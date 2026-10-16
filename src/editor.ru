@@ -1,0 +1,193 @@
+# Scintilla owns its native text buffer, rendering, selection and undo history.
+# This Ru module owns editor policy and search/replace command behavior.
+密 取 外言 '如:密'.
+窗 取 外言 'win32.ru'.
+
+算 创建 父, 实例, 号:
+    柄 取 窗 其 控制 父 实例 'Scintilla' '' 1073807360 号.
+    试
+        窗 其 发送 柄 2037 65001 0. # SCI_SETCODEPAGE UTF-8
+        窗 其 发文 柄 2056 32 'Consolas'.
+        窗 其 发送 柄 2055 32 11.
+        窗 其 发送 柄 2051 32 2039583. # charcoal foreground
+        窗 其 发送 柄 2052 32 16777215.
+        窗 其 发送 柄 2050 0 0. # STYLECLEARALL
+        窗 其 发送 柄 2240 0 1. # line-number margin
+        窗 其 发送 柄 2242 0 56.
+        窗 其 发送 柄 2051 33 8947848.
+        窗 其 发送 柄 2052 33 16448250.
+        窗 其 发送 柄 2036 4 0.
+        窗 其 发送 柄 2124 0 0. # spaces for indentation
+        窗 其 发送 柄 2132 1 0. # indentation guides
+        窗 其 发送 柄 2122 4 0.
+        窗 其 发送 柄 2031 0 0. # CRLF for new lines
+        窗 其 发送 柄 2563 0 0. # no multiple selection yet
+    救 原因
+        窗 其 结果 ((窗 其 DestroyWindow) 其 调用 [柄]).
+        卒 原因.
+    终
+    得 柄.
+法
+算 检查状态 柄:
+    码 取 (窗 其 发送 柄 2383 0 0) 其 数.
+    若 码 != 0 则 卒 ('Scintilla reported an editor error ('+(码 为 句)+'). Your document is still open.'). 然
+    得 空.
+法
+算 验文本 文 为 句:
+    若 (文 其 量) > 4194304 则 卒 'This preview supports at most 4 MiB of UTF-8 text per document.'. 然
+    存 取 密 其 UTF8 文.
+    大小 取 存 其 大小.
+    存 其 关闭.
+    若 大小 > 4194305 则 卒 'This file expands beyond the 4 MiB UTF-8 editor limit. No tab was opened.'. 然
+    得 空.
+法
+算 文本 柄:
+    长 取 (窗 其 发送 柄 2183 0 0) 其 数.
+    若 长 > 4194304 则 卒 'This preview supports at most 4 MiB of UTF-8 text per document.'. 然
+    存 取 密 其 缓冲 (长+1).
+    # Clear status before a checked operation; never mark an errored buffer clean.
+    窗 其 发送 柄 2382 0 0.
+    实长 取 (窗 其 发指 柄 2182 (长+1) 存) 其 数.
+    若 实长 != 长 则
+        存 其 关闭.
+        卒 'The editor returned incomplete text. Nothing was saved.'.
+    然
+    零长 取 (窗 其 结果 ((窗 其 lstrlenA) 其 调用 [存])) 其 数.
+    若 零长 != 长 则
+        存 其 关闭.
+        卒 'This document contains NUL bytes. Saving would lose text, so it was cancelled.'.
+    然
+    若 长 > 0 则
+        验 取 窗 其 结果 ((窗 其 MultiByteToWideChar) 其 调用 [65001,8,存,长,空,0]).
+        若 验 其 为空 则
+            存 其 关闭.
+            卒 'This document contains invalid UTF-8. Nothing was saved.'.
+        然
+    然
+    文 取 存 其 解UTF8.
+    存 其 关闭.
+    检查状态 柄.
+    得 文.
+法
+算 设文本 柄, 文 为 句:
+    验文本 文.
+    存 取 密 其 UTF8 文.
+    长 取 (存 其 大小)-1.
+    窗 其 发送 柄 2382 0 0.
+    窗 其 发指 柄 2181 0 存.
+    存 其 关闭.
+    检查状态 柄.
+    若 ((窗 其 发送 柄 2183 0 0) 其 数) != 长 则 卒 'The editor could not load the complete document.'. 然
+    若 (文本 柄) != 文 则 卒 'The editor content did not match the opened file.'. 然
+    # Preserve detected line-ending family for newly inserted lines.
+    模式 取 0.
+    若 非 (文 其 含 '\r\n') 则
+        若 文 其 含 '\n' 则 模式 取 2. 另
+            若 文 其 含 '\r' 则 模式 取 1. 然
+        然
+    然
+    窗 其 发送 柄 2031 模式 0.
+    窗 其 发送 柄 2175 0 0.
+    窗 其 发送 柄 2014 0 0.
+    得 空.
+法
+算 已变 柄:
+    得 非 ((窗 其 发送 柄 2159 0 0) 其 为空).
+法
+算 记保存 柄:
+    窗 其 发送 柄 2014 0 0.
+    得 空.
+法
+算 搜区 柄, 词 为 句, 始 为 数, 末 为 数, 区分 为 事实:
+    若 词 == '' 则 卒 'Enter text to find.'. 然
+    存 取 密 其 UTF8 词.
+    窗 其 发送 柄 2382 0 0.
+    标记 取 0.
+    若 区分 则 标记 取 4. 然
+    窗 其 发送 柄 2198 标记 0.
+    窗 其 发送 柄 2190 始 0.
+    窗 其 发送 柄 2192 末 0.
+    位 取 (窗 其 发指 柄 2197 ((存 其 大小)-1) 存) 其 数.
+    存 其 关闭.
+    检查状态 柄.
+    得 位.
+法
+算 下个 柄, 词 为 句, 区分 为 事实:
+    始 取 (窗 其 发送 柄 2145 0 0) 其 数. # GETSELECTIONEND
+    长 取 (窗 其 发送 柄 2183 0 0) 其 数.
+    位 取 搜区 柄 词 始 长 区分.
+    若 位 == -1 且 始 > 0 则 位 取 搜区 柄 词 0 始 区分. 然
+    若 位 != -1 则
+        末 取 (窗 其 发送 柄 2193 0 0) 其 数.
+        窗 其 发送 柄 2160 位 末.
+        窗 其 发送 柄 2169 0 0.
+    然
+    得 位.
+法
+算 换当前 柄, 词 为 句, 新文 为 句, 区分 为 事实:
+    始 取 (窗 其 发送 柄 2143 0 0) 其 数.
+    末 取 (窗 其 发送 柄 2145 0 0) 其 数.
+    命中 取 搜区 柄 词 始 末 区分.
+    若 命中 == 始 且 ((窗 其 发送 柄 2193 0 0) 其 数) == 末 则
+        存 取 密 其 UTF8 新文.
+        窗 其 发送 柄 2382 0 0.
+        已换 取 (窗 其 发指 柄 2194 ((存 其 大小)-1) 存) 其 数.
+        预换 取 (存 其 大小)-1.
+        存 其 关闭.
+        检查状态 柄.
+        若 已换 != 预换 则 卒 'Replacement was incomplete. Inspect the document or use Undo.'. 然
+        新末 取 (窗 其 发送 柄 2193 0 0) 其 数.
+        窗 其 发送 柄 2160 新末 新末.
+    然
+    得 下个 柄 词 区分.
+法
+算 全换 柄, 词 为 句, 新文 为 句, 区分 为 事实:
+    若 词 == '' 则 卒 'Enter text to find.'. 然
+    存 取 密 其 UTF8 新文.
+    # Preflight growth before opening an undo group or modifying the buffer.
+    原长 取 (窗 其 发送 柄 2183 0 0) 其 数.
+    预长 取 原长.
+    扫位 取 0.
+    循
+        位 取 搜区 柄 词 扫位 原长 区分.
+        若 位 == -1 则 破. 然
+        末 取 (窗 其 发送 柄 2193 0 0) 其 数.
+        预长 取 预长+(存 其 大小)-1-(末-位).
+        若 预长 > 4194304 则
+            存 其 关闭.
+            卒 'Replacement would exceed the 4 MiB save limit. No text was changed.'.
+        然
+        扫位 取 末.
+        若 扫位 >= 原长 则 破. 然
+    环
+    次数 取 0.
+    始 取 0.
+    窗 其 发送 柄 2078 0 0.
+    试
+        循
+            长 取 (窗 其 发送 柄 2183 0 0) 其 数.
+            若 始 > 长 则 破. 然
+            位 取 搜区 柄 词 始 长 区分.
+            若 位 == -1 则 破. 然
+            已换 取 (窗 其 发指 柄 2194 ((存 其 大小)-1) 存) 其 数.
+            检查状态 柄.
+            若 已换 != (存 其 大小)-1 则 卒 'The editor returned an incomplete replacement.'. 然
+            始 取 (窗 其 发送 柄 2193 0 0) 其 数.
+            次数 取 次数+1.
+        环
+    救 原因
+        窗 其 发送 柄 2079 0 0.
+        存 其 关闭.
+        卒 (原因+' Some changes may have completed. Use Undo to restore the replace-all operation.').
+    终
+    窗 其 发送 柄 2079 0 0.
+    存 其 关闭.
+    得 次数.
+法
+算 状态 柄:
+    位 取 (窗 其 发送 柄 2008 0 0) 其 数.
+    行 取 (窗 其 发送 柄 2166 位 0) 其 数.
+    列 取 (窗 其 发送 柄 2129 位 0) 其 数.
+    长 取 (窗 其 发送 柄 2183 0 0) 其 数.
+    得 'Ln '+((行+1) 为 句)+'  Col '+((列+1) 为 句)+'    '+(长 为 句)+' bytes'.
+法

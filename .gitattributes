@@ -1,0 +1,5 @@
+# Encoding/EOL fixtures must remain byte-exact on every checkout.
+packaging/samples/welcome-* -text -diff
+packaging/samples/legacy-* -text -diff
+*.png -text
+*.ico -text

@@ -1,0 +1,4 @@
+﻿ru_notepad preview
+这是用于验收的样例文件。请先测试副本。
+Unicode: 甲乙 😀 café Ω
+find alpha alpha

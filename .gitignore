@@ -1,0 +1,11 @@
+/build/
+/dist/
+/.tools/
+/vendor/*
+!/vendor/README.md
+*.log
+__pycache__/
+
+/tests/file_codec_artifacts/
+
+/.ci/

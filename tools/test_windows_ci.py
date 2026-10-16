@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""Portable harness tests with synthetic child programs and fake Win32 calls.
+
+These verify orchestration/fail-closed policy only. They are NOT native editor,
+GUI, DLL, file-codec, ACL, or Windows runtime acceptance evidence.
+"""
+from pathlib import Path
+import struct
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+import windows_ci as ci
+
+
+class NoDialogs:
+    def no_dialog(self, _):
+        return []
+
+
+def kill_synthetic(process):
+    if process.poll() is not None:
+        return False
+    process.kill()
+    process.wait(timeout=5)
+    return True
+
+
+class HarnessTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='ci-harness-unit-')
+        self.root = Path(self.temp.name)
+        self.addCleanup(self.temp.cleanup)
+
+    def console(self, code, timeout=3):
+        with patch.object(ci, 'cleanup_process', side_effect=kill_synthetic):
+            return ci.run_console(NoDialogs(), 'fixture', [sys.executable, '-c', code],
+                                  self.root, r'^TOTAL PASS: 1\s*$', timeout=timeout)
+
+    def test_console_requires_execution_exit_zero_and_marker(self):
+        result = self.console("print('PASS: synthetic'); print('TOTAL PASS: 1')")
+        self.assertTrue(result['passed'])
+        self.assertTrue(result['executed'])
+        self.assertFalse(result['cleanup_killed'])
+        self.assertEqual(result['assertions_passed'], 1)
+
+    def test_console_nonzero_fails_even_with_marker(self):
+        result = self.console("print('TOTAL PASS: 1'); raise SystemExit(7)")
+        self.assertFalse(result['passed'])
+        self.assertEqual(result['exit_code'], 7)
+
+    def test_console_missing_marker_fails(self):
+        self.assertFalse(self.console("print('just ran')")['passed'])
+
+    def test_console_fail_line_overrides_marker(self):
+        self.assertFalse(self.console("print('FAIL: case'); print('TOTAL PASS: 1')")['passed'])
+
+    def test_console_skip_is_recorded_and_fails_required_gate(self):
+        result = self.console("print('SKIP: synthetic case'); print('TOTAL PASS: 1')")
+        self.assertFalse(result['passed'])
+        self.assertEqual(result['skips'], ['SKIP: synthetic case'])
+
+    def test_console_timeout_and_cleanup_never_pass(self):
+        result = self.console('import time; time.sleep(30)', timeout=0.05)
+        self.assertFalse(result['passed'])
+        self.assertTrue(result['cleanup_killed'])
+        self.assertIn('deadline', result['error'])
+
+    def test_console_oversized_output_fails_and_is_capped(self):
+        result = self.console(f"print('x' * {ci.MAX_LOG_BYTES + 1})")
+        self.assertFalse(result['passed'])
+        self.assertLessEqual((self.root / 'fixture.stdout.log').stat().st_size, ci.MAX_LOG_BYTES)
+
+    def gui(self, mode='normal'):
+        binary = self.root / 'bin'
+        evidence = self.root / 'evidence'
+        binary.mkdir()
+        evidence.mkdir()
+        process = type('SyntheticProcess', (), {'pid': 12345, 'finished': mode == 'early',
+            'returncode': 0, 'poll': lambda self: self.returncode if self.finished else None})()
+        clock = [0.0]
+        def monotonic():
+            clock[0] += 0.2
+            return clock[0]
+        def launch(*_, **__):
+            if mode != 'missing-log':
+                lines = ['[launcher] Starting Ru program.', '[startup] menu installed',
+                         '[startup] initial document ready', '[startup] main window shown',
+                         '[launcher] Ru program returned with status 0.']
+                if mode == 'bad-log':
+                    lines[-1] = '[launcher] Ru program exited before returning to the launcher.'
+                (binary / 'ru_notepad-synthetic.log').write_text('\n'.join(lines), encoding='utf-8')
+            return process
+        class FakeWindows:
+            def no_dialog(self, _):
+                if mode == 'dialog':
+                    raise RuntimeError('Unexpected modal dialog in synthetic native test')
+                return [] if mode == 'missing-window' else [(123, ci.MAIN_CLASS, True)]
+            def responsive(self, _):
+                if mode == 'unresponsive':
+                    raise RuntimeError('Unresponsive synthetic window')
+            def close(self, _):
+                process.finished = mode != 'close-timeout'
+        def cleanup(_):
+            killed = not process.finished
+            process.finished = True
+            return killed
+        with patch.object(ci.subprocess, 'Popen', side_effect=launch) as start, \
+             patch.object(ci, 'cleanup_process', side_effect=cleanup), \
+             patch.object(ci.time, 'monotonic', side_effect=monotonic), \
+             patch.object(ci.time, 'sleep'):
+            result = ci.run_gui(FakeWindows(), binary, evidence)
+        return result, start
+
+    def test_gui_requires_detached_visible_responsive_normal_close(self):
+        result, start = self.gui()
+        self.assertTrue(result['passed'])
+        self.assertTrue(result['main_hwnd_seen'])
+        self.assertTrue(result['close_posted'])
+        self.assertFalse(result['cleanup_killed'])
+        self.assertEqual(start.call_args.kwargs['creationflags'], 0x00000008)
+
+    def test_gui_early_exit_is_failure(self):
+        self.assertFalse(self.gui('early')[0]['passed'])
+
+    def test_gui_error_dialog_is_failure(self):
+        result, _ = self.gui('dialog')
+        self.assertFalse(result['passed'])
+        self.assertTrue(result['cleanup_killed'])
+
+    def test_gui_missing_hwnd_is_failure(self):
+        result, _ = self.gui('missing-window')
+        self.assertFalse(result['passed'])
+        self.assertFalse(result['main_hwnd_seen'])
+
+    def test_gui_unresponsive_hwnd_is_failure(self):
+        self.assertFalse(self.gui('unresponsive')[0]['passed'])
+
+    def test_gui_close_timeout_cleanup_never_passes(self):
+        result, _ = self.gui('close-timeout')
+        self.assertFalse(result['passed'])
+        self.assertTrue(result['close_posted'])
+        self.assertTrue(result['cleanup_killed'])
+
+    def test_gui_missing_log_is_failure(self):
+        self.assertFalse(self.gui('missing-log')[0]['passed'])
+
+    def test_gui_early_exit_log_is_failure(self):
+        self.assertFalse(self.gui('bad-log')[0]['passed'])
+
+    def test_log_reader_rejects_overflow(self):
+        path = self.root / 'large.log'
+        path.write_bytes(b'x' * (ci.MAX_LOG_BYTES + 1))
+        with self.assertRaises(RuntimeError):
+            ci.bounded_text(path)
+
+    def test_pe_import_gate_rejects_unbundled_runtime(self):
+        path = self.root / 'synthetic.exe'
+        data = bytearray(128)
+        data[:2] = b'MZ'
+        struct.pack_into('<I', data, 60, 64)
+        data[64:68] = b'PE\0\0'
+        struct.pack_into('<H', data, 68, 0x8664)
+        path.write_bytes(data)
+        with patch.object(ci.subprocess, 'check_output', return_value='DLL Name: libgcc_s_seh-1.dll'):
+            with self.assertRaisesRegex(RuntimeError, 'unpackaged'):
+                ci.inspect_pe(path, 'synthetic-objdump')
+
+    def test_missing_runtime_notices_block_packaging(self):
+        license_dir = self.root / 'mingw/share/licenses/gcc'
+        license_dir.mkdir(parents=True)
+        (license_dir / 'COPYING3').write_text('GNU GENERAL PUBLIC LICENSE', encoding='utf-8')
+        with self.assertRaisesRegex(RuntimeError, 'Runtime Library Exception'):
+            ci.copy_runtime_licenses(self.root / 'mingw', self.root / 'out')
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)

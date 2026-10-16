@@ -1,0 +1,19 @@
+Optional Windows/NTFS ACL tests — not yet executed
+
+The normal run-tests.cmd does not run this test. The script creates a unique
+fixture folder underneath an existing disposable test directory. It intentionally
+gives that newly created folder an inheritable permissive ACL, uses synthetic text
+only, and removes the fixture folder when finished. It does not need admin rights.
+
+Review optional-acl-tests.ps1 first. If you choose to run it, use an isolated,
+trusted local NTFS directory. From PowerShell in the extracted package:
+
+.\optional-acl-tests.ps1 -ProbeExe .\file_codec_security_probe.exe -TestDirectory C:\YourDisposableTestDirectory
+
+Do not bypass execution-policy or operating-system security warnings. If local
+policy blocks the script, leave the ACL tests pending and report that limitation.
+Never point the probe directly at a real document: it is a destructive synthetic
+fixture helper. The ordinary application does not launch this probe or script.
+
+The expected outcome is FILE_CODEC_SECURITY_TESTS_PASS. Failed assertions are
+real failures, not skipped passes. Record the console output and Windows version.

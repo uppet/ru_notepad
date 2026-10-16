@@ -1,0 +1,76 @@
+"""ru_notepad-specific AST arity audit, not a language rule or Windows test.
+The named-member checks are project conventions for builtin/native receivers;
+Ru permits user members with other signatures. Native bindings are resolved.
+"""
+import sys, json, argparse
+from pathlib import Path
+ap=argparse.ArgumentParser()
+ap.add_argument('--ru-root',type=Path,required=True)
+ap.add_argument('--root',type=Path,default=Path(__file__).resolve().parents[1])
+a=ap.parse_args()
+sys.path.insert(0,str(a.ru_root.resolve()))
+from rulang.frontend import parse, Node
+ROOT=a.root.resolve()
+paths=sorted(ROOT.glob("src/*.ru"))+sorted(ROOT.glob("tests/*.ru"))
+programs={p.resolve():parse(p.read_text()) for p in paths}
+def walk(x):
+    if isinstance(x,Node):
+        yield x
+        for v in x.data.values():yield from walk(v)
+    elif isinstance(x,(list,tuple)):
+        for v in x:yield from walk(v)
+    elif isinstance(x,dict):
+        for v in x.values():yield from walk(v)
+def member(x,n): return isinstance(x,Node) and x.kind=="member" and x.data["name"]==n
+bindings={}
+for p,program in programs.items():
+    b={}
+    for n in program:
+        if n.kind=="function":
+            body=n.data["body"]
+            if len(body)==1 and body[0].kind=="return" and body[0].data["expr"].kind=="array":
+                b[n.data["name"]]=("array_helper",len(body[0].data["expr"].data["items"]),len(n.data["params"]))
+            continue
+        if n.kind!="bind":continue
+        x=n.data["expr"];name=n.data["name"]
+        if x.kind=="import" and not x.data["path"].startswith("如:"):
+            b[name]=("module",(p.parent/x.data["path"]).resolve())
+        elif member(x,"绑定") and len(x.data["args"])==2:
+            sig=x.data["args"][1][1]
+            if member(sig,"签名") and len(sig.data["args"])==3:
+                params=sig.data["args"][1][1]
+                if params.kind=="array":b[name]=("native",len(params.data["items"]))
+    bindings[p]=b
+def resolve(p,x):
+    if x.kind=="name":return bindings.get(p,{}).get(x.data["name"])
+    if x.kind=="member":
+        r=resolve(p,x.data["receiver"])
+        if r and r[0]=="module":return bindings.get(r[1],{}).get(x.data["name"])
+records=[];unknown=[];bad=[];member_bad=[]
+for p,program in programs.items():
+    for n in walk(program):
+        if n.kind=="member":
+            name=n.data['name']; argc=len(n.data['args'])
+            expected=1 if name=='查' else 0 if name in ('量','大小','地址','数','句') else None
+            if expected is not None and argc!=expected:
+                member_bad.append({'path':str(p.relative_to(ROOT)),'line':n.token.line,'member':name,'expected':expected,'actual':argc})
+        if not member(n,"调用"):continue
+        row={"path":str(p.relative_to(ROOT)),"line":n.token.line}
+        native=resolve(p,n.data["receiver"])
+        args=n.data["args"]
+        if not native or native[0]!="native" or len(args)!=1:
+            unknown.append(row);continue
+        argument_array=args[0][1]
+        if argument_array.kind=="array":
+            actual=len(argument_array.data["items"]);construction="literal"
+        else:
+            helper=resolve(p,argument_array)
+            if not helper or helper[0]!="array_helper" or len(argument_array.data.get("args",[]))!=helper[2]:
+                unknown.append(row);continue
+            actual=helper[1];construction="single-return helper"
+        row.update(expected=native[1],actual=actual,construction=construction)
+        records.append(row)
+        if row["expected"]!=row["actual"]:bad.append(row)
+print(json.dumps({"checked":len(records),"mismatches":bad,"unresolved":unknown,"member_mismatches":member_bad,"records":records},indent=2))
+
+if bad or unknown or member_bad:raise SystemExit(1)
