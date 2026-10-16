@@ -24,12 +24,16 @@ class PackageTests(unittest.TestCase):
         self.evidence = self.root / 'evidence'
         self.evidence.mkdir()
         for relative in {*package.RUNTIME_FILES, *package.TEST_FILES, 'src/main.ru',
-                         *package.RESOURCE_INPUTS,
-                         'packaging/diagnostic_launcher.c', 'packaging/samples/example.txt'}:
+                         *ci.SCANNER_PREFLIGHT_SOURCES,
+                         *package.RESOURCE_INPUTS, *package.NATIVE_BUILD_DRIVERS,
+                         *(source for sources in package.NATIVE_COMPILE_SOURCES.values() for source in sources),
+                         'native/ru_scan.h', 'native/ru_unicode_data.h',
+                         'packaging/diagnostic_launcher.c', 'packaging/samples/example.txt',
+                         'packaging/samples/example.ru'}:
             target = self.root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text('synthetic source\n', encoding='utf-8')
-        (self.root / 'VERSION').write_text('0.1.3', encoding='utf-8')
+        (self.root / 'VERSION').write_text('0.1.4', encoding='utf-8')
         self.dependencies = {name: dict(value) for name, value in package.DEPENDENCIES.items()}
         for dependency in self.dependencies.values():
             source = self.root / 'vendor' / dependency['folder'] / 'License.txt'
@@ -42,6 +46,7 @@ class PackageTests(unittest.TestCase):
             dependency['sha256'] = package.sha(archive)
         self.addCleanup(patch.stopall)
         patch.object(package, 'DEPENDENCIES', self.dependencies).start()
+        patch.object(package, 'UNICODE_LICENSE_SHA256', package.sha(self.root / 'packaging/licenses/Unicode.txt')).start()
         patch.object(package.subprocess, 'check_output', return_value='DLL Name: KERNEL32.dll\nDLL Name: msvcrt.dll\n').start()
         for name in package.BINARY_NAMES:
             data = bytearray(128)
@@ -50,16 +55,30 @@ class PackageTests(unittest.TestCase):
             data[64:68] = b'PE\0\0'
             struct.pack_into('<H', data, 68, 0x8664)
             (self.binary / name).write_bytes(data + name.encode())
+        self.native_receipts = {}
+        for name, compile_sources in package.NATIVE_COMPILE_SOURCES.items():
+            inputs = {'output_name': name, 'compile_sources': list(compile_sources),
+                'source_sha256': package.native_source_snapshot(self.root),
+                'driver_sha256': {relative: package.sha(self.root / relative) for relative in package.NATIVE_BUILD_DRIVERS},
+                'compiler_path': 'PRIVATE_WORKSPACE/home/private/compiler',
+                'compiler_sha256': 'f' * 64, 'compiler_version_sha256': 'e' * 64,
+                'compiler_flags': list(package.NATIVE_CFLAGS), 'link_libraries': list(package.NATIVE_LINK_LIBRARIES)}
+            receipt = {'name': name, 'build_inputs': inputs, 'build_key': package.native_build_key(inputs),
+                       'dll_sha256': package.sha(self.binary / name)}
+            package.save_json(self.binary / (Path(name).stem + '.native-build.json'), receipt)
+            self.native_receipts[name] = receipt
         for name in (package.RUNTIME_NAMES[0], *package.TEST_NAMES):
             source = 'src/main.ru' if name == 'ru_notepad.exe' else f'tests/{Path(name).stem}.ru'
             entry = self.root / source
             entry.parent.mkdir(parents=True, exist_ok=True)
             if not entry.exists():
                 entry.write_text('synthetic test source\n', encoding='utf-8')
-            receipt = {'app_version': '0.1.3', 'exe_sha256': package.sha(self.binary / name),
+            receipt = {'app_version': '0.1.4', 'exe_sha256': package.sha(self.binary / name),
                 'dll_sha256': package.sha(self.binary / 'Scintilla.dll'),
                 'lexilla_dll_sha256': package.sha(self.binary / 'Lexilla.dll'),
-                'source_sha256': {'src/main.ru': package.sha(self.root / 'src/main.ru')},
+                'source_sha256': {'src/main.ru': package.sha(self.root / 'src/main.ru')} | package.native_source_snapshot(self.root),
+                'native_helper_sha256': package.sha(self.binary / package.NATIVE_HELPER_NAME),
+                'native_helper_build_key': self.native_receipts[package.NATIVE_HELPER_NAME]['build_key'],
                 'entry_source': source, 'entry_sha256': package.sha(entry),
                 'generated_c_sha256': 'c' * 64, 'translation_unit_sha256': 'd' * 64,
                 'build_input_sha256': {relative: package.sha(self.root / relative)
@@ -74,6 +93,13 @@ class PackageTests(unittest.TestCase):
         self.summary = {'platform': 'native-windows-x64', 'passed': True,
                         'native_tests_passed': True, 'acl_requested': True, 'tests': [],
                         'tested_binary_sha256': package.binary_snapshot(self.binary)}
+        sources = ci.scanner_preflight_sources(self.root)
+        self.summary['scanner_preflight'] = {'name': package.SCANNER_PREFLIGHT_NAME,
+            'passed': True, 'executed': True, 'cleanup_killed': False, 'exit_code': 0,
+            'source_sha256': sources, 'report': {'cases': 157, 'chunk_checks': 942,
+                'ru_assertions_per_backend': 0, 'sanitizer': None,
+                'library_sha256': self.summary['tested_binary_sha256'][package.NATIVE_HELPER_NAME],
+                'source_sha256': sources['native/ru_scan.c']}}
         names = [name for name, _ in ci.NATIVE_CONSOLE_TESTS] + [case[0] for case in ci.SYNTAX_FALLBACK_TESTS] + ['file_codec_security', *sorted(ci.GUI_NAMES)]
         for name in names:
             result = {'name': name, 'passed': True, 'executed': True, 'cleanup_killed': False,
@@ -82,16 +108,33 @@ class PackageTests(unittest.TestCase):
                 result.update(main_hwnd_seen=True, close_posted=True, detached_from_console=True)
             else:
                 result['assertions_passed'] = ci.expected_assertions(name)
+            if name == 'ru_syntax_native':
+                result['performance'] = [{'size': size, 'initial_read_bytes': size,
+                    'edit_read_bytes': 1024, 'reused_bytes': size - 1024, 'max_read': 1024,
+                    'initial_ms': 100.0, 'edit_ms': 2.0, 'max_tick_ms': 3.0, 'max_chunk_ms': 1.0}
+                    for size in ci.RU_PERFORMANCE_SIZES]
             if name in {case[0] for case in ci.SYNTAX_FALLBACK_TESTS}:
-                result['fixture_binary_sha256'] = {binary: self.summary['tested_binary_sha256'][binary]
-                                                  for binary in ('syntax_native.exe', 'Scintilla.dll')}
-                if name == 'syntax_bad_lexer':
-                    result['fixture_binary_sha256']['Lexilla.dll'] = self.summary['tested_binary_sha256']['Scintilla.dll']
-            if name == 'main-gui-file-entry':
-                result.update({key: True for key in ci.GUI_FILE_CHECKS})
+                result['fixture_binary_sha256'] = {target: self.summary['tested_binary_sha256'][source]
+                                                  for target, source in ci.syntax_fallback_layout(name).items()}
+            if name in {'main-gui-file-entry', 'main-gui-ru-syntax'}:
+                checks = ci.GUI_FILE_CHECKS if name == 'main-gui-file-entry' else ci.GUI_RU_CHECKS
+                result.update({key: True for key in checks})
                 result['fixture_binary_sha256'] = {binary: self.summary['tested_binary_sha256'][binary]
                                                   for binary in package.RUNTIME_NAMES}
+            if name == 'main-gui-ru-syntax':
+                data, probes = ci.gui_ru_timer_fixture()
+                result['timer_performance'] = {'size': len(data), 'wall_ms': 100.0,
+                    'first_head_style_ms': 10.0, 'max_response_ms': 2.0, 'probes': 3,
+                    'source_sha256': hashlib.sha256(data).hexdigest(), 'style_probes': probes}
+                edit_data, edit_probes, edit_folds, _ = ci.gui_ru_edit_fixture()
+                result['edit_performance'] = {'size': len(edit_data), 'source_sha256': hashlib.sha256(edit_data).hexdigest(),
+                    'style_probes': edit_probes, 'fold_probes': edit_folds, 'undo_commands': 6,
+                    'measurement': ci.GUI_RU_EDIT_MEASUREMENT,
+                    'operations': [dict(operation, wall_ms=100.0, max_response_ms=1.0, probes=2)
+                                   for operation in ci.gui_ru_edit_operations()]}
             self.summary['tests'].append(result)
+        for name in package.required_evidence_names(self.summary):
+            (self.evidence / name).write_text('synthetic required evidence\n', encoding='utf-8')
         package.save_json(self.evidence / 'native-acceptance.json', self.summary)
         (self.evidence / 'msys2-packages.log').write_text('synthetic packages\n')
         (self.evidence / 'document_policy.stdout.log').write_text('synthetic results\n')
@@ -104,7 +147,8 @@ class PackageTests(unittest.TestCase):
             (target / 'GCC.txt').write_text('Synthetic GCC runtime notice')
         return package.create_packages(self.root, self.binary, self.root / destination,
             self.evidence, 'fake-objdump', self.summary, licenses, {'app_commit': 'e' * 40},
-            package.evidence_names(['document_policy']))
+            package.evidence_names([test['name'] for test in self.summary['tests']
+                                    if test['name'] not in ci.GUI_NAMES]))
 
     def archives(self, result, destination='dist'):
         return [self.root / destination / result['packages'][kind]['name'] for kind in ('runtime', 'tests')]
@@ -133,17 +177,23 @@ class PackageTests(unittest.TestCase):
             build = json.loads(files['BUILD.json'])
             self.assertEqual(build['package_kind'], kind)
             self.assertEqual(build['runtime_binary_sha256'], result['runtime_binary_sha256'])
+            self.assertEqual(len(build['runtime_binary_sha256']), 4)
+            self.assertEqual(build['native_helpers'][package.NATIVE_HELPER_NAME]['dll_sha256'],
+                             package.sha(self.binary / package.NATIVE_HELPER_NAME))
             self.assertIn('licenses/Lexilla.txt', files)
             self.assertIn('licenses/Scintilla.txt', files)
+            self.assertEqual(files['licenses/Unicode.txt'], (self.root / 'packaging/licenses/Unicode.txt').read_bytes())
+            self.assertEqual(files['samples/example.ru'], (self.root / 'packaging/samples/example.ru').read_bytes())
             self.assertEqual(archive.with_suffix('.zip.sha256').read_text(), f'{package.sha(archive)}  {archive.name}\n')
             if kind == 'runtime':
-                self.assertFalse(set(package.TEST_NAMES) & files.keys())
+                self.assertFalse(set((*package.TEST_NAMES, *package.TEST_SUPPORT_DLL_NAMES)) & files.keys())
                 self.assertFalse(any(name.endswith(('.log', '.cmd', '.ps1')) for name in files))
             else:
                 self.assertTrue(set(package.BINARY_NAMES) <= files.keys())
                 self.assertIn('run-tests.cmd', files)
                 self.assertIn('native-test-evidence/native-acceptance.json', files)
-                self.assertIn('native-test-evidence/document_policy.stdout.log', files)
+                self.assertTrue({f'native-test-evidence/{name}' for name in
+                                 package.required_evidence_names(self.summary)} <= files.keys())
 
     def test_only_allowlisted_synthetic_evidence_is_collected(self):
         tests = self.archives(self.create())[1]
@@ -152,6 +202,106 @@ class PackageTests(unittest.TestCase):
         self.assertNotIn('PRIVATE_WORKSPACE', files['BUILD.json'].decode())
         self.assertNotIn('PRIVATE_SECRET', files['BUILD.json'].decode())
         self.assertNotIn(str(self.root), files['BUILD.json'].decode())
+
+    def test_code_caches_and_unrelated_inputs_never_enter_either_zip(self):
+        private_inputs = ('src/private-source.c', 'tests/private-fixture.ru',
+                          'tools/__pycache__/private.pyc', '.tools/private-compiler.exe',
+                          'build/private-generated.c', 'build/private.build.json')
+        for relative in private_inputs:
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('DO NOT DISTRIBUTE THIS SOURCE OR CACHE', encoding='utf-8')
+        for archive in self.archives(self.create()):
+            files = package.verify_archive(archive)
+            self.assertFalse(set(private_inputs) & files.keys())
+            self.assertFalse(any(name.startswith(('src/', 'tests/', 'tools/', 'build/', '.tools/'))
+                                 or '__pycache__' in name or name.endswith(('.pyc', '.pyo'))
+                                 for name in files))
+            self.assertFalse(any(b'DO NOT DISTRIBUTE THIS SOURCE OR CACHE' in data for data in files.values()))
+
+    def test_ru_gui_evidence_is_allowlisted_but_unrelated_gui_logs_are_not(self):
+        (self.evidence / 'main-ru-syntax-launcher-0.log').write_text('synthetic Ru GUI receipt')
+        (self.evidence / 'main-ru-syntax-launcher-private.log').write_text('DO NOT COLLECT')
+        files = package.verify_archive(self.archives(self.create())[1])
+        self.assertEqual(files['native-test-evidence/main-ru-syntax-launcher-0.log'], b'synthetic Ru GUI receipt')
+        self.assertNotIn('native-test-evidence/main-ru-syntax-launcher-private.log', files)
+
+    def test_missing_or_changed_unicode_notice_blocks_both_packages(self):
+        notice = self.root / 'packaging/licenses/Unicode.txt'
+        original = notice.read_bytes()
+        notice.unlink()
+        with self.assertRaisesRegex(RuntimeError, 'Missing'):
+            self.create()
+        self.assertFalse((self.root / 'dist').exists())
+        notice.write_bytes(original + b'changed')
+        with self.assertRaisesRegex(RuntimeError, 'Unicode data license'):
+            self.create()
+        self.assertFalse((self.root / 'dist').exists())
+
+    def test_every_native_helper_dll_and_receipt_is_mandatory(self):
+        for name in package.NATIVE_COMPILE_SOURCES:
+            for filename in (name, Path(name).stem + '.native-build.json'):
+                with self.subTest(filename=filename):
+                    path = self.binary / filename
+                    original = path.read_bytes()
+                    path.unlink()
+                    with self.assertRaisesRegex(RuntimeError, 'Missing'):
+                        self.create()
+                    self.assertFalse((self.root / 'dist').exists())
+                    path.write_bytes(original)
+
+    def test_native_helper_changed_dll_inputs_driver_or_receipt_blocks_packaging(self):
+        cases = ('dll', 'table', 'header', 'driver', 'receipt-source', 'receipt-key', 'compiler-identity', 'flags')
+        for case in cases:
+            with self.subTest(case=case):
+                name = package.NATIVE_HELPER_NAME
+                receipt_path = self.binary / (Path(name).stem + '.native-build.json')
+                path = {'dll': self.binary / name, 'table': self.root / 'native/ru_unicode_data.h',
+                        'header': self.root / 'native/ru_scan.h', 'driver': self.root / 'tools/build.py'}.get(case, receipt_path)
+                original = path.read_bytes()
+                if case in ('dll', 'table', 'header', 'driver'):
+                    path.write_bytes(original + b'changed')
+                else:
+                    receipt = json.loads(original)
+                    if case == 'receipt-source': receipt['build_inputs']['source_sha256'].pop('native/ru_unicode_data.h')
+                    if case == 'receipt-key': receipt['build_key'] = '0' * 64
+                    if case == 'compiler-identity': receipt['build_inputs']['compiler_sha256'] = 'not a digest'
+                    if case == 'flags': receipt['build_inputs']['compiler_flags'] = []
+                    if case != 'receipt-key': receipt['build_key'] = package.native_build_key(receipt['build_inputs'])
+                    package.save_json(path, receipt)
+                with self.assertRaisesRegex(RuntimeError, 'Native helper'):
+                    self.create()
+                self.assertFalse((self.root / 'dist').exists())
+                path.write_bytes(original)
+
+    def test_every_executable_receipt_requires_matching_native_helper_and_source(self):
+        for field in ('native_helper_sha256', 'native_helper_build_key', 'source_sha256'):
+            with self.subTest(field=field):
+                name = 'ru_notepad.exe'
+                path = self.binary / Path(name).with_suffix('.build.json')
+                original = path.read_bytes()
+                if field == 'source_sha256':
+                    self.modify_receipt(name, lambda receipt: receipt['source_sha256'].pop('native/ru_unicode_data.h'))
+                else:
+                    self.modify_receipt(name, lambda receipt: receipt.update({field: 'wrong'}))
+                with self.assertRaisesRegex(RuntimeError, 'Native helper differs'):
+                    self.create()
+                path.write_bytes(original)
+
+    def test_native_helper_dlls_allow_only_system_imports(self):
+        for name in package.NATIVE_COMPILE_SOURCES:
+            for imported in ('Lexilla.dll', 'Scintilla.dll', 'libgcc_s_seh-1.dll'):
+                with self.subTest(name=name, imported=imported):
+                    with patch.object(package.subprocess, 'check_output', return_value=f'DLL Name: {imported}'):
+                        with self.assertRaisesRegex(RuntimeError, 'unpackaged non-system'):
+                            package.inspect_pe(self.binary / name, 'fake-objdump')
+
+    def test_native_build_receipts_and_sources_never_enter_archives(self):
+        for archive in self.archives(self.create()):
+            files = package.verify_archive(archive)
+            self.assertFalse(any(name.endswith('.native-build.json') or name.startswith('native/') for name in files))
+            self.assertNotIn('compiler_path', files['BUILD.json'].decode())
+            self.assertNotIn('PRIVATE_WORKSPACE', files['BUILD.json'].decode())
 
     def test_missing_lexilla_blocks_both_packages(self):
         (self.binary / 'Lexilla.dll').unlink()
@@ -231,10 +381,50 @@ class PackageTests(unittest.TestCase):
                     self.create()
                 self.assertFalse((self.root / 'dist').exists())
 
+    def test_native_packaging_rechecks_ru_performance_and_gui_contracts(self):
+        for mutation in ('missing-performance', 'unbounded-performance', 'missing-gui-style', 'wrong-gui-hash',
+                         'missing-timer', 'wrong-timer-source', 'wrong-timer-probes', 'timer-timeout',
+                         'missing-edit', 'wrong-edit-source', 'missing-edit-operation', 'edit-timeout'):
+            with self.subTest(mutation=mutation):
+                original = json.loads(json.dumps(self.summary))
+                core = next(case for case in self.summary['tests'] if case['name'] == 'ru_syntax_native')
+                gui = next(case for case in self.summary['tests'] if case['name'] == 'main-gui-ru-syntax')
+                if mutation == 'missing-performance': core.pop('performance')
+                if mutation == 'unbounded-performance': core['performance'][0]['edit_read_bytes'] = 65537
+                if mutation == 'missing-gui-style': gui['automatic_ru_styles'] = False
+                if mutation == 'wrong-gui-hash': gui['fixture_binary_sha256']['ru_notepad.exe'] = 'different'
+                if mutation == 'missing-timer': gui.pop('timer_performance')
+                if mutation == 'wrong-timer-source': gui['timer_performance']['source_sha256'] = 'different'
+                if mutation == 'wrong-timer-probes': gui['timer_performance']['style_probes']['tail_keyword']['style'] = 0
+                if mutation == 'timer-timeout': gui['timer_performance']['wall_ms'] = 30001
+                if mutation == 'missing-edit': gui.pop('edit_performance')
+                if mutation == 'wrong-edit-source': gui['edit_performance']['source_sha256'] = 'different'
+                if mutation == 'missing-edit-operation': gui['edit_performance']['operations'].pop()
+                if mutation == 'edit-timeout': gui['edit_performance']['operations'][0]['wall_ms'] = 30001
+                with self.assertRaises(RuntimeError):
+                    self.create()
+                self.assertFalse((self.root / 'dist').exists())
+                self.summary = original
+
     def test_native_packaging_rejects_cleanup_kill_even_with_true_flags(self):
         self.summary['tests'][0]['cleanup_killed'] = True
         with self.assertRaisesRegex(RuntimeError, 'did not pass normally'):
             self.create()
+
+    def test_native_packaging_requires_exact_dll_scanner_preflight_and_unchanged_test_script(self):
+        for mutation in ('missing', 'wrong-dll', 'changed-script'):
+            with self.subTest(mutation=mutation):
+                original = json.loads(json.dumps(self.summary))
+                script = self.root / 'tools/test_ru_scan.py'
+                original_script = script.read_bytes()
+                if mutation == 'missing': self.summary.pop('scanner_preflight')
+                if mutation == 'wrong-dll': self.summary['scanner_preflight']['report']['library_sha256'] = 'different'
+                if mutation == 'changed-script': script.write_bytes(b'changed test script')
+                with self.assertRaisesRegex(RuntimeError, 'scanner preflight'):
+                    self.create()
+                self.assertFalse((self.root / 'dist').exists())
+                self.summary = original
+                script.write_bytes(original_script)
 
     def test_all_test_executables_and_receipts_are_required(self):
         for name in package.TEST_NAMES:
@@ -273,6 +463,23 @@ class PackageTests(unittest.TestCase):
         self.modify_receipt('ru_notepad.exe', lambda r: r.update(entry_source='../outside'))
         with self.assertRaisesRegex(RuntimeError, 'Unsafe source path'):
             self.create()
+
+    def test_every_required_native_output_must_exist_and_be_allowlisted(self):
+        for name in package.required_evidence_names(self.summary):
+            with self.subTest(name=name):
+                path = self.evidence / name
+                original = path.read_bytes()
+                path.unlink()
+                with self.assertRaisesRegex(RuntimeError, 'Missing'):
+                    self.create()
+                self.assertFalse((self.root / 'dist').exists())
+                path.write_bytes(original)
+        allowed = package.evidence_names([test['name'] for test in self.summary['tests']
+                                          if test['name'] not in ci.GUI_NAMES])
+        for name in package.required_evidence_names(self.summary):
+            with self.subTest(allowlist_omits=name):
+                with self.assertRaisesRegex(RuntimeError, 'allowlist omits'):
+                    package.validate_native_evidence(self.evidence, self.summary, allowed - {name})
 
     def test_oversized_evidence_is_rejected(self):
         (self.evidence / 'document_policy.stdout.log').write_bytes(b'x' * (package.MAX_LOG_BYTES + 1))

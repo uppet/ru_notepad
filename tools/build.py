@@ -2,7 +2,9 @@
 """Build-time helper only. The distributed app does not execute Python."""
 from __future__ import annotations
 import argparse, hashlib, json, os, shutil, subprocess, sys, time, zipfile
-from package import DEPENDENCIES, RESOURCE_INPUTS
+from package import (DEPENDENCIES, RESOURCE_INPUTS, NATIVE_HELPER_NAME, NATIVE_COMPILE_SOURCES,
+                     NATIVE_BUILD_DRIVERS, NATIVE_CFLAGS, NATIVE_LINK_LIBRARIES,
+                     native_source_snapshot, native_build_key)
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,7 +23,7 @@ def source_snapshot():
     # Imported test helpers are build inputs too. Every executable is tied to
     # one common source/test snapshot, including helpers without an entry point.
     return {p.relative_to(ROOT).as_posix(): sha(p)
-            for folder in ('src', 'tests') for p in sorted((ROOT / folder).glob('*.ru'))}
+            for folder in ('src', 'tests') for p in sorted((ROOT / folder).glob('*.ru'))} | native_source_snapshot(ROOT)
 
 def build_input_paths(console):
     # Native console fixtures must use the same common-controls v6 activation
@@ -32,6 +34,71 @@ def compile_resources(windres, build):
     resource = build / 'app-resource.o'
     run([windres, '-I', ROOT / 'packaging', ROOT / 'packaging/app.rc', resource])
     return resource
+
+def native_build_inputs(cc, name):
+    compiler = Path(shutil.which(cc) or cc).resolve(strict=True)
+    version = subprocess.check_output([str(compiler), '--version'], timeout=30)
+    return {'output_name': name, 'compile_sources': list(NATIVE_COMPILE_SOURCES[name]),
+            'source_sha256': native_source_snapshot(ROOT),
+            'driver_sha256': {relative: sha(ROOT / relative) for relative in NATIVE_BUILD_DRIVERS},
+            'compiler_path': str(compiler), 'compiler_sha256': sha(compiler),
+            'compiler_version_sha256': hashlib.sha256(version).hexdigest(),
+            'compiler_flags': list(NATIVE_CFLAGS), 'link_libraries': list(NATIVE_LINK_LIBRARIES)}
+
+
+def build_native_helpers(cc, build):
+    cache = build / 'native-helper'
+    if cache.is_symlink():
+        raise RuntimeError('Refusing a linked native helper cache directory.')
+    cache.mkdir(parents=True, exist_ok=True)
+    results = {}
+    for name in NATIVE_COMPILE_SOURCES:
+        inputs = native_build_inputs(cc, name)
+        key = native_build_key(inputs)
+        output = cache / name
+        receipt_path = cache / (Path(name).stem + '.native-build.json')
+        try:
+            if receipt_path.is_symlink():
+                raise ValueError('Linked helper cache receipt is never trusted')
+            cached = json.loads(receipt_path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            cached = {}
+        if (output.is_file() and not output.is_symlink() and cached.get('name') == name and
+                cached.get('build_inputs') == inputs and cached.get('build_key') == key and
+                cached.get('dll_sha256') == sha(output)):
+            results[name] = cached
+            continue
+        pending = cache / (Path(name).stem + '.pending.dll')
+        pending.unlink(missing_ok=True)
+        command = [inputs['compiler_path'], *NATIVE_CFLAGS, *NATIVE_COMPILE_SOURCES[name],
+                   '-o', str(pending), *('-l' + name for name in NATIVE_LINK_LIBRARIES)]
+        try:
+            run(command, cwd=ROOT, timeout=600)
+            if native_build_inputs(cc, name) != inputs:
+                raise RuntimeError('Native helper inputs changed during compilation; no cache receipt published.')
+            receipt = {'schema': 1, 'name': name, 'build_inputs': inputs,
+                       'build_key': key, 'dll_sha256': sha(pending), 'compiler_command': command}
+            os.replace(pending, output)
+            pending_receipt = receipt_path.with_suffix('.json.pending')
+            pending_receipt.unlink(missing_ok=True)
+            pending_receipt.write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
+            os.replace(pending_receipt, receipt_path)
+            results[name] = receipt
+        finally:
+            pending.unlink(missing_ok=True)
+    return results
+
+
+def copy_native_helpers(build, destination):
+    for name in NATIVE_COMPILE_SOURCES:
+        for filename in (name, Path(name).stem + '.native-build.json'):
+            source = build / 'native-helper' / filename
+            target = destination / filename
+            if source.is_symlink() or target.is_symlink():
+                raise RuntimeError('Refusing a linked native helper binary or receipt.')
+            if source.resolve() != target.resolve():
+                shutil.copy2(source, target)
+
 
 def main():
     ap=argparse.ArgumentParser()
@@ -90,6 +157,7 @@ def main():
     graph=load_module_graph(str(source),program)
     graph.sources[graph.root]=text
     started=time.monotonic()
+    native_helpers=build_native_helpers(args.cc, build)
     code=Compiler(program,graph.root,modules=graph,allow_native=True).compile()
     emitted=build/(source.stem+'.c')
     emitted.write_text(code,encoding='utf-8')
@@ -106,10 +174,14 @@ def main():
     run(cmd,timeout=600)
     if build_inputs != {rel:sha(ROOT/rel) for rel in build_inputs}:
         raise SystemExit('Launcher/resource inputs changed during build; no receipt published.')
+    if any(native_build_inputs(args.cc, name) != receipt['build_inputs']
+           for name, receipt in native_helpers.items()):
+        raise SystemExit('Native helper inputs changed during executable build; no receipt published.')
     if snapshot != source_snapshot() or entry_sha != sha(source):
         raise SystemExit('Source changed during build; no verified receipt will be published. Rebuild from a stable snapshot.')
     shutil.copy2(ROOT/'vendor/scintilla/bin/Scintilla.dll',args.output.parent/'Scintilla.dll')
     shutil.copy2(ROOT/'vendor/lexilla/bin/lexilla.dll',args.output.parent/'Lexilla.dll')
+    copy_native_helpers(build, args.output.parent)
     receipt={'schema':1,'utc':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),
              'ru_commit':git(ru,'rev-parse','HEAD'),'ru_tree':tree,
              'app_version':(ROOT/'VERSION').read_text().strip(),
@@ -122,6 +194,8 @@ def main():
              'exe_sha256':sha(args.output),'exe_bytes':args.output.stat().st_size,
              'dll_sha256':sha(args.output.parent/'Scintilla.dll'),
              'lexilla_dll_sha256':sha(args.output.parent/'Lexilla.dll'),
+             'native_helper_sha256':sha(args.output.parent/NATIVE_HELPER_NAME),
+             'native_helper_build_key':native_helpers[NATIVE_HELPER_NAME]['build_key'],
              'generated_c_sha256':sha(emitted),'generated_c_bytes':emitted.stat().st_size,
              'seconds':time.monotonic()-started,'runtime_tested':False,
              'compiler_command':cmd}

@@ -1,4 +1,4 @@
-# Status and keyboard scope in 0.1.2
+# Status and keyboard scope in 0.1.4
 
 ## Status
 
@@ -16,4 +16,6 @@ Added: Ctrl+Shift+Tab for the previous tab; Ctrl+PageUp/PageDown as previous/nex
 
 The application never consumes Alt or Ctrl+Alt/AltGr combinations. Unsupported Shift combinations are left to the focused control rather than triggering the unshifted command. Shift+F3 backward search is not implemented or claimed.
 
-The same pure shortcut policy is exercised by 34 portable assertions. Native status tests cover mixed EOLs, tab/Han/emoji/combining-character columns and unchanged text/savepoints. Main-level feature tests use real WM_COMMAND callback dispatch; physical keyboard layouts and IME composition still need manual acceptance.
+For Ru folding, Ctrl+Shift+[ collapses all and Ctrl+Shift+] expands all. The View menu exposes the same commands. Re-selecting the active language preserves fold state; changing to plain reveals hidden text. These commands do not apply to the large-file plain-text mode.
+
+The same pure shortcut policy is exercised by 42 portable assertions. Native status tests cover mixed EOLs, tab/Han/emoji/combining-character columns and unchanged text/savepoints. Main-level feature tests use real WM_COMMAND callback dispatch; physical keyboard layouts and IME composition still need manual acceptance.

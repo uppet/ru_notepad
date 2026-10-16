@@ -5,6 +5,8 @@ These verify orchestration/fail-closed policy only. They are NOT native editor,
 GUI, DLL, file-codec, ACL, or Windows runtime acceptance evidence.
 """
 from pathlib import Path
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -105,10 +107,13 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'app_native': r'^TOTAL PASS: 23\s*$',
             'app_features_native': r'^TOTAL PASS: 23\s*$',
             'app_streaming_native': r'^APP_STREAMING_TESTS_PASS=63\s*$',
-            'shortcuts': r'^TOTAL PASS: 34\s*$',
-            'syntax_policy': r'^TOTAL PASS: 100\s*$',
+            'shortcuts': r'^TOTAL PASS: 42\s*$',
+            'syntax_policy': r'^TOTAL PASS: 108\s*$',
             'status_native': r'^TOTAL PASS: 21\s*$',
             'syntax_native': r'^TOTAL PASS: 82\s*$',
+            'app_ru_native': r'^TOTAL PASS: 39\s*$',
+            'ru_lexical_policy': r'^TOTAL PASS: 338\s*$',
+            'ru_syntax_native': r'^TOTAL PASS: 116\s*$',
             'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=73\s*$',
             'file_streaming_native': r'^FILE_STREAMING_TESTS_PASS=99\s*$',
             'editor_streaming_native': r'^EDITOR_STREAMING_TESTS_PASS=21\s*$',
@@ -118,9 +123,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'file_drop_native': r'^TOTAL PASS: 38\s*$',
         }
         self.assertEqual(dict(ci.NATIVE_CONSOLE_TESTS), expected)
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 18)
-        # Eighteen console gates, two lexer fallbacks, two real GUIs and ACL.
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 23)
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 21)
+        # Twenty-one console gates, six actual fallbacks, three real GUIs and ACL.
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 31)
 
     def test_console_and_gui_receipts_share_all_manifest_resource_inputs(self):
         common = {'packaging/app.rc', 'packaging/app.manifest', 'assets/app-icon.ico', 'VERSION'}
@@ -171,6 +176,15 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             self.assertRegex(runner, rf'(?m)^{name}\.exe(?: |$)')
         self.assertIn('call :syntax_fallback missing-lexilla --expect-missing', runner)
         self.assertIn('call :syntax_fallback bad-lexer --expect-bad-lexer', runner)
+        self.assertIn('call :syntax_fallback missing-ru-lexilla --expect-missing-lexilla ru_syntax_native', runner)
+
+    def test_unicode_data_notice_matches_reviewed_official_bytes(self):
+        source = ci.ROOT / 'packaging/licenses/Unicode.txt'
+        self.assertEqual(source.stat().st_size, 1995)
+        self.assertEqual(ci.portable.sha(source),
+                         'e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96')
+        self.assertEqual(ci.portable.UNICODE_LICENSE_SHA256, ci.portable.sha(source))
+        self.assertEqual(ci.portable.RUNTIME_FILES['packaging/licenses/Unicode.txt'], 'licenses/Unicode.txt')
 
     def test_build_inventory_sources_and_shared_helpers_exist(self):
         with patch.object(builder, 'ROOT', ci.ROOT):
@@ -251,25 +265,31 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         for folder in (binary, fixtures, evidence):
             folder.mkdir()
         (binary / 'syntax_native.exe').write_bytes(b'synthetic executable')
+        (binary / 'ru_syntax_native.exe').write_bytes(b'synthetic Ru executable')
         (binary / 'Scintilla.dll').write_bytes(b'synthetic editor DLL')
         (binary / 'Lexilla.dll').write_bytes(b'synthetic correct lexer DLL')
+        (binary / ci.portable.NATIVE_HELPER_NAME).write_bytes(b'synthetic correct native scanner DLL')
+        (binary / ci.portable.NATIVE_WRONG_ABI_NAME).write_bytes(b'synthetic wrong ABI scanner DLL')
         with patch.object(ci, 'run_console', return_value={'passed': True}) as run:
             results = ci.run_syntax_fallbacks(NoDialogs(), binary, fixtures, evidence)
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 6)
         for call, (name, argument, bad) in zip(run.call_args_list, ci.SYNTAX_FALLBACK_TESTS):
             isolated = fixtures / name
+            executable = ci.SYNTAX_FALLBACK_EXECUTABLES.get(name, 'syntax_native.exe')
             self.assertEqual(call.kwargs['cwd'], isolated)
             self.assertEqual(call.kwargs['expected_assertions'], 8)
-            self.assertEqual(call.args[2], [str(isolated / 'syntax_native.exe'), argument])
-            self.assertEqual((isolated / 'syntax_native.exe').read_bytes(), (binary / 'syntax_native.exe').read_bytes())
+            self.assertEqual(call.args[2], [str(isolated / executable), argument])
+            self.assertEqual((isolated / executable).read_bytes(), (binary / executable).read_bytes())
             self.assertEqual((isolated / 'Scintilla.dll').read_bytes(), (binary / 'Scintilla.dll').read_bytes())
-            self.assertEqual((isolated / 'Lexilla.dll').exists(), bad)
-            if bad:
-                self.assertEqual((isolated / 'Lexilla.dll').read_bytes(), (binary / 'Scintilla.dll').read_bytes())
+            layout = ci.syntax_fallback_layout(name)
+            self.assertEqual({path.name for path in isolated.iterdir()}, set(layout))
+            for target, source in layout.items():
+                self.assertEqual((isolated / target).read_bytes(), (binary / source).read_bytes())
 
     def acceptance(self):
         summary = {'acl_requested': True, 'tests': [],
                    'tested_binary_sha256': {name: name + '-hash' for name in ci.BINARY_NAMES}}
+        summary['scanner_preflight'] = self.scanner_record(ci.ROOT, summary['tested_binary_sha256'])
         names = [name for name, _ in ci.NATIVE_CONSOLE_TESTS] + [case[0] for case in ci.SYNTAX_FALLBACK_TESTS] + ['file_codec_security', *sorted(ci.GUI_NAMES)]
         for name in names:
             result = {'name': name, 'passed': True, 'executed': True, 'cleanup_killed': False,
@@ -278,23 +298,229 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 result.update(main_hwnd_seen=True, close_posted=True, detached_from_console=True)
             else:
                 result['assertions_passed'] = ci.expected_assertions(name)
+            if name == 'ru_syntax_native':
+                result['performance'] = [{'size': size, 'initial_read_bytes': size,
+                    'edit_read_bytes': 1024, 'reused_bytes': size - 1024, 'max_read': 1024,
+                    'initial_ms': 100.0, 'edit_ms': 2.0, 'max_tick_ms': 3.0, 'max_chunk_ms': 1.0}
+                    for size in ci.RU_PERFORMANCE_SIZES]
             if name in {case[0] for case in ci.SYNTAX_FALLBACK_TESTS}:
-                result['fixture_binary_sha256'] = {binary: summary['tested_binary_sha256'][binary]
-                                                  for binary in ('syntax_native.exe', 'Scintilla.dll')}
-                if name == 'syntax_bad_lexer':
-                    result['fixture_binary_sha256']['Lexilla.dll'] = summary['tested_binary_sha256']['Scintilla.dll']
-            if name == 'main-gui-file-entry':
-                result.update({key: True for key in ci.GUI_FILE_CHECKS})
+                result['fixture_binary_sha256'] = {target: summary['tested_binary_sha256'][source]
+                                                  for target, source in ci.syntax_fallback_layout(name).items()}
+            if name in {'main-gui-file-entry', 'main-gui-ru-syntax'}:
+                checks = ci.GUI_FILE_CHECKS if name == 'main-gui-file-entry' else ci.GUI_RU_CHECKS
+                result.update({key: True for key in checks})
                 result['fixture_binary_sha256'] = {binary: summary['tested_binary_sha256'][binary]
                                                   for binary in ci.portable.RUNTIME_NAMES}
+            if name == 'main-gui-ru-syntax':
+                data, probes = ci.gui_ru_timer_fixture()
+                result['timer_performance'] = {'size': len(data), 'wall_ms': 100.0,
+                    'first_head_style_ms': 10.0, 'max_response_ms': 2.0, 'probes': 3,
+                    'source_sha256': hashlib.sha256(data).hexdigest(), 'style_probes': probes}
+                edit_data, edit_probes, edit_folds, _ = ci.gui_ru_edit_fixture()
+                result['edit_performance'] = {'size': len(edit_data), 'source_sha256': hashlib.sha256(edit_data).hexdigest(),
+                    'style_probes': edit_probes, 'fold_probes': edit_folds, 'undo_commands': 6,
+                    'measurement': ci.GUI_RU_EDIT_MEASUREMENT,
+                    'operations': [dict(operation, wall_ms=100.0, max_response_ms=1.0, probes=2)
+                                   for operation in ci.gui_ru_edit_operations()]}
             summary['tests'].append(result)
         return summary
 
-    def test_acceptance_requires_all_23_groups_and_835_assertions(self):
+    def scanner_record(self, root, hashes):
+        sources = ci.scanner_preflight_sources(root)
+        return {'name': ci.portable.SCANNER_PREFLIGHT_NAME, 'passed': True, 'executed': True,
+                'cleanup_killed': False, 'exit_code': 0, 'source_sha256': sources,
+                'report': {'cases': 157, 'chunk_checks': 942, 'ru_assertions_per_backend': 0, 'sanitizer': None,
+                    'library_sha256': hashes[ci.portable.NATIVE_HELPER_NAME],
+                    'source_sha256': sources['native/ru_scan.c']}}
+
+    def test_scanner_preflight_is_mandatory_and_binds_exact_counts_dll_and_sources(self):
+        for mutation in ('missing', 'failed', 'unexecuted', 'killed', 'exit', 'wrong-cases',
+                         'wrong-chunks', 'unexpected-differential', 'wrong-dll', 'wrong-source',
+                         'wrong-script', 'missing-report', 'extra-report', 'host-sanitizer'):
+            with self.subTest(mutation=mutation):
+                summary = self.acceptance()
+                record = summary['scanner_preflight']
+                if mutation == 'missing': summary.pop('scanner_preflight')
+                if mutation == 'failed': record['passed'] = False
+                if mutation == 'unexecuted': record['executed'] = False
+                if mutation == 'killed': record['cleanup_killed'] = True
+                if mutation == 'exit': record['exit_code'] = 1
+                if mutation == 'wrong-cases': record['report']['cases'] = 156
+                if mutation == 'wrong-chunks': record['report']['chunk_checks'] = 941
+                if mutation == 'unexpected-differential': record['report']['ru_assertions_per_backend'] = 314
+                if mutation == 'wrong-dll': record['report']['library_sha256'] = 'different'
+                if mutation == 'wrong-source': record['report']['source_sha256'] = 'different'
+                if mutation == 'wrong-script': record['source_sha256']['tools/test_ru_scan.py'] = 'different'
+                if mutation == 'missing-report': record.pop('report')
+                if mutation == 'extra-report': record['report']['unreviewed'] = True
+                if mutation == 'host-sanitizer': record['report']['sanitizer'] = ci.SCANNER_SANITIZER_SUCCESS
+                with self.assertRaisesRegex(RuntimeError, 'scanner preflight'):
+                    ci.validate_acceptance(summary)
+
+    def scanner_preflight(self, mode='normal'):
+        for relative in (*ci.SCANNER_PREFLIGHT_SOURCES, 'native/ru_scan.c',
+                         'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h'):
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('synthetic fixture\n')
+        binary, evidence = self.root / 'bin', self.root / 'evidence'
+        binary.mkdir(); evidence.mkdir()
+        library = binary / ci.portable.NATIVE_HELPER_NAME
+        library.write_bytes(b'synthetic DLL')
+        record = self.scanner_record(self.root, {ci.portable.NATIVE_HELPER_NAME: ci.sha(library)})
+        code = "import sys\nassert sys.argv[1:] == " + repr(['--library', str(library), '--fuzz', '100']) + '\n'
+        if mode == 'wrong-count': record['report']['chunk_checks'] -= 1
+        if mode == 'wrong-dll': record['report']['library_sha256'] = 'different'
+        if mode == 'malformed': code += "print('not JSON')\n"
+        elif mode == 'overflow': code += f"print('x' * {ci.MAX_LOG_BYTES + 1})\n"
+        else: code += 'print(' + repr(json.dumps(record['report'])) + ')\n'
+        if mode == 'stderr': code += "print('unexpected diagnostic', file=sys.stderr)\n"
+        if mode == 'exit': code += 'sys.exit(1)\n'
+        if mode == 'changed-source':
+            code += 'from pathlib import Path\nPath(' + repr(str(self.root / 'native/ru_scan.h')) + ").write_text('changed')\n"
+        if mode == 'timeout': code += 'import time\ntime.sleep(120)\n'
+        (self.root / 'tools/test_ru_scan.py').write_text(code)
+        with patch.object(ci, 'ROOT', self.root), patch.object(ci, 'cleanup_process', side_effect=kill_synthetic):
+            if mode == 'timeout':
+                with patch.object(ci.time, 'monotonic', side_effect=iter((0, 181, 182))):
+                    result = ci.run_scanner_preflight(NoDialogs(), binary, evidence)
+            else:
+                result = ci.run_scanner_preflight(NoDialogs(), binary, evidence)
+        return result, library, evidence
+
+    def test_scanner_preflight_runs_exact_library_and_collects_bounded_outputs(self):
+        result, library, evidence = self.scanner_preflight()
+        self.assertTrue(result['passed'], result.get('error'))
+        ci.validate_scanner_preflight(result, {ci.portable.NATIVE_HELPER_NAME: ci.sha(library)}, self.root)
+        for stream in ('stdout', 'stderr'):
+            self.assertTrue((evidence / (ci.portable.SCANNER_PREFLIGHT_NAME + '.' + stream + '.log')).is_file())
+
+    def test_scanner_preflight_fails_closed_for_report_exit_timeout_mutation_and_output_errors(self):
+        for mode in ('wrong-count', 'wrong-dll', 'malformed', 'overflow', 'stderr', 'exit',
+                     'changed-source', 'timeout'):
+            with self.subTest(mode=mode):
+                for path in self.root.iterdir():
+                    if path.is_dir(): shutil.rmtree(path)
+                    else: path.unlink()
+                result, _, evidence = self.scanner_preflight(mode)
+                self.assertFalse(result['passed'])
+                self.assertIn('error', result)
+                for path in evidence.iterdir(): self.assertLessEqual(path.stat().st_size, ci.MAX_LOG_BYTES)
+                if mode == 'timeout': self.assertTrue(result['cleanup_killed'])
+
+    def helper_policy_fixture(self):
+        directory = self.root / 'build/logs/014/ru-scan'
+        inputs = {'ru_commit': ci.HELPER_POLICY_COMMIT, 'ru_tree': ci.HELPER_POLICY_TREE,
+                  'source_sha256': {'native/ru_scan.c': 'c' * 64, 'tools/test_ru_scan.py': 'd' * 64}}
+        with patch.object(ci, 'helper_policy_inputs', return_value=inputs):
+            ci.helper_policy_action('prepare', self.root)
+        (directory / 'libRuSyntax.so').write_bytes(b'synthetic host library')
+        report = {'cases': 157, 'chunk_checks': 942, 'ru_assertions_per_backend': 314,
+                  'sanitizer': ci.SCANNER_SANITIZER_SUCCESS,
+                  'source_sha256': inputs['source_sha256']['native/ru_scan.c'],
+                  'library_sha256': ci.sha(directory / 'libRuSyntax.so')}
+        for name in ci.HELPER_POLICY_EVIDENCE_FILES:
+            (directory / name).write_text('')
+        for name in ('report.json', 'helper-policy.stdout.log'):
+            (directory / name).write_text(json.dumps(report))
+        for name in ('differential-python.log', 'differential-c.log'):
+            (directory / name).write_text('PASS: fixture\n' * 314 + 'TOTAL PASS: 314\n')
+        (directory / 'sanitize.log').write_text(ci.SCANNER_SANITIZER_SUCCESS + '\n')
+        return directory, inputs
+
+    def test_linux_helper_policy_requires_clean_pinned_compiler_and_snapshots(self):
+        for values in ((ci.HELPER_POLICY_COMMIT, ci.HELPER_POLICY_TREE, ''),
+                       ('wrong', ci.HELPER_POLICY_TREE, ''),
+                       (ci.HELPER_POLICY_COMMIT, 'wrong', ''),
+                       (ci.HELPER_POLICY_COMMIT, ci.HELPER_POLICY_TREE, ' M compiler.py')):
+            with self.subTest(values=values), \
+                 patch.object(ci.subprocess, 'check_output', side_effect=values), \
+                 patch.object(ci, 'scanner_preflight_sources', return_value={}):
+                if values == (ci.HELPER_POLICY_COMMIT, ci.HELPER_POLICY_TREE, ''):
+                    result = ci.helper_policy_inputs(ci.ROOT)
+                    self.assertEqual(result['ru_commit'], ci.HELPER_POLICY_COMMIT)
+                    self.assertIn('.github/workflows/windows.yml', result['source_sha256'])
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'clean reviewed'):
+                        ci.helper_policy_inputs(ci.ROOT)
+
+    def test_linux_helper_policy_verifies_both_oracles_and_sanitizer_then_collects_only_bounded_logs(self):
+        directory, inputs = self.helper_policy_fixture()
+        with patch.object(ci, 'helper_policy_inputs', return_value=inputs):
+            result = ci.helper_policy_action('verify', self.root)
+            self.assertTrue(result['passed'])
+            with self.assertRaises(FileExistsError):
+                ci.helper_policy_action('prepare', self.root)
+        for name in ('differential.ru', 'sanitize.c', 'private-source.txt'):
+            (directory / name).write_text('DO NOT UPLOAD')
+        (directory / 'helper-policy.stderr.log').write_bytes(b'x' * (ci.MAX_LOG_BYTES + 1))
+        ci.helper_policy_action('collect', self.root)
+        destination = self.root / 'build/helper-policy-evidence'
+        expected = {*ci.HELPER_POLICY_EVIDENCE_FILES, 'helper-policy-inputs.json', 'helper-policy-acceptance.json'}
+        self.assertEqual({path.name for path in destination.iterdir()}, expected)
+        for path in destination.iterdir(): self.assertLessEqual(path.stat().st_size, ci.MAX_LOG_BYTES)
+
+    def test_linux_helper_policy_rejects_missing_or_partial_differential_sanitizer_and_source_results(self):
+        for mutation in ('missing', 'wrong-count', 'wrong-library', 'wrong-source', 'changed-inputs',
+                         'missing-sanitizer', 'partial-sanitizer', 'sanitizer-error', 'missing-python', 'missing-c',
+                         'extra-total', 'failed-case', 'skipped-case', 'unexpected-stderr', 'oversize'):
+            with self.subTest(mutation=mutation):
+                shutil.rmtree(self.root / 'build', ignore_errors=True)
+                directory, inputs = self.helper_policy_fixture()
+                report = json.loads((directory / 'report.json').read_text())
+                if mutation == 'missing': (directory / 'report.json').unlink()
+                if mutation == 'wrong-count': report['chunk_checks'] = 941
+                if mutation == 'wrong-library': report['library_sha256'] = 'different'
+                if mutation == 'wrong-source': report['source_sha256'] = 'different'
+                if mutation == 'missing-sanitizer': report['sanitizer'] = None
+                if mutation == 'partial-sanitizer':
+                    report['sanitizer'] = ci.SCANNER_SANITIZER_SUCCESS + ' (LSan disabled by caller)'
+                    (directory / 'sanitize.log').write_text(report['sanitizer'])
+                if mutation == 'changed-inputs': inputs = dict(inputs, ru_tree='different')
+                if mutation in ('wrong-count', 'wrong-library', 'wrong-source', 'missing-sanitizer', 'partial-sanitizer'):
+                    for name in ('report.json', 'helper-policy.stdout.log'):
+                        (directory / name).write_text(json.dumps(report))
+                if mutation == 'sanitizer-error': (directory / 'sanitize.log').write_text('runtime error: bad memory\n' + ci.SCANNER_SANITIZER_SUCCESS)
+                if mutation == 'missing-python': (directory / 'differential-python.log').write_text('TOTAL PASS: 314\n')
+                if mutation == 'missing-c': (directory / 'differential-c.log').unlink()
+                if mutation in ('extra-total', 'failed-case', 'skipped-case'):
+                    with (directory / 'differential-python.log').open('a') as stream:
+                        stream.write({'extra-total': 'TOTAL PASS: 314', 'failed-case': 'FAIL: fixture', 'skipped-case': 'SKIP: fixture'}[mutation] + '\n')
+                if mutation == 'unexpected-stderr': (directory / 'helper-policy.stderr.log').write_text('error')
+                if mutation == 'oversize': (directory / 'scanner-build.log').write_bytes(b'x' * (ci.MAX_LOG_BYTES + 1))
+                with patch.object(ci, 'helper_policy_inputs', return_value=inputs), self.assertRaises(RuntimeError):
+                    ci.helper_policy_action('verify', self.root)
+                self.assertFalse((directory / 'helper-policy-acceptance.json').exists())
+
+    def test_workflow_requires_linux_oracle_sanitizer_before_windows_or_package_artifacts(self):
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text()
+        helper = workflow.split('  helper-policy:\n', 1)[1].split('  windows-native:\n', 1)[0]
+        windows = workflow.split('  windows-native:\n', 1)[1]
+        self.assertIn('needs: helper-policy', windows)
+        self.assertNotIn('continue-on-error', workflow)
+        self.assertIn('python -I tools/test_ru_scan.py --ru-root .ci/ru-language --sanitize --fuzz 100', helper)
+        for action in ('prepare', 'verify', 'collect'):
+            self.assertIn('--helper-policy-action ' + action, helper)
+        self.assertIn('ASAN_OPTIONS:', helper)
+        self.assertIn('UBSAN_OPTIONS:', helper)
+        self.assertIn('path: build/helper-policy-evidence/*', helper)
+        self.assertNotIn('path: build/logs/', helper)
+        self.assertIn('if: success()', windows)
+
+    def test_acceptance_retains_previous_835_assertions_and_16_policy_additions(self):
         summary = self.acceptance()
         ci.validate_acceptance(summary)
-        self.assertEqual(len(summary['tests']), 23)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 835)
+        new = {'ru_lexical_policy', 'ru_syntax_native', 'app_ru_native',
+               'ru_syntax_missing_lexilla', 'main-gui-ru-syntax', *ci.HELPER_FALLBACK_LAYOUTS}
+        prior = [test for test in summary['tests'] if test['name'] not in new]
+        self.assertEqual(len(prior), 23)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 835 + 16)
+
+    def test_acceptance_requires_all_31_groups_and_exact_assertions(self):
+        summary = self.acceptance()
+        ci.validate_acceptance(summary)
+        self.assertEqual(len(summary['tests']), 31)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1376)
 
     def test_acceptance_rejects_missing_or_duplicated_syntax_branch(self):
         summary = self.acceptance()
@@ -358,6 +584,10 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertEqual(ci.console_command('app_streaming_native', self.root, self.root),
                          [str(self.root / 'app_streaming_native.exe'), str(self.root)])
         self.assertEqual(ci.CONSOLE_TIMEOUT_SECONDS['app_streaming_native'], 180)
+        self.assertEqual(ci.console_command('app_ru_native', self.root, self.root),
+                         [str(self.root / 'app_ru_native.exe'), str(self.root)])
+        self.assertEqual(ci.CONSOLE_TIMEOUT_SECONDS['app_ru_native'], 180)
+        self.assertIn('app_ru_native.exe "%TESTDIR%" >>test-results.txt 2>&1', runner)
         workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
         self.assertIn('timeout-minutes: 60', workflow)
         self.assertIn('-RunAclTests', workflow)
@@ -530,6 +760,559 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
     def test_gui_file_entry_rejects_partial_document_after_cancel(self):
         self.assertFalse(self.gui_file_entry('partial-after-cancel')[0]['passed'])
 
+    def test_ru_gui_requires_every_check_and_exact_runtime(self):
+        for key in ci.GUI_RU_CHECKS:
+            with self.subTest(key=key):
+                summary = self.acceptance()
+                next(case for case in summary['tests'] if case['name'] == 'main-gui-ru-syntax')[key] = False
+                with self.assertRaisesRegex(RuntimeError, 'required style/fold/visibility/clean-state'):
+                    ci.validate_acceptance(summary)
+        summary = self.acceptance()
+        next(case for case in summary['tests'] if case['name'] == 'main-gui-ru-syntax')['fixture_binary_sha256']['Lexilla.dll'] = 'different'
+        with self.assertRaisesRegex(RuntimeError, 'packaged runtime'):
+            ci.validate_acceptance(summary)
+
+    def test_ru_gui_fixture_uses_utf8_byte_offsets_and_nested_headers(self):
+        source, probes, headers, children = ci.gui_ru_syntax_fixture()
+        self.assertIn('中😀'.encode(), source)
+        expected = {'keyword': ('作', 4), 'number': ('42', 3), 'quoted_keyword': ("'若 真 则'", 2)}
+        self.assertEqual(set(probes), set(expected))
+        for name, (token, style) in expected.items():
+            probe = probes[name]
+            self.assertEqual(probe['style'], style)
+            self.assertEqual(source[probe['offset']:probe['offset'] + probe['length']], token.encode())
+            self.assertGreater(probe['offset'], source.decode().index(token))
+        self.assertEqual(headers, (1, 4))
+        self.assertEqual(children, (2, 5))
+        self.assertTrue(source.splitlines()[headers[0]].startswith('作'.encode()))
+        self.assertTrue(source.splitlines()[headers[1]].lstrip().startswith('若'.encode()))
+
+    def gui_ru_syntax(self, mode='normal'):
+        binary, fixtures, evidence = (self.root / name for name in ('bin', 'fixtures', 'evidence'))
+        for folder in (binary, fixtures, evidence):
+            folder.mkdir()
+        for name in ci.portable.RUNTIME_NAMES:
+            (binary / name).write_bytes(b'synthetic ' + name.encode())
+        original, probes, headers, children = ci.gui_ru_syntax_fixture()
+        timer_data, timer_probes = ci.gui_ru_timer_fixture()
+        process = type('Process', (), {'pid': 123, 'poll': lambda self: None})()
+        class FakeWindows:
+            def __init__(self):
+                self.language = 'ru'
+                self.collapsed = False
+                self.commands = []
+                self.queries = []
+                self.ru_reselected = False
+                self.large = False
+                self.timer_rounds = 0
+                self.drop_targets = []
+                self.released = False
+            def no_dialog(self, _): return []
+            def responsive(self, _):
+                if self.large:
+                    self.timer_rounds += 1
+                    if mode == 'timer-unresponsive': raise RuntimeError('WM_NULL failed')
+            def control(self, _, identifier): return identifier
+            def text(self, hwnd):
+                if hwnd == 11:
+                    if mode == 'timer-empty-status': return ''
+                    return 'Ru    Styling Ru...' if self.timer_rounds < 2 or mode == 'timer-stalled' else 'Ln 1    UTF-8    Ru'
+                return self.source.name + ' · ru_notepad'
+            def editor(self, _): return 456
+            def editor_bytes(self, _):
+                if self.large: raise AssertionError('Never fetch the 1 MB document byte by byte')
+                return b'wrong' if mode == 'wrong-text' else original
+            def drop(self, hwnd, paths):
+                if len(paths) != 1: raise AssertionError('Expected one timer source')
+                self.drop_targets.append(hwnd)
+                self.source = paths[0]
+                if self.source.read_bytes() != timer_data: raise AssertionError('Incorrect 1 MB fixture')
+                self.large = True
+                if mode == 'timer-changed-source': self.source.write_bytes(b'changed')
+            def release_drops(self): self.released = True
+            def scalar(self, hwnd, message, wparam=0, lparam=0):
+                self.queries.append((hwnd, message, wparam, lparam))
+                if message == 0x1304: return 3 if self.large else 2
+                if hwnd != 456 or lparam != 0 or not isinstance(wparam, int):
+                    raise AssertionError('Private GUI messages may carry only scalar values')
+                if self.large:
+                    if message == 2006: return len(timer_data) - int(mode == 'timer-wrong-length')
+                    if message == 2159: return int(mode == 'timer-dirty')
+                    if message != 2010: raise AssertionError('No whole-document or line scans in timer stage')
+                    return next((probe['style'] if mode != 'timer-wrong-' + label else 0
+                                 for label, probe in timer_probes.items()
+                                 if probe['offset'] <= wparam < probe['offset'] + probe['length']), 0)
+                if message == 2154: return original.count(b'\n') + 1
+                if message == 2159: return int(mode == 'dirty')
+                if message == 2010:
+                    if mode == 'wrong-style' or (mode == 'ru-no-restyle' and self.ru_reselected): return 0
+                    if self.language == 'plain' and mode != 'plain-keeps-style': return 0
+                    return next((probe['style'] for probe in probes.values()
+                                 if probe['offset'] <= wparam < probe['offset'] + probe['length']), 0)
+                if message == 2223:
+                    if mode == 'no-fold' or (self.language == 'plain' and mode != 'plain-keeps-fold'): return 0x400
+                    return 0x2400 if wparam in headers else 0x401
+                if message == 2228:
+                    return int(not self.collapsed or wparam not in
+                               (range(1, 9) if mode == 'root-hidden' else range(2, 8)))
+                raise AssertionError(f'Unexpected or pointer-bearing private message: {message}')
+            def command(self, _, identifier):
+                self.commands.append(identifier)
+                if identifier == 505:
+                    self.collapsed = mode != 'collapse-noop'
+                    if mode == 'changed-source': self.source.write_bytes(b'modified by synthetic bug')
+                elif identifier == 506:
+                    self.collapsed = mode == 'expand-noop'
+                elif identifier == 701:
+                    self.language = 'plain'
+                    self.collapsed = mode == 'plain-keeps-hidden'
+                elif identifier == 704:
+                    if self.language != 'ru':
+                        self.ru_reselected = True
+                        self.language = 'ru'
+                        self.collapsed = mode == 'ru-keeps-hidden'
+                    elif mode == 'same-ru-expands':
+                        self.collapsed = False
+                else:
+                    raise AssertionError('Unexpected GUI Ru menu command')
+        api = FakeWindows()
+        def launch(_, isolated, __, **kwargs):
+            self.assertEqual(kwargs['name'], 'main-gui-ru-syntax')
+            self.assertEqual(kwargs['log_prefix'], 'main-ru-syntax-launcher')
+            self.assertEqual(len(kwargs['arguments']), 1)
+            api.source = kwargs['arguments'][0]
+            self.assertEqual(api.source.suffix, '.ru')
+            self.assertIn('😀', str(api.source))
+            self.assertEqual(api.source.read_bytes(), original)
+            try:
+                return {'passed': True, **kwargs['exercise'](process, 123)}
+            except RuntimeError as exc:
+                return {'passed': False, 'error': str(exc)}
+        ticks = [0.0]
+        def monotonic():
+            ticks[0] += 1
+            return ticks[0]
+        def edit_stage(_, child, hwnd, source, record):
+            self.assertIs(child, process)
+            self.assertEqual(hwnd, 123)
+            self.assertEqual(source.read_bytes(), ci.gui_ru_edit_fixture()[0])
+            record['operations'] = [dict(operation, wall_ms=100.0, max_response_ms=1.0, probes=2)
+                                    for operation in ci.gui_ru_edit_operations()]
+            record['undo_commands'] = 6
+            return {name: True for name in ci.GUI_RU_EDIT_CHECKS}
+        with patch.object(ci, 'run_gui', side_effect=launch), \
+             patch.object(ci, 'run_gui_ru_edits', side_effect=edit_stage), \
+             patch.object(ci.time, 'monotonic', side_effect=monotonic), patch.object(ci.time, 'sleep'):
+            result = ci.run_gui_ru_syntax(api, binary, fixtures, evidence)
+        return result, api
+
+    def test_ru_gui_exercises_actual_style_fold_and_menu_scalar_contract(self):
+        result, api = self.gui_ru_syntax()
+        self.assertTrue(result['passed'], result.get('error'))
+        self.assertTrue(all(result[key] for key in ci.GUI_RU_CHECKS))
+        self.assertEqual(api.commands, [505, 704, 506, 505, 701, 704])
+        self.assertEqual(set(result['fixture_binary_sha256']), set(ci.portable.RUNTIME_NAMES))
+        self.assertEqual(set(query[1] for query in api.queries), {0x1304, 2006, 2154, 2159, 2010, 2223, 2228})
+        self.assertTrue(all(query[3] == 0 for query in api.queries))
+        self.assertEqual(api.drop_targets, [456])
+        self.assertTrue(api.released)
+        self.assertEqual(result['timer_performance']['probes'], 2)
+        ci.validate_gui_ru_timer(result['timer_performance'])
+
+    def test_ru_gui_fails_closed_for_wrong_style_fold_visibility_dirty_or_bytes(self):
+        for mode in ('wrong-text', 'wrong-style', 'no-fold', 'dirty', 'collapse-noop',
+                     'root-hidden', 'expand-noop', 'same-ru-expands', 'plain-keeps-style',
+                     'plain-keeps-fold', 'plain-keeps-hidden', 'ru-no-restyle',
+                     'ru-keeps-hidden', 'changed-source'):
+            with self.subTest(mode=mode):
+                # Each isolated run owns fresh fixtures and launcher-log names.
+                for name in ('bin', 'fixtures', 'evidence'):
+                    shutil.rmtree(self.root / name, ignore_errors=True)
+                result, _ = self.gui_ru_syntax(mode)
+                self.assertFalse(result['passed'])
+                self.assertIn('error', result)
+
+    def test_ru_timer_rejects_unfinished_styles_status_length_dirty_source_and_response(self):
+        for mode in ('timer-wrong-head_identifier', 'timer-wrong-head_keyword', 'timer-wrong-head_number',
+                     'timer-wrong-tail_keyword', 'timer-wrong-tail_number',
+                     'timer-stalled', 'timer-empty-status', 'timer-wrong-length',
+                     'timer-dirty', 'timer-changed-source', 'timer-unresponsive'):
+            with self.subTest(mode=mode):
+                for name in ('bin', 'fixtures', 'evidence'):
+                    shutil.rmtree(self.root / name, ignore_errors=True)
+                result, api = self.gui_ru_syntax(mode)
+                self.assertFalse(result['passed'])
+                self.assertTrue(api.released)
+                self.assertGreater(result['timer_performance']['wall_ms'], 0)
+                if mode.startswith('timer-wrong-') or mode in ('timer-stalled', 'timer-empty-status'):
+                    self.assertIn('30 seconds', result['error'])
+
+    def test_ru_timer_fixture_is_exact_unicode_megabyte_with_bounded_head_tail_probes(self):
+        data, probes = ci.gui_ru_timer_fixture()
+        self.assertEqual(len(data), 1000000)
+        self.assertTrue(data.decode('utf-8').startswith('值 取 1.\n'))
+        self.assertTrue(data.decode('utf-8').endswith('显 987654.\n'))
+        self.assertEqual(sum(probe['length'] for probe in probes.values()), 16)
+        for label, token in (('head_identifier', '值'), ('head_keyword', '取'), ('head_number', '1'),
+                             ('tail_keyword', '显'), ('tail_number', '987654')):
+            probe = probes[label]
+            self.assertEqual(data[probe['offset']:probe['offset'] + probe['length']], token.encode())
+            self.assertTrue(probe['offset'] < 16 if label.startswith('head') else probe['offset'] > 999980)
+
+    def test_ru_timer_acceptance_requires_exact_source_probe_schema_and_real_finite_metrics(self):
+        good = next(case for case in self.acceptance()['tests'] if case['name'] == 'main-gui-ru-syntax')['timer_performance']
+        import copy
+        for field, value in [('size', 999999), ('source_sha256', 'different'),
+                             ('style_probes', {}), ('probes', 0), ('probes', True),
+                             ('wall_ms', 30001), ('wall_ms', float('nan')),
+                             ('first_head_style_ms', -1), ('first_head_style_ms', 101),
+                             ('first_head_style_ms', None),
+                             ('max_response_ms', float('inf')), ('max_response_ms', -1),
+                             ('max_response_ms', 101)]:
+            record = copy.deepcopy(good)
+            record[field] = value
+            with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
+                ci.validate_gui_ru_timer(record)
+        for field in good:
+            record = copy.deepcopy(good)
+            record.pop(field)
+            with self.subTest(missing=field), self.assertRaises(RuntimeError):
+                ci.validate_gui_ru_timer(record)
+        summary = self.acceptance()
+        next(case for case in summary['tests'] if case['name'] == 'main-gui-ru-syntax').pop('timer_performance')
+        with self.assertRaisesRegex(RuntimeError, 'timer performance'):
+            ci.validate_acceptance(summary)
+
+    def ru_performance_text(self):
+        return '\n'.join(f'PERF_RU size={size} initial_ms=100 edit_ms=2 '
+                         f'initial_read_bytes={size} edit_read_bytes=1024 '
+                         f'reused_bytes={size - 1024} max_read=1024 max_tick_ms=3 max_chunk_ms=1'
+                         for size in ci.RU_PERFORMANCE_SIZES)
+
+    def gui_ru_edits(self, mode='normal'):
+        original, probes, folds, positions = ci.gui_ru_edit_fixture()
+        source = self.root / '代表源码 😀.ru'
+        source.write_bytes(original)
+        record = {'size': len(original), 'source_sha256': ci.sha(source), 'style_probes': probes,
+                  'fold_probes': folds, 'measurement': ci.GUI_RU_EDIT_MEASUREMENT,
+                  'operations': [], 'undo_commands': 0}
+        process = type('Process', (), {'pid': 123, 'poll': lambda self: None})()
+        class EditWindows:
+            def __init__(self):
+                self.data = original
+                self.inserted = None
+                self.history = []
+                self.caret = 0
+                self.input_count = 0
+                self.rounds = 2
+                self.inputs = []
+                self.commands = []
+                self.drops = []
+                self.byte_queries = []
+            def editor(self, _): return 456
+            def control(self, _, identifier): return identifier
+            def no_dialog(self, _): return []
+            def responsive(self, _):
+                self.rounds += 1
+                if mode == 'unresponsive' and self.input_count: raise RuntimeError('WM_NULL timed out')
+            def drop(self, target, paths):
+                self.drops.append((target, paths))
+            def text(self, hwnd):
+                if hwnd == 11:
+                    return 'Ru Styling Ru...' if self.rounds < 2 or (mode == 'pending' and self.input_count) else 'UTF-8 Ru'
+                return source.name + ' · ru_notepad'
+            def active_probes(self):
+                shifted = {name: dict(probe, offset=probe['offset'] + int(self.inserted is not None and probe['offset'] >= self.inserted))
+                           for name, probe in probes.items()}
+                if self.inserted is not None:
+                    shifted['new'] = {'offset': self.inserted, 'length': 1,
+                                      'style': 1 if self.inserted == len(original) else 8}
+                return shifted
+            def scalar(self, hwnd, message, wparam=0, lparam=0):
+                if message == 0x1304: return 4
+                if hwnd != 456: raise AssertionError('Edit messages must target the actual child')
+                if message == 2025:
+                    if lparam: raise AssertionError('Caret position must be scalar')
+                    self.caret = wparam
+                    return 0
+                if message == 2008: return self.caret + int(mode == 'wrong-caret')
+                if message in (0x0102, 0x0100):
+                    if lparam != 1: raise AssertionError('Expected a scalar real key repeat count')
+                    self.history.append((self.data, self.inserted))
+                    self.inputs.append((message, wparam, self.caret))
+                    self.input_count += 1
+                    self.rounds = 0
+                    if message == 0x0102:
+                        if wparam != ord('x'): raise AssertionError('Only the reviewed ASCII edit is permitted')
+                        self.inserted = self.caret
+                        self.data = self.data[:self.caret] + (b'y' if mode == 'wrong-context' else b'x') + self.data[self.caret:]
+                        self.caret += 1
+                    else:
+                        if wparam != 8: raise AssertionError('Delete must use actual Backspace')
+                        self.data = self.data[:self.caret - 1] + self.data[self.caret:]
+                        self.caret -= 1
+                        self.inserted = None
+                    return 0
+                if message == 0x0101:
+                    if (wparam, lparam) != (8, 0xc0000001): raise AssertionError('Expected Backspace release')
+                    return 0
+                if lparam: raise AssertionError('No pointer-bearing editor query is allowed')
+                if message == 2006: return len(self.data) + int(mode == 'wrong-length' and self.input_count > 0)
+                if message == 2159:
+                    if mode == 'lost-dirty' and self.input_count: return 0
+                    if mode == 'undo-dirty' and self.input_count: return 1
+                    return int(bool(self.history))
+                if message == 2028: return len(self.data) - int(mode == 'endstyled-only' and self.input_count > 0)
+                if message == 2174: return int(bool(self.history) and mode != 'lost-undo')
+                if message == 2010:
+                    if mode == 'wrong-style' and self.input_count: return 0
+                    return next((probe['style'] for probe in self.active_probes().values()
+                                 if probe['offset'] <= wparam < probe['offset'] + probe['length']), 0)
+                if message == 2223:
+                    if mode == 'wrong-fold' and self.input_count: return 0x400
+                    return next((probe['level'] for probe in folds if probe['line'] == wparam), 0x400)
+                if message == 2007:
+                    self.byte_queries.append(wparam)
+                    return self.data[wparam]
+                raise AssertionError(f'Unexpected private message {message}')
+            def command(self, _, identifier):
+                self.commands.append(identifier)
+                if identifier == 504:
+                    if mode == 'changed-source': source.write_bytes(b'changed')
+                elif identifier == 201:
+                    if mode != 'undo-noop':
+                        self.data, self.inserted = self.history.pop()
+                    self.rounds = 2
+                else: raise AssertionError('Unexpected edit menu command')
+        api = EditWindows()
+        ticks = [0.0]
+        def monotonic():
+            ticks[0] += 0.1
+            return ticks[0]
+        with patch.object(ci.time, 'monotonic', side_effect=monotonic), patch.object(ci.time, 'sleep'):
+            try:
+                checks = ci.run_gui_ru_edits(api, process, 123, source, record)
+                result = {'passed': True, **checks}
+            except RuntimeError as exc:
+                result = {'passed': False, 'error': str(exc)}
+        return result, api, record
+
+    def test_real_gui_edit_stage_uses_six_scalar_child_inputs_exact_context_and_bounded_undo(self):
+        result, api, record = self.gui_ru_edits()
+        self.assertTrue(result['passed'], result.get('error'))
+        self.assertTrue(all(result[name] for name in ci.GUI_RU_EDIT_CHECKS))
+        ci.validate_gui_ru_edits(record)
+        self.assertEqual(api.input_count, 6)
+        self.assertEqual(api.commands, [504] * 6 + [201] * 6)
+        self.assertEqual(api.drops[0][0], 456)
+        self.assertEqual(api.history, [])
+        self.assertEqual(api.data, ci.gui_ru_edit_fixture()[0])
+        self.assertLessEqual(len(api.byte_queries), 6 * 16)
+        for actual, expected in zip(api.inputs, ci.gui_ru_edit_operations()):
+            self.assertEqual(actual[2], expected['position'] + int(expected['operation'] == 'delete'))
+            self.assertEqual(actual[0], 0x0102 if expected['operation'] == 'insert' else 0x0100)
+        self.assertTrue(all(item['probes'] == 2 for item in record['operations']))
+
+    def test_real_gui_edits_reject_wrong_bytes_styles_folds_pending_dirty_length_caret_and_undo(self):
+        for mode in ('unresponsive', 'pending', 'wrong-context', 'wrong-length', 'wrong-caret',
+                     'lost-dirty', 'endstyled-only', 'wrong-style', 'wrong-fold', 'changed-source',
+                     'lost-undo', 'undo-noop', 'undo-dirty'):
+            with self.subTest(mode=mode):
+                result, api, record = self.gui_ru_edits(mode)
+                self.assertFalse(result['passed'])
+                self.assertIn('error', result)
+                self.assertLessEqual(record['undo_commands'], 6)
+                if mode in ('pending', 'wrong-context', 'wrong-length', 'lost-dirty',
+                            'endstyled-only', 'wrong-style', 'wrong-fold'):
+                    self.assertIn('30 seconds', result['error'])
+                    self.assertGreater(record['operations'][-1]['wall_ms'], 30000)
+
+    def test_edit_performance_requires_exact_fixture_all_six_operations_and_finite_deadlines(self):
+        import copy
+        good = next(case for case in self.acceptance()['tests'] if case['name'] == 'main-gui-ru-syntax')['edit_performance']
+        ci.validate_gui_ru_edits(good)
+        for mutation in ('size', 'source', 'style', 'fold', 'measurement', 'missing', 'extra', 'order',
+                         'position', 'before', 'after', 'timeout', 'nan', 'response', 'probes', 'undo'):
+            with self.subTest(mutation=mutation):
+                record = copy.deepcopy(good)
+                if mutation == 'size': record['size'] = 99999
+                if mutation == 'source': record['source_sha256'] = 'different'
+                if mutation == 'style': record['style_probes']['head_keyword']['style'] = 0
+                if mutation == 'fold': record['fold_probes'][0]['level'] = 0x400
+                if mutation == 'measurement': record['measurement'] = 'wrong metric definition'
+                if mutation == 'missing': record['operations'].pop()
+                if mutation == 'extra': record['operations'].append(record['operations'][-1])
+                if mutation == 'order': record['operations'].reverse()
+                if mutation == 'position': record['operations'][0]['position'] = 1
+                if mutation == 'before': record['operations'][0]['before_size'] = 99999
+                if mutation == 'after': record['operations'][0]['after_size'] = 100000
+                if mutation == 'timeout': record['operations'][0]['wall_ms'] = 30001
+                if mutation == 'nan': record['operations'][0]['wall_ms'] = float('nan')
+                if mutation == 'response': record['operations'][0]['max_response_ms'] = 101
+                if mutation == 'probes': record['operations'][0]['probes'] = 0
+                if mutation == 'undo': record['undo_commands'] = 7
+                with self.assertRaises(RuntimeError): ci.validate_gui_ru_edits(record)
+        summary = self.acceptance()
+        next(case for case in summary['tests'] if case['name'] == 'main-gui-ru-syntax').pop('edit_performance')
+        with self.assertRaisesRegex(RuntimeError, 'edit performance'):
+            ci.validate_acceptance(summary)
+
+    def test_ru_performance_requires_both_sizes_with_exact_finite_fields(self):
+        records = ci.parse_ru_performance(self.ru_performance_text())
+        self.assertEqual([record['size'] for record in records], [100000, 1000000])
+        for record in records:
+            self.assertEqual(set(record), ci.RU_PERFORMANCE_FIELDS)
+            self.assertEqual(record['initial_read_bytes'], record['size'])
+            self.assertEqual(record['max_read'], 1024)
+        # Large measured times are reported, not silently discarded or assigned
+        # a fabricated hardware-independent latency requirement.
+        records[0]['initial_ms'] = 123456.25
+        ci.validate_ru_performance(records)
+
+    def test_ru_performance_rejects_missing_duplicate_and_unbounded_records(self):
+        valid = self.ru_performance_text()
+        variants = [
+            '', valid.splitlines()[0], valid + '\n' + valid.splitlines()[0],
+            valid.replace('size=1000000 ', 'size=100000 '),
+            valid.replace('initial_ms=100', 'initial_ms=NaN'),
+            valid.replace('edit_ms=2', 'edit_ms=inf'),
+            valid.replace('max_tick_ms=3', 'max_tick_ms=-1'),
+            valid.replace('max_chunk_ms=1', 'max_chunk_ms=NaN'),
+            valid.replace('max_read=1024', 'max_read=1025'),
+            valid.replace('max_read=1024', 'max_read=0'),
+            valid.replace('edit_read_bytes=1024', 'edit_read_bytes=65537'),
+            valid.replace('edit_read_bytes=1024', 'edit_read_bytes=0'),
+            valid.replace('initial_read_bytes=100000 ', 'initial_read_bytes=99999 '),
+            valid.replace('reused_bytes=98976', 'reused_bytes=0'),
+            valid.replace('reused_bytes=98976', 'reused_bytes=100001'),
+            valid.replace('max_read=1024', 'max_read=1024.0'),
+            valid.replace('max_read=1024', 'max_read=1024 max_read=1024'),
+            valid.replace('max_read=1024', 'unexpected=1024'),
+            valid.replace('max_read=1024', 'max_read=bad'),
+            valid.replace('max_read=1024', 'max_read=1024=1024'),
+            valid.replace('max_read=1024', 'max_read'),
+            valid.replace('PERF_RU ', 'PERF_RU_BAD '),
+        ]
+        for text in variants:
+            with self.subTest(text=text):
+                with self.assertRaisesRegex(RuntimeError, 'Ru performance'):
+                    ci.parse_ru_performance(text)
+
+    def test_acceptance_revalidates_ru_performance_records(self):
+        for mutation in ('missing', 'oversized-read', 'no-convergence', 'nonfinite-time'):
+            with self.subTest(mutation=mutation):
+                summary = self.acceptance()
+                result = next(test for test in summary['tests'] if test['name'] == 'ru_syntax_native')
+                if mutation == 'missing': result.pop('performance')
+                if mutation == 'oversized-read': result['performance'][0]['max_read'] = 1025
+                if mutation == 'no-convergence': result['performance'][0]['reused_bytes'] = 0
+                if mutation == 'nonfinite-time': result['performance'][0]['max_tick_ms'] = float('nan')
+                with self.assertRaisesRegex(RuntimeError, 'Ru performance'):
+                    ci.validate_acceptance(summary)
+
+    def test_ru_console_requires_measurements_in_addition_to_exact_assertions(self):
+        for measured in (True, False):
+            with self.subTest(measured=measured):
+                evidence = self.root / str(measured)
+                evidence.mkdir()
+                output = 'PASS: synthetic\nTOTAL PASS: 1\n'
+                if measured:
+                    output += self.ru_performance_text()
+                with patch.object(ci, 'cleanup_process', side_effect=kill_synthetic):
+                    result = ci.run_console(NoDialogs(), 'ru_syntax_native',
+                        [sys.executable, '-c', f'print({output!r})'], evidence,
+                        r'^TOTAL PASS: 1\s*$', expected_assertions=1)
+                self.assertEqual(result['passed'], measured)
+                if measured:
+                    self.assertEqual(len(result['performance']), 2)
+                else:
+                    self.assertIn('Ru performance', result['error'])
+
+    def native_build_fixture(self):
+        for relative in (*ci.portable.NATIVE_BUILD_DRIVERS,
+                         *(source for sources in ci.portable.NATIVE_COMPILE_SOURCES.values() for source in sources),
+                         'native/ru_scan.h', 'native/ru_unicode_data.h'):
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('synthetic native input: ' + relative, encoding='utf-8')
+        compiler = self.root / 'synthetic-cc'
+        compiler.write_bytes(b'synthetic compiler binary')
+        def compile_fixture(command, **kwargs):
+            self.assertEqual(kwargs['cwd'], self.root)
+            destination = Path(command[command.index('-o') + 1])
+            destination.write_bytes(('synthetic DLL ' + destination.stem).encode())
+        return compiler, compile_fixture
+
+    def test_native_helper_cache_requires_exact_inputs_compiler_flags_and_dll_bytes(self):
+        compiler, compile_fixture = self.native_build_fixture()
+        build_dir = self.root / 'build'
+        with patch.object(builder, 'ROOT', self.root), \
+             patch.object(builder.subprocess, 'check_output', return_value=b'synthetic compiler version'), \
+             patch.object(builder, 'run', side_effect=compile_fixture) as run:
+            first = builder.build_native_helpers(str(compiler), build_dir)
+            self.assertEqual(run.call_count, 2)
+            self.assertEqual(builder.build_native_helpers(str(compiler), build_dir), first)
+            self.assertEqual(run.call_count, 2, 'Unchanged inputs must reuse exact cached bytes')
+            (build_dir / 'native-helper' / ci.portable.NATIVE_HELPER_NAME).write_bytes(b'tampered cached DLL')
+            builder.build_native_helpers(str(compiler), build_dir)
+            self.assertEqual(run.call_count, 3, 'Tampered DLL must rebuild, never bless its changed bytes')
+            for relative in ('native/ru_unicode_data.h', 'native/ru_scan.h', 'native/ru_wrong_abi.c', 'tools/build.py'):
+                with self.subTest(changed=relative):
+                    before = run.call_count
+                    with (self.root / relative).open('a') as stream: stream.write('\nchanged')
+                    builder.build_native_helpers(str(compiler), build_dir)
+                    self.assertEqual(run.call_count, before + 2)
+            before = run.call_count
+            compiler.write_bytes(b'changed compiler binary')
+            builder.build_native_helpers(str(compiler), build_dir)
+            self.assertEqual(run.call_count, before + 2)
+            before = run.call_count
+            with patch.object(builder, 'NATIVE_CFLAGS', builder.NATIVE_CFLAGS + ('-DSYNTHETIC=1',)):
+                builder.build_native_helpers(str(compiler), build_dir)
+            self.assertEqual(run.call_count, before + 2)
+
+    def test_native_helper_changed_input_during_compilation_never_publishes_receipt(self):
+        compiler, compile_fixture = self.native_build_fixture()
+        def mutate(command, **kwargs):
+            compile_fixture(command, **kwargs)
+            (self.root / 'native/ru_unicode_data.h').write_text('changed during compilation')
+        with patch.object(builder, 'ROOT', self.root), \
+             patch.object(builder.subprocess, 'check_output', return_value=b'synthetic compiler version'), \
+             patch.object(builder, 'run', side_effect=mutate):
+            with self.assertRaisesRegex(RuntimeError, 'inputs changed during compilation'):
+                builder.build_native_helpers(str(compiler), self.root / 'build')
+        self.assertEqual(list((self.root / 'build/native-helper').iterdir()), [])
+
+    def test_native_helper_copy_preserves_both_exact_dlls_and_receipts(self):
+        compiler, compile_fixture = self.native_build_fixture()
+        build_dir = self.root / 'build'
+        destination = self.root / 'bin'
+        destination.mkdir()
+        with patch.object(builder, 'ROOT', self.root), \
+             patch.object(builder.subprocess, 'check_output', return_value=b'synthetic compiler version'), \
+             patch.object(builder, 'run', side_effect=compile_fixture):
+            builder.build_native_helpers(str(compiler), build_dir)
+            builder.copy_native_helpers(build_dir, destination)
+        expected = {filename for name in ci.portable.NATIVE_COMPILE_SOURCES
+                    for filename in (name, Path(name).stem + '.native-build.json')}
+        self.assertEqual({path.name for path in destination.iterdir()}, expected)
+        for name in expected:
+            self.assertEqual((destination / name).read_bytes(), (build_dir / 'native-helper' / name).read_bytes())
+
+    def test_helper_failure_layouts_keep_lexilla_and_isolate_only_helper(self):
+        for name, mode in ci.HELPER_FALLBACK_LAYOUTS.items():
+            with self.subTest(name=name):
+                layout = ci.syntax_fallback_layout(name)
+                self.assertEqual(layout['Lexilla.dll'], 'Lexilla.dll')
+                self.assertEqual(layout['Scintilla.dll'], 'Scintilla.dll')
+                if mode == 'missing':
+                    self.assertNotIn(ci.portable.NATIVE_HELPER_NAME, layout)
+                else:
+                    expected = 'Scintilla.dll' if mode == 'bad-exports' else ci.portable.NATIVE_WRONG_ABI_NAME
+                    self.assertEqual(layout[ci.portable.NATIVE_HELPER_NAME], expected)
+        for name in ('syntax_missing_lexilla', 'syntax_bad_lexer', 'ru_syntax_missing_lexilla'):
+            self.assertEqual(ci.syntax_fallback_layout(name)[ci.portable.NATIVE_HELPER_NAME], ci.portable.NATIVE_HELPER_NAME)
+
     def test_receipt_paths_are_portable_on_windows(self):
         build = (ci.ROOT / 'tools/build.py').read_text(encoding='utf-8')
         self.assertNotIn('str(p.relative_to(ROOT))', build)
@@ -544,9 +1327,14 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         (self.root / 'tests/entry.ru').write_text('test entry')
         helper = self.root / 'tests/imported_helper.ru'
         helper.write_text('helper source')
+        for relative in ('native/ru_scan.c', 'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h'):
+            target = self.root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text('native input')
         with patch.object(builder, 'ROOT', self.root):
             before = builder.source_snapshot()
-            self.assertEqual(set(before), {'src/main.ru', 'tests/entry.ru', 'tests/imported_helper.ru'})
+            self.assertEqual(set(before), {'src/main.ru', 'tests/entry.ru', 'tests/imported_helper.ru',
+                'native/ru_scan.c', 'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h'})
             helper.write_text('changed helper source')
             after = builder.source_snapshot()
         self.assertNotEqual(before['tests/imported_helper.ru'], after['tests/imported_helper.ru'])

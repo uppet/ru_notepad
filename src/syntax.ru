@@ -3,6 +3,7 @@
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
 策 取 外言 'syntax_policy.ru'.
+如语 取 外言 'ru_syntax.ru'.
 词法状态 取 {'ready':假,'library':空,'warning':''}.
 GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 (窗 其 PTR) ([(窗 其 PTR),(窗 其 PTR)]) 'win64').
 
@@ -14,13 +15,13 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
 路径存 其 关闭.
 预载 取 窗 其 结果 预载成果.
 若 预载 其 为空 则
-    词法状态 其 增 'warning' ('Syntax highlighting is unavailable: Lexilla.dll could not be loaded (Windows error '+((预载成果 其 错误码) 为 句)+'). Your documents remain editable as plain text. Extract the complete Windows x64 package and keep Lexilla.dll beside ru_notepad.exe.').
+    词法状态 其 增 'warning' ('C/C++ and JSON syntax highlighting is unavailable: Lexilla.dll could not be loaded (Windows error '+((预载成果 其 错误码) 为 句)+'). Those formats remain editable as plain text; Ru highlighting uses its separate RuSyntax.dll helper. Extract the complete Windows x64 package and keep Lexilla.dll beside ru_notepad.exe.').
 另
     导出名 取 密 其 UTF8 'CreateLexer'.
     导出 取 窗 其 结果 (GetProcAddress 其 调用 [预载,导出名]).
     导出名 其 关闭.
     若 导出 其 为空 则
-        词法状态 其 增 'warning' 'Syntax highlighting is unavailable: Lexilla.dll does not export CreateLexer. Your documents remain editable as plain text. Restore Lexilla.dll from the complete Windows x64 package.'.
+        词法状态 其 增 'warning' 'C/C++ and JSON syntax highlighting is unavailable: Lexilla.dll does not export CreateLexer. Those formats remain editable as plain text; Ru highlighting uses its separate RuSyntax.dll helper. Restore Lexilla.dll from the complete Windows x64 package.'.
     另
         词法库 取 密 其 动态库 库路径.
         CreateLexer 取 词法库 其 绑定 'CreateLexer' (密 其 签名 (窗 其 PTR) ([(窗 其 PTR)]) 'win64').
@@ -33,7 +34,13 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
 然
 
 算 初始化:
-    得 词法状态 其 查 'warning'.
+    文 取 词法状态 其 查 'warning'.
+    如警告 取 如语 其 初始化.
+    若 如警告 != '' 则
+        若 文 != '' 则 文 取 文+'\n\n'. 然
+        文 取 文+如警告.
+    然
+    得 文.
 法
 算 名称 语言 为 句:
     得 策 其 名称 语言.
@@ -67,12 +74,18 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
     得 空.
 法
 算 纯文 柄:
+    如语 其 停用 柄.
     # Scintilla releases any prior ILexer5 when it replaces the lexer.
     窗 其 发送 柄 4033 0 0.
     清样式 柄.
     得 'plain'.
 法
 算 选择 柄, 语言 为 句:
+    若 语言 == 'ru' 则
+        清样式 柄.
+        得 如语 其 选择 柄.
+    然
+    如语 其 停用 柄.
     若 语言 != 'cpp' 且 语言 != 'json' 则 得 纯文 柄. 然
     若 非 (词法状态 其 查 'ready') 则 得 纯文 柄. 然
     名存 取 密 其 UTF8 语言.
@@ -118,4 +131,37 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
     然
     # Invalidate only; Scintilla requests native styling for visible text on paint.
     得 语言.
+法
+
+# Container requests always carry the originating HWND, never the active tab.
+算 遗忘 柄:
+    得 如语 其 遗忘 柄.
+法
+算 请求 柄 位置 为 数:
+    得 如语 其 请求 柄 位置.
+法
+算 变化 柄 位置 为 数 长度 为 数 加行 为 数 修改 为 数:
+    得 如语 其 变化 柄 位置 长度 加行 修改.
+法
+算 推进 柄 预算 为 数:
+    得 如语 其 推进 柄 预算.
+法
+算 待办 柄:
+    得 如语 其 待办 柄.
+法
+算 状态 柄:
+    得 如语 其 状态 柄.
+法
+算 排空 柄:
+    得 如语 其 排空 柄.
+法
+算 折叠 柄 位置 为 数:
+    得 如语 其 折叠 柄 位置.
+法
+算 全折 柄 动作 为 数:
+    得 如语 其 全折 柄 动作.
+法
+
+算 时刻:
+    得 如语 其 时刻.
 法

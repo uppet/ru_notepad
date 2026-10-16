@@ -1,4 +1,4 @@
-ru_notepad 0.1.3-preview · Windows x64
+ru_notepad 0.1.4-preview · Windows x64
 
 IMPORTANT: EXPERIMENTAL PORTABLE PREVIEW
 Read BUILD.json for this exact package's verification results. A local cross-build
@@ -24,7 +24,7 @@ forced termination or power loss can produce a diagnostic dialog.
 
 RUN
 1. Extract the complete ZIP into a writable directory.
-2. Keep ru_notepad.exe, Scintilla.dll and Lexilla.dll together.
+2. Keep ru_notepad.exe, Scintilla.dll, Lexilla.dll and RuSyntax.dll together.
 3. Run ru_notepad.exe. No Python, Ru compiler, installation or admin rights needed.
    Windows may warn about this unsigned, newly built application. No code-signing
    or SmartScreen reputation is claimed.
@@ -52,7 +52,10 @@ Independent document tabs; open/save/save-as; UTF-8/BOM and UTF-16 LE/BE;
 Windows-1252 and GBK; undo/redo; literal find/replace; case matching;
 replace-all as one undo group; word wrap; zoom/reset; line numbers; native C/C++
 and JSON highlighting, extension detection and a Language menu. Ru source files
-remain plain text until a dedicated Ru lexer is implemented.
+use a dedicated Ru 0.21.3 container policy with structural folding. Keyword tables
+and fold decisions stay in Ru; the application-owned RuSyntax.dll handles bounded
+UTF-8 scanning and style-byte generation. This is tolerant
+editing support, not a complete parser or syntax validator.
 
 STATUS AND SHORTCUTS
 Ln/Col are one-based. Col uses Scintilla tab-expanded Unicode codepoint columns,
@@ -61,15 +64,20 @@ Line EOL describes the caret line (CRLF/LF/CR/None at EOF); Enter describes the
 new-line insertion mode. Mixed files are not claimed to have one uniform EOL.
 Ctrl+Tab / Ctrl+Shift+Tab and Ctrl+PageDown / Ctrl+PageUp switch tabs.
 Ctrl++ / Ctrl+- zoom; Ctrl+0 resets zoom. Ctrl+Alt/AltGr is left to input methods.
+For Ru, click the fold margin or use Ctrl+Shift+[ to collapse all and Ctrl+Shift+]
+to expand all. The View menu has the same commands. Tabs retain fold state.
+Language > Ru / 如言 selects it manually; open/save-as .ru paths select it
+automatically. Styling runs in bounded background slices; wait for completion
+before folding. Switching to plain text reveals all previously hidden lines.
 
 LIMITS
 No fixed 4 MiB file limit; 64 tabs and 64 queued paths. Full text remains in RAM.
-Files >=32,000,000 bytes use labelled plain-text mode without syntax/wrap.
+Files >=32,000,000 bytes use labelled plain-text mode without syntax/wrap/folding.
 Files >500,000,000 bytes ask before any body read. Cancel/Esc stops between
 bounded chunks; an individual disk call or long-line layout can still block.
 Embedded NUL and invalid Unicode text are rejected; no binary-file editing.
 Legacy text may expand substantially when held as UTF-8; sufficient RAM is needed.
-Not full Notepad++ parity. No regex parity, Ru-specific lexer, additional language
+Not full Notepad++ parity. No regex parity, additional language
 catalogue, plugin ABI, macros, sessions/recovery, split views, project panels,
 printing, installer, updater, or network features yet.
 Accessibility, IME, high-DPI/multi-monitor, broad large-file behavior, and Windows
@@ -114,6 +122,9 @@ MANUAL ACCEPTANCE
 - Modify the on-disk file elsewhere; ordinary Save should reject the conflict.
 - Find next wraps; case option works; replace-all is reverted by one Undo.
 - Try mixed line endings, Chinese IME, high DPI, keyboard-only controls.
+- Open samples/example.ru; check comment/string colours and nested folds.
+- Click a fold margin, switch tabs, then expand; bytes and dirty state must not change.
+- Edit an unfinished string/comment, undo it, and wait for the syntax status to finish.
 
 REPORT
 Include Windows version/architecture, app build SHA from BUILD.json, steps to
@@ -123,6 +134,8 @@ private document contents, or originals just to report a bug.
 COMPONENTS
 Application logic: Ru compiled to native C/Windows PE.
 Editor core: Scintilla 5.6.7, built from official source; license in licenses/.
-Syntax engine: Lexilla 5.5.4, built from official source; license in licenses/.
+C/C++ and JSON syntax: Lexilla 5.5.4. Ru syntax: Ru policy plus the application-owned
+RuSyntax.dll C scanning/style-buffer helper; structural folding decisions remain Ru.
+Unicode classification data notice is included in licenses/Unicode.txt.
 Icon: original GPT-generated artwork. No Notepad++ branding or source included.
 The application has no selected public project license.

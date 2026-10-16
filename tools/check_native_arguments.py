@@ -55,13 +55,16 @@ def array_contains_errors(value, path, array_parameters=frozenset()):
             yield from array_contains_errors(child, path, array_parameters)
 def member(x,n): return isinstance(x,Node) and x.kind=="member" and x.data["name"]==n
 def module_declarations(program):
-    # Only module-level conditional branches, never function bodies/local rebinding.
+    # Only module-level control branches, never function bodies/local rebinding.
     # Optional native DLL exports are declared here before GUI callbacks begin.
     for node in program:
         yield node
         if node.kind == 'if':
             yield from module_declarations(node.data['yes'])
             yield from module_declarations(node.data['no'])
+        elif node.kind == 'try':
+            yield from module_declarations(node.data['body'])
+            yield from module_declarations(node.data['rescue'])
 def syntax_shape(value):
     if isinstance(value,Node):
         return (value.kind,tuple((key,syntax_shape(item)) for key,item in value.data.items()))

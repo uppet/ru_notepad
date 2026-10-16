@@ -28,7 +28,7 @@
     ['data.json','json'],['DATA.JSON','json'],['名字.JsOn','json'],
     ['C:/甲/😀.jSoN','json'],['\\\\server\\共享\\data.JSON','json'],
     ['','plain'],['README','plain'],['a.','plain'],['.','plain'],['..','plain'],
-    ['source.ru','plain'],['source.RU','plain'],['data.jsonc','plain'],
+    ['source.ru','ru'],['source.RU','ru'],['data.jsonc','plain'],
     ['data.json5','plain'],['file.cppx','plain'],['file.xcpp','plain'],
     ['file.cxx.bak','plain'],['file.json.bak','plain'],['file.c++x','plain'],
     ['file.h++x','plain'],['file.json ','plain'],['file.cpp\n','plain'],
@@ -40,7 +40,10 @@
     ['./relative.H','cpp'],['../relative.CXX','cpp'],
     ['a.b.c','cpp'],['.cpp','cpp'],['.json','json'],
     ['C:/name with spaces/文件名.Hpp','cpp'],
-    ['C:\\emoji😀.cpp\\子目录\\main.c','cpp']
+    ['C:\\emoji😀.cpp\\子目录\\main.c','cpp'],
+    ['source.rU','ru'],['C:/源码😀/main.Ru','ru'],['.ru','ru'],
+    ['source.rux','plain'],['source.ru.bak','plain'],['source.ru ','plain'],
+    ['C:/folder.ru/README','plain'],['C:\\folder.ru\\main.ru','ru']
 ].
 位 取 0.
 循 例们 其 量 次
@@ -51,7 +54,7 @@
 确认 ((策 其 名称 'cpp') == 'C / C++') 'C-family display label'.
 确认 ((策 其 名称 'json') == 'JSON') 'JSON display label'.
 确认 ((策 其 名称 'plain') == 'Plain text') 'plain display label'.
-确认 ((策 其 名称 'ru') == 'Plain text') 'Ru label never claims borrowed highlighting'.
+确认 ((策 其 名称 'ru') == 'Ru / 如言') 'Ru-owned lexer has its own display label'.
 确认 ((策 其 名称 '') == 'Plain text') 'empty language label'.
 确认 ((策 其 名称 'CPP') == 'Plain text') 'unknown language identifier label'.
 # Same helper used by production suffix selection and the native fixture CLI.

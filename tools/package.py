@@ -26,24 +26,44 @@ DEPENDENCIES = {
         'sha256': '5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0',
         'folder': 'lexilla', 'license': 'Lexilla.txt'},
 }
-RUNTIME_NAMES = ('ru_notepad.exe', *DEPENDENCIES)
+NATIVE_HELPER_NAME = 'RuSyntax.dll'
+NATIVE_WRONG_ABI_NAME = 'RuSyntaxWrongAbi.dll'
+NATIVE_COMPILE_SOURCES = {
+    NATIVE_HELPER_NAME: ('native/ru_scan.c',),
+    NATIVE_WRONG_ABI_NAME: ('native/ru_wrong_abi.c',),
+}
+NATIVE_SOURCE_SUFFIXES = {'.c', '.h', '.inc', '.inl', '.def'}
+NATIVE_BUILD_DRIVERS = ('tools/build.py', 'tools/package.py')
+NATIVE_CFLAGS = ('-std=c99', '-O2', '-Wall', '-Wextra', '-shared', '-static-libgcc',
+                 '-Wl,--no-insert-timestamp', '-Wl,--kill-at', '-s',
+                 '-Inative')
+NATIVE_LINK_LIBRARIES = ()
+RUNTIME_NAMES = ('ru_notepad.exe', *DEPENDENCIES, NATIVE_HELPER_NAME)
 TEST_NAMES = ('document_policy.exe', 'ui_arguments.exe', 'file_codec_flags.exe',
               'editor_native.exe', 'app_native.exe', 'app_features_native.exe', 'file_codec_tests.exe',
               'file_codec_security_probe.exe', 'syntax_native.exe', 'syntax_policy.exe', 'shortcuts.exe', 'status_native.exe',
               'file_streaming_native.exe', 'editor_streaming_native.exe',
-              'associations_policy.exe', 'associations_native.exe', 'file_drop_native.exe', 'app_streaming_native.exe')
-BINARY_NAMES = (*RUNTIME_NAMES, *TEST_NAMES)
+              'associations_policy.exe', 'associations_native.exe', 'file_drop_native.exe', 'app_streaming_native.exe',
+              'ru_lexical_policy.exe', 'ru_syntax_native.exe', 'app_ru_native.exe')
+TEST_SUPPORT_DLL_NAMES = (NATIVE_WRONG_ABI_NAME,)
+SCANNER_PREFLIGHT_NAME = 'ru-scanner-preflight'
+BINARY_NAMES = (*RUNTIME_NAMES, *TEST_NAMES, *TEST_SUPPORT_DLL_NAMES)
 RESOURCE_INPUTS = ('packaging/app.rc', 'packaging/app.manifest', 'assets/app-icon.ico', 'VERSION')
 SYSTEM_DLLS = {'advapi32.dll', 'gdi32.dll', 'imm32.dll', 'kernel32.dll',
     'msvcrt.dll', 'ole32.dll', 'oleaut32.dll', 'user32.dll', 'comctl32.dll',
     'comdlg32.dll', 'shell32.dll', 'shlwapi.dll', 'version.dll', 'winmm.dll',
     'ntdll.dll', 'uxtheme.dll', 'dwmapi.dll'}
 MAX_LOG_BYTES = 1024 * 1024
+GUI_EVIDENCE_PREFIXES = {'main-gui-smoke': 'main-launcher',
+                         'main-gui-file-entry': 'main-file-entry-launcher',
+                         'main-gui-ru-syntax': 'main-ru-syntax-launcher'}
+UNICODE_LICENSE_SHA256 = 'e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96'
 RUNTIME_FILES = {
     'VERSION': 'VERSION', 'packaging/README-preview.txt': 'README.txt',
     'packaging/开始前请读.txt': '开始前请读.txt', 'CHANGELOG.md': 'CHANGELOG.md',
     'THIRD_PARTY_NOTICES.md': 'THIRD_PARTY_NOTICES.md',
     'assets/README.md': 'licenses/Artwork-provenance.md',
+    'packaging/licenses/Unicode.txt': 'licenses/Unicode.txt',
 }
 TEST_FILES = {
     'packaging/run-tests.cmd': 'run-tests.cmd',
@@ -80,6 +100,46 @@ def source_file(root, relative):
     return checked_file(candidate)
 
 
+def native_source_snapshot(root):
+    required = {source for sources in NATIVE_COMPILE_SOURCES.values() for source in sources}
+    for relative in required:
+        source_file(root, relative)
+    return {path.relative_to(root).as_posix(): sha(source_file(root, path.relative_to(root).as_posix()))
+            for path in sorted((root / 'native').rglob('*'))
+            if path.suffix.lower() in NATIVE_SOURCE_SUFFIXES and (path.is_file() or path.is_symlink())}
+
+
+def native_build_key(inputs):
+    return hashlib.sha256(json.dumps(inputs, sort_keys=True, separators=(',', ':')).encode('utf-8')).hexdigest()
+
+
+def validate_native_helper_receipts(root, binary_dir, pe):
+    sources = native_source_snapshot(root)
+    drivers = {relative: sha(source_file(root, relative)) for relative in NATIVE_BUILD_DRIVERS}
+    result = {}
+    for name, compile_sources in NATIVE_COMPILE_SOURCES.items():
+        receipt = json.loads(checked_file(binary_dir / (Path(name).stem + '.native-build.json')).read_text(encoding='utf-8'))
+        inputs = receipt.get('build_inputs', {})
+        if (receipt.get('name') != name or receipt.get('dll_sha256') != pe[name]['sha256'] or
+                inputs.get('source_sha256') != sources or inputs.get('driver_sha256') != drivers or
+                inputs.get('compile_sources') != list(compile_sources) or
+                inputs.get('output_name') != name or inputs.get('compiler_flags') != list(NATIVE_CFLAGS) or
+                inputs.get('link_libraries') != list(NATIVE_LINK_LIBRARIES) or
+                receipt.get('build_key') != native_build_key(inputs)):
+            raise RuntimeError(f'Native helper build receipt/source mismatch: {name}')
+        if not all(re.fullmatch(r'[a-f0-9]{64}', inputs.get(key, '')) for key in
+                   ('compiler_sha256', 'compiler_version_sha256')):
+            raise RuntimeError(f'Native helper compiler identity is missing: {name}')
+        result[name] = {'dll_sha256': receipt['dll_sha256'], 'build_key': receipt['build_key'],
+                        'source_sha256': sources, 'driver_sha256': drivers,
+                        'compiler_sha256': inputs['compiler_sha256'],
+                        'compiler_version_sha256': inputs['compiler_version_sha256'],
+                        'compiler_flags': inputs['compiler_flags'],
+                        'compile_sources': inputs['compile_sources'],
+                        'link_libraries': inputs['link_libraries']}
+    return result
+
+
 def inspect_pe(path, objdump):
     data = checked_file(path).read_bytes()
     if len(data) < 64 or data[:2] != b'MZ':
@@ -89,11 +149,13 @@ def inspect_pe(path, objdump):
         raise RuntimeError(f'{path.name}: not a Windows x64 executable')
     output = subprocess.check_output([str(objdump), '-p', str(path)], text=True, timeout=30)
     imports = re.findall(r'DLL Name:\s*(\S+)', output)
-    unexpected = {name.lower() for name in imports} - SYSTEM_DLLS - {name.lower() for name in DEPENDENCIES}
+    bundled = set(DEPENDENCIES) | {NATIVE_HELPER_NAME}
+    allowed = SYSTEM_DLLS if path.name in NATIVE_COMPILE_SOURCES else SYSTEM_DLLS | {name.lower() for name in bundled}
+    unexpected = {name.lower() for name in imports} - allowed
     if unexpected:
         raise RuntimeError(f'{path.name}: unpackaged non-system DLL imports: {sorted(unexpected)}')
     for imported in imports:
-        match = next((name for name in DEPENDENCIES if name.lower() == imported.lower()), None)
+        match = next((name for name in bundled if name.lower() == imported.lower()), None)
         if match:
             checked_file(path.parent / match)
     return {'sha256': sha(path), 'bytes': len(data), 'machine': 'AMD64', 'imports': imports}
@@ -101,6 +163,9 @@ def inspect_pe(path, objdump):
 
 def validate_dependency_sources(root):
     """Verify the official pins and exact license bytes, including local packaging."""
+    unicode_license = source_file(root, 'packaging/licenses/Unicode.txt')
+    if sha(unicode_license) != UNICODE_LICENSE_SHA256:
+        raise RuntimeError('Unicode data license differs from the reviewed official notice')
     for dependency in DEPENDENCIES.values():
         archive = checked_file(root / 'vendor/downloads' / dependency['archive'])
         if sha(archive) != dependency['sha256']:
@@ -120,11 +185,17 @@ def validate_receipts(root, binary_dir, objdump):
     version = (root / 'VERSION').read_text(encoding='utf-8').strip()
     pe = {name: inspect_pe(binary_dir / name, objdump) for name in BINARY_NAMES}
     app = json.loads(checked_file(binary_dir / 'ru_notepad.build.json').read_text(encoding='utf-8'))
-    receipts = {}
+    receipts = validate_native_helper_receipts(root, binary_dir, pe)
+    helper = receipts[NATIVE_HELPER_NAME]
     for name in (RUNTIME_NAMES[0], *TEST_NAMES):
         receipt = json.loads(checked_file(binary_dir / Path(name).with_suffix('.build.json')).read_text(encoding='utf-8'))
         if receipt['app_version'] != version or receipt['exe_sha256'] != pe[name]['sha256']:
             raise RuntimeError(f'Build receipt/version does not match {name}')
+        if (receipt.get('native_helper_sha256') != helper['dll_sha256'] or
+                receipt.get('native_helper_build_key') != helper['build_key'] or
+                any(receipt.get('source_sha256', {}).get(path) != digest
+                    for path, digest in helper['source_sha256'].items())):
+            raise RuntimeError(f'Native helper differs from the executable source/receipt: {name}')
         for dll, dependency in DEPENDENCIES.items():
             prefix = dependency['folder']
             field = 'dll_sha256' if dll == 'Scintilla.dll' else 'lexilla_dll_sha256'
@@ -145,15 +216,39 @@ def validate_receipts(root, binary_dir, objdump):
         # Never publish compiler argv, absolute machine paths, or full raw receipts.
         receipts[name] = {key: receipt[key] for key in (
             'entry_source', 'entry_sha256', 'generated_c_sha256', 'translation_unit_sha256',
-            'build_input_sha256', 'exe_sha256', 'dll_sha256', 'lexilla_dll_sha256')}
+            'build_input_sha256', 'exe_sha256', 'dll_sha256', 'lexilla_dll_sha256',
+            'native_helper_sha256', 'native_helper_build_key')}
     return app, receipts, pe
 
 
 def evidence_names(test_names):
     return {'msys2-packages.log', 'native-acceptance.json',
+            *(f'{SCANNER_PREFLIGHT_NAME}.{stream}.log' for stream in ('stdout', 'stderr')),
             *(f'{name}.{stream}.log' for name in test_names for stream in ('stdout', 'stderr')),
-            *(f'{prefix}-{number}.log' for prefix in ('main-launcher', 'main-file-entry-launcher')
+            *(f'{prefix}-{number}.log' for prefix in GUI_EVIDENCE_PREFIXES.values()
               for number in range(4))}
+
+
+def required_evidence_names(summary):
+    required = {'msys2-packages.log', 'native-acceptance.json',
+                *(f'{SCANNER_PREFLIGHT_NAME}.{stream}.log' for stream in ('stdout', 'stderr'))}
+    for test in summary['tests']:
+        name = test['name']
+        if name in GUI_EVIDENCE_PREFIXES:
+            required.add(GUI_EVIDENCE_PREFIXES[name] + '-0.log')
+        else:
+            required.update(f'{name}.{stream}.log' for stream in ('stdout', 'stderr'))
+    return required
+
+
+def validate_native_evidence(evidence, summary, allowed_names):
+    required = required_evidence_names(summary)
+    if evidence is None or not required <= set(allowed_names):
+        raise RuntimeError('Native evidence allowlist omits required test outputs')
+    for name in required:
+        path = checked_file(evidence / name)
+        if path.stat().st_size > MAX_LOG_BYTES:
+            raise RuntimeError(f'{name}: synthetic evidence exceeds 1 MiB limit')
 
 
 def copy_evidence(evidence, destination, allowed_names):
@@ -254,7 +349,8 @@ def _create_packages(root, binary_dir, destination, evidence, objdump, summary,
         # Defend the packaging boundary too: booleans and matching hashes alone
         # cannot bless a missing, skipped, or force-killed mandatory test group.
         from windows_ci import validate_acceptance
-        validate_acceptance(summary)
+        validate_acceptance(summary, root)
+        validate_native_evidence(evidence, summary, allowed_evidence)
     if not native and summary.get('passed'):
         raise RuntimeError('Cross-built packages cannot claim native acceptance')
     artifacts = {}
@@ -291,6 +387,7 @@ def _create_packages(root, binary_dir, destination, evidence, objdump, summary,
             'runtime_binary_sha256': {name: hashes[name] for name in RUNTIME_NAMES},
             'binaries': {name: pe[name] for name in selected},
             'build_entries': {name: receipts[name] for name in selected if name.endswith('.exe')},
+            'native_helpers': {name: receipts[name] for name in selected if name in NATIVE_COMPILE_SOURCES},
             'native_acceptance': summary if kind == 'tests' else {
                 'platform': summary.get('platform'), 'passed': summary.get('passed', False),
                 'tests': [{'name': test['name'], 'passed': test['passed'],

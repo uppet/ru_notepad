@@ -1,16 +1,17 @@
-# Syntax highlighting in 0.1.3 preview
+# Syntax highlighting in 0.1.4 preview
 
 ## Supported languages
 
 The application owns colours and native integration in `src/syntax.ru`; its
 `识别` / `名称` wrappers delegate to the exact pure production policy in
 `src/syntax_policy.ru`. Scintilla
-owns text, rendering, selection and undo. Lexilla supplies real native lexers:
+owns text, rendering, selection and undo. C/C++ and JSON use native Lexilla lexers; Ru uses its own container policy:
 
-| File suffix, case-insensitive | Display | Lexilla lexer |
+| File suffix, case-insensitive | Display | Implementation |
 | --- | --- | --- |
 | `.c`, `.h`, `.cc`, `.hh`, `.cpp`, `.hpp`, `.cxx`, `.hxx`, `.c++`, `.h++`, `.inl` | C / C++ | `cpp` (`SCLEX_CPP=3`) |
 | `.json` | JSON | `json` (`SCLEX_JSON=120`) |
+| `.ru` | Ru / 如言 | Ru-owned Scintilla container policy (`SCLEX_CONTAINER=0`) |
 | Other suffixes, no suffix, new unsaved documents | Plain text | No lexer |
 
 Only the final filename suffix is considered. The shared `含词` helper performs
@@ -23,9 +24,24 @@ C/C++ uses a shared C-family keyword list; this is colouring, not a compiler or 
 language-version validator. Preprocessor branch evaluation is disabled rather
 than guessing which branches are active without the project's build settings.
 
-`.ru` is deliberately plain text in this version. Lexilla 5.5.4 has `rust`, but
-that is Rust, not the unrelated Ru language. The application never labels a
-C++, Rust or Python lexer as Ru support.
+Ru keeps keyword tables and structural-folding rules in application Ru modules.
+`RuSyntax.dll` accelerates bounded UTF-8 token scanning and fills style-byte buffers;
+`ru_syntax.ru` owns Scintilla jobs, checkpoints and lifecycle. The original pure
+`ru_lexical.ru` scanner remains the differential test oracle. Its exact language scope is in
+[Ru lexical policy](ru-language-syntax.md). It works independently of Lexilla;
+C/C++ and JSON still use their actual native Lexilla implementations.
+
+Ru jobs are owned by a specific editor/document generation. Notifications only
+invalidate or request work; the main timer budgets background slices. Checkpoints
+bound restart distance, and equivalent same-length edits reuse a converged suffix.
+Incomplete edits may require scanning farther. No styling operation edits text,
+resets the savepoint, or clears undo. The existing 32 MB plain-text mode disables
+Ru highlighting/folding too; large files remain editable.
+
+The fold margin and View menu operate on Ru folds. Ctrl+Shift+[ / ] collapse/expand
+all folds. Re-selecting Ru or switching tabs retains existing folds; changing to
+plain/C++/JSON first restores hidden text. Fold state is in-memory only; sessions
+and crash recovery are not implemented.
 
 ## Dependency and source pin
 
@@ -39,7 +55,8 @@ C++, Rust or Python lexer as Ru support.
   [SciTE 5.6.7 release](https://www.scintilla.org/SciTEHistory.html).
 - Both use the permissive
   [License for Lexilla, Scintilla, and SciTE](https://www.scintilla.org/License.txt).
-  The unmodified dependency license is shipped in both distribution packages.
+  The unmodified dependency license is shipped in both distribution packages. The application-owned RuSyntax DLL and Unicode data
+notice are also included and hash-checked.
 
 Lexilla is built from its official source. Its `src/makefile` expects the peer
 `scintilla/include` directory. The Windows target is `../bin/lexilla.dll` with
@@ -95,7 +112,7 @@ not make those runtime failures recoverable; the compiler is unchanged.
 Public module operations:
 
 - `初始化`: cached warning string, empty on success; no retry or late module loading.
-- `识别 路`: extension mapping to `cpp`, `json` or `plain`.
+- `识别 路`: extension mapping to `ru`, `cpp`, `json` or `plain`.
 - `名称 语言`: truthful status-bar label.
 - `选择 柄 语言`: applies the requested supported language, returning the actual
   language; unavailable or unknown languages return `plain`.
@@ -113,13 +130,19 @@ unavailable.
 
 ## Incremental work and large-file mode
 
-Lexer selection clears old style information once and enables
-`SC_IDLESTYLING_TOVISIBLE`. It does not immediately force
-`SCI_COLOURISE(0, -1)`. Scintilla requests native styling for the visible range and
-invalidates the necessary ranges after text edits. Ru does not extract the entire
-document or scan it on each keypress. A large multiline construct may still
-require native lexer work up to the visible location; no universal latency or
-performance claim is made.
+For C/C++ and JSON, lexer selection clears old style information once and
+enables `SC_IDLESTYLING_TOVISIBLE`. It does not immediately force
+`SCI_COLOURISE(0, -1)`. Scintilla requests native styling for the visible range
+and invalidates the necessary ranges after text edits.
+
+For Ru, a separate timer advances bounded UTF-8 slices outside notification
+callbacks. Checkpoints retain lexical and structural context, including incomplete
+strings/comments. Same-length, same-line-count edits may reuse an unchanged suffix
+when the full state converges; edits that change later parsing can require a
+longer suffix rescan. Jobs are tied to the actual document pointer and generation.
+The scanner never extracts the whole document as one Ru string. Timing and read
+counts for 100 KB and 1 MB fixtures are recorded by the native acceptance suite;
+no universal latency or performance claim is made.
 
 The fixed file-size limit has been removed. Files of at least 32,000,000 bytes
 open in labelled plain-text large-file mode with no lexer or wrapping; choosing
@@ -134,7 +157,7 @@ elapsed time is a diagnostic, not a pass/fail speed threshold or a benchmark.
 ## Acceptance coverage
 
 `tests/syntax_policy.ru` runs the exact `src/syntax_policy.ru` production module,
-without importing Win32 or loading substitute DLLs. Its **100 assertions** run
+without importing Win32 or loading substitute DLLs. Its **108 assertions** run
 in both the pinned Ru interpreter and compiled Linux C. They cover all supported
 suffixes in lower/upper/mixed case, JSON, Unicode and network paths, directory
 boundaries, unknown extensions, display names, and the same `含词` helper used by
@@ -174,20 +197,31 @@ Static checks and cross-compilation establish source/ABI/build viability only.
 Only a successful native Windows CI run establishes that these acceptance tests
 passed; see that run's exact-commit results and distribution validation receipt.
 
-## A future Ru-owned lexer
+## Ru-owned native acceptance
 
-The pinned Ru frontend contains language-specific rules absent from upstream
-Lexilla: Unicode identifiers, Chinese punctuation aliases, four quote pairs,
-multiline strings, `#` / `//` / `批.` line comments, and exact `解.` … `释.` block
-comments. Treating these as C++ would visibly miscolour ordinary Ru programs.
+The production lexical policy has **338 portable assertions**, replaying small
+fixtures at different scalar boundaries. The real Scintilla bridge adds **116
+assertions** for byte styles, fold levels, incomplete multiline edits, bounded
+reads, checkpoint convergence, stale document generations, fallback visibility,
+and text/savepoint/undo preservation. Length-changing insertion/deletion at the
+beginning, middle and end is compared byte-for-byte and fold-for-fold with a fresh
+scan; further edits while work is pending must converge to the latest document. An isolated **8-assertion** run omits
+Lexilla.dll and proves that Ru styling and folding still work with RuSyntax.dll.
+Three further **8-assertion** runs independently omit the helper, provide a DLL
+without its exports, or provide an incompatible ABI version. Each requires a
+clear ordinary warning and continued plain-text editing, without unsafe binding.
 
-The smallest truthful next step is a restricted container lexer written in Ru,
-with `SCI_SETILEXER(NULL)` and `SCN_STYLENEEDED`. It should obtain only the changed
-line/range, preserve UTF-8 byte offsets, and store per-line lexical state for
-strings and block comments. State changes need to propagate forward until they
-converge; a whole-document restart on every keystroke is unacceptable. Initial
-support should explicitly name its supported lexical classes and exclusions,
-with native byte-style tests for punctuation, quote/escape pairs, identifier
-boundaries and edits that change multiline state. It should remain a separate
-milestone until those rules and incremental behavior are proven. This version
-does not ship or advertise that future lexer.
+The main-window integration suite has **39 assertions**. It exercises real timer
+dispatch, Unicode `.ru` CLI input, Language/View menu commands, Scintilla margin
+hit-testing and the owning callback, independent tabs, dirty/undo preservation,
+automatic selection after successful Save As, and closing a pending styling job.
+The separate detached GUI gate checks actual style/fold values, hidden-line
+visibility, unchanged source, responsiveness and normal close. It also measures
+1 MB timer completion and representative 100 KB real insertion/Backspace at
+the beginning, middle and end. These are required
+Windows gates for 0.1.4; a local compile is not evidence that they passed.
+
+Physical mouse interaction, non-US keyboard layouts and IME composition still
+need manual acceptance. Keyboard shortcuts use Windows virtual-key positions;
+the View menu and fold margin provide alternatives on layouts where brackets
+require different modifier combinations.

@@ -1,4 +1,4 @@
-# ru_notepad 0.1.3 preview. Application behavior is compiled from Ru.
+# ru_notepad 0.1.4 preview. Application behavior is compiled from Ru.
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
 编 取 外言 'editor.ru'.
@@ -10,9 +10,82 @@
 语 取 外言 'syntax.ru'.
 关联 取 外言 'associations.ru'.
 拖放 取 外言 'file_drop.ru'.
-修改头 取 密 其 结构 [['header',窗 其 NMHDR],['position',窗 其 IP],['ch',窗 其 I],['modifiers',窗 其 I],['modificationType',窗 其 I]].
-A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0}.
+修改头 取 密 其 结构 [['header',窗 其 NMHDR],['position',窗 其 IP],['ch',窗 其 I],['modifiers',窗 其 I],['modificationType',窗 其 I],['text',窗 其 PTR],['length',窗 其 IP],['linesAdded',窗 其 IP],['message',窗 其 I],['wParam',窗 其 UP],['lParam',窗 其 IP],['line',窗 其 IP],['foldLevelNow',窗 其 I],['foldLevelPrev',窗 其 I],['margin',窗 其 I]].
+A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxTick':假,'syntaxNext':0}.
 
+# Syntax work is deferred out of Scintilla callbacks, with one shared UI budget.
+算 所属文档 柄:
+    文们 取 A 其 查 'docs'.
+    位 取 0.
+    循 文们 其 量 次
+        若 ((文们[位] 其 查 'editor') 其 句) == (柄 其 句) 则 得 文们[位]. 然
+        位 取 位+1.
+    环
+    得 空.
+法
+算 安排语法:
+    若 非 (A 其 查 'ready') 或 (A 其 查 'syntaxTimer') 则 得 空. 然
+    文们 取 A 其 查 'docs'.
+    位 取 0.
+    循 文们 其 量 次
+        若 语 其 待办 (文们[位] 其 查 'editor') 则
+            窗 其 成功 ((窗 其 SetTimer) 其 调用 [(A 其 查 'window'),902,10,空]) 'SetTimer(Ru syntax)'.
+            A 其 增 'syntaxTimer' 真.
+            得 空.
+        然
+        位 取 位+1.
+    环
+    得 空.
+法
+算 语法时钟:
+    若 非 (A 其 查 'ready') 或 (A 其 查 'busy') 或 (A 其 查 'syntaxTick') 则 得 空. 然
+    A 其 增 'syntaxTick' 真.
+    试
+        文们 取 A 其 查 'docs'.
+        数量 取 文们 其 量.
+        活动 取 A 其 查 'active'.
+        起 取 语 其 时刻.
+        后台 取 -1.
+        若 数量 > 1 则
+            位 取 (A 其 查 'syntaxNext')%数量.
+            循 数量 次
+                若 位 != 活动 且 (语 其 待办 (文们[位] 其 查 'editor')) 则 后台 取 位. 破. 然
+                位 取 (位+1)%数量.
+            环
+            若 后台 >= 0 则 A 其 增 'syntaxNext' ((后台+1)%数量). 然
+        然
+        已有 取 假.
+        若 活动 >= 0 且 活动 < 数量 则
+            柄 取 文们[活动] 其 查 'editor'.
+            已有 取 语 其 待办 柄.
+            余时 取 8-((语 其 时刻)-起).
+            若 后台 >= 0 且 余时 > 4 则 余时 取 4. 然
+            若 已有 且 余时 > 0 则 语 其 推进 柄 余时. 然
+        然
+        若 后台 >= 0 则
+            已用 取 (语 其 时刻)-起.
+            若 已用 < 8 则 语 其 推进 (文们[后台] 其 查 'editor') (8-已用). 然
+        然
+        待续 取 假.
+        位 取 0.
+        循 数量 次
+            若 语 其 待办 (文们[位] 其 查 'editor') 则 待续 取 真. 然
+            位 取 位+1.
+        环
+        若 非 待续 则
+            窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),902]).
+            A 其 增 'syntaxTimer' 假.
+        然
+        若 已有 且 活动 >= 0 且 非 (语 其 待办 (文们[活动] 其 查 'editor')) 则 刷新. 然
+    救 原因
+        A 其 增 'syntaxTick' 假.
+        窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),902]).
+        A 其 增 'syntaxTimer' 假.
+        卒 原因.
+    终
+    A 其 增 'syntaxTick' 假.
+    得 空.
+法
 算 当前:
     得 (A 其 查 'docs')[A 其 查 'active'].
 法
@@ -94,7 +167,14 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     若 文档 其 查 'bom' 则 编文 取 编文+' BOM'. 然
     模式文 取 ''.
     若 文档 其 查 'large' 则 模式文 取 '    Large file · plain text'. 然
-    窗 其 标题 (A 其 查 'status') ('  '+(态 其 文本 (文档 其 查 'editor'))+'    '+编文+'    '+(语 其 名称 (文档 其 查 'language'))+模式文).
+    语言名 取 语 其 名称 (文档 其 查 'language').
+    语态 取 语 其 状态 (文档 其 查 'editor').
+    若 语态 != 空 则
+        若 非 语态['enabled'] 则 语言名 取 语 其 名称 'plain'. 然
+        若 语态['warning'] != '' 则 模式文 取 模式文+'    '+语态['warning']. 然
+        若 语态['pending'] 则 模式文 取 模式文+'    Styling Ru...'. 然
+    然
+    窗 其 标题 (A 其 查 'status') ('  '+(态 其 文本 (文档 其 查 'editor'))+'    '+编文+'    '+语言名+模式文).
     得 空.
 法
 算 移控 柄, 横, 纵, 宽, 高:
@@ -164,6 +244,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     窗 其 结果 ((窗 其 ShowWindow) 其 调用 [编辑柄,5]).
     窗 其 结果 ((窗 其 SetFocus) 其 调用 [编辑柄]).
     当前 其 增 'label' ''.
+    安排语法.
     布局.
     刷新.
     得 空.
@@ -207,6 +288,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         编 其 设文本 柄 文.
         文档 取 登记页 柄 路 编码 BOM 戳 '' 假.
     救 原因
+        语 其 遗忘 柄.
         窗 其 结果 ((窗 其 DestroyWindow) 其 调用 [柄]).
         卒 原因.
     终
@@ -275,7 +357,10 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     A 其 增 'operation' 空.
     若 操['kind'] == 'open' 则
         件编 其 关闭读取 操['reader'].
-        若 操['editor'] != 空 则 窗 其 结果 ((窗 其 DestroyWindow) 其 调用 [操['editor']]). 然
+        若 操['editor'] != 空 则
+            语 其 遗忘 操['editor'].
+            窗 其 结果 ((窗 其 DestroyWindow) 其 调用 [操['editor']]).
+        然
     另
         件编 其 取消写入 操['writer'].
     然
@@ -451,6 +536,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     结束工作.
     若 原路 != 写态['path'] 且 非 (文档 其 查 'large') 则
         文档 其 增 'language' (语 其 选择 (文档 其 查 'editor') (语 其 识别 写态['path'])).
+        安排语法.
     然
     刷新.
     若 后续 == 'tab' 则 删除当前页. 然
@@ -493,6 +579,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     位 取 A 其 查 'active'.
     柄 取 编辑柄.
     A 其 增 'active' (-1).
+    语 其 遗忘 柄.
     窗 其 成功 ((窗 其 DestroyWindow) 其 调用 [柄]) 'DestroyWindow(editor)'.
     文们 其 删 位.
     窗 其 发送 (A 其 查 'tabs') 4872 位 0.
@@ -534,6 +621,13 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     环
     A 其 增 'closeIndex' (-1).
     A 其 增 'ready' 假.
+    窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),902]).
+    A 其 增 'syntaxTimer' 假.
+    位 取 0.
+    循 文们 其 量 次
+        语 其 遗忘 (文们[位] 其 查 'editor').
+        位 取 位+1.
+    环
     窗 其 成功 ((窗 其 DestroyWindow) 其 调用 [A 其 查 'window']) 'DestroyWindow(main)'.
     得 真.
 法
@@ -604,13 +698,28 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     若 号 == 406 则
         模 其 改编码 当前 936 假.
     然
-    若 (号 == 501 或 (号 >= 702 且 号 <= 703)) 且 (当前 其 查 'large') 则 提示 'Large-file mode keeps wrapping and syntax colouring disabled to bound memory and layout cost.'. 得 空. 然
-    若 号 >= 701 且 号 <= 703 则
+    若 (号 == 501 或 (号 >= 702 且 号 <= 704)) 且 (当前 其 查 'large') 则 提示 'Large-file mode keeps wrapping and syntax colouring disabled to bound memory and layout cost.'. 得 空. 然
+    若 号 >= 701 且 号 <= 704 则
         语言 取 'plain'.
         若 号 == 702 则 语言 取 'cpp'. 然
         若 号 == 703 则 语言 取 'json'. 然
+        若 号 == 704 则 语言 取 'ru'. 然
+        若 语言 == (当前 其 查 'language') 则
+            若 语言 != 'ru' 则 得 空. 然
+            语态 取 语 其 状态 编辑柄.
+            若 语态 != 空 且 语态['enabled'] 则 得 空. 然
+        然
         当前 其 增 'language' (语 其 选择 编辑柄 语言).
+        安排语法.
         报语法警告.
+    然
+    若 号 == 505 或 号 == 506 则
+        若 (当前 其 查 'language') == 'ru' 且 非 (当前 其 查 'large') 则
+            若 语 其 待办 编辑柄 则 提示 'Ru syntax is still being updated. Folding will be available when styling finishes.'. 得 空. 然
+            动作 取 0.
+            若 号 == 506 则 动作 取 1. 然
+            语 其 全折 编辑柄 动作.
+        然
     然
     若 号 == 501 则
         当前 其 增 'wrap' (非 (当前 其 查 'wrap')).
@@ -632,7 +741,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         若 (窗 其 弹窗 (A 其 查 'window') 'Remove this copy from Open With / Default Apps candidates? Your Windows default choices will not be overwritten.' 'ru_notepad · unregister candidate' 292) == 6 则 关联 其 注销. 提示 'Candidate entries owned by this copy were removed.'. 然
     然
     若 号 == 804 则 提示 ('Registration status: '+(关联 其 查询状态)+'\nregistered = this copy; none = not registered; partial = incomplete; otherowner = another portable location. Unregister at the old location before moving, then register the new copy.'). 然
-    若 号 == 601 则 提示 'ru_notepad 0.1.3 preview\n\nWindows x64 · application logic compiled from Ru\nScintilla + Lexilla native editor components\n\nTabs, safe text saves, undo/redo, literal find/replace.\nBounded streaming, 64 tabs; over 500 MB asks first. Not full Notepad++ parity yet.\nNo Python runtime. No telemetry. No network features.'. 然
+    若 号 == 601 则 提示 'ru_notepad 0.1.4 preview\n\nWindows x64 · application logic compiled from Ru\nScintilla + Lexilla native editor components\n\nTabs, safe text saves, undo/redo, literal find/replace.\nBounded streaming, 64 tabs; over 500 MB asks first. Not full Notepad++ parity yet.\nNo Python runtime. No telemetry. No network features.'. 然
     刷新.
     得 空.
 法
@@ -643,8 +752,8 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         ['&Edit',[[201,'&Undo\tCtrl+Z'],[202,'&Redo\tCtrl+Y'],[203,'Cu&t\tCtrl+X'],[204,'&Copy\tCtrl+C'],[205,'&Paste\tCtrl+V'],[206,'Select &All\tCtrl+A']]],
         ['&Search',[[301,'&Find...\tCtrl+F'],[302,'&Replace...\tCtrl+H'],[303,'Find &Next\tF3']]],
         ['E&ncoding',[[401,'Save as UTF-8'],[402,'Save as UTF-8 with BOM'],[403,'Save as UTF-16 LE'],[404,'Save as UTF-16 BE'],[405,'Save as Windows-1252'],[406,'Save as GBK (CP936)']]],
-        ['&Language',[[701,'Plain text'],[702,'C / C++'],[703,'JSON']]],
-        ['&View',[[501,'Toggle word &wrap'],[502,'Zoom &in\tCtrl++'],[503,'Zoom &out\tCtrl+-'],[504,'Reset zoom\tCtrl+0']]],
+        ['&Language',[[701,'Plain text'],[702,'C / C++'],[703,'JSON'],[704,'Ru / 如言']]],
+        ['&View',[[501,'Toggle word &wrap'],[502,'Zoom &in\tCtrl++'],[503,'Zoom &out\tCtrl+-'],[504,'Reset zoom\tCtrl+0'],[505,'Collapse all Ru folds\tCtrl+Shift+['],[506,'Expand all Ru folds\tCtrl+Shift+]']]],
         ['&Settings',[[801,'Register Open With candidate...'],[802,'Choose defaults in Windows Settings...'],[803,'Unregister this copy...'],[804,'Registration status']]],
         ['&Help',[[601,'&About ru_notepad']]]
     ].
@@ -676,6 +785,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         试
             若 号 == 17 则 得 关机会话. 然
             若 号 == 275 且 (宽参 其 数) == 901 则 工作时钟. 得 0. 然
+            若 号 == 275 且 (宽参 其 数) == 902 则 语法时钟. 得 0. 然
             若 号 == 563 则
                 路们 取 拖放 其 接收 ((窗 其 PTR) 其 重释 宽参).
                 入队 路们 0.
@@ -693,19 +803,23 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
                 来源 取 头 其 读 'hwndFrom'.
                 码 取 (头 其 读 'code') 其 数.
                 头 其 关闭.
-                若 码 == 2008 则
+                文档 取 所属文档 来源.
+                若 文档 != 空 且 (码 == 2008 或 码 == 2000 或 码 == 2010) 则
                     修改 取 修改头 其 新建.
                     窗 其 结果 ((窗 其 RtlMoveMemory) 其 调用 [修改,((窗 其 PTR) 其 重释 长参),(修改头 其 大小)]).
+                    位置 取 (修改 其 读 'position') 其 数.
                     类型 取 修改 其 读 'modificationType'.
+                    长度 取 (修改 其 读 'length') 其 数.
+                    行变 取 (修改 其 读 'linesAdded') 其 数.
+                    边栏 取 (修改 其 读 'margin') 其 数.
                     修改 其 关闭.
-                    若 (类型 其 位段 0 2) != 0 则
-                        文们 取 A 其 查 'docs'.
-                        位 取 0.
-                        循 文们 其 量 次
-                            若 (来源 其 句) == ((文们[位] 其 查 'editor') 其 句) 则 文们[位] 其 增 'revision' ((文们[位] 其 查 'revision')+1). 然
-                            位 取 位+1.
-                        环
+                    若 码 == 2008 且 (类型 其 位段 0 2) != 0 则
+                        文档 其 增 'revision' ((文档 其 查 'revision')+1).
+                        语 其 变化 来源 位置 长度 行变 (类型 其 数).
+                        安排语法.
                     然
+                    若 码 == 2000 则 语 其 请求 来源 位置. 安排语法. 然
+                    若 码 == 2010 且 边栏 == 2 且 非 (A 其 查 'busy') 则 语 其 折叠 来源 位置. 然
                 然
                 若 A 其 查 'busy' 则 得 0. 然
                 若 (来源 其 句) == ((A 其 查 'tabs') 其 句) 且 码 == 4294966745 则

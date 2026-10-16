@@ -1,14 +1,21 @@
 # Changelog
 
+## 0.1.4-preview — 2026-10-16
+
+- Add a real Ru 0.21.3 lexical policy and structural folding, with Ru keyword/structural policy, a bounded application-owned C scanning helper and Scintilla container styling. Recognize Unicode names, exact comments, strings/escapes, numbers, keywords and contextual block delimiters.
+- Add `.ru` automatic selection, a Ru language menu, fold margin, collapse/expand commands and Ctrl+Shift+[ / ]. Preserve bytes, dirty/undo state and per-tab fold state.
+- Process bounded background styling slices and lexical checkpoints; coalesce edits and reuse a converged unchanged suffix. Keep the existing 32 MB plain-text mode.
+- Require pure-policy, native byte-style/fold, main-window and detached GUI regressions plus measured 100 KB / 1 MB initial/edit evidence. Actual 0.1.4 Windows acceptance remains pending.
+
 ## 0.1.3-preview — 2026-10-16
 
 - Add explicit per-user Open With / Default Apps candidate registration, ownership-safe removal, status, and a Windows Settings link. Windows retains control of default choices.
 - Route Unicode CLI, dialog and multi-file HDROP inputs through one bounded queue; retain dirty tabs, continue after per-file errors, and select duplicates by file identity.
 - Replace whole-file open/save paths with bounded Unicode/legacy cursors and hidden pending editors. Remove the fixed 4 MiB limit; ask before any body read above 500,000,000 bytes. A separate 32,000,000-byte plain-text performance mode disables lexer/wrap.
 - Advance open/save through bounded timer batches with Cancel/Esc, mutation locking, revision checks and safe asynchronous close continuations. Retain conflict checks, protected staging, recovery backups and checked final commits.
-- Require native chunk-boundary/cancellation/registry/drop/main-operation tests, full 500,039,680-byte editor roundtrip, and detached GUI file-entry/cancel acceptance. These changes await exact-build Windows CI.
+- Require native chunk-boundary/cancellation/registry/drop/main-operation tests, full 500,039,680-byte editor roundtrip, and detached GUI file-entry/cancel acceptance. The corrected exact-build Windows run 38887294845 passed these gates.
 - Pin the independently validated Ru 0.21.3 toolchain; keep runtime/tests ZIPs separate and byte-identical for shared runtime files.
-- First Windows run passed 797 assertions, both GUI gates and the complete 500,039,680-byte roundtrip, but could not package because the file-drop console fixture lacked the v6 manifest required by GetWindowSubclass. Embed the same reviewed manifest in every executable; keep all 38 file-drop assertions and require a full corrected 835-assertion/23-result run.
+- First Windows run passed 797 assertions, both GUI gates and the complete 500,039,680-byte roundtrip, but could not package because the file-drop console fixture lacked the v6 manifest required by GetWindowSubclass. Embed the same reviewed manifest in every executable; keep all 38 file-drop assertions. The complete corrected run passed 835 assertions / 23 results, and both original CI ZIPs were independently verified.
 
 ## 0.1.2-preview — 2026-10-16
 

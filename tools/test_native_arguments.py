@@ -18,6 +18,12 @@ def main():
     cases = [
         ('conditional native export', native.split('函数 取')[0] + '若 真 则 函数 取' + native.split('函数 取')[1] + '然\n函数 其 调用 [1].', False),
         ('conflicting conditional signature', native + '若 真 则 ' + native.replace('[(密 其 i32)]','[(密 其 u32)]') + '然\n函数 其 调用 [1].', True),
+        ('try native export', '试\n' + native + '救 原因 显 原因. 终\n函数 其 调用 [1].', False),
+        ('rescue native export', '试 显 1. 救 原因\n' + native + '终\n函数 其 调用 [1].', False),
+        ('nested try conditional export', '试 若 真 则\n' + native + '然 救 原因 显 原因. 终\n函数 其 调用 [1].', False),
+        ('conflicting try rescue signature', '试\n' + native + '救 原因\n' + native.replace('[(密 其 i32)]','[(密 其 u32)]') + '终\n函数 其 调用 [1].', True),
+        ('function local binding is not module export', '算 局部:\n' + native + '得 0. 法\n函数 其 调用 [1].', True, True),
+        ('try nested function remains local', '试 算 局部:\n' + native + '得 0. 法 救 原因 显 原因. 终\n函数 其 调用 [1].', True, True),
         ('array literal string-only member', "若 (['cpp','json'] 其 含 'cpp') 则 显 1. 然", True),
         ('typed array parameter string-only member', "算 检查 参数 为 句 阵: 得 参数 其 含 'x'. 法", True),
         ('string contains contract', "若 ('cpp,json' 其 含 'cpp') 则 显 1. 然", False),
@@ -34,14 +40,16 @@ def main():
     with tempfile.TemporaryDirectory(prefix='ru-notepad-argument-audit-') as folder:
         root = Path(folder)
         (root / 'src').mkdir()
-        for name, source, rejected in cases:
+        for name, source, rejected, *options in cases:
+            unresolved_expected = options[0] if options else False
             (root / 'src' / 'mutant.ru').write_text(source, encoding='utf-8')
             result = subprocess.run([sys.executable, str(ROOT / 'tools/check_native_arguments.py'),
                 '--ru-root', str(args.ru_root.resolve()), '--root', str(root)],
                 capture_output=True, text=True)
             report = json.loads(result.stdout)
-            errors = report['member_mismatches'] + report['known_type_mismatches'] + report['binding_conflicts']
-            if result.returncode != int(rejected) or bool(errors) != rejected or report['unresolved']:
+            errors = report['member_mismatches'] + report['known_type_mismatches'] + report['binding_conflicts'] + report['mismatches']
+            if (result.returncode != int(rejected) or bool(errors) != (rejected and not unresolved_expected)
+                    or bool(report['unresolved']) != unresolved_expected):
                 raise RuntimeError(f'{name}: unexpected audit result: {result.stdout}\n{result.stderr}')
             print('PASS: ' + name)
     print(f'TOTAL STATIC AUDIT PASS: {len(cases)}')

@@ -25,17 +25,48 @@ Required acceptance retains every 0.1.1 assertion and adds:
 
 The total is **553 assertions across 14 required assertion results**, plus the separate visible-GUI/normal-close result. CI rejects missing results, skipped tests, inconsistent PASS-line totals, nonzero exits and timeouts. The actual Windows result and exact binary/source hashes are recorded in each successful package's BUILD.json; consult that receipt rather than treating this planned gate as a pass.
 
-## 0.1.3 acceptance gates (pending)
+## Released 0.1.3 evidence
 
-The [first 0.1.3 Windows run](https://github.com/uppet/ru_notepad/actions/runs/38881489424) executed 797 assertions and passed 22 of 23 results, including both detached GUI gates and the complete 500,039,680-byte editor roundtrip. It did **not** qualify for packaging: the 38-assertion file-drop fixture failed before its first assertion because its console executable lacked the Common Controls v6 manifest required by GetWindowSubclass. Console tests now embed the application's same reviewed manifest while retaining their console subsystem; all 835 assertions and 23 results must pass together on the corrected build.
+The [first 0.1.3 Windows run](https://github.com/uppet/ru_notepad/actions/runs/38881489424) executed 797 assertions and passed 22 of 23 results, including both detached GUI gates and the complete 500,039,680-byte editor roundtrip. It did **not** qualify for packaging: the 38-assertion file-drop fixture failed before its first assertion because its console executable lacked the Common Controls v6 manifest required by GetWindowSubclass. Console tests now embed the application's same reviewed manifest while retaining their console subsystem. The corrected [Windows run 38887294845](https://github.com/uppet/ru_notepad/actions/runs/38887294845), commit `6c67574a164a26e0629cc5e4e707351ec0059b71`, passed all **835 assertions / 23 results**, including the full 500,039,680-byte roundtrip in 18.844 seconds. Both original CI ZIPs were independently verified against the executed binaries.
 
 New native gates cover strict UTF-8/UTF-16/legacy boundaries, staged-write cancellation and ACL preservation, actual files beyond 4 MiB/16 MiB, zero-read cancellation above 500 MB, and a complete 500,039,680-byte valid-text editor load/save with independent full-output validation. Main-level tests exercise real timer dispatch, Unicode CLI/drop input, duplicate hard-link identity, per-file queue errors, preserved dirty state, same-length revision changes, Save As cancellation during close-all, and normal async-save close continuations.
 
-Registration tests operate only inside a disposable HKCU test namespace; they do not choose defaults. HDROP tests cover bounded Unicode path ownership and malformed data. A separate detached GUI gate must inject file drops through the actual visible Scintilla child (rather than only the parent), observe exact opened text, responsiveness during a partial load, cancellation without a partial tab or remaining queue, and normal WM_CLOSE/exit0. Large generated fixtures are deleted and never uploaded; only bounded synthetic logs, hashes and counts are artifacts. The required total is 835 individual assertions across 21 assertion results, plus two detached GUI results (23 required results). This is a required gate, not an unexecuted claim of success.
+Registration tests operate only inside a disposable HKCU test namespace; they do not choose defaults. HDROP tests cover bounded Unicode path ownership and malformed data. A separate detached GUI gate must inject file drops through the actual visible Scintilla child (rather than only the parent), observe exact opened text, responsiveness during a partial load, cancellation without a partial tab or remaining queue, and normal WM_CLOSE/exit0. Large generated fixtures are deleted and never uploaded; only bounded synthetic logs, hashes and counts are artifacts. The required total is 835 individual assertions across 21 assertion results, plus two detached GUI results (23 required results). The successful run above establishes these exact synthetic cases, not every filesystem or interactive path.
+
+## 0.1.4 Ru syntax gates (pending)
+
+This revision retains every 0.1.3 assertion and adds 8 shortcut and 8 suffix-policy
+cases, 338 production lexer/fold-policy cases, 116 real Scintilla container cases,
+39 main-window integration cases, and an isolated 8-case Ru run without Lexilla, and three 8-case helper rejection runs
+for missing DLL, missing exports and ABI mismatch.
+The required total is **1,376 individual assertions / 31 results**, including
+three detached GUI results. The existing complete >500 MB roundtrip is retained.
+
+New native gates check actual UTF-8 style bytes and fold levels, incomplete edits,
+checkpoint convergence, 100 KB / 1 MB scanned-byte and timing diagnostics,
+text/dirty/undo preservation, document generations, language-switch visibility,
+main timer ownership, margin hit-testing, menu commands, tab state, and automatic
+Ru selection after Save As. Portable tests run the pure Ru lexical/fold policy in both the pinned interpreter
+and Linux C. The C scanner is compared against that oracle, and the exact Windows
+DLL must pass the locked corpus/fuzz chunk configurations before native
+acceptance. A required Linux job separately runs the full style/fold oracle
+differential and ASan/UBSan checks; Windows packaging depends on its success. None of these portable checks replaces the Windows UI gates.
+
+The detached Ru GUI gate additionally loads a 1,000,000-byte synthetic Chinese
+Ru source through the actual child drop/timer path. It verifies byte length,
+clean state, known head/tail style bytes and completed status while probing
+WM_NULL responsiveness; completion must occur within 30 seconds. Its wall time
+and maximum measured response time are retained independently of synchronous
+scanner timings. A separate approximately 100 KB source exercises real insertion
+and Backspace at the beginning, middle and end, with each response/completion
+time recorded and final style/fold probes checked. Native cases compare all
+text/style bytes and fold levels against fresh scans after unequal-length edits
+and edits made while earlier work is pending. Passing a finite timing-value check alone is not a usability
+claim. No 0.1.4 Windows pass is claimed until the exact-commit CI run succeeds.
 
 ## Packaging
 
-The ordinary runtime ZIP contains the application, Scintilla.dll, Lexilla.dll and necessary docs/licenses/samples. The separate tests ZIP is self-contained, includes byte-identical copies of those runtime files, and adds test executables, the test runner and bounded synthetic CI evidence. Both packages are made from the binaries that passed acceptance, without a rebuild between tests and packaging. Full inventory/hash and dependency-source/license gates apply to both.
+The ordinary runtime ZIP contains the application, Scintilla.dll, Lexilla.dll, RuSyntax.dll and necessary docs/licenses/samples. The separate tests ZIP is self-contained, includes byte-identical copies of those runtime files, and adds test executables, the test runner and bounded synthetic CI evidence. Both packages are made from the binaries that passed acceptance, without a rebuild between tests and packaging. Full inventory/hash and dependency-source/license gates apply to both.
 
 ## Source and build checks
 
@@ -49,4 +80,4 @@ The ordinary runtime ZIP contains the application, Scintilla.dll, Lexilla.dll an
 
 Physical Explorer mouse dragging, keyboard layouts, IME composition, clipboard integration, file dialogs and dirty prompts require interactive acceptance. Editor child routing revokes Scintilla's OLE text target; external text drops and internal selection drag-to-move are unavailable in this version. Further coverage is needed for shutdown veto, real-world ACL/EFS configurations, replacement/backup failures, fault injection, accessibility and rendering at different display scales. Local Wine never ran; it is not claimed as evidence.
 
-No crash recovery exists. Use samples or copies first. The fixed 4 MiB limit is removed in 0.1.3; NUL rejection remains. Scintilla keeps the entire text in memory, and bounded streaming does not promise unlimited size. At 32,000,000 bytes, opening uses labelled plain-text/no-wrap mode; above 500,000,000 bytes, consent precedes any body read. Cancel is between I/O chunks, not during one synchronous disk call. Replace-all and very long-line rendering can still block. Ru files remain plain text in 0.1.3. Save All, recent files, backward/whole-word/selection-scope search, explicit EOL conversion, tab reordering and localization are absent. Plugins, macros, sessions and full Notepad++ parity remain future work.
+No crash recovery exists. Use samples or copies first. The fixed 4 MiB limit is removed in 0.1.3; NUL rejection remains. Scintilla keeps the entire text in memory, and bounded streaming does not promise unlimited size. At 32,000,000 bytes, opening uses labelled plain-text/no-wrap mode; above 500,000,000 bytes, consent precedes any body read. Cancel is between I/O chunks, not during one synchronous disk call. Replace-all and very long-line rendering can still block. Ru files were plain text in 0.1.3; 0.1.4 adds dedicated Ru highlighting and structural folding below the large-file threshold. Save All, recent files, backward/whole-word/selection-scope search, explicit EOL conversion, tab reordering and localization are absent. Plugins, macros, sessions and full Notepad++ parity remain future work.

@@ -10,7 +10,15 @@ Scintilla is distributed under its permissive copyright/permission notice, avail
 
 ## Lexilla 5.5.4
 
-The syntax-lexer library is built from the official source archive at https://www.scintilla.org/lexilla554.zip . Its reproducibility SHA-256 pin is `5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0`; this is not an independently signed upstream checksum. The exact Lexilla `License.txt` from that source accompanies both portable ZIPs. This release exposes C/C++ and JSON lexers only; Ru-specific highlighting is not claimed.
+The syntax-lexer library is built from the official source archive at https://www.scintilla.org/lexilla554.zip . Its reproducibility SHA-256 pin is `5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0`; this is not an independently signed upstream checksum. The exact Lexilla `License.txt` from that source accompanies both portable ZIPs. Lexilla supplies C/C++ and JSON lexers. Ru highlighting uses the application's own Ru policy and bounded C scanner; structural folding remains Ru. It does not borrow another Lexilla language.
+
+## Unicode classification data
+
+The Ru scanner's generated identifier-classification intervals come from Python 3.12 / Unicode 15.0.0 `str.isalpha()` and `str.isalnum()` predicates, matching the pinned Ru frontend. The generated range data is distributed with the Unicode copyright and permission notice in `licenses/Unicode.txt` in both portable packages; the source copy is `packaging/licenses/Unicode.txt`, obtained from https://www.unicode.org/license.txt . Reproduction details are in `docs/ru-language-syntax.md`. This notice concerns Unicode data and does not assign an application license.
+
+## Application-owned native helper
+
+RuSyntax.dll is built from this repository's `native/` C sources. It accelerates bounded UTF-8 scanning and style-byte generation, using keyword/tag configuration and folding policy owned by the Ru application. It is not an additional third-party lexer. Its source and binary hashes are part of the same package receipts; the application license remains pending.
 
 ## Compiler and Windows runtime support
 

@@ -2,15 +2,16 @@
 
 A small Windows text editor written mostly in **Ru**. Open a file, edit it in a native Scintilla control, and keep several documents in tabs. Ru handles the menus, document state, encoding choices, save policy, and search commands.
 
-**Status: 0.1.3 preview development for Windows x64.** The released 0.1.2 build passed [553 native Windows assertions and the GUI smoke test](https://github.com/uppet/ru_notepad/actions/runs/38871195015). New 0.1.3 features require their own exact-build CI receipt; compiling an EXE is not proof that the application works. Use sample files or copies of your documents while testing. Notepad++ feature parity is a longer-term goal, not a claim about this preview.
+**Status: 0.1.4 preview development for Windows x64.** The released 0.1.3 build passed [835 native Windows assertions and two GUI gates](https://github.com/uppet/ru_notepad/actions/runs/38887294845), including a full 500,039,680-byte editor roundtrip. New 0.1.4 Ru syntax features require their own exact-build CI receipt. Use samples or copies while testing; full Notepad++ parity remains a longer-term goal.
 
 ## What is included
 
-- A standalone Windows x64 app with Scintilla and Lexilla DLLs; Python is not needed to run them
+- A standalone Windows x64 app with Scintilla, Lexilla and the application-owned RuSyntax DLL; Python is not needed to run them
 - Tabs, undo/redo, and prompts before closing unsaved documents
 - UTF-8, UTF-8 BOM, UTF-16 LE/BE, explicit Windows-1252, and GBK
 - Save-conflict checks and lossless-encoding checks
 - Literal search/replace, case matching, and replace-all as one undo operation
+- Ru lexical tables and structural-folding policy, with a bounded application-owned C scanner for the UTF-8 hot path and incremental background styling
 - C/C++ and JSON syntax highlighting from native Lexilla; automatic extension detection and a Language menu
 - Current-line EOL and Enter insertion mode shown separately, including mixed-EOL files
 - Tab-expanded Unicode columns, reverse tab switching, and zoom reset
@@ -19,11 +20,13 @@ A small Windows text editor written mostly in **Ru**. Open a file, edit it in a 
 - Bounded streaming open/save, with a cancellable warning before reading files over 500,000,000 bytes
 - An original AI-generated icon
 
-There is no fixed 4 MiB file limit. At most 64 documents and 64 queued paths are allowed. Scintilla retains the full document in RAM, so available memory still limits usable sizes. Files of at least 32,000,000 bytes open in labelled plain-text large-file mode with highlighting and wrap disabled; this is a performance mode, not an opening limit. Files over exactly 500,000,000 bytes require consent before body reads. Cancel is checked between bounded I/O chunks; one slow disk call or long-line layout can still block. Embedded NUL and invalid Unicode are rejected rather than silently changed. There is no crash recovery yet. Ru-specific highlighting, additional languages, regex parity, plugins, macros, split views, accessibility validation, and broader performance validation remain future work. `.ru` files stay plain text; no substitute lexer is presented as Ru support.
+There is no fixed 4 MiB file limit. At most 64 documents and 64 queued paths are allowed. Scintilla retains the full document in RAM, so available memory still limits usable sizes. Files of at least 32,000,000 bytes open in labelled plain-text large-file mode with highlighting and wrap disabled; this is a performance mode, not an opening limit. Files over exactly 500,000,000 bytes require consent before body reads. Cancel is checked between bounded I/O chunks; one slow disk call or long-line layout can still block. Embedded NUL and invalid Unicode are rejected rather than silently changed. There is no crash recovery yet. Additional languages, regex parity, plugins, macros, split views, accessibility validation, and broader performance validation remain future work. `.ru` files select the Ru-owned container lexer. Folding tolerates incomplete edits conservatively and is not a full parser or syntax validator.
+
+For Ru files, click the folding margin or use View > Collapse all Ru folds / Expand all Ru folds (Ctrl+Shift+[ / Ctrl+Shift+]). New/opened and successfully saved-as `.ru` paths select Ru automatically; Language > Ru / 如言 enables it manually. Switching tabs retains fold state; switching to plain text restores all hidden lines. The 32 MB plain-text performance mode also disables Ru folding.
 
 ## Trying the preview
 
-Download the ordinary runtime ZIP for everyday use. Keep `ru_notepad.exe`, `Scintilla.dll`, and `Lexilla.dll` in the same folder. Read the warning and test instructions included with the package before opening important files. Editor file drops replace the native OLE text-drop target; external text drops and selection drag-to-move are currently unavailable. Automated acceptance covers real child-window drop messages, while full Explorer mouse-drag interaction remains a manual check.
+Download the ordinary runtime ZIP for everyday use. Keep `ru_notepad.exe`, `Scintilla.dll`, `Lexilla.dll`, and `RuSyntax.dll` in the same folder. Read the warning and test instructions included with the package before opening important files. Editor file drops replace the native OLE text-drop target; external text drops and selection drag-to-move are currently unavailable. Automated acceptance covers real child-window drop messages, while full Explorer mouse-drag interaction remains a manual check.
 
 The portable app does not need installation. Settings > Register Open With candidate is an explicit optional action. Windows Settings lets you choose each default file type. Unregister at the old location before moving the portable folder, then register the new copy.
 
@@ -33,7 +36,7 @@ For the current automated result, check this repository’s **Actions** page. Wi
 
 ## Building and understanding the project
 
-Python is used only to run the Ru compiler and build/test tools. Application code is translated to C and compiled as a native Windows executable.
+Python is used only to run the Ru compiler and build/test tools. Ru application code is translated to C and compiled as a native Windows executable. A small application-owned C DLL accelerates UTF-8 token scanning and style-byte generation; Ru still owns keyword tables, structural folding and UI policy. The pure Ru scanner remains an independently executable test oracle.
 
 - [Build requirements and pinned dependencies](docs/build-provenance.md)
 - [Syntax-highlighting scope](docs/syntax-highlighting.md)

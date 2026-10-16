@@ -57,12 +57,12 @@
     确认 ((语法 其 识别 'C:/a.cpp/config.JsOn') == 'json') 'mixed-case JSON suffix'.
     确认 ((语法 其 识别 'C:/a.cpp/README') == 'plain') 'directory suffix does not choose a lexer'.
     确认 ((语法 其 识别 'C:\\a.json\\README') == 'plain') 'Windows directory suffix does not choose a lexer'.
-    确认 ((语法 其 识别 'source.ru') == 'plain') 'Ru is truthfully plain text, never borrowed C++'.
+    确认 ((语法 其 识别 'source.ru') == 'ru') 'Ru selects its own container lexer, never borrowed C++'.
     确认 ((语法 其 识别 'data.json.bak') == 'plain') 'unknown final suffix falls back'.
     确认 ((语法 其 识别 '') == 'plain') 'untitled text defaults to plain'.
     确认 ((语法 其 名称 'cpp') == 'C / C++') 'C-family status label'.
     确认 ((语法 其 名称 'json') == 'JSON') 'JSON status label'.
-    确认 ((语法 其 名称 'ru') == 'Plain text') 'unsupported status label is truthful'.
+    确认 ((语法 其 名称 'ru') == 'Ru / 如言') 'Ru-owned status label is explicit'.
 
     原文 取 '// 甲😀\nint answer = 42;\nconst char *s = "甲😀";\n/* note */ return true;\n'.
     编 其 设文本 甲 原文.
