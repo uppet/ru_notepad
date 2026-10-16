@@ -113,6 +113,18 @@ class PackageTests(unittest.TestCase):
                     'edit_read_bytes': 1024, 'reused_bytes': size - 1024, 'max_read': 1024,
                     'initial_ms': 100.0, 'edit_ms': 2.0, 'max_tick_ms': 3.0, 'max_chunk_ms': 1.0}
                     for size in ci.RU_PERFORMANCE_SIZES]
+            if name == 'ru_syntax_native':
+                result['gui_sync_performance'] = {'size': 1000000, 'source_chars': 636370,
+                    'wall_ms': 100, 'read_bytes': 1000000, 'max_read': 1024, 'max_tick_ms': 3,
+                    'max_chunk_ms': 1, 'chunks': 1000,
+                    'source_sha256': hashlib.sha256(ci.gui_ru_timer_fixture()[0]).hexdigest()}
+            if name == 'app_ru_timer_native':
+                result['timer_performance'] = {'size': 1000000, 'source_chars': 636370,
+                    'wall_ms': 100, 'ticks': 10, 'work_ms': 40, 'gap_ms': 50, 'max_tick_ms': 4,
+                    'max_gap_ms': 6, 'read_bytes': 1000000, 'max_read': 1024, 'chunks': 1000,
+                    'feed': 1000000, 'bytes': 1000000, 'pending': 0, 'text_notifications': 0,
+                    'style_notifications': 0, 'fold_notifications': 0,
+                    'source_sha256': hashlib.sha256(ci.gui_ru_timer_fixture()[0]).hexdigest()}
             if name in {case[0] for case in ci.SYNTAX_FALLBACK_TESTS}:
                 result['fixture_binary_sha256'] = {target: self.summary['tested_binary_sha256'][source]
                                                   for target, source in ci.syntax_fallback_layout(name).items()}
@@ -408,6 +420,32 @@ class PackageTests(unittest.TestCase):
                     self.create()
                 self.assertFalse((self.root / 'dist').exists())
                 self.summary = original
+
+    def test_native_packaging_rechecks_same_source_sync_and_production_timer_measurements(self):
+        for name, key in (('ru_syntax_native', 'gui_sync_performance'),
+                          ('app_ru_timer_native', 'timer_performance')):
+            for mutation in ('missing', 'source', 'characters', 'incomplete', 'unbounded', 'nonfinite',
+                             'extra-field', 'timer-pending', 'timer-timeout', 'timer-style', 'timer-fold'):
+                if mutation.startswith('timer-') and name != 'app_ru_timer_native':
+                    continue
+                with self.subTest(name=name, mutation=mutation):
+                    original = json.loads(json.dumps(self.summary))
+                    result = next(case for case in self.summary['tests'] if case['name'] == name)
+                    record = result[key]
+                    if mutation == 'missing': result.pop(key)
+                    if mutation == 'source': record['source_sha256'] = 'different'
+                    if mutation == 'characters': record['source_chars'] = 1000000
+                    if mutation == 'incomplete': record['read_bytes'] = 999999
+                    if mutation == 'unbounded': record['max_read'] = 1025
+                    if mutation == 'nonfinite': record['wall_ms'] = float('nan')
+                    if mutation == 'extra-field': record['unexpected'] = 1
+                    if mutation == 'timer-pending': record['pending'] = 1
+                    if mutation == 'timer-timeout': record['wall_ms'] = 30001
+                    if mutation == 'timer-style': record['style_notifications'] = 1
+                    if mutation == 'timer-fold': record['fold_notifications'] = 1
+                    with self.assertRaises(RuntimeError): self.create()
+                    self.assertFalse((self.root / 'dist').exists())
+                    self.summary = original
 
     def test_native_packaging_rejects_cleanup_kill_even_with_true_flags(self):
         self.summary['tests'][0]['cleanup_killed'] = True

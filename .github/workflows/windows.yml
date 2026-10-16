@@ -51,6 +51,11 @@ jobs:
           python -I tests/ru_syntax_failure_portable.py --ru-root .ci/ru-language -v
           > build/logs/014/ru-scan/bridge-failure.stdout.log
           2> build/logs/014/ru-scan/bridge-failure.stderr.log
+      - name: Verify native timing corpora match the unchanged detached-GUI bytes
+        run: >-
+          python -I tools/test_ru_timer_corpus.py --ru-root .ci/ru-language
+          > build/logs/014/ru-scan/timer-corpus.stdout.log
+          2> build/logs/014/ru-scan/timer-corpus.stderr.log
       - name: Run full pure-Ru oracle and bounded scanner sanitizer cases
         run: >-
           python -I tools/test_ru_scan.py --ru-root .ci/ru-language --sanitize --fuzz 100

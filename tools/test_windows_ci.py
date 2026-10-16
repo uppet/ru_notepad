@@ -111,9 +111,10 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'syntax_policy': r'^TOTAL PASS: 108\s*$',
             'status_native': r'^TOTAL PASS: 21\s*$',
             'syntax_native': r'^TOTAL PASS: 82\s*$',
-            'app_ru_native': r'^TOTAL PASS: 39\s*$',
+            'app_ru_native': r'^TOTAL PASS: 47\s*$',
+            'app_ru_timer_native': r'^TOTAL PASS: 8\s*$',
             'ru_lexical_policy': r'^TOTAL PASS: 338\s*$',
-            'ru_syntax_native': r'^TOTAL PASS: 119\s*$',
+            'ru_syntax_native': r'^TOTAL PASS: 125\s*$',
             'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=73\s*$',
             'file_streaming_native': r'^FILE_STREAMING_TESTS_PASS=99\s*$',
             'editor_streaming_native': r'^EDITOR_STREAMING_TESTS_PASS=21\s*$',
@@ -123,9 +124,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'file_drop_native': r'^TOTAL PASS: 38\s*$',
         }
         self.assertEqual(dict(ci.NATIVE_CONSOLE_TESTS), expected)
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 21)
-        # Twenty-one console gates, six actual fallbacks, three real GUIs and ACL.
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 31)
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 22)
+        # Twenty-two console gates, six actual fallbacks, three real GUIs and ACL.
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 32)
 
     def test_console_and_gui_receipts_share_all_manifest_resource_inputs(self):
         common = {'packaging/app.rc', 'packaging/app.manifest', 'assets/app-icon.ico', 'VERSION'}
@@ -303,6 +304,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     'edit_read_bytes': 1024, 'reused_bytes': size - 1024, 'max_read': 1024,
                     'initial_ms': 100.0, 'edit_ms': 2.0, 'max_tick_ms': 3.0, 'max_chunk_ms': 1.0}
                     for size in ci.RU_PERFORMANCE_SIZES]
+            if name in ci.RU_GUI_CONSOLE_MEASUREMENTS:
+                marker, key = ci.RU_GUI_CONSOLE_MEASUREMENTS[name]
+                result[key] = ci.parse_ru_gui_measurement(self.ru_gui_measurement_text(marker), marker)
             if name in {case[0] for case in ci.SYNTAX_FALLBACK_TESTS}:
                 result['fixture_binary_sha256'] = {target: summary['tested_binary_sha256'][source]
                                                   for target, source in ci.syntax_fallback_layout(name).items()}
@@ -433,6 +437,10 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'BACKEND: python\n' + 'PASS: fixture\n' * 8 + 'TOTAL PASS: 8\n' +
             'BACKEND: c\n' + 'PASS: fixture\n' * 8 + 'TOTAL PASS: 8\n' +
             'PASS: production cleanup rescue bodies and original scalar negative controls in both Ru backends\n')
+        (directory / 'timer-corpus.stdout.log').write_text(''.join(
+            f'PASS: {backend} {fixture} exact UTF-8 corpus\n'
+            for fixture in ('ru_syntax_native', 'app_ru_native') for backend in ('python', 'c')) +
+            'RU_TIMER_CORPUS_PASS: 4\n')
         (directory / 'bridge-failure.stdout.log').write_text('RU_SYNTAX_FAILURE_PORTABLE_PASS: 6\n')
         (directory / 'bridge-failure.stderr.log').write_text('Ran 6 tests in 1.000s\n\nOK\n')
         return directory, inputs
@@ -449,6 +457,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     result = ci.helper_policy_inputs(ci.ROOT)
                     self.assertEqual(result['ru_commit'], ci.HELPER_POLICY_COMMIT)
                     self.assertIn('.github/workflows/windows.yml', result['source_sha256'])
+                    self.assertIn('tools/test_ru_timer_corpus.py', result['source_sha256'])
+                    self.assertIn('tests/app_ru_native.ru', result['source_sha256'])
                 else:
                     with self.assertRaisesRegex(RuntimeError, 'clean reviewed'):
                         ci.helper_policy_inputs(ci.ROOT)
@@ -474,7 +484,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                          'missing-sanitizer', 'partial-sanitizer', 'sanitizer-error', 'missing-python', 'missing-c',
                          'extra-total', 'failed-case', 'skipped-case', 'unexpected-stderr', 'oversize',
                          'missing-cleanup', 'partial-cleanup', 'cleanup-error',
-                         'missing-bridge', 'partial-bridge', 'skipped-bridge'):
+                         'missing-bridge', 'partial-bridge', 'skipped-bridge',
+                         'missing-corpus', 'partial-corpus', 'duplicate-corpus', 'corpus-stderr',
+                         'wrong-corpus-backend', 'trailing-corpus'):
             with self.subTest(mutation=mutation):
                 shutil.rmtree(self.root / 'build', ignore_errors=True)
                 directory, inputs = self.helper_policy_fixture()
@@ -502,6 +514,16 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 if mutation == 'missing-cleanup': (directory / 'cleanup-control.stdout.log').unlink()
                 if mutation == 'partial-cleanup': (directory / 'cleanup-control.stdout.log').write_text('TOTAL PASS: 8\n')
                 if mutation == 'cleanup-error': (directory / 'cleanup-control.stderr.log').write_text('error')
+                if mutation == 'missing-corpus': (directory / 'timer-corpus.stdout.log').unlink()
+                if mutation == 'partial-corpus': (directory / 'timer-corpus.stdout.log').write_text('RU_TIMER_CORPUS_PASS: 4\n')
+                if mutation == 'duplicate-corpus':
+                    with (directory / 'timer-corpus.stdout.log').open('a') as stream: stream.write('RU_TIMER_CORPUS_PASS: 4\n')
+                if mutation == 'corpus-stderr': (directory / 'timer-corpus.stderr.log').write_text('warning\n')
+                if mutation == 'wrong-corpus-backend':
+                    path = directory / 'timer-corpus.stdout.log'
+                    path.write_text(path.read_text().replace('PASS: c ', 'PASS: python '))
+                if mutation == 'trailing-corpus':
+                    with (directory / 'timer-corpus.stdout.log').open('a') as stream: stream.write('SKIP: extra\n')
                 if mutation == 'missing-bridge': (directory / 'bridge-failure.stdout.log').unlink()
                 if mutation == 'partial-bridge': (directory / 'bridge-failure.stdout.log').write_text('RU_SYNTAX_FAILURE_PORTABLE_PASS: 5\n')
                 if mutation == 'skipped-bridge': (directory / 'bridge-failure.stderr.log').write_text('Ran 6 tests in 1.000s\nOK (skipped=1)\n')
@@ -516,6 +538,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertIn('needs: helper-policy', windows)
         self.assertNotIn('continue-on-error', workflow)
         self.assertIn('python -I tools/test_ru_scan.py --ru-root .ci/ru-language --sanitize --fuzz 100', helper)
+        self.assertIn('python -I tools/test_ru_timer_corpus.py --ru-root .ci/ru-language', helper)
         for action in ('prepare', 'verify', 'collect'):
             self.assertIn('--helper-policy-action ' + action, helper)
         self.assertIn('ASAN_OPTIONS:', helper)
@@ -527,17 +550,17 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
     def test_acceptance_retains_previous_835_assertions_and_16_policy_additions(self):
         summary = self.acceptance()
         ci.validate_acceptance(summary)
-        new = {'ru_lexical_policy', 'ru_syntax_native', 'app_ru_native',
+        new = {'ru_lexical_policy', 'ru_syntax_native', 'app_ru_native', 'app_ru_timer_native',
                'ru_syntax_missing_lexilla', 'main-gui-ru-syntax', *ci.HELPER_FALLBACK_LAYOUTS}
         prior = [test for test in summary['tests'] if test['name'] not in new]
         self.assertEqual(len(prior), 23)
         self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 835 + 16)
 
-    def test_acceptance_requires_all_31_groups_and_exact_assertions(self):
+    def test_acceptance_requires_all_32_groups_and_exact_assertions(self):
         summary = self.acceptance()
         ci.validate_acceptance(summary)
-        self.assertEqual(len(summary['tests']), 31)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1379)
+        self.assertEqual(len(summary['tests']), 32)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1401)
 
     def test_acceptance_rejects_missing_or_duplicated_syntax_branch(self):
         summary = self.acceptance()
@@ -605,6 +628,11 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                          [str(self.root / 'app_ru_native.exe'), str(self.root)])
         self.assertEqual(ci.CONSOLE_TIMEOUT_SECONDS['app_ru_native'], 180)
         self.assertIn('app_ru_native.exe "%TESTDIR%" >>test-results.txt 2>&1', runner)
+        self.assertEqual(ci.console_command('app_ru_timer_native', self.root, self.root),
+                         [str(self.root / 'app_ru_native.exe'), str(self.root), '--measure-ru-timer'])
+        self.assertEqual(ci.CONSOLE_TIMEOUT_SECONDS['app_ru_timer_native'], 60)
+        self.assertIn('app_ru_native.exe "%TESTDIR%" --measure-ru-timer >>test-results.txt 2>&1\n'
+                      'if not "%ERRORLEVEL%"=="0" set "FAILED=1"', runner)
         workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
         self.assertIn('timeout-minutes: 60', workflow)
         self.assertIn('-RunAclTests', workflow)
@@ -852,6 +880,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 if message == 0x1304: return 3 if self.large else 2
                 if hwnd != 456 or lparam != 0 or not isinstance(wparam, int):
                     raise AssertionError('Private GUI messages may carry only scalar values')
+                if message == 2378:
+                    return 8388607 if mode == ('timer-wrong-mask' if self.large else 'wrong-mask') else 3
                 if self.large:
                     if message == 2006: return len(timer_data) - int(mode == 'timer-wrong-length')
                     if message == 2159: return int(mode == 'timer-dirty')
@@ -930,7 +960,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertTrue(all(result[key] for key in ci.GUI_RU_CHECKS))
         self.assertEqual(api.commands, [505, 704, 506, 505, 701, 704])
         self.assertEqual(set(result['fixture_binary_sha256']), set(ci.portable.RUNTIME_NAMES))
-        self.assertEqual(set(query[1] for query in api.queries), {0x1304, 2006, 2028, 2154, 2159, 2010, 2223, 2228})
+        self.assertEqual(set(query[1] for query in api.queries), {0x1304, 2006, 2028, 2154, 2159, 2010, 2223, 2228, 2378})
         self.assertTrue(all(query[3] == 0 for query in api.queries))
         self.assertEqual(api.drop_targets, [456])
         self.assertTrue(api.released)
@@ -938,7 +968,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         ci.validate_gui_ru_timer(result['timer_performance'])
 
     def test_ru_gui_fails_closed_for_wrong_style_fold_visibility_dirty_or_bytes(self):
-        for mode in ('wrong-text', 'wrong-style', 'no-fold', 'dirty', 'collapse-noop',
+        for mode in ('wrong-mask', 'wrong-text', 'wrong-style', 'no-fold', 'dirty', 'collapse-noop',
                      'root-hidden', 'expand-noop', 'same-ru-expands', 'plain-keeps-style',
                      'plain-keeps-fold', 'plain-keeps-hidden', 'ru-no-restyle',
                      'ru-keeps-hidden', 'changed-source'):
@@ -954,7 +984,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         for mode in ('timer-wrong-head_identifier', 'timer-wrong-head_keyword', 'timer-wrong-head_number',
                      'timer-wrong-tail_keyword', 'timer-wrong-tail_number',
                      'timer-stalled', 'timer-empty-status', 'timer-wrong-length',
-                     'timer-dirty', 'timer-changed-source', 'timer-unresponsive'):
+                     'timer-dirty', 'timer-changed-source', 'timer-unresponsive', 'timer-wrong-mask'):
             with self.subTest(mode=mode):
                 for name in ('bin', 'fixtures', 'evidence'):
                     shutil.rmtree(self.root / name, ignore_errors=True)
@@ -962,7 +992,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 self.assertFalse(result['passed'])
                 self.assertTrue(api.released)
                 self.assertGreater(result['timer_performance']['wall_ms'], 0)
-                if mode.startswith('timer-wrong-') or mode in ('timer-stalled', 'timer-empty-status'):
+                if (mode.startswith('timer-wrong-') and mode != 'timer-wrong-mask') or mode in ('timer-stalled', 'timer-empty-status'):
                     self.assertIn('30 seconds', result['error'])
 
     def test_ru_timer_failure_retains_bounded_progress_without_treating_endstyled_as_completion(self):
@@ -1025,6 +1055,15 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         next(case for case in summary['tests'] if case['name'] == 'main-gui-ru-syntax').pop('timer_performance')
         with self.assertRaisesRegex(RuntimeError, 'timer performance'):
             ci.validate_acceptance(summary)
+
+    def ru_gui_measurement_text(self, marker):
+        if marker == 'RU_GUI_SYNC':
+            return ('RU_GUI_SYNC size=1000000 source_chars=636370 wall_ms=100 read_bytes=1000000 '
+                    'max_read=1024 max_tick_ms=3 max_chunk_ms=1 chunks=1000')
+        return ('RU_GUI_TIMER size=1000000 source_chars=636370 wall_ms=100 ticks=10 '
+                'work_ms=40 gap_ms=50 max_tick_ms=4 max_gap_ms=6 read_bytes=1000000 '
+                'max_read=1024 chunks=1000 feed=1000000 bytes=1000000 pending=0 '
+                'text_notifications=0 style_notifications=0 fold_notifications=0')
 
     def ru_performance_text(self):
         return '\n'.join(f'PERF_RU size={size} initial_ms=100 edit_ms=2 '
@@ -1200,6 +1239,138 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         with self.assertRaisesRegex(RuntimeError, 'edit performance'):
             ci.validate_acceptance(summary)
 
+    def test_same_source_measurements_require_exact_finite_fixture_bound_records(self):
+        data, _ = ci.gui_ru_timer_fixture()
+        for marker in ci.RU_GUI_MEASUREMENTS:
+            with self.subTest(marker=marker):
+                record = ci.parse_ru_gui_measurement(self.ru_gui_measurement_text(marker), marker)
+                self.assertEqual(record['size'], 1000000)
+                self.assertEqual(record['source_chars'], 636370)
+                self.assertEqual(record['source_sha256'], hashlib.sha256(data).hexdigest())
+                self.assertEqual(set(record), set.union(*ci.RU_GUI_MEASUREMENTS[marker]) | {'source_sha256'})
+        # The synchronous comparison has no invented hardware-independent SLA.
+        record = ci.parse_ru_gui_measurement(self.ru_gui_measurement_text('RU_GUI_SYNC'), 'RU_GUI_SYNC')
+        record['wall_ms'] = 123456
+        ci.validate_ru_gui_measurement(record, 'RU_GUI_SYNC')
+
+    def test_same_source_parser_rejects_missing_duplicate_malformed_nonfinite_and_wrong_fixture(self):
+        for marker in ci.RU_GUI_MEASUREMENTS:
+            valid = self.ru_gui_measurement_text(marker)
+            variants = ['', valid + '\n' + valid, valid.replace(marker, marker + '_BAD'),
+                valid.replace('size=1000000', 'size=999999'),
+                valid.replace('source_chars=636370', 'source_chars=1000000'),
+                valid.replace('source_chars=636370 ', ''),
+                valid.replace('wall_ms=100', 'wall_ms=NaN'),
+                valid.replace('wall_ms=100', 'wall_ms=inf'),
+                valid.replace('wall_ms=100', 'wall_ms=-1'),
+                valid.replace('max_read=1024', 'max_read=1025'),
+                valid.replace('max_read=1024', 'max_read=0'),
+                valid.replace('max_read=1024', 'max_read=1024.0'),
+                valid.replace('max_read=1024', 'max_read=bad'),
+                valid.replace('max_read=1024', 'max_read=1024=1024'),
+                valid.replace('max_read=1024', 'max_read'),
+                valid.replace('max_read=1024', 'max_read=1024 max_read=1024'),
+                valid.replace('max_read=1024', 'unexpected=1024'),
+                valid.replace('read_bytes=1000000', 'read_bytes=999999'),
+                valid.replace('read_bytes=1000000', 'read_bytes=1000001'),
+                valid.replace('chunks=1000', 'chunks=0')]
+            for output in variants:
+                with self.subTest(marker=marker, output=output), self.assertRaises(RuntimeError):
+                    ci.parse_ru_gui_measurement(output, marker)
+
+    def test_same_source_timer_requires_complete_30s_bounded_production_notification_work(self):
+        marker = 'RU_GUI_TIMER'
+        valid = self.ru_gui_measurement_text(marker)
+        for old, new in [('wall_ms=100', 'wall_ms=30001'), ('ticks=10', 'ticks=0'),
+                         ('work_ms=40', 'work_ms=101'), ('gap_ms=50', 'gap_ms=101'),
+                         ('max_tick_ms=4', 'max_tick_ms=0'),
+                         ('max_tick_ms=4', 'max_tick_ms=41'), ('max_gap_ms=6', 'max_gap_ms=51'),
+                         ('work_ms=40', 'work_ms=NaN'), ('gap_ms=50', 'gap_ms=inf'),
+                         ('feed=1000000', 'feed=999999'), ('bytes=1000000', 'bytes=999999'),
+                         ('pending=0', 'pending=1'), ('pending=0', 'pending=2'),
+                         ('text_notifications=0', 'text_notifications=-1'),
+                         ('style_notifications=0', 'style_notifications=1'),
+                         ('fold_notifications=0', 'fold_notifications=1')]:
+            with self.subTest(old=old, new=new), self.assertRaises(RuntimeError):
+                ci.parse_ru_gui_measurement(valid.replace(old, new), marker)
+        # A genuine text callback is legal; styling/folding callbacks are excluded.
+        ci.parse_ru_gui_measurement(valid.replace('text_notifications=0', 'text_notifications=1'), marker)
+
+    def test_acceptance_rechecks_every_same_source_field_and_rejects_incomplete_progress(self):
+        import copy
+        for name, (marker, key) in ci.RU_GUI_CONSOLE_MEASUREMENTS.items():
+            good = self.acceptance()
+            test = next(item for item in good['tests'] if item['name'] == name)
+            for field in test[key]:
+                for mutation in ('missing', 'wrong-type'):
+                    with self.subTest(name=name, field=field, mutation=mutation):
+                        summary = copy.deepcopy(good)
+                        record = next(item for item in summary['tests'] if item['name'] == name)[key]
+                        if mutation == 'missing': record.pop(field)
+                        elif field == 'source_sha256': record[field] = 'different'
+                        else: record[field] = True
+                        with self.assertRaises(RuntimeError): ci.validate_acceptance(summary)
+            summary = copy.deepcopy(good)
+            next(item for item in summary['tests'] if item['name'] == name).pop(key)
+            with self.assertRaises(RuntimeError): ci.validate_acceptance(summary)
+
+    def test_timer_console_records_diagnostics_before_nonzero_failure_without_blessing_it(self):
+        marker = 'RU_GUI_TIMER'
+        complete = self.ru_gui_measurement_text(marker)
+        partial = (complete.replace('wall_ms=100', 'wall_ms=30001')
+                   .replace('read_bytes=1000000', 'read_bytes=471040')
+                   .replace('feed=1000000', 'feed=470180').replace('bytes=1000000', 'bytes=470180')
+                   .replace('pending=0', 'pending=1'))
+        zero_record = ci.parse_ru_gui_measurement(complete, marker)
+        for field in ci.RU_GUI_TIMER_INTEGER_FIELDS | ci.RU_GUI_TIMER_TIME_FIELDS:
+            if field not in {'size', 'source_chars'}: zero_record[field] = 0
+        zero_record.update(pending=1, wall_ms=30001)
+        zero = marker + ' ' + ' '.join(f'{field}={value}' for field, value in zero_record.items()
+                                     if field != 'source_sha256')
+        for label, measurement, exit_code in [('success', complete, 0), ('complete-nonzero', complete, 7),
+                                               ('partial-nonzero', partial, 7), ('partial-zero', partial, 0),
+                                               ('zero-nonzero', zero, 7), ('zero-zero', zero, 0),
+                                               ('no-measurement', '', 0), ('duplicate', complete + '\n' + complete, 0)]:
+            with self.subTest(label=label):
+                evidence = self.root / label
+                evidence.mkdir()
+                output = 'PASS: fixture\n' * 8 + measurement + '\nTOTAL PASS: 8\n'
+                with patch.object(ci, 'cleanup_process', side_effect=kill_synthetic):
+                    result = ci.run_console(NoDialogs(), 'app_ru_timer_native',
+                        [sys.executable, '-c', f'print({output!r}); raise SystemExit({exit_code})'],
+                        evidence, r'^TOTAL PASS: 8\s*$', expected_assertions=8)
+                self.assertEqual(result['passed'], label == 'success')
+                self.assertEqual(result['exit_code'], exit_code)
+                if measurement and label != 'duplicate':
+                    self.assertIn('timer_performance', result)
+                if exit_code:
+                    self.assertIn('nonzero exit status', result['error'])
+                if label.startswith('zero'):
+                    self.assertEqual(result['timer_performance']['ticks'], 0)
+                    self.assertEqual(result['timer_performance']['bytes'], 0)
+                    self.assertEqual(result['timer_performance']['pending'], 1)
+                if label.startswith('partial'):
+                    self.assertEqual(result['timer_performance']['feed'], 470180)
+                    self.assertEqual(result['timer_performance']['read_bytes'], 471040)
+                    self.assertEqual(result['timer_performance']['bytes'], 470180)
+                    self.assertEqual(result['timer_performance']['pending'], 1)
+
+    def test_timer_console_retains_flushed_partial_measurement_after_outer_timeout(self):
+        evidence = self.root / 'timeout'
+        evidence.mkdir()
+        partial = (self.ru_gui_measurement_text('RU_GUI_TIMER')
+                   .replace('read_bytes=1000000', 'read_bytes=1024')
+                   .replace('feed=1000000', 'feed=1000').replace('bytes=1000000', 'bytes=1000')
+                   .replace('pending=0', 'pending=1'))
+        code = f'import time; print({partial!r}, flush=True); time.sleep(10)'
+        with patch.object(ci, 'cleanup_process', side_effect=kill_synthetic):
+            result = ci.run_console(NoDialogs(), 'app_ru_timer_native', [sys.executable, '-c', code],
+                evidence, r'^TOTAL PASS: 8\s*$', timeout=0.3, expected_assertions=8)
+        self.assertFalse(result['passed'])
+        self.assertTrue(result['cleanup_killed'])
+        self.assertEqual(result['timer_performance']['pending'], 1)
+        self.assertIn('execution deadline', result['error'])
+
     def test_ru_performance_requires_both_sizes_with_exact_finite_fields(self):
         records = ci.parse_ru_performance(self.ru_performance_text())
         self.assertEqual([record['size'] for record in records], [100000, 1000000])
@@ -1260,7 +1431,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 evidence.mkdir()
                 output = 'PASS: synthetic\nTOTAL PASS: 1\n'
                 if measured:
-                    output += self.ru_performance_text()
+                    output += self.ru_performance_text() + '\n' + self.ru_gui_measurement_text('RU_GUI_SYNC')
                 with patch.object(ci, 'cleanup_process', side_effect=kill_synthetic):
                     result = ci.run_console(NoDialogs(), 'ru_syntax_native',
                         [sys.executable, '-c', f'print({output!r})'], evidence,

@@ -45,18 +45,33 @@ head-token styles in 156 ms and had a measured maximum WM_NULL response of
 the six subsequent editing measurements did not run. These partial metrics are
 not a completed performance result, and no ZIP was produced.
 
-The next revision fixes that fixture and the same scope mistake in initialization
-recovery and cleanup-error reporting. It retains the GUI deadline and adds a
-bounded final length/end-styled/status/style-probe snapshot to diagnose the
-unresolved completion failure. New portable controls execute the actual rescue
-bodies and their original failing scalar variants; actual Windows cleanup and
-styling still require the next full run.
+The [scope-repair run 38934373024](https://github.com/uppet/ru_notepad/actions/runs/38934373024)
+passed all 1,379 individual native assertions, including all 119 container
+cases, and 30 of 31 results. The production initialization recovery and cleanup
+controls also passed both portable backends. GUI styling still failed: after
+30 seconds the 1 MB document was clean but only its first 470,180 bytes were
+styled; tail probes were false and status remained `Styling Ru`. First-token
+styles took 172 ms and maximum measured WM_NULL response was 47 ms. The core's
+different, 200,000-line ASCII corpus completed synchronously in 20.22 seconds;
+these different workloads do not establish the GUI's CPU or scheduling cost.
+No ZIP was produced.
+
+The next revision narrows the main application's modification subscription to
+actual text insertion/deletion. Scintilla still performs its internal styling,
+folding and undo work, but no longer calls the Ru main callback for unused
+style/fold modification events. The core fixture retains all notifications as
+a control. New native measurements use exactly the detached-GUI Chinese corpus
+for synchronous and main-timer paths, with separate work/gap/tick and notification
+counts. Both actual corpus builders must match the original complete UTF-8 bytes
+in both portable backends. Timer settings, budgets and the 30-second GUI gate
+remain unchanged. This optimization has not yet passed Windows acceptance.
 
 This revision retains every 0.1.3 assertion and adds 8 shortcut and 8 suffix-policy
-cases, 338 production lexer/fold-policy cases, 119 real Scintilla container cases,
-39 main-window integration cases, and an isolated 8-case Ru run without Lexilla, and three 8-case helper rejection runs
+cases, 338 production lexer/fold-policy cases, 125 real Scintilla container cases,
+47 main-window integration cases, 8 separate main-timer measurement cases,
+and an isolated 8-case Ru run without Lexilla, and three 8-case helper rejection runs
 for missing DLL, missing exports and ABI mismatch.
-The required total is **1,379 individual assertions / 31 results**, including
+The required total is **1,401 individual assertions / 32 results**, including
 three detached GUI results. The existing complete >500 MB roundtrip is retained.
 
 New native gates check actual UTF-8 style bytes and fold levels, incomplete edits,

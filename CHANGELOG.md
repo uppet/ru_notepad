@@ -7,6 +7,7 @@
 - Process bounded background styling slices and lexical checkpoints; coalesce edits and reuse a converged unchanged suffix. Keep the existing 32 MB plain-text mode.
 - Require pure-policy, native byte-style/fold, main-window and detached GUI regressions plus measured 100 KB / 1 MB initial/edit evidence. Actual 0.1.4 Windows acceptance remains pending.
 - First 0.1.4 CI exposed a rescue-scope fixture error and a 1 MB GUI styling completion timeout. Fix the related initialization/cleanup diagnostic scope paths and retain strict completion gates with bounded progress diagnostics; the GUI timeout is not yet claimed fixed.
+- The scope-repair run passed all 1,379 native assertions but still reached only 470,180 styled bytes within the GUI's 30-second deadline. Subscribe the main application only to text modification events, retain the full-notification core control, and add exact-same-corpus work/cadence diagnostics. Performance acceptance remains pending.
 
 ## 0.1.3-preview — 2026-10-16
 

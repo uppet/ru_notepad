@@ -50,9 +50,10 @@ NATIVE_CONSOLE_TESTS = (
     ('syntax_policy', r'^TOTAL PASS: 108\s*$'),
     ('status_native', r'^TOTAL PASS: 21\s*$'),
     ('syntax_native', r'^TOTAL PASS: 82\s*$'),
-    ('app_ru_native', r'^TOTAL PASS: 39\s*$'),
+    ('app_ru_native', r'^TOTAL PASS: 47\s*$'),
+    ('app_ru_timer_native', r'^TOTAL PASS: 8\s*$'),
     ('ru_lexical_policy', r'^TOTAL PASS: 338\s*$'),
-    ('ru_syntax_native', r'^TOTAL PASS: 119\s*$'),
+    ('ru_syntax_native', r'^TOTAL PASS: 125\s*$'),
 )
 SYNTAX_FALLBACK_TESTS = (
     ('syntax_missing_lexilla', '--expect-missing', False),
@@ -69,17 +70,21 @@ HELPER_FALLBACK_LAYOUTS = {'ru_syntax_missing_helper': 'missing',
                           'ru_syntax_wrong_helper_abi': 'wrong-abi'}
 # These limits apply only to the named synthetic suites, never to user files.
 # The >500 MB test is mandatory: low disk or timeout fails instead of skipping.
-CONSOLE_EXECUTABLES = {'editor_largefile_native': 'editor_streaming_native'}
+CONSOLE_EXECUTABLES = {'editor_largefile_native': 'editor_streaming_native',
+                       'app_ru_timer_native': 'app_ru_native'}
 FIXTURE_ARGUMENT_TESTS = {'file_codec_tests', 'file_streaming_native', 'app_streaming_native',
-                        'editor_streaming_native', 'editor_largefile_native', 'app_ru_native'}
+                        'editor_streaming_native', 'editor_largefile_native', 'app_ru_native',
+                        'app_ru_timer_native'}
 CONSOLE_TIMEOUT_SECONDS = {'file_streaming_native': 300, 'app_streaming_native': 180,
                            'editor_streaming_native': 300,
-                           'editor_largefile_native': 900, 'app_ru_native': 180}
+                           'editor_largefile_native': 900, 'app_ru_native': 180,
+                           'app_ru_timer_native': 60}
 LARGE_FILE_MIN_FREE_BYTES = 2 * 1024 * 1024 * 1024
 GUI_FILE_CHECKS = ('cli_unicode_paths', 'cli_exact_text', 'drop_unicode_paths',
                    'drop_exact_text', 'child_drop_routed', 'busy_observed', 'busy_responsive',
                    'cancel_no_partial_tab', 'cancel_queue_cleared', 'source_bytes_preserved')
-GUI_RU_CHECKS = ('cli_unicode_path', 'cli_exact_text', 'automatic_ru_styles',
+GUI_RU_CHECKS = ('initial_mod_event_mask', 'timer_mod_event_mask', 'cli_unicode_path',
+                 'cli_exact_text', 'automatic_ru_styles',
                  'actual_fold_headers', 'collapse_hides_children', 'same_ru_preserves_collapse',
                  'expand_restores_visibility',
                  'plain_clears_styles_folds', 'plain_restores_visibility',
@@ -100,6 +105,17 @@ RU_PERFORMANCE_TIME_FIELDS = ('initial_ms', 'edit_ms', 'max_tick_ms', 'max_chunk
 RU_PERFORMANCE_FIELDS = set(RU_PERFORMANCE_INTEGER_FIELDS + RU_PERFORMANCE_TIME_FIELDS)
 GUI_RU_TIMER_BYTES = 1000000
 GUI_RU_TIMER_TIMEOUT_SECONDS = 30
+RU_GUI_SYNC_INTEGER_FIELDS = {'size', 'source_chars', 'read_bytes', 'max_read', 'chunks'}
+RU_GUI_SYNC_TIME_FIELDS = {'wall_ms', 'max_tick_ms', 'max_chunk_ms'}
+RU_GUI_TIMER_INTEGER_FIELDS = {'size', 'source_chars', 'ticks', 'read_bytes', 'max_read',
+    'chunks', 'feed', 'bytes', 'pending', 'text_notifications', 'style_notifications', 'fold_notifications'}
+RU_GUI_TIMER_TIME_FIELDS = {'wall_ms', 'work_ms', 'gap_ms', 'max_tick_ms', 'max_gap_ms'}
+RU_GUI_MEASUREMENTS = {
+    'RU_GUI_SYNC': (RU_GUI_SYNC_INTEGER_FIELDS, RU_GUI_SYNC_TIME_FIELDS),
+    'RU_GUI_TIMER': (RU_GUI_TIMER_INTEGER_FIELDS, RU_GUI_TIMER_TIME_FIELDS),
+}
+RU_GUI_CONSOLE_MEASUREMENTS = {'ru_syntax_native': ('RU_GUI_SYNC', 'gui_sync_performance'),
+                              'app_ru_timer_native': ('RU_GUI_TIMER', 'timer_performance')}
 GUI_RU_EDIT_BYTES = 100000
 GUI_RU_EDIT_CHECKS = ('edit_fixture_loaded', 'edit_all_operations', 'edit_style_fold_probes',
                      'edit_dirty_transitions', 'edit_source_bytes_preserved', 'edit_undo_clean')
@@ -115,6 +131,7 @@ SCANNER_SANITIZER_SUCCESS = 'PASS: 20000 ASan/UBSan bounded random buffer cases'
 HELPER_POLICY_EVIDENCE_FILES = ('helper-policy.stdout.log', 'helper-policy.stderr.log',
     'cleanup-control.stdout.log', 'cleanup-control.stderr.log',
     'bridge-failure.stdout.log', 'bridge-failure.stderr.log',
+    'timer-corpus.stdout.log', 'timer-corpus.stderr.log',
     'scanner-build.log', 'differential-python.log', 'differential-build.log',
     'differential-c.log', 'sanitize-build.log', 'sanitize.log', 'report.json')
 HELPER_POLICY_COMMIT = 'dd6cb81b52a426408f7076d82a84c2fdfb644263'
@@ -350,6 +367,75 @@ def parse_ru_performance(stdout):
     return records
 
 
+def validate_ru_gui_measurement(record, marker, *, require_complete=True):
+    integer_fields, time_fields = RU_GUI_MEASUREMENTS[marker]
+    if not isinstance(record, dict) or set(record) != integer_fields | time_fields | {'source_sha256'}:
+        raise RuntimeError(f'{marker}: same-source measurement fields are missing or unexpected')
+    data, _ = gui_ru_timer_fixture()
+    if (record['source_sha256'] != hashlib.sha256(data).hexdigest() or
+            record['size'] != len(data) or record['source_chars'] != len(data.decode('utf-8'))):
+        raise RuntimeError(f'{marker}: same-source measurement differs from the exact GUI fixture')
+    if any(type(record[key]) is not int or record[key] < 0 for key in integer_fields):
+        raise RuntimeError(f'{marker}: counts must be nonnegative integers')
+    if any(type(record[key]) not in (int, float) or not math.isfinite(record[key]) or record[key] < 0
+           for key in time_fields):
+        raise RuntimeError(f'{marker}: times must be finite nonnegative measurements')
+    if not 0 <= record['max_read'] <= 1024 or not 0 <= record['read_bytes'] <= len(data):
+        raise RuntimeError(f'{marker}: same-source measurement exceeds bounded reads')
+    if marker == 'RU_GUI_TIMER':
+        if (not 0 <= record['bytes'] <= record['feed'] <= record['read_bytes'] <= len(data) or
+                record['pending'] not in (0, 1) or record['work_ms'] > record['wall_ms'] or
+                record['gap_ms'] > record['wall_ms'] or
+                record['max_tick_ms'] > record['work_ms'] or record['max_gap_ms'] > record['gap_ms']):
+            raise RuntimeError(f'{marker}: timer work/gap or byte progress is inconsistent')
+    if not require_complete:
+        return
+    if record['read_bytes'] != len(data) or record['max_read'] < 1 or record['chunks'] < 1:
+        raise RuntimeError(f'{marker}: same-source scan did not finish all bounded reads')
+    if marker == 'RU_GUI_TIMER' and (
+            record['wall_ms'] > GUI_RU_TIMER_TIMEOUT_SECONDS * 1000 or record['ticks'] < 1 or
+            record['work_ms'] <= 0 or record['max_tick_ms'] <= 0 or
+            record['feed'] != len(data) or record['bytes'] != len(data) or record['pending'] != 0 or
+            record['style_notifications'] != 0 or record['fold_notifications'] != 0):
+        raise RuntimeError(f'{marker}: production timer must complete within 30 seconds without style/fold callbacks')
+
+
+def parse_ru_gui_measurement(stdout, marker, *, require_complete=True):
+    integer_fields, time_fields = RU_GUI_MEASUREMENTS[marker]
+    fields = integer_fields | time_fields
+    lines = [line for line in stdout.splitlines() if line.startswith(marker)]
+    if len(lines) != 1:
+        raise RuntimeError(f'{marker}: exactly one same-source measurement is required')
+    tokens = lines[0].split()
+    if tokens[0] != marker:
+        raise RuntimeError(f'{marker}: measurement marker has an invalid prefix')
+    record = {}
+    for token in tokens[1:]:
+        if token.count('=') != 1:
+            raise RuntimeError(f'{marker}: malformed measurement')
+        key, value = token.split('=')
+        if key in record or key not in fields:
+            raise RuntimeError(f'{marker}: duplicate or unexpected measurement field')
+        try:
+            record[key] = int(value) if key in integer_fields else float(value)
+        except ValueError as exc:
+            raise RuntimeError(f'{marker}: nonnumeric measurement') from exc
+    record['source_sha256'] = hashlib.sha256(gui_ru_timer_fixture()[0]).hexdigest()
+    validate_ru_gui_measurement(record, marker, require_complete=require_complete)
+    return record
+
+
+def collect_ru_gui_measurement(result, stdout):
+    """Keep a bounded partial measurement on failures; it can never grant a pass."""
+    if result['name'] not in RU_GUI_CONSOLE_MEASUREMENTS:
+        return
+    marker, key = RU_GUI_CONSOLE_MEASUREMENTS[result['name']]
+    try:
+        result[key] = parse_ru_gui_measurement(stdout, marker, require_complete=False)
+    except RuntimeError as exc:
+        result['measurement_error'] = str(exc)
+
+
 def run_console(api, name, command, evidence, marker, timeout=120, expected_assertions=None, cwd=None):
     out, err = evidence / f'{name}.stdout.log', evidence / f'{name}.stderr.log'
     result = {'name': name, 'passed': False, 'executed': False, 'cleanup_killed': False}
@@ -369,6 +455,7 @@ def run_console(api, name, command, evidence, marker, timeout=120, expected_asse
                 time.sleep(0.1)
             result['exit_code'] = process.returncode
         stdout_text, stderr_text = bounded_text(out), bounded_text(err)
+        collect_ru_gui_measurement(result, stdout_text)
         result['assertions_passed'] = len(re.findall(r'^PASS:', stdout_text, re.M))
         result['skips'] = re.findall(r'^SKIP:.*$', stdout_text + stderr_text, re.M)
         if result['skips']:
@@ -382,6 +469,9 @@ def run_console(api, name, command, evidence, marker, timeout=120, expected_asse
             raise RuntimeError(f'{name}: expected {expected_assertions} individual PASS lines, got {result["assertions_passed"]}')
         if name == 'ru_syntax_native':
             result['performance'] = parse_ru_performance(stdout_text)
+        if name in RU_GUI_CONSOLE_MEASUREMENTS:
+            measurement_marker, key = RU_GUI_CONSOLE_MEASUREMENTS[name]
+            validate_ru_gui_measurement(result.get(key), measurement_marker)
         result['passed'] = True
     except Exception as exc:
         result['error'] = str(exc)
@@ -392,6 +482,8 @@ def run_console(api, name, command, evidence, marker, timeout=120, expected_asse
                 result['passed'] = False
         for path in (out, err):
             cap_log(path)
+        if name in RU_GUI_CONSOLE_MEASUREMENTS and out.is_file():
+            collect_ru_gui_measurement(result, bounded_text(out))
         result['seconds'] = round(time.monotonic() - started, 3)
     return result
 
@@ -412,7 +504,8 @@ def helper_policy_inputs(root):
         name: sha(portable.source_file(root, name))
         for name in ('tools/windows_ci.py', '.github/workflows/windows.yml',
                      'tools/test_cleanup_paths.py', 'tests/ru_syntax_failure_portable.py',
-                     'src/main.ru', 'src/ru_syntax.ru', 'tests/ru_syntax_native.ru')}}
+                     'src/main.ru', 'src/ru_syntax.ru', 'tests/ru_syntax_native.ru',
+                     'tests/app_ru_native.ru', 'tools/test_ru_timer_corpus.py')}}
 
 
 def helper_policy_action(action, root):
@@ -465,6 +558,12 @@ def helper_policy_action(action, root):
             not cleanup.endswith('PASS: production cleanup rescue bodies and original scalar negative controls in both Ru backends\n') or
             texts['cleanup-control.stderr.log'].strip()):
         raise RuntimeError('Linux cleanup control requires eight real assertions in each backend and both negative controls')
+    corpus_lines = texts['timer-corpus.stdout.log'].splitlines()
+    expected_corpus_lines = [f'PASS: {backend} {fixture} exact UTF-8 corpus'
+        for fixture in ('ru_syntax_native', 'app_ru_native') for backend in ('python', 'c')]
+    if (corpus_lines != expected_corpus_lines + ['RU_TIMER_CORPUS_PASS: 4'] or
+            texts['timer-corpus.stderr.log']):
+        raise RuntimeError('Linux timer corpus requires exact complete bytes in both fixtures and both real backends')
     failure_text = texts['bridge-failure.stderr.log']
     if (texts['bridge-failure.stdout.log'].strip() != 'RU_SYNTAX_FAILURE_PORTABLE_PASS: 6' or
             not re.search(r'^Ran 6 tests in [0-9.]+s$', failure_text, re.M) or
@@ -1025,6 +1124,9 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
                  'Unicode Ru command-line file did not finish opening')
         checks['cli_unicode_path'] = True
         editor = api.editor(hwnd)
+        if api.scalar(editor, 2378) != 3:  # SCI_GETMODEVENTMASK
+            raise RuntimeError('GUI Ru editor must use the production insert/delete notification mask')
+        checks['initial_mod_event_mask'] = True
         if api.editor_bytes(hwnd) != original:
             raise RuntimeError('GUI Ru editor bytes differ from the Unicode fixture')
         checks['cli_exact_text'] = True
@@ -1110,6 +1212,9 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
                 timer_record['last_probe'] = last_probe
                 if opened:
                     active = api.editor(hwnd)
+                    if api.scalar(active, 2378) != 3:
+                        raise RuntimeError('GUI Ru timer child must use the production insert/delete notification mask')
+                    checks['timer_mod_event_mask'] = True
                     length = api.scalar(active, 2006)
                     length_ok = length == len(timer_data)
                     clean = api.scalar(active, 2159) == 0
@@ -1204,6 +1309,8 @@ def console_command(name, binary_dir, fixtures):
         command.append(str(fixtures))
     if name == 'editor_largefile_native':
         command.append('--large')
+    if name == 'app_ru_timer_native':
+        command.append('--measure-ru-timer')
     return command
 
 
@@ -1277,6 +1384,9 @@ def validate_acceptance(summary, root=None):
             raise RuntimeError(f'Native acceptance assertion count mismatch: {test["name"]}')
         if test['name'] == 'ru_syntax_native':
             validate_ru_performance(test.get('performance'))
+        if test['name'] in RU_GUI_CONSOLE_MEASUREMENTS:
+            marker, key = RU_GUI_CONSOLE_MEASUREMENTS[test['name']]
+            validate_ru_gui_measurement(test.get(key), marker)
         if test['name'] in {case[0] for case in SYNTAX_FALLBACK_TESTS}:
             expected_hashes = {target: summary['tested_binary_sha256'][source]
                                for target, source in syntax_fallback_layout(test['name']).items()}

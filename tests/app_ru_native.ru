@@ -50,7 +50,84 @@ Delete 取 (窗 其 内核) 其 绑定 'DeleteFileW' (密 其 签名 (窗 其 I)
     窗 其 成功 (Delete 其 调用 [存]) 'Delete synthetic Ru file'.
     存 其 关闭.
 为
+算 计时源码:
+    # Exactly gui_ru_timer_fixture(): 90,907*11 +11 +12 UTF-8 bytes.
+    # Keep this pure producer identical in app_ru_native for portable SHA checks.
+    文 取 '值 取 1.\n'.
+    循 17 次 文 取 文+文. 环
+    得 文[0:90907*7]+'#         \n显 987654.\n'.
+法
+算 计时样式 柄:
+    探针们 取 [[0,3,8],[4,3,4],[8,1,3],[999988,3,4],[999992,6,3]].
+    位 取 0.
+    循 探针们 其 量 次
+        探针 取 探针们[位].
+        偏 取 0.
+        循 探针[1] 次
+            若 (窗 其 发送 柄 2010 (探针[0]+偏) 0) 其 数 != 探针[2] 则 得 假. 然
+            偏 取 偏+1.
+        环
+        位 取 位+1.
+    环
+    得 真.
+法
+算 计时泵 起 为 数:
+    消 取 (窗 其 MSG) 其 新建.
+    完成 取 假.
+    循
+        若 (语 其 时刻)-起 > 30000 则 破. 然
+        状 取 应用 其 A.
+        若 非 (状 其 查 'busy') 且 非 (状 其 查 'syntaxTimer') 则 完成 取 真. 破. 然
+        若 非 ((窗 其 结果 ((窗 其 PeekMessageW) 其 调用 [消,空,0,0,1])) 其 为空) 则
+            若 (消 其 读 'message') 其 数 == 18 则 破. 然
+            窗 其 结果 ((窗 其 TranslateMessage) 其 调用 [消]).
+            窗 其 结果 ((窗 其 DispatchMessageW) 其 调用 [消]).
+        另 Sleep 其 调用 [1]. 然
+    环
+    消 其 关闭.
+    得 完成.
+法
+算 计时原生 目录 为 句:
+    路 取 目录+'\\真实计时 一百万字节 😀.ru'.
+    文 取 计时源码.
+    件编 其 写文件 路 文 65001 假 ''.
+    主 取 应用 其 初始化 [] 真.
+    状 取 应用 其 A.
+    # This separate mode owns only disposable synthetic data, including on error.
+    状 其 增 'confirmClose' (算 文档: 得 7. 法).
+    试
+        起 取 语 其 时刻.
+        应用 其 打开 路 0.
+        完成 取 计时泵 起.
+        用时 取 (语 其 时刻)-起.
+        柄 取 应用 其 编辑柄.
+        扫 取 语 其 状态 柄.
+        若 扫 == 空 则 扫 取 {'readBytes':0,'maxRead':0,'chunks':0,'feed':0,'bytes':0,'pending':真,'enabled':假}. 然
+        待办 取 0.
+        若 扫['pending'] 则 待办 取 1. 然
+        # Print the bounded snapshot before assertions, including the 30s failure.
+        显 'RU_GUI_TIMER size=1000000 source_chars='+(文 其 量 为 句)+' wall_ms='+(用时 为 句)+' ticks='+((状 其 查 'syntaxTicks') 为 句)+' work_ms='+((状 其 查 'syntaxWorkMs') 为 句)+' gap_ms='+((状 其 查 'syntaxGapMs') 为 句)+' max_tick_ms='+((状 其 查 'syntaxMaxTickMs') 为 句)+' max_gap_ms='+((状 其 查 'syntaxMaxGapMs') 为 句)+' read_bytes='+(扫['readBytes'] 为 句)+' max_read='+(扫['maxRead'] 为 句)+' chunks='+(扫['chunks'] 为 句)+' feed='+(扫['feed'] 为 句)+' bytes='+(扫['bytes'] 为 句)+' pending='+(待办 为 句)+' text_notifications='+((状 其 查 'syntaxTextNotifications') 为 句)+' style_notifications='+((状 其 查 'syntaxStyleNotifications') 为 句)+' fold_notifications='+((状 其 查 'syntaxFoldNotifications') 为 句).
+        确认 (完成 且 用时 <= 30000) 'actual main timer finishes the exact GUI corpus within the unchanged thirty-second gate'.
+        确认 ((状 其 查 'syntaxTicks') > 0 且 (状 其 查 'syntaxWorkMs') > 0 且 (状 其 查 'syntaxWorkMs') <= 用时 且 (状 其 查 'syntaxMaxTickMs') > 0 且 (状 其 查 'syntaxGapMs') >= 0 且 (状 其 查 'syntaxMaxGapMs') >= 0) 'actual timer exposes bounded scalar work and callback-gap measurements'.
+        确认 ((窗 其 发送 柄 2378 0 0) 其 数 == 3 且 (状 其 查 'syntaxStyleNotifications') == 0 且 (状 其 查 'syntaxFoldNotifications') == 0 且 扫['enabled'] 且 非 扫['pending'] 且 扫['feed'] == 1000000 且 扫['readBytes'] == 1000000 且 扫['maxRead'] > 0 且 扫['maxRead'] <= 1024 且 扫['chunks'] > 0) 'filtered production timer completes bounded scanning without style or fold notifications'.
+        确认 ((文 其 量) == 636370 且 (窗 其 发送 柄 2183 0 0) 其 数 == 1000000 且 (窗 其 发送 柄 2154 0 0) 其 数 == 90910 且 (编 其 文本 柄) == 文) 'timer styling preserves the exact Unicode megabyte and all source lines'.
+        确认 (计时样式 柄) 'actual timer matches all sixteen GUI head and tail style bytes'.
+        确认 (非 (应用 其 脏 (应用 其 当前)) 且 ((应用 其 当前) 其 查 'revision') == 0 且 ((状 其 查 'errors') 其 量) == 0) 'timer styling preserves the clean savepoint and reports no text revision or errors'.
+        读回 取 件编 其 读文件 路 0.
+        确认 (读回['text'] == 文) 'timer measurement preserves the complete disposable source file'.
+        确认 (应用 其 关程序) 'timer measurement closes its real main window normally'.
+    救 原因
+        若 状 其 查 'busy' 则 应用 其 取消工作. 然
+        若 状 其 查 'ready' 则 应用 其 关程序. 然
+        删 路.
+        卒 原因.
+    终
+    删 路.
+    显 'TOTAL PASS: '+(次数[0] 为 句).
+    得 0.
+法
 算 元初 参数 为 句 阵:
+    若 (参数 其 量) == 2 且 参数[1] == '--measure-ru-timer' 则 得 计时原生 参数[0]. 然
     若 (参数 其 量) != 1 则 显 'Usage: app_ru_native.exe EXISTING_DISPOSABLE_DIRECTORY'. 得 2. 然
     入路 取 参数[0]+'\\如言 source 😀.ru'.
     出路 取 参数[0]+'\\另存 source.RU'.
@@ -60,6 +137,9 @@ Delete 取 (窗 其 内核) 其 绑定 'DeleteFileW' (密 其 签名 (窗 其 I)
     状 取 应用 其 A.
     第一 取 应用 其 编辑柄.
     文一 取 应用 其 当前.
+    初页 取 (状 其 查 'docs')[0].
+    确认 ((窗 其 发送 (初页 其 查 'editor') 2378 0 0) 其 数 == 3) 'new-page creation subscribes only to text insert and delete modifications'.
+    确认 ((窗 其 发送 第一 2378 0 0) 其 数 == 3) 'hidden streaming-open creation retains the production text-only notification mask'.
     确认 ((文一 其 查 'language') == 'ru') 'Unicode CLI .ru selects the actual Ru container'.
     确认 ((编 其 文本 第一) == 源) 'initial background styling preserves complete text'.
     确认 (非 (应用 其 脏 文一)) 'initial background styling preserves savepoint'.
@@ -70,6 +150,43 @@ Delete 取 (窗 其 内核) 其 绑定 'DeleteFileW' (密 其 签名 (窗 其 I)
     确认 ((窗 其 发送 第一 2243 2 0) 其 数 > 0) 'dedicated fold margin is visible'.
     确认 ((窗 其 取文 (状 其 查 'status')) 其 含 'Ru / 如言') 'status names the Ru-owned language mode'.
     确认 ((文一 其 查 'revision') == 0) 'style and fold notifications do not become text revisions'.
+    # Prove the counter path sees real native notifications before filtering.
+    窗 其 发送 第一 2359 8388607 0.
+    样前 取 状 其 查 'syntaxStyleNotifications'.
+    折前 取 状 其 查 'syntaxFoldNotifications'.
+    旧修订 取 文一 其 查 'revision'.
+    窗 其 发送 主 273 701 0.
+    窗 其 发送 主 273 704 0.
+    泵.
+    确认 ((窗 其 发送 第一 2378 0 0) 其 数 == 8388607 且 (状 其 查 'syntaxStyleNotifications') > 样前 且 (状 其 查 'syntaxFoldNotifications') > 折前 且 (文一 其 查 'revision') == 旧修订) 'default-all control receives real style and fold modifications without a text revision'.
+    应用 其 配置修改通知 第一.
+    样前 取 状 其 查 'syntaxStyleNotifications'.
+    折前 取 状 其 查 'syntaxFoldNotifications'.
+    窗 其 发送 主 273 701 0.
+    窗 其 发送 主 273 704 0.
+    泵.
+    确认 ((状 其 查 'syntaxStyleNotifications') == 样前 且 (状 其 查 'syntaxFoldNotifications') == 折前 且 (文一 其 查 'revision') == 旧修订 且 (窗 其 发送 第一 2010 0 0) 其 数 == 4 且 (窗 其 发送 第一 2223 0 0) 其 数 == 9216) 'text-only subscription suppresses style/fold callbacks while real byte styles and folds still update'.
+    旧行数 取 (窗 其 发送 第一 2154 0 0) 其 数.
+    文前 取 状 其 查 'syntaxTextNotifications'.
+    窗 其 发送 第一 2160 0 0.
+    窗 其 发文 第一 2170 0 '# line test\n'.
+    泵.
+    确认 ((状 其 查 'syntaxTextNotifications') > 文前 且 (文一 其 查 'revision') > 旧修订 且 (窗 其 发送 第一 2154 0 0) 其 数 == 旧行数+1 且 (编 其 文本 第一) == '# line test\n'+源 且 (应用 其 脏 文一)) 'filtered insert notification retains line-count, revision and dirty-state updates'.
+    文前 取 状 其 查 'syntaxTextNotifications'.
+    旧修订 取 文一 其 查 'revision'.
+    窗 其 发送 第一 2176 0 0.
+    泵.
+    确认 ((状 其 查 'syntaxTextNotifications') > 文前 且 (文一 其 查 'revision') > 旧修订 且 (窗 其 发送 第一 2154 0 0) 其 数 == 旧行数 且 (编 其 文本 第一) == 源 且 非 (应用 其 脏 文一)) 'filtered undo-delete notification restores source lines and original savepoint'.
+    文前 取 状 其 查 'syntaxTextNotifications'.
+    旧修订 取 文一 其 查 'revision'.
+    窗 其 发送 第一 2011 0 0.
+    泵.
+    确认 ((状 其 查 'syntaxTextNotifications') > 文前 且 (文一 其 查 'revision') > 旧修订 且 (窗 其 发送 第一 2154 0 0) 其 数 == 旧行数+1 且 (编 其 文本 第一) == '# line test\n'+源 且 (应用 其 脏 文一)) 'filtered redo-insert notification restores the changed lines, revision and dirty state'.
+    文前 取 状 其 查 'syntaxTextNotifications'.
+    旧修订 取 文一 其 查 'revision'.
+    窗 其 发送 第一 2176 0 0.
+    泵.
+    确认 ((状 其 查 'syntaxTextNotifications') > 文前 且 (文一 其 查 'revision') > 旧修订 且 (窗 其 发送 第一 2154 0 0) 其 数 == 旧行数 且 (编 其 文本 第一) == 源 且 非 (应用 其 脏 文一)) 'undo after redo again restores the complete original source and clean savepoint'.
     窗 其 发送 主 273 505 0.
     确认 (非 (可见 第一 1)) 'collapse-all command hides function body'.
     窗 其 发送 主 273 704 0.

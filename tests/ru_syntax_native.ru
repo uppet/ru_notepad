@@ -165,6 +165,44 @@ memcmp 取 比较库 其 绑定 'memcmp' (密 其 签名 (窗 其 I) ([(窗 其 
     语 其 推进 甲 8.
     确认 (合['enabled'] 且 合['revision'] >= 3 且 参['enabled'] 且 (编 其 文本 甲) == 预期 且 (全部相同 甲 乙)) 'repeated edits during pending work discard old states and match every fresh byte style and fold level'.
 为
+算 计时源码:
+    # Exactly gui_ru_timer_fixture(): 90,907*11 +11 +12 UTF-8 bytes.
+    # Keep this pure producer identical in app_ru_native for portable SHA checks.
+    文 取 '值 取 1.\n'.
+    循 17 次 文 取 文+文. 环
+    得 文[0:90907*7]+'#         \n显 987654.\n'.
+法
+算 计时样式 柄:
+    探针们 取 [[0,3,8],[4,3,4],[8,1,3],[999988,3,4],[999992,6,3]].
+    位 取 0.
+    循 探针们 其 量 次
+        探针 取 探针们[位].
+        偏 取 0.
+        循 探针[1] 次
+            若 (窗 其 发送 柄 2010 (探针[0]+偏) 0) 其 数 != 探针[2] 则 得 假. 然
+            偏 取 偏+1.
+        环
+        位 取 位+1.
+    环
+    得 真.
+法
+作 计时同源性能 柄:
+    文 取 计时源码.
+    语 其 选择 柄 'plain'.
+    编 其 设文本 柄 文.
+    确认 ((文 其 量) == 636370 且 (窗 其 发送 柄 2183 0 0) 其 数 == 1000000) 'GUI-equivalent synchronous corpus has the exact Unicode character and byte counts'.
+    确认 ((窗 其 发送 柄 2378 0 0) 其 数 == 8388607) 'core synchronous fixture retains Scintilla default all-modification notifications'.
+    起时 取 如语 其 _时刻.
+    语 其 选择 柄 'ru'.
+    初 取 语 其 状态 柄.
+    确认 (初['feed'] == 0 且 初['pending']) 'GUI-equivalent synchronous selection queues work without draining it'.
+    终态 取 语 其 排空 柄.
+    用时 取 (如语 其 _时刻)-起时.
+    显 'RU_GUI_SYNC size=1000000 source_chars='+(文 其 量 为 句)+' wall_ms='+(用时 为 句)+' read_bytes='+(终态['readBytes'] 为 句)+' max_read='+(终态['maxRead'] 为 句)+' max_tick_ms='+(终态['maxTickMs'] 为 句)+' max_chunk_ms='+(终态['maxChunkMs'] 为 句)+' chunks='+(终态['chunks'] 为 句).
+    确认 (终态['enabled'] 且 非 终态['pending'] 且 终态['feed'] == 1000000 且 终态['readBytes'] == 1000000 且 终态['maxRead'] > 0 且 终态['maxRead'] <= 1024 且 终态['chunks'] > 0) 'GUI-equivalent synchronous scan finishes with exact bounded reads'.
+    确认 (计时样式 柄) 'GUI-equivalent synchronous scan matches all sixteen head and tail style bytes'.
+    确认 ((编 其 文本 柄) == 文 且 非 (编 其 已变 柄) 且 (窗 其 发送 柄 2154 0 0) 其 数 == 90910 且 (窗 其 发送 柄 2174 0 0) 其 为空) 'GUI-equivalent synchronous styling preserves exact source, line count, savepoint and empty undo'.
+为
 作 性能 柄 大小 为 数:
     # 100 KB is one long line; 1 MB is 200,000 short lines. Both keep
     # the same byte footprint and exact full-state convergence assertions.
@@ -468,6 +506,7 @@ memcmp 取 比较库 其 绑定 'memcmp' (密 其 签名 (窗 其 I) ([(窗 其 
 
     性能 甲 100000.
     性能 甲 1000000.
+    计时同源性能 甲.
     语 其 遗忘 甲.
     编 其 开始载入 甲 32000000.
     确认 ((语 其 选择 甲 'ru') == 'plain') 'STYLES_NONE document suppresses Ru even when currently empty'.

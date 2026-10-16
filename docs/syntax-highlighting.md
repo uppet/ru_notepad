@@ -38,6 +38,13 @@ Incomplete edits may require scanning farther. No styling operation edits text,
 resets the savepoint, or clears undo. The existing 32 MB plain-text mode disables
 Ru highlighting/folding too; large files remain editable.
 
+The main application requests only insertion/deletion `SCN_MODIFIED` events
+(`SCI_SETMODEVENTMASK=3`), and reads back that subscription for both new tabs
+and pending file-load editors. Style-needed, savepoint, update-UI and margin
+notifications remain independent. Scintilla completes its internal style/fold,
+layout and undo handling before this parent-notification filter. Native controls
+retain the default full subscription to test the unused-notification path.
+
 The fold margin and View menu operate on Ru folds. Ctrl+Shift+[ / ] collapse/expand
 all folds. Re-selecting Ru or switching tabs retains existing folds; changing to
 plain/C++/JSON first restores hidden text. Fold state is in-memory only; sessions
@@ -200,7 +207,7 @@ passed; see that run's exact-commit results and distribution validation receipt.
 ## Ru-owned native acceptance
 
 The production lexical policy has **338 portable assertions**, replaying small
-fixtures at different scalar boundaries. The real Scintilla bridge adds **119
+fixtures at different scalar boundaries. The real Scintilla bridge adds **125
 assertions** for byte styles, fold levels, incomplete multiline edits, bounded
 reads, checkpoint convergence, stale document generations, fallback visibility,
 and text/savepoint/undo preservation. Length-changing insertion/deletion at the
@@ -211,10 +218,17 @@ Three further **8-assertion** runs independently omit the helper, provide a DLL
 without its exports, or provide an incompatible ABI version. Each requires a
 clear ordinary warning and continued plain-text editing, without unsafe binding.
 
-The main-window integration suite has **39 assertions**. It exercises real timer
+The main-window integration suite has **47 assertions**. It exercises real timer
 dispatch, Unicode `.ru` CLI input, Language/View menu commands, Scintilla margin
 hit-testing and the owning callback, independent tabs, dirty/undo preservation,
 automatic selection after successful Save As, and closing a pending styling job.
+It also compares a deliberately full-notification small control with the actual
+text-only application subscription, including insertion, undo, redo, line
+counts and savepoint transitions. A separate **8-assertion** mode uses the
+production main timer on the exact 1 MB GUI corpus, records cumulative work and
+idle gaps, and requires completion within 30 seconds. Both fixture corpus
+builders are executed in both portable backends and compared against every
+byte of the existing GUI fixture before native CI runs.
 The separate detached GUI gate checks actual style/fold values, hidden-line
 visibility, unchanged source, responsiveness and normal close. It also measures
 1 MB timer completion and representative 100 KB real insertion/Backspace at

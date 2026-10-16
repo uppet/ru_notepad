@@ -11,7 +11,7 @@
 关联 取 外言 'associations.ru'.
 拖放 取 外言 'file_drop.ru'.
 修改头 取 密 其 结构 [['header',窗 其 NMHDR],['position',窗 其 IP],['ch',窗 其 I],['modifiers',窗 其 I],['modificationType',窗 其 I],['text',窗 其 PTR],['length',窗 其 IP],['linesAdded',窗 其 IP],['message',窗 其 I],['wParam',窗 其 UP],['lParam',窗 其 IP],['line',窗 其 IP],['foldLevelNow',窗 其 I],['foldLevelPrev',窗 其 I],['margin',窗 其 I]].
-A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxTick':假,'syntaxNext':0}.
+A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0}.
 
 # Syntax work is deferred out of Scintilla callbacks, with one shared UI budget.
 算 所属文档 柄:
@@ -31,6 +31,8 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         若 语 其 待办 (文们[位] 其 查 'editor') 则
             窗 其 成功 ((窗 其 SetTimer) 其 调用 [(A 其 查 'window'),902,10,空]) 'SetTimer(Ru syntax)'.
             A 其 增 'syntaxTimer' 真.
+            # Do not count time between separate styling bursts as callback gaps.
+            A 其 增 'syntaxLastEndMs' 0.
             得 空.
         然
         位 取 位+1.
@@ -77,6 +79,21 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
             A 其 增 'syntaxTimer' 假.
         然
         若 已有 且 活动 >= 0 且 非 (语 其 待办 (文们[活动] 其 查 'editor')) 则 刷新. 然
+        # Scalar-only diagnostic totals: one extra QPC read per accepted tick.
+        # Work includes the existing callback scheduling/refresh work; gaps are
+        # previous callback end to next callback start while its timer is armed.
+        终时 取 语 其 时刻.
+        用时 取 终时-起.
+        A 其 增 'syntaxTicks' ((A 其 查 'syntaxTicks')+1).
+        A 其 增 'syntaxWorkMs' ((A 其 查 'syntaxWorkMs')+用时).
+        若 用时 > (A 其 查 'syntaxMaxTickMs') 则 A 其 增 'syntaxMaxTickMs' 用时. 然
+        前终 取 A 其 查 'syntaxLastEndMs'.
+        若 前终 > 0 则
+            间隔 取 起-前终.
+            A 其 增 'syntaxGapMs' ((A 其 查 'syntaxGapMs')+间隔).
+            若 间隔 > (A 其 查 'syntaxMaxGapMs') 则 A 其 增 'syntaxMaxGapMs' 间隔. 然
+        然
+        A 其 增 'syntaxLastEndMs' 终时.
     救 原因
         A 其 增 'syntaxTick' 假.
         窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),902]).
@@ -278,12 +295,21 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     文们 其 增 文档.
     得 文档.
 法
+算 配置修改通知 柄:
+    # The application consumes insert/delete SCN_MODIFIED only. Scintilla still
+    # owns style/fold updates and sends independent savepoint/UI notifications.
+    窗 其 发送 柄 2359 3 0. # SCI_SETMODEVENTMASK: INSERTTEXT | DELETETEXT.
+    编 其 检查状态 柄.
+    若 (窗 其 发送 柄 2378 0 0) 其 数 != 3 则 卒 'Scintilla did not retain the text modification notification mask.'. 然
+    得 空.
+法
 算 新页 路 为 句, 文 为 句, 编码, BOM, 戳 为 句:
     若 A 其 查 'busy' 则 卒 'Finish or cancel the current file operation first.'. 然
     若 ((A 其 查 'docs') 其 量) >= 64 则 卒 'Up to 64 documents can be open. Close a tab and retry.'. 然
     编 其 验文本 文.
     柄 取 编 其 创建 (A 其 查 'window') (A 其 查 'instance') (1001+(A 其 查 'counter')).
     试
+        配置修改通知 柄.
         拖放 其 启用编辑器 柄 (A 其 查 'window').
         编 其 设文本 柄 文.
         文档 取 登记页 柄 路 编码 BOM 戳 '' 假.
@@ -443,6 +469,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     然
     柄 取 编 其 创建 (A 其 查 'window') (A 其 查 'instance') (1001+(A 其 查 'counter')).
     操 其 增 'editor' 柄.
+    配置修改通知 柄.
     拖放 其 启用编辑器 柄 (A 其 查 'window').
     操 其 增 'load' (编 其 开始载入 柄 读态['size']).
     显 '[operation] open started'.
@@ -817,6 +844,11 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
                     行变 取 (修改 其 读 'linesAdded') 其 数.
                     边栏 取 (修改 其 读 'margin') 其 数.
                     修改 其 关闭.
+                    若 码 == 2008 则
+                        若 (类型 其 位段 0 2) != 0 则 A 其 增 'syntaxTextNotifications' ((A 其 查 'syntaxTextNotifications')+1). 然
+                        若 (类型 其 位段 2 1) != 0 则 A 其 增 'syntaxStyleNotifications' ((A 其 查 'syntaxStyleNotifications')+1). 然
+                        若 (类型 其 位段 3 1) != 0 则 A 其 增 'syntaxFoldNotifications' ((A 其 查 'syntaxFoldNotifications')+1). 然
+                    然
                     若 码 == 2008 且 (类型 其 位段 0 2) != 0 则
                         文档 其 增 'revision' ((文档 其 查 'revision')+1).
                         语 其 变化 来源 位置 长度 行变 (类型 其 数).
