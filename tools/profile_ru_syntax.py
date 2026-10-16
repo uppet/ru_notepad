@@ -35,7 +35,8 @@ PINNED = {
     "tests/app_features_native.ru": "2c70b91cd161761a915ea10bb8874215574cf7cd02fe2180ff065c730203067f",
     "tests/app_native.ru": "d172f30dc628ea43f5bd6202fd087e693c507b79516dca80e838336ec8dcc1f0",
     "tests/app_ru_native.ru": "e3edfa66bdf06381500d6148f08dd3833a4cad69c35acc9448ba842c61c63d8e",
-    "tests/app_streaming_native.ru": "4a513546d68fb6fc2fba44a872d8d4bf6d9b29ddb89b5c7d061a619b22555925",
+    # Reviewed bounded-tick fixture repair; this fixture is not imported by any profiling graph.
+    "tests/app_streaming_native.ru": "e31c4d389672d10a21d90113bb295907a977383fc527a4dbd2d1f589917d1b2e",
     "tests/associations_native.ru": "3a2b4f465a95b56572ffbf9a38ff3ba663b5f927aaa0eff54dab18b5c767ce21",
     "tests/associations_policy.ru": "0bcd48f0c47bc8a2b84d8dc87124499c834968d878ffbccb3939ba5422294004",
     "tests/document_policy.ru": "0eda2569f8c06cb39a400d4d6365b20177fce1dbc86754dc3dc34f6c82dade9a",

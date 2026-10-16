@@ -112,7 +112,7 @@ class PlanTests(unittest.TestCase):
 
     def test_reconstruct_baseline_without_old_commit_objects(self):
         # Uses current source bytes. The baseline may be shallow and have only
-        # the reviewed benchmark README correction plus five profiling files.
+        # the two exact reviewed README/streaming-fixture corrections plus five profiling files.
         hashes = runner.production_tree(ROOT)
         self.assertEqual(len(hashes), 109)
         self.assertIn('src/main.ru', hashes)
@@ -135,6 +135,77 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(runner.BUILD_BUDGET_SECONDS, 1200)
         self.assertEqual(runner.COMPILE_TIMEOUT_SECONDS, 180)
         self.assertEqual(runner.STYLE_TIMEOUT_SECONDS, 30)
+
+
+class StreamingFixtureIdentityTests(unittest.TestCase):
+    def test_only_exact_reviewed_fixture_is_substituted_without_old_git_objects(self):
+        entries = runner.subprocess.check_output(['git', '-C', str(ROOT), 'ls-files', '--stage', '-z'], timeout=30)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for entry in entries.split(b'\0'):
+                if not entry:
+                    continue
+                name = entry.split(b'\t', 1)[1].decode('utf-8')
+                if name in runner.OWNED:
+                    continue
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ROOT / name).read_bytes())
+            with patch.object(runner.subprocess, 'check_output', return_value=entries) as git_index:
+                hashes = runner.production_tree(root)
+                self.assertEqual(len(hashes), 109)
+                self.assertEqual(hashes['tests/app_streaming_native.ru'], runner.sha(ROOT / 'tests/app_streaming_native.ru'))
+                for mutation, expected in (('third_fixture', 'unreviewed_streaming_fixture'),
+                                           ('missing_fixture', 'missing_owned_file'),
+                                           ('other_file', 'production_source_tree_changed')):
+                    target = root / ('src/main.ru' if mutation == 'other_file' else 'tests/app_streaming_native.ru')
+                    original = target.read_bytes()
+                    try:
+                        if mutation == 'missing_fixture':
+                            target.unlink()
+                        else:
+                            target.write_bytes(original + b'\n# unreviewed third version\n')
+                        with self.subTest(mutation=mutation), self.assertRaisesRegex(runner.ProfileError, expected):
+                            runner.production_tree(root)
+                    finally:
+                        target.write_bytes(original)
+                self.assertTrue(all(call.args[0][3:] == ['ls-files', '--stage', '-z'] for call in git_index.call_args_list))
+
+    def test_generator_pin_and_three_profile_entries_are_exact(self):
+        generator = runner.load_generator()
+        self.assertEqual(generator.PINNED['tests/app_streaming_native.ru'], runner.REVIEWED_STREAMING_FIXTURE_SHA256)
+        for name, expected in {
+            'src/main.ru': '7ac0852b07072301bafaddfc0b4585044d7a9a931ce742165ad4e1d20d596adf',
+            'tests/app_ru_native.ru': 'e3edfa66bdf06381500d6148f08dd3833a4cad69c35acc9448ba842c61c63d8e',
+            'tests/ru_syntax_native.ru': '6bd86a28410354cdbefd89c6649d64f7aefa83fa6e681d97892e2367f1e1740c',
+        }.items():
+            with self.subTest(source=name):
+                self.assertEqual(generator.PINNED[name], expected)
+                self.assertEqual(runner.sha(ROOT / name), expected)
+
+    def test_actual_fixture_hash_is_required_in_closed_identity(self):
+        compiler = ROOT / 'unused-test-compiler'
+        def fake_git(root, *args):
+            if args == ('status', '--porcelain'):
+                return ''
+            if root == compiler:
+                return runner.RU_COMMIT if args[-1] == 'HEAD' else runner.RU_TREE
+            return '1' * 40 if args[-1] == 'HEAD' else '2' * 40
+        with patch.object(runner, 'git', side_effect=fake_git):
+            identity = runner.source_identity(ROOT, compiler)
+        self.assertEqual(identity['streaming_fixture_sha256'], runner.sha(ROOT / 'tests/app_streaming_native.ru'))
+        receipt = {'schema': 1, 'prepared': False, 'error_code': 'synthetic_host_control', 'corpus': runner.CORPUS,
+                   'matrix': runner.matrix(), 'builds': [], 'commands': [], 'preflight_builds': [],
+                   'build_budget_seconds': runner.BUILD_BUDGET_SECONDS, 'compile_timeout_seconds': runner.COMPILE_TIMEOUT_SECONDS,
+                   'initial_build_estimate_seconds': [120, 240], 'elapsed_seconds': 0, 'estimate_exceeded': False,
+                   'identity': identity}
+        runner.validate_prepare_receipt(receipt)
+        identity['streaming_fixture_sha256'] = '0' * 64
+        with self.assertRaisesRegex(runner.ProfileError, 'streaming_fixture_hash_mismatch'):
+            runner.validate_prepare_receipt(receipt)
+        del identity['streaming_fixture_sha256']
+        with self.assertRaisesRegex(runner.ProfileError, 'identity_shape_mismatch'):
+            runner.validate_prepare_receipt(receipt)
 
 
 class ProfileTests(unittest.TestCase):
@@ -453,6 +524,10 @@ class GeneratedContractTests(unittest.TestCase):
         manifest = runner.read_json(generated / 'manifest.json')
         units = runner.validate_manifest(manifest, generated)
         self.assertEqual(len(units), 5)
+        self.assertEqual(manifest['baseline_inputs']['tests/app_streaming_native.ru'], runner.REVIEWED_STREAMING_FIXTURE_SHA256)
+        for unit in units:
+            self.assertNotIn('app_streaming_native.ru', [Path(name).name for name in unit['graph_sha256']])
+            self.assertNotIn('app_streaming_native.ru', (generated / unit['generated_c']).read_text(encoding='utf-8'))
         runner.validate_preflight_manifest(manifest['preflight'], generated)
         missing = copy.deepcopy(manifest)
         del missing['preflight']
@@ -585,6 +660,77 @@ class ExplicitEncodingTests(unittest.TestCase):
                 (ROOT / 'tools/profile_ru_syntax.py').read_bytes().decode(io.text_encoding(None))
             PreflightTests().test_generation_failure_codes_preserved()
             PlanTests().test_workflow_is_separate_and_narrow()
+
+
+class OfficialDependencyAcquisitionTests(unittest.TestCase):
+    def test_workflow_uses_existing_official_powershell_client_and_guards(self):
+        workflow = (ROOT / '.github/workflows/ru-syntax-profile.yml').read_text(encoding='utf-8')
+        product = (ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        for item in runner.portable.DEPENDENCIES.values():
+            self.assertIn("Invoke-WebRequest -Uri 'https://www.scintilla.org/" + item['archive'] + "'", product)
+            self.assertIn("('" + item['archive'] + "', '" + item['sha256'] + "')", workflow)
+        self.assertIn("$env:PROFILE_PWSH = Join-Path $PSHOME 'pwsh.exe'", workflow)
+        self.assertIn("Invoke-WebRequest -Uri 'https://www.scintilla.org/", workflow)
+        self.assertIn("'-Command', download", workflow)
+        self.assertIn('-TimeoutSec 120', workflow)
+        self.assertNotIn('urllib', workflow)
+        self.assertNotIn('-UserAgent', workflow)
+        self.assertNotIn('-Headers', workflow)
+        self.assertLess(workflow.index('archive.stat().st_size <= 32 * 1024 * 1024'), workflow.index('archive.read_bytes()'))
+        self.assertLess(workflow.index('hashlib.sha256(content).hexdigest() == checksum'), workflow.index('zipfile.ZipFile(archive)'))
+        self.assertIn("'..' not in pathlib.PurePosixPath(item.filename).parts", workflow)
+
+    def test_workflow_rejects_oversize_and_bad_hash_before_zip_access(self):
+        import textwrap
+        import types
+        import zipfile
+        from unittest.mock import Mock
+        workflow = (ROOT / '.github/workflows/ru-syntax-profile.yml').read_text(encoding='utf-8')
+        script = textwrap.dedent(workflow.split("@'\n", 1)[1].split("          '@ |", 1)[0])
+        for invalid in ('oversize', 'bad_hash'):
+            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / "owner's workspace"
+                root.mkdir()
+                calls = []
+                def download(command, private, label, deadline):
+                    calls.append(label)
+                    self.assertEqual(label, 'dependency-download-scintilla567')
+                    self.assertEqual(command[0], 'selected-powershell.exe')
+                    self.assertIn("Invoke-WebRequest -Uri 'https://www.scintilla.org/scintilla567.zip'", command[-1])
+                    self.assertIn("owner''s workspace", command[-1])
+                    archive = root / 'vendor/downloads/scintilla567.zip'
+                    if invalid == 'oversize':
+                        with archive.open('wb') as output:
+                            output.truncate(32 * 1024 * 1024 + 1)
+                    else:
+                        archive.write_bytes(b'not the pinned official archive')
+                stub = types.SimpleNamespace(build_command=download, read_json=runner.read_json)
+                opened_zip = Mock(side_effect=AssertionError('ZIP must not be reached'))
+                with patch.object(Path, 'cwd', return_value=root), patch.dict(os.environ, {'PROFILE_PWSH': 'selected-powershell.exe'}), \
+                        patch.dict(sys.modules, {'run_ru_syntax_profile': stub}), patch.object(sys, 'path', sys.path.copy()), \
+                        patch.object(zipfile, 'ZipFile', opened_zip), self.assertRaises(AssertionError):
+                    exec(compile(script, 'dependency_workflow', 'exec'), {})
+                self.assertEqual(calls, ['dependency-download-scintilla567'])
+                opened_zip.assert_not_called()
+                self.assertFalse(runner.read_json(root / 'build/dependency-profile-setup.json')['passed'])
+
+    def test_download_failure_receipt_is_preserved_without_success_or_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'build').mkdir()
+            setup = {'schema': 1, 'passed': False, 'commands': [{'stage': 'dependency-download-scintilla567',
+                     'elapsed_seconds': 0.5, 'exit_code': 1, 'error_code': 'build_command_failed',
+                     'cleanup_killed': False, 'cleanup_failed': False}], 'elapsed_seconds': 0.6}
+            runner.save_json(root / 'build/dependency-profile-setup.json', setup)
+            with patch.object(runner, 'ROOT', root):
+                self.assertFalse(runner.collect()['passed'])
+            evidence = root / 'build/ru-syntax-profile-evidence'
+            self.assertEqual(runner.read_json(evidence / 'dependency-setup.json'), setup)
+            collected = runner.read_json(evidence / 'collection.json')
+            for key in ('passed', 'profile_verified', 'native_execution_recorded',
+                        'prepare_receipt_present', 'results_receipt_present'):
+                self.assertIs(collected[key], False)
+            self.assertEqual(collected['error_code'], 'profile_evidence_missing')
 
 
 class EarlyCollectionTests(unittest.TestCase):

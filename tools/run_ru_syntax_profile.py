@@ -34,6 +34,8 @@ BASELINE_COMMIT = 'b525b47dab6a51494cde29a3aa468cfe2d14703a'
 BASELINE_TREE = 'a1fb1a02abf76d80d3daf6f385edf29901264d73'
 BASELINE_DOC_BLOB = 'df4d1d7af958f5f6518f6c47ede3c49a0ee2d346'
 REVIEWED_DOC_SHA256 = '3d69bcaa9847d8d92d91f4b3a1ee432d2665efe97fce0e46638ef65bae5832af'
+BASELINE_STREAMING_FIXTURE_BLOB = '6a205fbc1fd4f5a7449549dfcd3d26348a076a3d'
+REVIEWED_STREAMING_FIXTURE_SHA256 = 'e31c4d389672d10a21d90113bb295907a977383fc527a4dbd2d1f589917d1b2e'
 RU_COMMIT = acceptance.HELPER_POLICY_COMMIT
 RU_TREE = acceptance.HELPER_POLICY_TREE
 CORPUS_SHA256 = 'ecf8dca884444a5e54e1f40dc6af01cf5e7830ed6fe902d3adf6fdf255f9b3fa'
@@ -196,6 +198,10 @@ def production_tree(root):
         if name == 'benchmarks/README.md':
             require(blob.hex() == BASELINE_DOC_BLOB or hashes[name] == REVIEWED_DOC_SHA256, 'unreviewed_benchmark_document')
             blob = bytes.fromhex(BASELINE_DOC_BLOB)
+        if name == 'tests/app_streaming_native.ru':
+            require(blob.hex() == BASELINE_STREAMING_FIXTURE_BLOB or hashes[name] == REVIEWED_STREAMING_FIXTURE_SHA256,
+                    'unreviewed_streaming_fixture')
+            blob = bytes.fromhex(BASELINE_STREAMING_FIXTURE_BLOB)
         node = tree
         parts = PurePosixPath(name).parts
         for part in parts[:-1]:
@@ -224,7 +230,8 @@ def source_identity(root, ru_root):
             'profile_commit': git(root, 'rev-parse', 'HEAD'),
             'profile_tree': git(root, 'rev-parse', 'HEAD^{tree}'),
             'compiler_commit': RU_COMMIT, 'compiler_tree': RU_TREE, 'source_sha256': hashes,
-            'reviewed_document_sha256': hashes['benchmarks/README.md']}
+            'reviewed_document_sha256': hashes['benchmarks/README.md'],
+            'streaming_fixture_sha256': hashes['tests/app_streaming_native.ru']}
 
 
 def native_windows():
@@ -971,7 +978,7 @@ def validate_prepare_receipt(record):
     if 'identity' in record:
         identity = record['identity']
         exact(identity, ('baseline_commit', 'baseline_tree', 'profile_commit', 'profile_tree', 'compiler_commit',
-                         'compiler_tree', 'source_sha256', 'reviewed_document_sha256'), 'identity_shape_mismatch')
+                         'compiler_tree', 'source_sha256', 'reviewed_document_sha256', 'streaming_fixture_sha256'), 'identity_shape_mismatch')
         require(identity['baseline_commit'] == BASELINE_COMMIT and identity['baseline_tree'] == BASELINE_TREE
                 and identity['compiler_commit'] == RU_COMMIT and identity['compiler_tree'] == RU_TREE,
                 'identity_pin_mismatch')
@@ -987,6 +994,8 @@ def validate_prepare_receipt(record):
             require(type(checksum) is str and re.fullmatch('[0-9a-f]{64}', checksum), 'source_hash_invalid')
         require(identity['reviewed_document_sha256'] == identity['source_sha256']['benchmarks/README.md'],
                 'document_hash_mismatch')
+        require(identity['streaming_fixture_sha256'] == identity['source_sha256']['tests/app_streaming_native.ru'],
+                'streaming_fixture_hash_mismatch')
     if 'environment' in record:
         exact(record['environment'], ('platform', 'os_version', 'architecture', 'logical_cpus', 'python_version',
                                       'cpu', 'cold_warm'), 'environment_shape_mismatch')
@@ -1153,11 +1162,13 @@ def collect():
         setup = read_json(dependency_setup)
         exact(setup, ('schema', 'passed', 'commands', 'elapsed_seconds'), 'dependency_setup_shape_mismatch')
         require(setup['schema'] == 1 and type(setup['passed']) is bool and number(setup['elapsed_seconds']), 'dependency_setup_invalid')
-        require(type(setup['commands']) is list and len(setup['commands']) <= 2, 'dependency_setup_invalid')
+        require(type(setup['commands']) is list and len(setup['commands']) <= 4, 'dependency_setup_invalid')
         for command in setup['commands']:
             exact(command, ('stage', 'elapsed_seconds', 'exit_code', 'error_code', 'cleanup_killed', 'cleanup_failed'),
                   'dependency_command_shape_mismatch')
-            require(command['stage'] in ('dependency-scintilla', 'dependency-lexilla') and number(command['elapsed_seconds'])
+            require(command['stage'] in ('dependency-scintilla', 'dependency-lexilla',
+                                          'dependency-download-scintilla567', 'dependency-download-lexilla554')
+                    and number(command['elapsed_seconds'])
                     and type(command['cleanup_killed']) is bool and type(command['cleanup_failed']) is bool
                     and (command['exit_code'] is None or type(command['exit_code']) is int)
                     and (command['error_code'] is None or re.fullmatch('[a-z_]{1,80}', command['error_code'])),

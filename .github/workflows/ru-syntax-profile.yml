@@ -69,8 +69,9 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $env:PATH = "$env:MSYS2_ROOT/mingw64/bin;$env:PATH"
+          $env:PROFILE_PWSH = Join-Path $PSHOME 'pwsh.exe'
           @'
-          import hashlib, json, pathlib, sys, time, urllib.request, zipfile
+          import hashlib, json, os, pathlib, sys, time, zipfile
           root = pathlib.Path.cwd()
           sys.path.insert(0, str(root / 'tools'))
           import run_ru_syntax_profile as runner
@@ -86,10 +87,15 @@ jobs:
                   ('lexilla554.zip', '5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0')):
                   archive = root / 'vendor/downloads' / name
                   archive.parent.mkdir(parents=True, exist_ok=True)
-                  with urllib.request.urlopen('https://www.scintilla.org/' + name, timeout=120) as response:
-                      content = response.read(32 * 1024 * 1024 + 1)
-                  assert len(content) <= 32 * 1024 * 1024 and hashlib.sha256(content).hexdigest() == checksum
-                  archive.write_bytes(content)
+                  # Use the same ordinary official client as windows_ci.ps1.
+                  download = ("$ErrorActionPreference = 'Stop'; Invoke-WebRequest -Uri 'https://www.scintilla.org/"
+                              + name + "' -OutFile '" + str(archive).replace("'", "''") + "' -TimeoutSec 120")
+                  runner.build_command([os.environ['PROFILE_PWSH'], '-NoLogo', '-NoProfile', '-NonInteractive',
+                                        '-Command', download], private, 'dependency-download-' + name.split('.')[0], started + 600)
+                  # Archive-acceptance cap, before reading or extraction; this is not a transfer-byte cap.
+                  assert archive.stat().st_size <= 32 * 1024 * 1024
+                  content = archive.read_bytes()
+                  assert hashlib.sha256(content).hexdigest() == checksum
                   with zipfile.ZipFile(archive) as source:
                       for item in source.infolist():
                           assert not pathlib.PurePosixPath(item.filename).is_absolute() and '..' not in pathlib.PurePosixPath(item.filename).parts
