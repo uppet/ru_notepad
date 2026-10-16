@@ -1,14 +1,10 @@
 name: Ru syntax bounded profiling
 
 on:
-  push:
-    branches: [wip]
-    paths:
-      - tools/profile_ru_syntax.py
-      - native/profile_counters.h
-      - tools/run_ru_syntax_profile.py
-      - tools/test_ru_syntax_profile.py
-      - .github/workflows/ru-syntax-profile.yml
+  # Retired automatic study. Every manual replay builds this exact accepted
+  # historical source and historical tools, even when launched from current wip.
+  # The trigger SHA is not the build identity. Historical elapsed omissions
+  # remain historical and are not backfilled by the current paired runner.
   workflow_dispatch:
 
 permissions:
@@ -35,10 +31,11 @@ jobs:
     steps:
       - name: Preserve source bytes
         run: git config --global core.autocrlf false
-      - name: Check out profiling candidate
+      - name: Check out accepted historical profiling source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+          ref: e3256f0453b3b11dd26b671f38628cf411ab24e8
       - name: Check out reviewed Ru compiler
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -131,7 +128,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ru-syntax-profile-evidence-${{ github.sha }}
+          name: historical-profile-e3256f0453b3b11dd26b671f38628cf411ab24e8-${{ github.run_id }}
           path: |
             build/ru-syntax-profile-evidence/*.json
             build/ru-syntax-profile-evidence/*.log

@@ -1,4 +1,4 @@
-# ru_notepad 0.1.5 preview. Application behavior is compiled from Ru.
+# ru_notepad 0.1.6 preview. Application behavior is compiled from Ru.
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
 编 取 外言 'editor.ru'.
@@ -334,6 +334,13 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     刷新.
     得 空.
 法
+# All app editors have one private document and this controlled UI parent.
+# Selection discards prior capability; only this owning path opts back in.
+算 选择语法 柄 语言 为 句:
+    已选 取 语 其 选择 柄 语言.
+    若 已选 == 'ru' 则 语 其 登记直属 柄 (A 其 查 'window'). 然
+    得 已选.
+法
 # Tab ownership is committed only after initialization and native insertion succeed.
 算 登记页 柄, 路 为 句, 编码, BOM, 戳 为 句, 身份 为 句, 大型 为 事实:
     文们 取 A 其 查 'docs'.
@@ -343,7 +350,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     名 取 短名 路.
     若 路 == '' 则 名 取 'Untitled '+(序 为 句). 然
     语言 取 'plain'.
-    若 非 大型 则 语言 取 语 其 选择 柄 (语 其 识别 路). 然
+    若 非 大型 则 语言 取 选择语法 柄 (语 其 识别 路). 然
     文档 取 {'editor':柄,'path':路,'name':名,'encoding':编码,'bom':BOM,'stamp':戳,'fileIdentity':身份,'encodingDirty':假,'label':'','wrap':假,'language':语言,'large':大型,'revision':0}.
     项 取 (窗 其 TCITEM) 其 新建.
     存 取 空.
@@ -633,7 +640,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     显 '[operation] save completed'.
     结束工作.
     若 原路 != 写态['path'] 且 非 (文档 其 查 'large') 则
-        文档 其 增 'language' (语 其 选择 (文档 其 查 'editor') (语 其 识别 写态['path'])).
+        文档 其 增 'language' (选择语法 (文档 其 查 'editor') (语 其 识别 写态['path'])).
         安排语法.
     然
     刷新.
@@ -810,7 +817,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
             语态 取 语 其 状态 编辑柄.
             若 语态 != 空 且 语态['enabled'] 则 得 空. 然
         然
-        当前 其 增 'language' (语 其 选择 编辑柄 语言).
+        当前 其 增 'language' (选择语法 编辑柄 语言).
         安排语法.
         报语法警告.
     然
@@ -842,7 +849,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         若 (窗 其 弹窗 (A 其 查 'window') 'Remove this copy from Open With / Default Apps candidates? Your Windows default choices will not be overwritten.' 'ru_notepad · unregister candidate' 292) == 6 则 关联 其 注销. 提示 'Candidate entries owned by this copy were removed.'. 然
     然
     若 号 == 804 则 提示 ('Registration status: '+(关联 其 查询状态)+'\nregistered = this copy; none = not registered; partial = incomplete; otherowner = another portable location. Unregister at the old location before moving, then register the new copy.'). 然
-    若 号 == 601 则 提示 'ru_notepad 0.1.5 preview\n\nWindows x64 · application logic compiled from Ru\nScintilla + Lexilla native editor components\n\nTabs, safe text saves, undo/redo, literal find/replace.\nBounded streaming, 64 tabs; over 500 MB asks first. Not full Notepad++ parity yet.\nNo Python runtime. No telemetry. No network features.'. 然
+    若 号 == 601 则 提示 'ru_notepad 0.1.6 preview\n\nWindows x64 · application logic compiled from Ru\nScintilla + Lexilla native editor components\n\nTabs, safe text saves, undo/redo, literal find/replace.\nBounded streaming, 64 tabs; over 500 MB asks first. Not full Notepad++ parity yet.\nNo Python runtime. No telemetry. No network features.'. 然
     刷新.
     得 空.
 法

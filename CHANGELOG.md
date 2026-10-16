@@ -1,10 +1,19 @@
 # Changelog
 
+## 0.1.6-preview — 2026-10-16
+
+- Add 36 required native route, output and lifetime assertions, retaining all 1,451 prior assertions for a pending total of 1,487 / 33 results.
+- Evaluate the documented Scintilla direct export for three style-publication messages, only for explicitly registered, same-thread, exclusive-document editors with validated ownership and text-only notification masks. Fold publication and all editing, saving and Win32 routing retain their existing paths.
+- Keep the borrowed direct pointer within one validated non-pumping batch; unregistered or ineligible editors retain message-based publication. No change to Ru lexical/folding decisions or the scanner DLL ABI.
+- Require complete native equivalence/lifecycle tests and an interleaved, same-run direct-versus-message comparison with the unchanged corpus, 30-second styling gate and six edit probes. This candidate has not yet passed those Windows gates; no speedup is claimed.
+- Correct whole-process elapsed reporting in benchmark receipts, separately from styling wall/work/gap. Historical evidence is preserved without invented timing fields.
+
 ## 0.1.5-preview — 2026-10-16
 
 - Prepare an independent bulk-transport optimization candidate using the reviewed Ru 0.21.6 owned-memory `读U32LE阵` API. Keep the scanner DLL ABI and lexical/folding policy unchanged; validate high header bits before exact reconstruction and retain every event bound/order check.
 - Add 24 native production-decoder assertions, raising the syntax suite to 149 and the required total to 1,451 assertions / 32 results. Require 23 production-decoder arithmetic/control-flow cases in each portable backend, with exact input and output evidence.
-- Retain the same Chinese corpus, 30-second GUI completion deadline and all six edit measurements. Native application acceptance and an actual performance gain remain pending; language API acceptance and local cross-compilation do not establish either result.
+- Retain the same Chinese corpus, 30-second GUI completion deadline and all six edit measurements. The [actual 0.1.5 run](https://github.com/uppet/ru_notepad/actions/runs/38957923664) subsequently passed all 1,451 assertions / 32 results and both original packages passed independent verification. Its 1 MB GUI result was 16.652 seconds, with six edit completions of 1.472–3.307 seconds; these observations did not establish an end-to-end gain over 0.1.4.
+- A later [exact-build run](https://github.com/uppet/ru_notepad/actions/runs/38974348825) also passed all gates after correcting a test assumption: the first bounded open tick may finish initialization without reading text. The revised fixture requires bounded progress over two ticks and retains cancellation before the full file is read. Production streaming behavior was unchanged.
 - External-file-change notification and reload remain a separate proposal, outside this version's changes.
 
 ## 0.1.4-preview — 2026-10-16

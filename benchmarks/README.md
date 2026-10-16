@@ -75,3 +75,62 @@ startup, open, save, editing, search, styling and memory separately, with repeat
 paired trials and dependency-version differences. Notepad++ plain text is not an
 equivalent task to Ru structural highlighting and folding. No same-runner
 Notepad++ performance result is claimed yet.
+
+## Direct-style paired candidate experiment
+
+The new `direct-style-benchmark.yml` is a separate, wip-only experiment. It
+builds the current candidate, including its current initialization, DLL roots,
+resources and Ru lexical/fold policy. It does not modify the old profiler's
+accepted source locks or substitute its historical 109-file proof for this
+candidate. A closed candidate manifest records every accepted source identity,
+every independently reviewed change, the current commit/tree, compiler identity,
+all copied module graphs, generated C, executable and dependency hashes.
+
+The fixed schedule has eight fresh processes on one real Windows x64 runner:
+GUI direct, cooperative message, GUI message, cooperative direct, cooperative
+direct, GUI message, cooperative message, GUI direct. Each path has two paired
+repeats. Four binaries differ only in execution path and the single private
+copied-source direct-route enable value. The message control preserves all new
+initialization and GC roots; it selects the original SendMessage publication.
+No phase/callback hooks or hot counters run in either measured binary. Only
+2032/2033/2073 may use direct publication; fold publication remains messages.
+
+Both routes contain the same complete-byte/style checker and endpoint-only
+eligibility scaffold. Before the 1 MB target starts styling, and after it
+finishes, the scaffold verifies registration, same owner thread and parent,
+same document/generation, revision zero, mask 3 and a non-null native context.
+The context is discarded immediately. Exactly two numeric receipts are required;
+these are endpoint eligibility evidence, not a count or trace of every batch.
+The separate native fixture must actually pass its positive/negative subclass
+controls for all three style messages and its full text/style/fold/lifecycle
+checks. The exact-DLL scanner and existing off-level native boundary controls
+also execute. Missing, skipped, timed-out or killed runs fail the experiment.
+
+Every matrix run retains the exact 1,000,000-byte corpus above and the unchanged
+30-second styling limit. Both routes check every input byte and style byte. GUI
+runs retain all six BOF/middle/EOF edit probes, actual queued navigation, natural
+paint-region service, ordinary WM_CLOSE and exit zero without cleanup killing.
+The initial eligibility queries are inside styling wall time; the final
+eligibility and full-byte checks follow completion. Common verification roots
+and setup overhead can affect both variants. There is no claim that this
+scaffolding has zero overhead or that subtraction isolates it.
+
+The report shows every exact pair, direct-minus-message milliseconds and ratio,
+measured process seconds and process-minus-styling time. That final difference
+includes setup, other probes, verification, edits and closing. It is not an
+isolated checker cost. Missing or invalid process clocks fail; old missing
+seconds are never inferred. No performance success threshold, statistical
+significance or broad speedup claim is attached to two pairs. A fully correct
+result showing no gain is valid evidence. Full product CI remains independently
+mandatory and is not replaced by this experiment.
+
+The completed twenty-row historical profiler is now manual-only. Dispatching
+`ru-syntax-profile.yml` always checks out accepted public commit
+`e3256f0453b3b11dd26b671f38628cf411ab24e8`, tree
+`a9636c81716f0788baa4a8ba505319d51b3775bc`, and executes those historical tools.
+This also works when the workflow is launched from current wip; it does not
+attempt to run the old locked experiment against direct-style product sources.
+Its artifact name identifies the built historical SHA separately from the
+workflow run ID, and its source receipts use the actual checkout. Historical
+whole-process elapsed omissions remain historical. The new paired experiment
+executes the current reporting fixes and their fail-closed host controls.

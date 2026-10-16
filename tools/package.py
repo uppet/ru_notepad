@@ -44,7 +44,8 @@ TEST_NAMES = ('document_policy.exe', 'ui_arguments.exe', 'file_codec_flags.exe',
               'file_codec_security_probe.exe', 'syntax_native.exe', 'syntax_policy.exe', 'shortcuts.exe', 'status_native.exe',
               'file_streaming_native.exe', 'editor_streaming_native.exe',
               'associations_policy.exe', 'associations_native.exe', 'file_drop_native.exe', 'app_streaming_native.exe',
-              'ru_lexical_policy.exe', 'ru_syntax_native.exe', 'app_ru_native.exe')
+              'ru_lexical_policy.exe', 'ru_syntax_native.exe', 'app_ru_native.exe',
+              'ru_direct_styling_native.exe')
 TEST_SUPPORT_DLL_NAMES = (NATIVE_WRONG_ABI_NAME,)
 SCANNER_PREFLIGHT_NAME = 'ru-scanner-preflight'
 BINARY_NAMES = (*RUNTIME_NAMES, *TEST_NAMES, *TEST_SUPPORT_DLL_NAMES)

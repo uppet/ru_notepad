@@ -133,6 +133,10 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
     得 语言.
 法
 
+算 登记直属 柄 父:
+    得 如语 其 登记直属 柄 父.
+法
+
 # Container requests always carry the originating HWND, never the active tab.
 算 遗忘 柄:
     得 如语 其 遗忘 柄.

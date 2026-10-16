@@ -143,6 +143,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'app_ru_timer_native': r'^TOTAL PASS: 8\s*$',
             'ru_lexical_policy': r'^TOTAL PASS: 338\s*$',
             'ru_syntax_native': r'^TOTAL PASS: 149\s*$',
+            'ru_direct_styling_native': r'^TOTAL PASS: 36\s*$',
             'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=73\s*$',
             'file_streaming_native': r'^FILE_STREAMING_TESTS_PASS=99\s*$',
             'editor_streaming_native': r'^EDITOR_STREAMING_TESTS_PASS=21\s*$',
@@ -152,9 +153,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'file_drop_native': r'^TOTAL PASS: 38\s*$',
         }
         self.assertEqual(dict(ci.NATIVE_CONSOLE_TESTS), expected)
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 22)
-        # Twenty-two console gates, six actual fallbacks, three real GUIs and ACL.
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 32)
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 23)
+        # Twenty-three console gates, six actual fallbacks, three real GUIs and ACL.
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 33)
 
     def test_console_and_gui_receipts_share_all_manifest_resource_inputs(self):
         common = {'packaging/app.rc', 'packaging/app.manifest', 'assets/app-icon.ico', 'VERSION'}
@@ -624,18 +625,35 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         summary = self.acceptance()
         ci.validate_acceptance(summary)
         new = {'ru_lexical_policy', 'ru_syntax_native', 'app_ru_native', 'app_ru_timer_native',
+               'ru_direct_styling_native',
                'ru_syntax_missing_lexilla', 'main-gui-ru-syntax', *ci.HELPER_FALLBACK_LAYOUTS}
         prior = [test for test in summary['tests'] if test['name'] not in new]
         self.assertEqual(len(prior), 23)
         self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 835 + 16)
 
-    def test_acceptance_requires_all_32_groups_and_exact_assertions(self):
+    def test_acceptance_requires_all_33_groups_and_exact_assertions(self):
         summary = self.acceptance()
         ci.validate_acceptance(summary)
-        self.assertEqual(len(summary['tests']), 32)
-        # The bulk candidate retains all 1427 prior required assertions and adds
-        # 24 production decoder assertions. Native execution remains a separate gate.
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1451)
+        self.assertEqual(len(summary['tests']), 33)
+        # All 1451 prior assertions remain; 36 additional native assertions cover
+        # guarded publication. Native execution remains a separate gate.
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1487)
+
+    def test_direct_style_fixture_is_built_packaged_and_required(self):
+        name = 'ru_direct_styling_native'
+        self.assertIn(name + '.exe', ci.portable.TEST_NAMES)
+        self.assertEqual(ci.console_command(name, self.root, self.root),
+                         [str(self.root / (name + '.exe'))])
+        self.assertEqual(ci.CONSOLE_TIMEOUT_SECONDS[name], 120)
+        script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        self.assertIn("'ru_direct_styling_native'", script)
+        runner = (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8')
+        self.assertIn('ru_direct_styling_native.exe >>test-results.txt 2>&1\n'
+                      'if not "%ERRORLEVEL%"=="0" set "FAILED=1"', runner)
+        summary = self.acceptance()
+        summary['tests'] = [case for case in summary['tests'] if case['name'] != name]
+        with self.assertRaisesRegex(RuntimeError, 'inventory'):
+            ci.validate_acceptance(summary)
 
     def test_acceptance_rejects_missing_or_duplicated_syntax_branch(self):
         summary = self.acceptance()

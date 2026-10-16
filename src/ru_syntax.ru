@@ -8,6 +8,30 @@ _编辑们 取 {}.
 _序号 取 [0].
 _范围型 取 密 其 结构 [['start',窗 其 IP],['end',窗 其 IP],['text',窗 其 PTR]].
 _计数型 取 密 其 结构 [['value',密 其 i64]].
+# Only the named public export is bound. Never convert an arbitrary address to
+# callable code. The managed absolute-path DLL root outlives every style call.
+_直接策略 取 {'enabled':真}. # Source-only paired benchmark control; no application setting.
+_直库态 取 {'ready':假,'library':空}.
+_GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 (窗 其 PTR) ([(窗 其 PTR),(窗 其 PTR)]) 'win64').
+_GetCurrentThreadId 取 (窗 其 内核) 其 绑定 'GetCurrentThreadId' (密 其 签名 (窗 其 U) ([]) 'win64').
+_GetWindowThreadProcessId 取 (窗 其 用户) 其 绑定 'GetWindowThreadProcessId' (密 其 签名 (窗 其 U) ([(窗 其 PTR),(窗 其 PTR)]) 'win64').
+_GetParent 取 (窗 其 用户) 其 绑定 'GetParent' (密 其 签名 (窗 其 PTR) ([(窗 其 PTR)]) 'win64').
+_直路径 取 (窗 其 目录)+'Scintilla.dll'.
+_直路径存 取 密 其 UTF16 _直路径.
+_直预载 取 窗 其 结果 ((窗 其 LoadLibraryExW) 其 调用 [_直路径存,空,2304]).
+_直路径存 其 关闭.
+若 非 (_直预载 其 为空) 则
+    _直名 取 密 其 UTF8 'Scintilla_DirectFunction'.
+    _直出口 取 窗 其 结果 (_GetProcAddress 其 调用 [_直预载,_直名]).
+    _直名 其 关闭.
+    若 非 (_直出口 其 为空) 则
+        _直库 取 密 其 动态库 _直路径.
+        _DirectFunction 取 _直库 其 绑定 'Scintilla_DirectFunction' (密 其 签名 (窗 其 IP) ([(窗 其 PTR),(窗 其 U),(窗 其 UP),(窗 其 IP)]) 'win64').
+        _直库态 其 增 'library' _直库.
+        _直库态 其 增 'ready' 真.
+    然
+    窗 其 结果 ((窗 其 FreeLibrary) 其 调用 [_直预载]).
+然
 _IsWindow 取 (窗 其 用户) 其 绑定 'IsWindow' (密 其 签名 (窗 其 I) ([(窗 其 PTR)]) 'win64').
 _QueryPerformanceCounter 取 (窗 其 内核) 其 绑定 'QueryPerformanceCounter' (密 其 签名 (窗 其 I) ([(窗 其 PTR)]) 'win64').
 _QueryPerformanceFrequency 取 (窗 其 内核) 其 绑定 'QueryPerformanceFrequency' (密 其 签名 (窗 其 I) ([(窗 其 PTR)]) 'win64').
@@ -34,6 +58,12 @@ _时存 取 _计数型 其 新建. # UI-thread-only QPC call never invokes appli
 算 _存在 柄:
     得 非 ((窗 其 结果 (_IsWindow 其 调用 [柄])) 其 为空).
 法
+算 _同线程 柄:
+    # This Win32 query does not send to the HWND. Reject foreign owners before
+    # even GETDOCPOINTER/GETMODEVENTMASK, which use the ordinary message route.
+    线程 取 窗 其 结果 (_GetWindowThreadProcessId 其 调用 [柄,空]).
+    得 非 (线程 其 为空) 且 线程 其 句 == (窗 其 结果 (_GetCurrentThreadId 其 调用 [])) 其 句.
+法
 算 _放点 点们:
     位 取 0.
     循 点们 其 量 次
@@ -49,6 +79,7 @@ _时存 取 _计数型 其 新建. # UI-thread-only QPC call never invokes appli
 法
 算 _放态 态:
     若 态 == 空 则 得 空. 然
+    态 其 增 'direct' 空.
     词 其 释放 态['lexical'].
     态 其 增 'lexical' 空.
     _放点 态['points'].
@@ -59,6 +90,7 @@ _时存 取 _计数型 其 新建. # UI-thread-only QPC call never invokes appli
 算 _状态 柄:
     态 取 _编辑们 其 查 (柄 其 句).
     若 态 == 空 则 得 空. 然
+    若 非 (_同线程 柄) 且 (_存在 柄) 则 得 空. 然
     若 非 (_存在 柄) 则
         _放态 态.
         _编辑们 其 除 (柄 其 句).
@@ -150,7 +182,7 @@ _时存 取 _计数型 其 新建. # UI-thread-only QPC call never invokes appli
             _初始化失败 初 (原因 为 句).
         终
     然
-    态 取 {'document':(窗 其 发送 柄 2357 0 0) 其 句,'generation':_序号[0], 'revision':0,'language':'ru','warning':'','feed':0,'readEnd':0,'bytes':0,'lexical':初['lexical'],'points':初['points'],'pending':真,'inTick':假,'requested':0,'chunks':0,'readBytes':0,'restart':0,'maxRead':0,'maxTickMs':0,'maxChunkMs':0,'candidates':[],'candidateIndex':0,'delta':0,'lineDelta':0,'dirtyEnd':0,'reuseComplete':假,'reusedBytes':0,'editReadBytes':0,'converged':假}.
+    态 取 {'document':(窗 其 发送 柄 2357 0 0) 其 句,'direct':空,'generation':_序号[0], 'revision':0,'language':'ru','warning':'','feed':0,'readEnd':0,'bytes':0,'lexical':初['lexical'],'points':初['points'],'pending':真,'inTick':假,'requested':0,'chunks':0,'readBytes':0,'restart':0,'maxRead':0,'maxTickMs':0,'maxChunkMs':0,'candidates':[],'candidateIndex':0,'delta':0,'lineDelta':0,'dirtyEnd':0,'reuseComplete':假,'reusedBytes':0,'editReadBytes':0,'converged':假}.
     _编辑们 其 增 (柄 其 句) 态.
     若 初['lexical'] == 空 则
         态 其 增 'pending' 假.
@@ -167,6 +199,31 @@ _时存 取 _计数型 其 新建. # UI-thread-only QPC call never invokes appli
         位 取 位+1.
     环
     得 'ru'.
+法
+# Explicit caller capability: the application owns this parent, editor and
+# exclusive document. Generic, shared and unregistered fixtures stay on messages.
+# No opaque Scintilla pointer is stored in this capability or in any state.
+算 登记直属 柄 父:
+    若 非 _直库态['ready'] 或 非 (_同线程 柄) 或 非 (_同线程 父) 则 得 假. 然
+    若 (窗 其 结果 (_GetParent 其 调用 [柄])) 其 句 != 父 其 句 则 得 假. 然
+    态 取 _状态 柄.
+    若 态 == 空 或 态['language'] != 'ru' 或 态['inTick'] 则 得 假. 然
+    若 (窗 其 发送 柄 2378 0 0) 其 数 != 3 则 得 假. 然
+    态 其 增 'direct' {'parent':父,'thread':(窗 其 结果 (_GetCurrentThreadId 其 调用 [])) 其 句,'document':态['document'],'generation':态['generation']}.
+    得 真.
+法
+算 _直属合格 柄 态 长 为 数 代 为 数 修 为 数:
+    若 非 _直接策略['enabled'] 则 得 假. 然
+    权 取 态['direct'].
+    若 权 == 空 或 非 _直库态['ready'] 或 非 (_同线程 柄) 则 得 假. 然
+    若 权['thread'] != (窗 其 结果 (_GetCurrentThreadId 其 调用 [])) 其 句 或 非 (_同线程 权['parent']) 则 得 假. 然
+    若 (窗 其 结果 (_GetParent 其 调用 [柄])) 其 句 != (权['parent']) 其 句 则 得 假. 然
+    现 取 _编辑们 其 查 (柄 其 句).
+    若 现 == 空 或 现['generation'] != 代 或 现['revision'] != 修 或 现['language'] != 'ru' 或 权['generation'] != 代 或 权['document'] != 态['document'] 则 得 假. 然
+    若 (窗 其 发送 柄 2357 0 0) 其 句 != 权['document'] 或 (窗 其 发送 柄 2183 0 0) 其 数 != 长 或 (窗 其 发送 柄 2378 0 0) 其 数 != 3 则 得 假. 然
+    # Recheck after the last eligibility message, before obtaining the pointer.
+    现 取 _编辑们 其 查 (柄 其 句).
+    得 现 != 空 且 现['generation'] == 代 且 现['revision'] == 修 且 现['language'] == 'ru' 且 现['direct'] == 权.
 法
 算 _读块 柄 始 为 数 末 为 数:
     长 取 末-始.
@@ -268,7 +325,9 @@ _时存 取 _计数型 其 新建. # UI-thread-only QPC call never invokes appli
 算 _施样 柄 态 结果 长 为 数:
     # Validate the ENTIRE batch before the first style/fold mutation. No caller
     # can supply an arbitrary Scintilla message or an unchecked native pointer.
-    若 非 (_存在 柄) 或 (窗 其 发送 柄 2357 0 0) 其 句 != 态['document'] 或 (窗 其 发送 柄 2183 0 0) 其 数 != 长 则 卒 'The styling batch belongs to a stale document.'. 然
+    若 非 (_同线程 柄) 则 卒 'A styling batch must run on its HWND owner thread.'. 然
+    代 取 结果['batchGeneration'].
+    修 取 结果['batchRevision'].
     始 取 结果['styleStart'].
     色长 取 结果['styleLength'].
     色存 取 结果['styleBuffer'].
@@ -289,26 +348,73 @@ _时存 取 _计数型 其 新建. # UI-thread-only QPC call never invokes appli
         若 项[0] < 0 或 项[0] >= 行数 或 项[1] < 0 或 项[1] > 3071 则 卒 'The Ru scanner returned an invalid fold level.'. 然
         位 取 位+1.
     环
-    若 色长 > 0 则
-        窗 其 发送 柄 2032 始 0.
-        窗 其 发指 柄 2073 色长 色存. # SCI_SETSTYLINGEX copies synchronously.
-    另
-        窗 其 发送 柄 2032 结果['bytes'] 0.
+    若 非 (_存在 柄) 或 (窗 其 发送 柄 2357 0 0) 其 句 != 态['document'] 或 (窗 其 发送 柄 2183 0 0) 其 数 != 长 则 卒 'The styling batch belongs to a stale document.'. 然
+    现 取 _编辑们 其 查 (柄 其 句).
+    若 现 == 空 或 现['generation'] != 代 或 现['revision'] != 修 或 态['generation'] != 代 或 态['revision'] != 修 或 现['document'] != 态['document'] 或 现['language'] != 'ru' 则 卒 'The styling batch belongs to a stale generation or revision.'. 然
+    # All bounds and eligibility checks finish before the first style mutation.
+    # GETDIRECTPOINTER is the LAST message on the direct branch. This borrowed
+    # opaque PTR stays only in the non-pumping publication segment below.
+    直 取 空.
+    权 取 态['direct'].
+    若 _直属合格 柄 态 长 代 修 则
+        借 取 窗 其 发送 柄 2185 0 0.
+        若 非 (借 其 为空) 则 直 取 (窗 其 PTR) 其 重释 借. 然
+        借 取 空.
+        现 取 _编辑们 其 查 (柄 其 句).
+        若 现 == 空 或 现['generation'] != 代 或 现['revision'] != 修 或 现['document'] != 态['document'] 或 现['language'] != 'ru' 或 现['direct'] != 权 或 权 == 空 则
+            直 取 空.
+            卒 'The styling owner changed while obtaining direct access.'.
+        然
     然
-    # This owned container is the only style publisher; successful SETSTYLINGEX
-    # advances endStyled exactly by the validated length (pinned Document.cxx).
-    样末 取 结果['bytes'].
-    位 取 0.
-    循 段们 其 量 次
-        段 取 段们[位].
-        若 样末 != 段[0] 则 窗 其 发送 柄 2032 段[0] 0. 然
-        窗 其 发送 柄 2033 段[1] 段[2].
-        样末 取 段[0]+段[1].
-        位 取 位+1.
-    环
-    # Corrections may precede this batch. Never leave endStyled behind the
-    # validated contiguous prefix or mark an unanalysed suffix complete.
-    若 样末 < 结果['bytes'] 则 窗 其 发送 柄 2032 结果['bytes'] 0. 然
+    # Eligibility queries can themselves cross synchronous callback boundaries.
+    # Even an ineligible batch must not replay a stale result via SendMessage.
+    现 取 _编辑们 其 查 (柄 其 句).
+    若 现 == 空 或 现['generation'] != 代 或 现['revision'] != 修 或 现['document'] != 态['document'] 或 现['language'] != 'ru' 则
+        直 取 空.
+        卒 'The styling owner changed while checking direct eligibility.'.
+    然
+    若 直 != 空 则
+        若 色长 > 0 则
+            窗 其 结果 (_DirectFunction 其 调用 [直,2032,始,0]).
+            # The caller-owned native buffer remains rooted until return.
+            窗 其 结果 (_DirectFunction 其 调用 [直,2073,色长,((窗 其 IP) 其 重释 (色存 其 地址))]).
+        另
+            窗 其 结果 (_DirectFunction 其 调用 [直,2032,结果['bytes'],0]).
+        然
+        样末 取 结果['bytes'].
+        位 取 0.
+        循 段们 其 量 次
+            段 取 段们[位].
+            若 样末 != 段[0] 则 窗 其 结果 (_DirectFunction 其 调用 [直,2032,段[0],0]). 然
+            窗 其 结果 (_DirectFunction 其 调用 [直,2033,段[1],段[2]]).
+            样末 取 段[0]+段[1].
+            位 取 位+1.
+        环
+        若 样末 < 结果['bytes'] 则 窗 其 结果 (_DirectFunction 其 调用 [直,2032,结果['bytes'],0]). 然
+        # Drop before fold publication, status queries or any later callback.
+        直 取 空.
+    另
+        若 色长 > 0 则
+            窗 其 发送 柄 2032 始 0.
+            窗 其 发指 柄 2073 色长 色存. # SCI_SETSTYLINGEX copies synchronously.
+        另
+            窗 其 发送 柄 2032 结果['bytes'] 0.
+        然
+        # This owned container is the only style publisher; successful SETSTYLINGEX
+        # advances endStyled exactly by the validated length (pinned Document.cxx).
+        样末 取 结果['bytes'].
+        位 取 0.
+        循 段们 其 量 次
+            段 取 段们[位].
+            若 样末 != 段[0] 则 窗 其 发送 柄 2032 段[0] 0. 然
+            窗 其 发送 柄 2033 段[1] 段[2].
+            样末 取 段[0]+段[1].
+            位 取 位+1.
+        环
+        # Corrections may precede this batch. Never leave endStyled behind the
+        # validated contiguous prefix or mark an unanalysed suffix complete.
+        若 样末 < 结果['bytes'] 则 窗 其 发送 柄 2032 结果['bytes'] 0. 然
+    然
     位 取 0.
     循 折们 其 量 次
         项 取 折们[位].
@@ -323,6 +429,8 @@ _时存 取 _计数型 其 新建. # UI-thread-only QPC call never invokes appli
     得 空.
 法
 算 _一步 柄 态:
+    代 取 态['generation'].
+    修 取 态['revision'].
     长 取 (窗 其 发送 柄 2183 0 0) 其 数.
     始 取 态['feed'].
     若 始 > 长 则 卒 'The document changed without a styling invalidation.'. 然
@@ -354,6 +462,8 @@ _时存 取 _计数型 其 新建. # UI-thread-only QPC call never invokes appli
     结果 取 词 其 扫描 态['lexical'] 文 (态['readEnd'] == 长) 限.
     末 取 始+结果['consumed'].
     若 末 > 态['readEnd'] 或 结果['bytes'] > 末 或 (结果['done'] 且 (末 != 长 或 结果['bytes'] != 长)) 则 卒 'The Ru scanner returned an invalid feed/processed position.'. 然
+    结果 其 增 'batchGeneration' 代.
+    结果 其 增 'batchRevision' 修.
     _施样 柄 态 结果 长.
     态 其 增 'feed' 末.
     态 其 增 'bytes' 结果['bytes'].

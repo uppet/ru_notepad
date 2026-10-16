@@ -53,7 +53,8 @@ def success_summary():
     for item in runner.matrix():
         name = {'gui': 'main-gui-ru-syntax', 'cooperative_console': 'app_ru_timer_native',
                 'console_pipeline': 'ru_syntax_native'}[item['path']]
-        outcome = runner.public_outcome(copy.deepcopy(by_name[name]), item)
+        native = dict(copy.deepcopy(by_name[name]), seconds=42.125)
+        outcome = runner.public_outcome(native, item)
         if item['path'] == 'console_pipeline':
             outcome['sync_performance'] = by_name[name]['gui_sync_performance'].copy()
             outcome['assertions_passed'] = 6
@@ -76,11 +77,153 @@ def success_summary():
             'complete': True, 'passed': True, 'preflight_passed': True,
             'preflight': [{'instrumentation': level, 'passed': True, 'error_code': None,
                 'outcome': {'passed': True, 'executed': True, 'cleanup_killed': False, 'exit_code': 0,
-                            'error_code': None, 'assertions_passed': 1},
+                            'error_code': None, 'assertions_passed': 1,
+                            'elapsed_seconds': 0.125, 'elapsed_seconds_status': 'valid'},
                 'boundary_check': {'schema': 1, 'instrumentation': level, 'passed': True,
                                    'first_longjmp': 2, 'second_longjmp': 1, 'trap_oom': 1}} for level in runner.LEVELS],
             'counter_interval_excluded': ['file_open_before_first_batch',
             'initial_outer_callback_snapshot', 'refresh_after_last_batch'], 'product_acceptance': {'separate': True, 'status': 'not_claimed'}}
+
+
+class OutcomeElapsedTests(unittest.TestCase):
+    def test_acceptance_seconds_are_preserved_for_every_path(self):
+        summary = success_summary()
+        for row in summary['runs']:
+            with self.subTest(path=row['path']):
+                self.assertEqual(row['outcome']['elapsed_seconds'], 42.125)
+                self.assertEqual(row['outcome']['elapsed_seconds_status'], 'valid')
+                self.assertNotEqual(row['outcome']['elapsed_seconds'], runner.primary_wall(row) / 1000)
+        for flag in ({}, {'seconds_valid': True}):
+            for seconds in (0, 0.125, 99999.5):
+                source = dict(passed=True, executed=True, cleanup_killed=False, exit_code=0,
+                              seconds=seconds, elapsed_seconds=987654, **flag)
+                outcome = runner.public_outcome(source, {'path': 'preflight'})
+                self.assertEqual(outcome['elapsed_seconds'], seconds)
+                self.assertEqual(outcome['elapsed_seconds_status'], 'valid')
+                runner.validate_outcome_elapsed(outcome)
+
+    def test_missing_seconds_are_explicitly_unavailable_without_backfill(self):
+        for source in ({}, {'seconds': None}, {'elapsed_seconds': 55, 'wall_ms': 1000},
+                       {'last_good_seconds': 12}):
+            with self.subTest(source=source):
+                outcome = runner.public_outcome(dict(source, passed=False), {'path': 'console_pipeline'})
+                self.assertIsNone(outcome['elapsed_seconds'])
+                self.assertEqual(outcome['elapsed_seconds_status'], 'unavailable')
+                runner.validate_outcome_elapsed(outcome)
+
+    def test_invalid_clock_values_and_flags_cannot_keep_success(self):
+        invalid_sources = [{'seconds': value} for value in
+                           (-1, True, '2.5', float('nan'), float('inf'), float('-inf'))]
+        invalid_sources += [{'seconds': 1, 'seconds_valid': flag} for flag in (False, 0, 1, 'true', None)]
+        invalid_sources += [{'seconds': None, 'seconds_valid': False}, {'seconds_valid': True}]
+        for source in invalid_sources:
+            for path in ('preflight', 'console_pipeline', 'cooperative_console', 'gui'):
+                with self.subTest(source=source, path=path):
+                    outcome = runner.public_outcome(dict(source, passed=True, executed=True,
+                        cleanup_killed=True, exit_code=0, clock_error='private diagnostic'), {'path': path})
+                    self.assertFalse(outcome['passed'])
+                    self.assertTrue(outcome['executed'])
+                    self.assertTrue(outcome['cleanup_killed'])
+                    self.assertIsNone(outcome['elapsed_seconds'])
+                    self.assertEqual(outcome['elapsed_seconds_status'], 'invalid')
+                    self.assertEqual(outcome['error_code'], 'native_run_failed')
+                    self.assertNotIn('clock_error', outcome)
+                    runner.validate_outcome_elapsed(outcome)
+                    runner.check_public_tree(outcome)
+
+    def test_real_acceptance_final_clock_contract_is_mapped(self):
+        for final in (3.25, float('nan'), 0.5):
+            source = {'passed': True, 'executed': True, 'cleanup_killed': False}
+            with patch.object(runner.acceptance.time, 'perf_counter', side_effect=[1.0, final]):
+                clock = runner.acceptance.PerformanceClock()
+                started = clock()
+                runner.acceptance.finish_result_clock(source, clock, started)
+            outcome = runner.public_outcome(source, {'path': 'console_pipeline'})
+            if final == 3.25:
+                self.assertNotIn('seconds_valid', source)
+                self.assertEqual(outcome['elapsed_seconds'], 2.25)
+                self.assertEqual(outcome['elapsed_seconds_status'], 'valid')
+            else:
+                self.assertFalse(source['seconds_valid'])
+                self.assertFalse(outcome['passed'])
+                self.assertIsNone(outcome['elapsed_seconds'])
+                self.assertEqual(outcome['elapsed_seconds_status'], 'invalid')
+        source = {'passed': False, 'executed': False}
+        runner.acceptance.finish_result_clock(source, None, None)
+        outcome = runner.public_outcome(source, {'path': 'preflight'})
+        self.assertIsNone(outcome['elapsed_seconds'])
+        self.assertEqual(outcome['elapsed_seconds_status'], 'unavailable')
+
+    def test_new_complete_success_requires_valid_elapsed_for_preflight_and_matrix(self):
+        for group in ('preflight', 'runs'):
+            summary = success_summary()
+            outcome = summary[group][0]['outcome']
+            outcome.update(elapsed_seconds=None, elapsed_seconds_status='unavailable')
+            runner.validate_results_receipt(summary)  # Collectible missing data is not invented zero.
+            with self.assertRaisesRegex(runner.ProfileError, 'process_elapsed_unavailable_or_invalid'):
+                runner.verify_results(summary)
+            outcome.update(elapsed_seconds_status='invalid', passed=False, error_code='native_run_failed')
+            runner.validate_results_receipt(summary)
+            with self.assertRaises(runner.ProfileError):
+                runner.verify_results(summary)
+
+    def test_elapsed_receipt_states_are_closed_and_coherent(self):
+        for group in ('preflight', 'runs'):
+            for change in ('missing_value', 'missing_status', 'invalid_pass', 'unavailable_number',
+                           'valid_null', 'valid_nan', 'valid_bool', 'valid_negative', 'unknown_status'):
+                summary = success_summary()
+                outcome = summary[group][0]['outcome']
+                if change == 'missing_value':
+                    del outcome['elapsed_seconds']
+                elif change == 'missing_status':
+                    del outcome['elapsed_seconds_status']
+                elif change == 'invalid_pass':
+                    outcome.update(elapsed_seconds=None, elapsed_seconds_status='invalid')
+                elif change == 'unavailable_number':
+                    outcome['elapsed_seconds_status'] = 'unavailable'
+                elif change == 'unknown_status':
+                    outcome['elapsed_seconds_status'] = 'unknown'
+                else:
+                    outcome['elapsed_seconds'] = {'valid_null': None, 'valid_nan': float('nan'),
+                                                  'valid_bool': True, 'valid_negative': -1}[change]
+                with self.subTest(group=group, change=change), self.assertRaisesRegex(
+                        runner.ProfileError, 'outcome_elapsed_(missing|invalid)'):
+                    runner.validate_results_receipt(summary)
+
+    def test_whole_process_elapsed_does_not_change_styling_comparisons_or_thresholds(self):
+        summary = success_summary()
+        original = runner.verify_results(summary)
+        for row in summary['runs']:
+            row['outcome']['elapsed_seconds'] = 99999.5
+        self.assertEqual(runner.verify_results(summary), original)
+        summary['runs'][0]['outcome']['sync_performance']['wall_ms'] = 30001
+        with self.assertRaisesRegex(runner.ProfileError, 'invalid_primary_wall'):
+            runner.verify_results(summary)
+
+    def test_collection_keeps_failed_or_unavailable_elapsed_without_raw_clock_errors(self):
+        for source, status in (({}, 'unavailable'), ({'seconds': None, 'seconds_valid': False}, 'invalid')):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                work = root / 'build/profile'
+                work.mkdir(parents=True)
+                summary = success_summary()
+                summary.update(complete=False, passed=False)
+                summary['runs'] = summary['runs'][:1]
+                row = summary['runs'][0]
+                row.update(passed=False, profile=None, output_check=None, error_code='native_run_failed',
+                           outcome=runner.public_outcome(dict(source, passed=False, executed=True,
+                               clock_error='private diagnostic', last_good_seconds=3), row))
+                runner.save_json(work / 'results.json', summary)
+                with patch.object(runner, 'ROOT', root):
+                    runner.collect()
+                collected = root / 'build/ru-syntax-profile-evidence/results.json'
+                published = runner.read_json(collected)
+                outcome = published['runs'][0]['outcome']
+                self.assertEqual(outcome['elapsed_seconds_status'], status)
+                self.assertIsNone(outcome['elapsed_seconds'])
+                self.assertFalse(outcome['passed'])
+                self.assertFalse(published['passed'])
+                self.assertNotIn(b'private diagnostic', collected.read_bytes())
 
 
 class PlanTests(unittest.TestCase):
@@ -448,6 +591,9 @@ class OutputAndCollectionTests(unittest.TestCase):
             collection = runner.read_json(published / 'collection.json')
             self.assertFalse(collection['passed'])  # A missing preparation cannot grant success.
             self.assertEqual(collection['error_code'], 'profile_evidence_incomplete')
+            results = runner.read_json(published / 'results.json')
+            self.assertTrue(all(row['outcome']['elapsed_seconds'] == 42.125
+                                and row['outcome']['elapsed_seconds_status'] == 'valid' for row in results['runs']))
 
     def test_collect_retains_failed_zero_progress_receipt(self):
         with tempfile.TemporaryDirectory() as directory:

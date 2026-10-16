@@ -141,13 +141,17 @@ text/style bytes and fold levels against fresh scans after unequal-length edits
 and edits made while earlier work is pending. Passing a finite timing-value check alone is not a usability
 claim. The latest green run and independent original-artifact verification are identified above.
 
-## 0.1.5 bulk-transport candidate gates (pending)
+## 0.1.5 bulk-transport baseline (accepted)
 
 This independent candidate pins the reviewed Ru 0.21.6 toolchain for one owned-memory U32LE snapshot per existing event batch. It preserves the scanner DLL ABI, lexical/folding policy, corpus, scheduling limits, 30-second GUI deadline and all six edit measurements. The external-file-change/reload proposal is separate and is not implemented here.
 
 The native container suite adds 24 production bulk-decoder assertions, including exact equality to the previous decoder and malformed bounds/high bits/order. Its required count is **149**, with **1,451 total assertions / 32 results**. The Ubuntu helper job additionally requires **23 exact arithmetic/control-flow assertions per backend** using the unchanged production decoder with ordinary Ru snapshot stubs. These portable controls do not establish native-memory behavior or application performance. All original helper oracle and sanitizer gates remain required.
 
-The language API's Windows acceptance is recorded in [language CI 38951630488](https://github.com/uppet/ru-language/actions/runs/38951630488). This application's native run and same-corpus performance comparison remain pending. Local full-LSan execution is blocked by the traced environment and is retained as a failure, not counted as full helper acceptance. No 0.1.5 native pass or speedup is claimed.
+The language API's Windows acceptance is recorded in [language CI 38951630488](https://github.com/uppet/ru-language/actions/runs/38951630488). The [0.1.5 application run 38957923664](https://github.com/uppet/ru_notepad/actions/runs/38957923664) passed both jobs, all 1,451 native assertions / 32 results, both portable decoder controls and full ASan/UBSan/LSan. The original runtime/tests packages passed independent verification. Its exact 1 MB GUI completion was 16.65236 seconds; six edit completions were 1.472–3.307 seconds. This single-run comparison does not establish a clear end-to-end speedup. Earlier local full-LSan execution failed in the traced environment; that local failure is not counted as acceptance.
+
+## 0.1.6 direct-publication candidate (pending)
+
+The candidate changes only the eligible three-message style-publication route. See [ownership and fallback constraints](direct-style-publication.md). All prior 1,451 native assertions remain required. The new 36-assertion direct-versus-message equivalence and lifecycle suite brings the required total to **1,487 assertions / 33 results**; these are pending real Windows execution. A separate same-run, interleaved eight-row comparison covers cooperative and detached GUI paths with the same corpus, completion deadline, six edit cases, input/paint probes and normal closure. Valid timing evidence may show no benefit; a passed correctness gate is not itself a performance claim. The completed twenty-row baseline study stays available as a historical, pinned reproduction rather than accepting changed production inputs.
 
 ## Packaging
 

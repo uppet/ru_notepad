@@ -1,6 +1,6 @@
 # Ru highlighting and structural folding
 
-`ru_notepad` 0.1.5 preserves a source-derived Ru lexical and folding policy in `src/ru_lexical.ru`, with a bounded application-internal C scanning hot path in `native/ru_scan.c` (`RuSyntax.dll`). The independent pure-Ru scanner remains the test oracle. Scintilla owns document/style storage; Ru supplies the exact keyword/style table and owns all structural pairing and fold decisions. This is not a renamed C, Python, or generic Chinese-keyword lexer. Ru highlighting does not depend on the optional Lexilla DLL used for C/C++ and JSON.
+`ru_notepad` 0.1.6 preserves a source-derived Ru lexical and folding policy in `src/ru_lexical.ru`, with a bounded application-internal C scanning hot path in `native/ru_scan.c` (`RuSyntax.dll`). The independent pure-Ru scanner remains the test oracle. Scintilla owns document/style storage; Ru supplies the exact keyword/style table and owns all structural pairing and fold decisions. This is not a renamed C, Python, or generic Chinese-keyword lexer. Ru highlighting does not depend on the optional Lexilla DLL used for C/C++ and JSON.
 
 ## Language baseline
 

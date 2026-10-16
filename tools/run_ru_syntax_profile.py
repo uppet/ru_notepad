@@ -617,13 +617,23 @@ def public_outcome(result, row):
     out = {'passed': result.get('passed') is True, 'executed': result.get('executed') is True,
            'cleanup_killed': result.get('cleanup_killed') is True,
            'exit_code': result.get('exit_code'), 'error_code': None if result.get('passed') else 'native_run_failed'}
-    for key in ('main_hwnd_seen', 'close_posted', 'detached_from_console', 'assertions_passed', 'elapsed_seconds'):
+    # Acceptance measures its complete process-run interval in seconds, including
+    # setup/verification/close inside that interval; styling wall/work/gap remain separate.
+    seconds = result.get('seconds')
+    flag = result.get('seconds_valid')
+    invalid = (('seconds_valid' in result and type(flag) is not bool) or flag is False
+               or (seconds is not None and not number(seconds)) or (flag is True and seconds is None))
+    out['elapsed_seconds'] = seconds if not invalid and number(seconds) else None
+    out['elapsed_seconds_status'] = 'invalid' if invalid else 'valid' if number(seconds) else 'unavailable'
+    if invalid:
+        out.update(passed=False, error_code='native_run_failed')
+    for key in ('main_hwnd_seen', 'close_posted', 'detached_from_console', 'assertions_passed'):
         if key in result and (type(result[key]) is bool or number(result[key])):
             out[key] = result[key]
     if row['path'] == 'cooperative_console' and 'timer_performance' in result:
         acceptance.validate_ru_gui_measurement(result['timer_performance'], 'RU_GUI_TIMER', require_complete=False)
         out['timer_performance'] = result['timer_performance']
-    if row['path'] == 'gui' and result.get('passed'):
+    if row['path'] == 'gui' and out['passed']:
         acceptance.validate_gui_ru_timer(result['timer_performance'], require_windows_clock=True)
         # This validated record contains only predefined synthetic probe data.
         timer = dict(result['timer_performance'])
@@ -631,12 +641,22 @@ def public_outcome(result, row):
         timer['last_probe']['status'] = 'verified_complete_nonempty_status'
         out['timer_performance'] = timer
         out['full_gui_checks'] = {key: result.get(key) is True for key in acceptance.GUI_RU_CHECKS}
-    if row['path'] == 'gui' and not result.get('passed'):
+    if row['path'] == 'gui' and not out['passed']:
         timer = result.get('timer_performance') or {}
         out['partial_timer_performance'] = {key: timer[key] for key in
             ('size', 'wall_ms', 'first_head_style_ms', 'max_response_ms', 'probes')
             if key in timer and number(timer[key])}
     return out
+
+
+def validate_outcome_elapsed(outcome):
+    """Missing measurements and invalid clocks are distinct, closed public states."""
+    require({'elapsed_seconds', 'elapsed_seconds_status'} <= set(outcome), 'outcome_elapsed_missing')
+    value, status = outcome['elapsed_seconds'], outcome['elapsed_seconds_status']
+    require((status == 'valid' and number(value))
+            or (status == 'unavailable' and value is None)
+            or (status == 'invalid' and value is None and outcome.get('passed') is False
+                and outcome.get('error_code') == 'native_run_failed'), 'outcome_elapsed_invalid')
 
 
 def stage_run_binaries(build, source, destination):
@@ -688,6 +708,7 @@ def run_matrix():
             record['outcome'] = public_outcome(result, {'path': 'preflight'})
             record['boundary_check'] = preflight_check_from_logs(sorted(logs.glob('*.log')), level)
             require(result.get('passed') is True and not result.get('cleanup_killed'), 'preflight_native_failed')
+            require(record['outcome']['elapsed_seconds_status'] == 'valid', 'process_elapsed_unavailable_or_invalid')
             validate_preflight_check(record['boundary_check'], level)
             record['passed'] = True
         except Exception as exc:
@@ -732,6 +753,7 @@ def run_matrix():
                 stdout = (logs / 'profile_pipeline.stdout.log').read_text(encoding='utf-8')
                 record['outcome']['sync_performance'] = acceptance.parse_ru_gui_measurement(stdout, 'RU_GUI_SYNC')
             require(result.get('passed') is True and not result.get('cleanup_killed'), 'native_run_failed')
+            require(record['outcome']['elapsed_seconds_status'] == 'valid', 'process_elapsed_unavailable_or_invalid')
             record['passed'] = True
         except Exception as exc:
             record['error_code'] = str(exc) if isinstance(exc, ProfileError) else 'run_or_validation_failed'
@@ -851,6 +873,7 @@ def verify_results(summary):
         outcome = result['outcome'] or {}
         require(outcome.get('passed') is True and outcome.get('executed') is True and outcome.get('exit_code') == 0
                 and not outcome.get('cleanup_killed') and outcome.get('assertions_passed') == 1, 'native_preflight_failed')
+        require(outcome['elapsed_seconds_status'] == 'valid', 'process_elapsed_unavailable_or_invalid')
     runs = summary.get('runs')
     require(type(runs) is list and len(runs) == 20 and summary.get('complete') is True, 'matrix_incomplete')
     for expected, actual in zip(matrix(), runs):
@@ -861,6 +884,7 @@ def verify_results(summary):
         require(outcome.get('passed') is True and outcome.get('executed') is True and not outcome.get('cleanup_killed')
                 and outcome.get('exit_code') == 0,
                 'matrix_native_outcome_invalid')
+        require(outcome['elapsed_seconds_status'] == 'valid', 'process_elapsed_unavailable_or_invalid')
         if actual['path'] == 'gui':
             require(all(outcome.get(key) is True for key in ('main_hwnd_seen', 'close_posted', 'detached_from_console')),
                     'gui_normal_close_unproven')
@@ -1078,13 +1102,15 @@ def validate_results_receipt(summary):
             validate_preflight_check(result['boundary_check'], level, require_success=False)
         if result['outcome'] is not None:
             outcome = result['outcome']
-            require(set(outcome) <= {'passed', 'executed', 'cleanup_killed', 'exit_code', 'error_code', 'assertions_passed', 'elapsed_seconds'},
+            require(set(outcome) <= {'passed', 'executed', 'cleanup_killed', 'exit_code', 'error_code', 'assertions_passed',
+                                     'elapsed_seconds', 'elapsed_seconds_status'},
                     'preflight_outcome_shape_mismatch')
             require(all(type(outcome.get(key)) is bool for key in ('passed', 'executed', 'cleanup_killed'))
                     and (outcome.get('exit_code') is None or type(outcome['exit_code']) is int)
                     and outcome.get('error_code') in (None, 'native_run_failed')
-                    and all(number(outcome[key]) for key in ('assertions_passed', 'elapsed_seconds') if key in outcome),
+                    and all(number(outcome[key]) for key in ('assertions_passed',) if key in outcome),
                     'preflight_outcome_invalid')
+            validate_outcome_elapsed(outcome)
     require(type(summary['runs']) is list and len(summary['runs']) <= 20, 'result_rows_invalid')
     for expected, row in zip(matrix(), summary['runs']):
         base = set(expected) | {'passed', 'error_code', 'profile', 'outcome', 'output_check'}
@@ -1102,13 +1128,15 @@ def validate_results_receipt(summary):
         if row['outcome'] is not None:
             outcome = row['outcome']
             base_outcome = {'passed', 'executed', 'cleanup_killed', 'exit_code', 'error_code'}
-            optional = {'main_hwnd_seen', 'close_posted', 'detached_from_console', 'assertions_passed', 'elapsed_seconds',
+            optional = {'main_hwnd_seen', 'close_posted', 'detached_from_console', 'assertions_passed',
+                        'elapsed_seconds', 'elapsed_seconds_status',
                         'timer_performance', 'sync_performance', 'partial_timer_performance', 'full_gui_checks'}
             require(base_outcome <= set(outcome) <= base_outcome | optional, 'outcome_shape_mismatch')
             require(all(type(outcome[key]) is bool for key in ('passed', 'executed', 'cleanup_killed'))
                     and (outcome['exit_code'] is None or type(outcome['exit_code']) is int)
                     and outcome['error_code'] in (None, 'native_run_failed'), 'outcome_values_invalid')
-            for key in ('assertions_passed', 'elapsed_seconds'):
+            validate_outcome_elapsed(outcome)
+            for key in ('assertions_passed',):
                 if key in outcome:
                     require(number(outcome[key]), 'outcome_number_invalid')
             for key in ('main_hwnd_seen', 'close_posted', 'detached_from_console'):

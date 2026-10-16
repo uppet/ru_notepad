@@ -1,4 +1,4 @@
-# Syntax highlighting in 0.1.5 preview
+# Syntax highlighting in 0.1.6 preview
 
 ## Supported languages
 
@@ -260,9 +260,10 @@ they do not scan or read document text. Diagnostic collection cannot turn a
 post-deadline completion into a pass. The gate also measures representative
 100 KB real insertion/Backspace at
 the beginning, middle and end. These are required
-Windows gates for the 0.1.5 candidate, with 1,451 required assertions across
-32 results. Native acceptance and performance gain remain pending; a local
-compile or a green language API run is not evidence that they passed.
+Windows gates. The 0.1.5 baseline passed 1,451 assertions across 32 results;
+the 0.1.6 direct-publication candidate requires its own complete run and added
+route/lifecycle coverage. Native acceptance and performance gain for this
+candidate remain pending. See [the direct-publication contract](direct-style-publication.md).
 
 Physical mouse interaction, non-US keyboard layouts and IME composition still
 need manual acceptance. Keyboard shortcuts use Windows virtual-key positions;

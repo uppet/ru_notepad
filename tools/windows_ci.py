@@ -54,6 +54,7 @@ NATIVE_CONSOLE_TESTS = (
     ('app_ru_timer_native', r'^TOTAL PASS: 8\s*$'),
     ('ru_lexical_policy', r'^TOTAL PASS: 338\s*$'),
     ('ru_syntax_native', r'^TOTAL PASS: 149\s*$'),
+    ('ru_direct_styling_native', r'^TOTAL PASS: 36\s*$'),
 )
 SYNTAX_FALLBACK_TESTS = (
     ('syntax_missing_lexilla', '--expect-missing', False),
@@ -78,7 +79,7 @@ FIXTURE_ARGUMENT_TESTS = {'file_codec_tests', 'file_streaming_native', 'app_stre
 CONSOLE_TIMEOUT_SECONDS = {'file_streaming_native': 300, 'app_streaming_native': 180,
                            'editor_streaming_native': 300,
                            'editor_largefile_native': 900, 'app_ru_native': 180,
-                           'app_ru_timer_native': 60}
+                           'app_ru_timer_native': 60, 'ru_direct_styling_native': 120}
 LARGE_FILE_MIN_FREE_BYTES = 2 * 1024 * 1024 * 1024
 GUI_FILE_CHECKS = ('cli_unicode_paths', 'cli_exact_text', 'drop_unicode_paths',
                    'drop_exact_text', 'child_drop_routed', 'busy_observed', 'busy_responsive',

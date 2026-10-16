@@ -36,6 +36,9 @@ if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo ru_syntax_native.exe: real Scintilla Ru styles, edits, folding, margin callbacks and bounded performance probes.
 ru_syntax_native.exe >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo ru_direct_styling_native.exe: guarded direct-style routing, complete output equivalence, thread and document lifetime rejection, undo and fallback.
+ru_direct_styling_native.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo app_ru_native.exe: actual Ru menu routing, folding, tab isolation, bounded cooperative scheduling, capped numeric diagnostics and unchanged document state.
 app_ru_native.exe "%TESTDIR%" >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"
