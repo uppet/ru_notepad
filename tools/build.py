@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCINTILLA_SHA256 = DEPENDENCIES['Scintilla.dll']['sha256']
 LEXILLA_SHA256 = DEPENDENCIES['Lexilla.dll']['sha256']
-BASELINE_TREE = '3a9972dfd17fd570ef992ecffd9b5bccec1cc88d'
+BASELINE_TREE = '346d9f3f19c64f50f25b9f47ce92df1ea804bdb8'
 
 def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def run(args, **kw):
@@ -16,6 +16,12 @@ def run(args, **kw):
     subprocess.run(list(map(str,args)), check=True, **kw)
 def git(root, *args):
     return subprocess.check_output(['git','-C',str(root),*args],text=True).strip()
+
+def source_snapshot():
+    # Imported test helpers are build inputs too. Every executable is tied to
+    # one common source/test snapshot, including helpers without an entry point.
+    return {p.relative_to(ROOT).as_posix(): sha(p)
+            for folder in ('src', 'tests') for p in sorted((ROOT / folder).glob('*.ru'))}
 
 def main():
     ap=argparse.ArgumentParser()
@@ -66,7 +72,7 @@ def main():
     from rulang.modules import load_module_graph
     from rulang.compiler import Compiler
     source=args.source.resolve()
-    snapshot={p.relative_to(ROOT).as_posix():sha(p) for p in sorted((ROOT/'src').glob('*.ru'))}
+    snapshot=source_snapshot()
     build_inputs={} if args.console else {rel:sha(ROOT/rel) for rel in ['packaging/diagnostic_launcher.c','packaging/app.rc','packaging/app.manifest','assets/app-icon.ico','VERSION']}
     entry_sha=sha(source)
     text=source.read_text(encoding='utf-8-sig')
@@ -91,7 +97,7 @@ def main():
     run(cmd,timeout=600)
     if build_inputs != {rel:sha(ROOT/rel) for rel in build_inputs}:
         raise SystemExit('Launcher/resource inputs changed during build; no receipt published.')
-    if snapshot != {p.relative_to(ROOT).as_posix():sha(p) for p in sorted((ROOT/'src').glob('*.ru'))} or entry_sha != sha(source):
+    if snapshot != source_snapshot() or entry_sha != sha(source):
         raise SystemExit('Source changed during build; no verified receipt will be published. Rebuild from a stable snapshot.')
     shutil.copy2(ROOT/'vendor/scintilla/bin/Scintilla.dll',args.output.parent/'Scintilla.dll')
     shutil.copy2(ROOT/'vendor/lexilla/bin/lexilla.dll',args.output.parent/'Lexilla.dll')

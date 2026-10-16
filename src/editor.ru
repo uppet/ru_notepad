@@ -2,10 +2,14 @@
 # This Ru module owns editor policy and search/replace command behavior.
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
+_范围型 取 密 其 结构 [['start',窗 其 IP],['end',窗 其 IP],['text',窗 其 PTR]].
+_块长 取 65536.
+大文件模式字节 取 32000000.
 
 算 创建 父, 实例, 号:
     柄 取 窗 其 控制 父 实例 'Scintilla' '' 1073807360 号.
     试
+        _新文档 柄 假.
         窗 其 发送 柄 2037 65001 0. # SCI_SETCODEPAGE UTF-8
         窗 其 发文 柄 2056 32 'Consolas'.
         窗 其 发送 柄 2055 32 11.
@@ -33,62 +37,193 @@
     若 码 != 0 则 卒 ('Scintilla reported an editor error ('+(码 为 句)+'). Your document is still open.'). 然
     得 空.
 法
-算 验文本 文 为 句:
-    若 (文 其 量) > 4194304 则 卒 'This preview supports at most 4 MiB of UTF-8 text per document.'. 然
-    存 取 密 其 UTF8 文.
-    大小 取 存 其 大小.
-    存 其 关闭.
-    若 大小 > 4194305 则 卒 'This file expands beyond the 4 MiB UTF-8 editor limit. No tab was opened.'. 然
+算 _新文档 柄 大文件 为 事实:
+    选项 取 256. # SC_DOCUMENTOPTION_TEXT_LARGE: 64-bit text positions.
+    若 大文件 则 选项 取 257. 然 # additionally STYLES_NONE
+    窗 其 发送 柄 2382 0 0.
+    文档 取 窗 其 发送 柄 2375 0 选项.
+    若 文档 其 为空 则 卒 'Not enough memory to create an editor document.'. 然
+    试
+        窗 其 发送 柄 2358 0 文档.
+        检查状态 柄.
+        若 (窗 其 发送 柄 2357 0 0) 其 句 != 文档 其 句 则 卒 'The editor could not attach the pending document.'. 然
+    救 原因
+        窗 其 发送 柄 2377 0 文档.
+        卒 原因.
+    终
+    # CREATEDOCUMENT grants one ref; SETDOCPOINTER grants the window another.
+    窗 其 发送 柄 2377 0 文档.
+    窗 其 发送 柄 2037 65001 0.
     得 空.
 法
-算 文本 柄:
-    长 取 (窗 其 发送 柄 2183 0 0) 其 数.
-    若 长 > 4194304 则 卒 'This preview supports at most 4 MiB of UTF-8 text per document.'. 然
-    存 取 密 其 缓冲 (长+1).
-    # Clear status before a checked operation; never mark an errored buffer clean.
+
+算 开始载入 柄 大小 为 数:
+    _新文档 柄 (大小 >= 大文件模式字节).
+    窗 其 发送 柄 2160 0 0.
+    窗 其 发送 柄 2012 0 0. # no undo copies for the uncommitted hidden document
     窗 其 发送 柄 2382 0 0.
-    实长 取 (窗 其 发指 柄 2182 (长+1) 存) 其 数.
-    若 实长 != 长 则
-        存 其 关闭.
-        卒 'The editor returned incomplete text. Nothing was saved.'.
-    然
-    零长 取 (窗 其 结果 ((窗 其 lstrlenA) 其 调用 [存])) 其 数.
-    若 零长 != 长 则
-        存 其 关闭.
-        卒 'This document contains NUL bytes. Saving would lose text, so it was cancelled.'.
-    然
-    若 长 > 0 则
-        验 取 窗 其 结果 ((窗 其 MultiByteToWideChar) 其 调用 [65001,8,存,长,空,0]).
-        若 验 其 为空 则
-            存 其 关闭.
-            卒 'This document contains invalid UTF-8. Nothing was saved.'.
+    得 {'editor':柄,'bytes':0,'crlf':假,'lf':假,'cr':假,'tailCR':假,'done':假}.
+法
+
+算 _范围文本 柄 始 为 数 末 为 数:
+    长 取 末-始.
+    若 长 < 0 或 长 > _块长*4 则 卒 'Invalid bounded editor text range.'. 然
+    存 取 密 其 缓冲 (长+1).
+    范围 取 _范围型 其 新建.
+    试
+        范围 其 写 'start' 始.
+        范围 其 写 'end' 末.
+        范围 其 写 'text' (存 其 地址).
+        窗 其 发送 柄 2382 0 0.
+        实长 取 (窗 其 发指 柄 2039 0 范围) 其 数.
+        若 实长 != 长 则 卒 'The editor returned incomplete text. Nothing was saved.'. 然
+        检查状态 柄.
+        零长 取 (窗 其 结果 ((窗 其 lstrlenA) 其 调用 [存])) 其 数.
+        若 零长 != 长 则 卒 'This document contains NUL bytes. Saving would lose text, so it was cancelled.'. 然
+        若 长 > 0 则
+            验 取 窗 其 结果 ((窗 其 MultiByteToWideChar) 其 调用 [65001,8,存,长,空,0]).
+            若 验 其 为空 则 卒 'This document contains invalid UTF-8. Nothing was saved.'. 然
         然
-    然
-    文 取 存 其 解UTF8.
+        文 取 存 其 解UTF8.
+    救 原因
+        范围 其 关闭.
+        存 其 关闭.
+        卒 原因.
+    终
+    范围 其 关闭.
     存 其 关闭.
-    检查状态 柄.
     得 文.
 法
-算 设文本 柄, 文 为 句:
-    验文本 文.
+
+算 追加文本 流态 文 为 句:
+    若 流态['done'] 则 卒 'The pending document is already complete.'. 然
+    若 文 其 量 > _块长 则 卒 'An editor load chunk exceeds the bounded streaming contract.'. 然
+    若 文 == '' 则 得 空. 然
+    柄 取 流态['editor'].
+    旧长 取 流态['bytes'].
+    若 (窗 其 发送 柄 2183 0 0) 其 数 != 旧长 则 卒 'The pending document changed during loading.'. 然
     存 取 密 其 UTF8 文.
     长 取 (存 其 大小)-1.
-    窗 其 发送 柄 2382 0 0.
-    窗 其 发指 柄 2181 0 存.
+    试
+        窗 其 发送 柄 2382 0 0.
+        窗 其 发指 柄 2001 长 存.
+        检查状态 柄.
+    救 原因
+        存 其 关闭.
+        卒 原因.
+    终
     存 其 关闭.
+    若 (窗 其 发送 柄 2183 0 0) 其 数 != 旧长+长 则 卒 'The editor could not load the complete document.'. 然
+    若 (_范围文本 柄 旧长 (旧长+长)) != 文 则 卒 'The editor content did not match the opened file.'. 然
+    流态 其 增 'bytes' (旧长+长).
+    若 (文 其 含 '\r\n') 或 (流态['tailCR'] 且 文[0] == '\n') 则 流态 其 增 'crlf' 真. 然
+    若 文 其 含 '\n' 则 流态 其 增 'lf' 真. 然
+    若 文 其 含 '\r' 则 流态 其 增 'cr' 真. 然
+    流态 其 增 'tailCR' (文[文 其 量-1] == '\r').
+    得 空.
+法
+
+算 完成载入 流态:
+    若 流态['done'] 则 得 流态. 然
+    柄 取 流态['editor'].
     检查状态 柄.
-    若 ((窗 其 发送 柄 2183 0 0) 其 数) != 长 则 卒 'The editor could not load the complete document.'. 然
-    若 (文本 柄) != 文 则 卒 'The editor content did not match the opened file.'. 然
-    # Preserve detected line-ending family for newly inserted lines.
+    若 (窗 其 发送 柄 2183 0 0) 其 数 != 流态['bytes'] 则 卒 'The pending document changed before commit.'. 然
     模式 取 0.
-    若 非 (文 其 含 '\r\n') 则
-        若 文 其 含 '\n' 则 模式 取 2. 另
-            若 文 其 含 '\r' 则 模式 取 1. 然
+    若 非 流态['crlf'] 则
+        若 流态['lf'] 则 模式 取 2. 另
+            若 流态['cr'] 则 模式 取 1. 然
         然
     然
     窗 其 发送 柄 2031 模式 0.
     窗 其 发送 柄 2175 0 0.
+    窗 其 发送 柄 2012 1 0.
     窗 其 发送 柄 2014 0 0.
+    窗 其 发送 柄 2160 0 0.
+    检查状态 柄.
+    流态 其 增 'done' 真.
+    得 流态.
+法
+
+算 开始取文 柄:
+    检查状态 柄.
+    得 {'editor':柄,'bytes':(窗 其 发送 柄 2183 0 0) 其 数,'position':0,'document':(窗 其 发送 柄 2357 0 0) 其 句,'done':假}.
+法
+
+算 取文一步 流态:
+    若 流态['done'] 则 得 空. 然
+    柄 取 流态['editor'].
+    长 取 流态['bytes'].
+    若 (窗 其 发送 柄 2183 0 0) 其 数 != 长 或 (窗 其 发送 柄 2357 0 0) 其 句 != 流态['document'] 则 卒 'The document changed during saving. Nothing was replaced.'. 然
+    始 取 流态['position'].
+    若 始 == 长 则 流态 其 增 'done' 真. 得 空. 然
+    末 取 始+_块长.
+    若 末 >= 长 则
+        末 取 长.
+    另
+        # PositionBefore(end+1) rounds down at a UTF-8/CRLF boundary.
+        末 取 (窗 其 发送 柄 2417 (末+1) 0) 其 数.
+    然
+    若 末 <= 始 或 末-始 > _块长 则 卒 'The editor returned an invalid text boundary.'. 然
+    文 取 _范围文本 柄 始 末.
+    流态 其 增 'position' 末.
+    得 文.
+法
+
+算 流文本 柄:
+    流态 取 开始取文 柄.
+    得 算: 得 取文一步 流态. 法.
+法
+
+算 验文本 文 为 句:
+    位 取 0.
+    循
+        若 位 >= 文 其 量 则 破. 然
+        末 取 位+_块长.
+        若 末 > 文 其 量 则 末 取 文 其 量. 然
+        存 取 密 其 UTF8 文[位:末].
+        存 其 关闭.
+        位 取 末.
+    环
+    得 空.
+法
+
+算 文本 柄:
+    # Explicit SMALL compatibility API, never the production document save path.
+    若 (窗 其 发送 柄 2183 0 0) 其 数 > 1048576 则 卒 'Whole-string text extraction is only for small callers; use the bounded editor cursor.'. 然
+    流态 取 开始取文 柄.
+    文 取 ''.
+    循
+        段 取 取文一步 流态.
+        若 段 == 空 则 破. 然
+        文 取 文+段.
+    环
+    得 文.
+法
+
+算 设文本 柄 文 为 句:
+    # Compatibility setter preserves this document's lexer and configuration.
+    # Production opening uses a distinct hidden document via 开始载入 instead.
+    验文本 文.
+    窗 其 发送 柄 2382 0 0.
+    窗 其 发送 柄 2012 0 0.
+    流态 取 {'editor':柄,'bytes':0,'crlf':假,'lf':假,'cr':假,'tailCR':假,'done':假}.
+    试
+        窗 其 发送 柄 2004 0 0.
+        检查状态 柄.
+        窗 其 发送 柄 2160 0 0.
+        位 取 0.
+        循
+            若 位 >= 文 其 量 则 破. 然
+            末 取 位+_块长.
+            若 末 > 文 其 量 则 末 取 文 其 量. 然
+            追加文本 流态 文[位:末].
+            位 取 末.
+        环
+        完成载入 流态.
+    救 原因
+        窗 其 发送 柄 2012 1 0.
+        卒 原因.
+    终
     得 空.
 法
 算 已变 柄:
@@ -144,22 +279,7 @@
 算 全换 柄, 词 为 句, 新文 为 句, 区分 为 事实:
     若 词 == '' 则 卒 'Enter text to find.'. 然
     存 取 密 其 UTF8 新文.
-    # Preflight growth before opening an undo group or modifying the buffer.
-    原长 取 (窗 其 发送 柄 2183 0 0) 其 数.
-    预长 取 原长.
-    扫位 取 0.
-    循
-        位 取 搜区 柄 词 扫位 原长 区分.
-        若 位 == -1 则 破. 然
-        末 取 (窗 其 发送 柄 2193 0 0) 其 数.
-        预长 取 预长+(存 其 大小)-1-(末-位).
-        若 预长 > 4194304 则
-            存 其 关闭.
-            卒 'Replacement would exceed the 4 MiB save limit. No text was changed.'.
-        然
-        扫位 取 末.
-        若 扫位 >= 原长 则 破. 然
-    环
+    # Native allocation errors remain checked; there is no document-size cap.
     次数 取 0.
     始 取 0.
     窗 其 发送 柄 2078 0 0.

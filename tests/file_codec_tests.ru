@@ -128,10 +128,9 @@ SetEnd 取 系统 其 绑定 'SetEndOfFile' (密 其 签名 I32 ([PTR]) 'win64')
     根 取 外参[0] + '\\ru-codec-test-'.
     路径 取 根 + '内容-😀.txt'.
     原样 取 根 + 'raw.bin'.
-    边界 取 根 + 'boundary.txt'.
     锁定路径 取 根 + 'locked.txt'.
     链接路径 取 根 + 'hardlink.txt'.
-    文件们 取 [路径,原样,边界,锁定路径].
+    文件们 取 [路径,原样,锁定路径].
     试
         编码往返 路径 'A中😀\r\n' 65001 假 ([65,228,184,173,240,159,152,128,13,10]).
         编码往返 路径 'A中😀\r\n' 65001 真 ([239,187,191,65,228,184,173,240,159,152,128,13,10]).
@@ -192,20 +191,8 @@ SetEnd 取 系统 其 绑定 'SetEndOfFile' (密 其 签名 I32 ([PTR]) 'win64')
         应失败 (算: 得 文件库 其 读文件 '' 0. 法) 'empty path is recoverable'.
         应失败 (算: 得 文件库 其 读文件 'x' 7. 法) 'unsupported codepage is recoverable'.
         应失败 (算: 得 文件库 其 读文件 (路径 + ':stream') 0. 法) 'reject alternate data streams'.
-        大文 取 'a'.
-        循 22 次 大文 取 大文 + 大文. 环
-        戳 取 文件库 其 写文件 边界 大文 65001 假 ''.
-        文档 取 文件库 其 读文件 边界 0.
-        断言 (文档['text'] == 大文 且 文档['stamp'] == 戳) 'exact 4 MiB ASCII boundary'.
-        应失败 (算: 得 文件库 其 写文件 边界 大文 65001 真 戳. 法) 'BOM counts toward 4 MiB save cap'.
-        应失败 (算: 得 文件库 其 写文件 边界 (大文 + 'a') 65001 假 戳. 法) 'reject save over 4 MiB'.
-        句柄 取 打开 边界 1073741824 3.
-        成果 取 SetPointer 其 调用 [句柄,4194305,空,0].
-        必须成功 成果 'fixture seek'.
-        成果 取 SetEnd 其 调用 [句柄].
-        Close 其 调用 [句柄].
-        必须成功 成果 'fixture extend'.
-        应失败 (算: 得 文件库 其 读文件 边界 0. 法) 'reject read over 4 MiB'.
+        # Large-file coverage lives in file_streaming_native.ru: bounded producers,
+        # real >4MiB / >16MiB byte checks, and pre-read >500MB confirmation.
         文件库 其 写文件 锁定路径 'locked' 65001 假 ''.
         句柄 取 打开 锁定路径 1073741824 3.
         应失败 (算: 得 文件库 其 读文件 锁定路径 0. 法) 'reject concurrently open writer'.

@@ -30,6 +30,8 @@ UpdateWindow 取 用户 其 绑定 'UpdateWindow' (密 其 签名 I ([PTR]) 'win
 GetMessageW 取 用户 其 绑定 'GetMessageW' (密 其 签名 I ([PTR,PTR,U,U]) 'win64').
 TranslateMessage 取 用户 其 绑定 'TranslateMessage' (密 其 签名 I ([PTR]) 'win64').
 DispatchMessageW 取 用户 其 绑定 'DispatchMessageW' (密 其 签名 IP ([PTR]) 'win64').
+EnableWindow 取 用户 其 绑定 'EnableWindow' (密 其 签名 I ([PTR,I]) 'win64').
+PeekMessageW 取 用户 其 绑定 'PeekMessageW' (密 其 签名 I ([PTR,PTR,U,U,U]) 'win64').
 PostQuitMessage 取 用户 其 绑定 'PostQuitMessage' (密 其 签名 V ([I]) 'win64').
 DestroyWindow 取 用户 其 绑定 'DestroyWindow' (密 其 签名 I ([PTR]) 'win64').
 SetWindowTextW 取 用户 其 绑定 'SetWindowTextW' (密 其 签名 I ([PTR,PTR]) 'win64').
@@ -64,6 +66,8 @@ InitCommonControlsEx 取 控件 其 绑定 'InitCommonControlsEx' (密 其 签�
 
 lstrlenA 取 内核 其 绑定 'lstrlenA' (密 其 签名 I ([PTR]) 'win64').
 MultiByteToWideChar 取 内核 其 绑定 'MultiByteToWideChar' (密 其 签名 I ([U,U,PTR,I,PTR,I]) 'win64').
+WideCharToMultiByte 取 内核 其 绑定 'WideCharToMultiByte' (密 其 签名 I ([U,U,PTR,I,PTR,I,PTR,PTR]) 'win64').
+lstrlenW 取 内核 其 绑定 'lstrlenW' (密 其 签名 I ([PTR]) 'win64').
 
 ShutdownBlockReasonCreate 取 用户 其 绑定 'ShutdownBlockReasonCreate' (密 其 签名 I ([PTR,PTR]) 'win64').
 ShutdownBlockReasonDestroy 取 用户 其 绑定 'ShutdownBlockReasonDestroy' (密 其 签名 I ([PTR]) 'win64').
@@ -98,12 +102,27 @@ FreeLibrary 取 内核 其 绑定 'FreeLibrary' (密 其 签名 I ([PTR]) 'win64
     存 其 关闭.
     得 值.
 法
+# Validate foreign UTF-16 before invoking the native runtime decoder. Its own
+# malformed-input failure is fatal, while this rejection is an ordinary 卒.
+算 解宽 存, 长 为 数:
+    若 长 < 0 或 长 > 1048576 则 卒 'External text is too long.'. 然
+    若 (结果 (lstrlenW 其 调用 [存])) 其 数 != 长 则 卒 'External text has an incomplete or embedded-NUL representation.'. 然
+    若 长 == 0 则 得 ''. 然
+    验 取 结果 (WideCharToMultiByte 其 调用 [65001,128,存,长,空,0,空,空]).
+    若 验 其 为空 则 卒 'External text contains invalid UTF-16. The operation was cancelled.'. 然
+    得 存 其 解UTF16.
+法
 算 取文 柄:
     长 取 (结果 (GetWindowTextLengthW 其 调用 [柄])) 其 数.
     若 长 > 1048576 则 卒 'Input text is too long.'. 然
-    存 取 密 其 缓冲 ((长+1)*2).
-    结果 (GetWindowTextW 其 调用 [柄,存,长+1]).
-    文 取 存 其 解UTF16.
+    存 取 密 其 缓冲 ((长+2)*2).
+    试
+        实长 取 (结果 (GetWindowTextW 其 调用 [柄,存,长+1])) 其 数.
+        文 取 解宽 存 实长.
+    救 原因
+        存 其 关闭.
+        卒 原因.
+    终
     存 其 关闭.
     得 文.
 法
@@ -130,10 +149,15 @@ FreeLibrary 取 内核 其 绑定 'FreeLibrary' (密 其 签名 I ([PTR]) 'win64
     得 空.
 法
 算 目录:
-    存 取 密 其 缓冲 65536.
+    存 取 密 其 缓冲 65538.
     长 取 (结果 (GetModuleFileNameW 其 调用 [空,存,32768])) 其 数.
-    若 长 == 0 或 长 >= 32768 则 卒 'Cannot locate application directory.'. 然
-    全 取 存 其 解UTF16.
+    若 长 == 0 或 长 >= 32768 则 存 其 关闭. 卒 'Cannot locate application directory.'. 然
+    试
+        全 取 解宽 存 长.
+    救 原因
+        存 其 关闭.
+        卒 原因.
+    终
     存 其 关闭.
     位 取 全 其 量.
     循
@@ -144,10 +168,10 @@ FreeLibrary 取 内核 其 绑定 'FreeLibrary' (密 其 签名 I ([PTR]) 'win64
     卒 'Application path has no directory.'.
 法
 算 文件对话 父, 保存 为 事实, 原名 为 句:
-    存 取 密 其 缓冲 65536.
+    存 取 密 其 缓冲 65538.
     若 原名 != '' 则
         旧 取 密 其 UTF16 原名.
-        若 旧 其 大小 > 65536 则 卒 'Path is too long.'. 然
+        若 旧 其 大小 > 65536 则 旧 其 关闭. 存 其 关闭. 卒 'Path is too long.'. 然
         结果 (RtlMoveMemory 其 调用 [存,旧,旧 其 大小]).
         旧 其 关闭.
     然
@@ -176,7 +200,14 @@ FreeLibrary 取 内核 其 绑定 'FreeLibrary' (密 其 签名 I ([PTR]) 'win64
         结果值 取 (结果 (GetOpenFileNameW 其 调用 [配])) 其 数.
     然
     路 取 ''.
-    若 结果值 != 0 则 路 取 存 其 解UTF16. 然
+    试
+        若 结果值 != 0 则 路 取 解宽 存 ((结果 (lstrlenW 其 调用 [存])) 其 数). 然
+    救 原因
+        存 其 关闭.
+        配 其 关闭.
+        滤 其 关闭.
+        卒 原因.
+    终
     存 其 关闭.
     配 其 关闭.
     滤 其 关闭.

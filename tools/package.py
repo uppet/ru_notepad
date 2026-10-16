@@ -29,7 +29,9 @@ DEPENDENCIES = {
 RUNTIME_NAMES = ('ru_notepad.exe', *DEPENDENCIES)
 TEST_NAMES = ('document_policy.exe', 'ui_arguments.exe', 'file_codec_flags.exe',
               'editor_native.exe', 'app_native.exe', 'app_features_native.exe', 'file_codec_tests.exe',
-              'file_codec_security_probe.exe', 'syntax_native.exe', 'syntax_policy.exe', 'shortcuts.exe', 'status_native.exe')
+              'file_codec_security_probe.exe', 'syntax_native.exe', 'syntax_policy.exe', 'shortcuts.exe', 'status_native.exe',
+              'file_streaming_native.exe', 'editor_streaming_native.exe',
+              'associations_policy.exe', 'associations_native.exe', 'file_drop_native.exe', 'app_streaming_native.exe')
 BINARY_NAMES = (*RUNTIME_NAMES, *TEST_NAMES)
 SYSTEM_DLLS = {'advapi32.dll', 'gdi32.dll', 'imm32.dll', 'kernel32.dll',
     'msvcrt.dll', 'ole32.dll', 'oleaut32.dll', 'user32.dll', 'comctl32.dll',
@@ -50,7 +52,11 @@ TEST_FILES = {
 
 
 def sha(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    digest = hashlib.sha256()
+    with Path(path).open('rb') as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def save_json(path, value):
@@ -143,7 +149,8 @@ def validate_receipts(root, binary_dir, objdump):
 def evidence_names(test_names):
     return {'msys2-packages.log', 'native-acceptance.json',
             *(f'{name}.{stream}.log' for name in test_names for stream in ('stdout', 'stderr')),
-            *(f'main-launcher-{number}.log' for number in range(4))}
+            *(f'{prefix}-{number}.log' for prefix in ('main-launcher', 'main-file-entry-launcher')
+              for number in range(4))}
 
 
 def copy_evidence(evidence, destination, allowed_names):
@@ -240,6 +247,11 @@ def _create_packages(root, binary_dir, destination, evidence, objdump, summary,
     if native and (not summary.get('passed') or not summary.get('native_tests_passed') or
                    summary.get('tested_binary_sha256') != hashes):
         raise RuntimeError('Native acceptance must cover the exact packaged binary snapshot')
+    if native:
+        # Defend the packaging boundary too: booleans and matching hashes alone
+        # cannot bless a missing, skipped, or force-killed mandatory test group.
+        from windows_ci import validate_acceptance
+        validate_acceptance(summary)
     if not native and summary.get('passed'):
         raise RuntimeError('Cross-built packages cannot claim native acceptance')
     artifacts = {}

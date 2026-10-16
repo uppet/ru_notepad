@@ -1,4 +1,4 @@
-# Syntax highlighting in 0.1.2 preview
+# Syntax highlighting in 0.1.3 preview
 
 ## Supported languages
 
@@ -111,7 +111,7 @@ avoids `SCI_STYLECLEARALL`, which would also reset the editor's line-number styl
 The document remains independently editable and undoable if highlighting is
 unavailable.
 
-## Incremental work and the 4 MiB limit
+## Incremental work and large-file mode
 
 Lexer selection clears old style information once and enables
 `SC_IDLESTYLING_TOVISIBLE`. It does not immediately force
@@ -121,8 +121,12 @@ document or scan it on each keypress. A large multiline construct may still
 require native lexer work up to the visible location; no universal latency or
 performance claim is made.
 
-The existing 4 MiB UTF-8 document/save limit remains unchanged. Native acceptance
-coverage includes a document of exactly 4 MiB, verifies that initial selection
+The fixed file-size limit has been removed. Files of at least 32,000,000 bytes
+open in labelled plain-text large-file mode with no lexer or wrapping; choosing
+highlighting/wrap is disabled for that document to control memory/layout cost.
+Existing documents retain their own manual language and wrap choices. This mode
+is independent of the strict >500,000,000-byte pre-read consent threshold.
+Native syntax acceptance coverage includes a document of exactly 4 MiB, verifies that initial selection
 and a bounded edit/style request do not eagerly mark the whole file styled, and
 checks that undo restores the changed byte and original savepoint. The measured
 elapsed time is a diagnostic, not a pass/fail speed threshold or a benchmark.

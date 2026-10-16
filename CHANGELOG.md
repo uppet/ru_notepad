@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.3-preview — 2026-10-16
+
+- Add explicit per-user Open With / Default Apps candidate registration, ownership-safe removal, status, and a Windows Settings link. Windows retains control of default choices.
+- Route Unicode CLI, dialog and multi-file HDROP inputs through one bounded queue; retain dirty tabs, continue after per-file errors, and select duplicates by file identity.
+- Replace whole-file open/save paths with bounded Unicode/legacy cursors and hidden pending editors. Remove the fixed 4 MiB limit; ask before any body read above 500,000,000 bytes. A separate 32,000,000-byte plain-text performance mode disables lexer/wrap.
+- Advance open/save through bounded timer batches with Cancel/Esc, mutation locking, revision checks and safe asynchronous close continuations. Retain conflict checks, protected staging, recovery backups and checked final commits.
+- Require native chunk-boundary/cancellation/registry/drop/main-operation tests, full 500,039,680-byte editor roundtrip, and detached GUI file-entry/cancel acceptance. These changes await exact-build Windows CI.
+- Pin the independently validated Ru 0.21.3 toolchain; keep runtime/tests ZIPs separate and byte-identical for shared runtime files.
+
 ## 0.1.2-preview — 2026-10-16
 
 - Add native Lexilla 5.5.4 C/C++ and JSON highlighting, automatic extension selection, and an explicit Language menu. `.ru` remains plain text pending a dedicated lexer.
@@ -7,7 +16,7 @@
 - Add reverse/alternative tab navigation and zoom reset; preserve AltGr/input-method combinations.
 - Split the ordinary runtime ZIP from a self-contained tests ZIP. Both contain byte-identical tested runtime files and dependency licenses; test executables/evidence stay out of the ordinary ZIP.
 - Replace unsupported array `含` calls exposed by the first native run with a shared explicit-match policy, directly exercised by 100 interpreter/Linux C cases and required in the Windows suite. Preserve all original syntax assertions and an expected-failure fixture for the invalid API call.
-- Require exact assertion counts, isolated missing-Lexilla fallback checks, stronger package-inventory/hash regressions, and real Windows execution before delivery. These additions are pending their own CI receipt.
+- Require exact assertion counts, isolated missing-Lexilla fallback checks, stronger package-inventory/hash regressions, and real Windows execution before delivery. The repaired exact-build Windows run 38871195015 subsequently passed all 553 assertions and GUI acceptance.
 
 ## 0.1.1-preview — 2026-10-16
 

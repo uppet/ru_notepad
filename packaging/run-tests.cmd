@@ -8,6 +8,7 @@ mkdir "%TESTDIR%" || exit /b 1
 >>test-results.txt echo ru_notepad.exe: interactive editor; CI separately checks its detached GUI startup and normal close.
 >>test-results.txt echo file_codec_security_probe.exe: helper for optional-acl-tests.ps1; never run it against important files.
 >>test-results.txt echo Optional NTFS ACL cases are described in OPTIONAL-ACL-TESTS.txt and run separately.
+>>test-results.txt echo Full tests include a real 500039680-byte editor load/save: allow 3 GiB RAM, 2 GiB free disk, and 15 minutes.
 >>test-results.txt ver
 set "FAILED=0"
 >>test-results.txt echo document_policy.exe: document limits, dirty-state and safe-save policy.
@@ -40,8 +41,29 @@ if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo app_features_native.exe: real menu dispatch, language changes, tab isolation, zoom, status and undo.
 app_features_native.exe >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo app_streaming_native.exe: actual main event loop, Unicode entry, busy cancel, dirty tabs and safe staged saves.
+app_streaming_native.exe "%TESTDIR%" >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo file_codec_tests.exe: synthetic file encoding, lossless saves and failure handling.
 file_codec_tests.exe "%TESTDIR%" >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo associations_policy.exe: explicit per-user registration commands and quoted Unicode application paths.
+associations_policy.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo associations_native.exe: isolated synthetic HKCU registration with cleanup, never actual defaults or UserChoice.
+associations_native.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo file_drop_native.exe: actual Scintilla child WM_DROPFILES routing, Unicode paths, HDROP ownership and callback cleanup.
+file_drop_native.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo file_streaming_native.exe: bounded large-file encoding, exact bytes, sparse threshold and pre-read cancellation.
+file_streaming_native.exe "%TESTDIR%" >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo editor_streaming_native.exe: native editor streaming, Unicode boundaries and full large-file roundtrip.
+editor_streaming_native.exe "%TESTDIR%" >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo editor_streaming_native.exe --large: mandatory full 500039680-byte native editor load/save and every-byte verification.
+editor_streaming_native.exe "%TESTDIR%" --large >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo syntax_native.exe --expect-missing: isolated absent-DLL fallback keeps plain-text editing and undo working.
 call :syntax_fallback missing-lexilla --expect-missing

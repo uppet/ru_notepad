@@ -2,7 +2,9 @@
 # Public: 读文件 / 写文件 and 文件.读取 / 文件.写入. See docs/file_codec.md.
 密 取 外言 '如:密'.
 _属性位 取 外言 './file_codec_flags.ru'.
-最大文件字节 取 4194304.
+流块字节 取 65536.
+大文件提示字节 取 500000000.
+最大段字符 取 65536.
 UTF8 取 65001.
 UTF16LE 取 1200.
 UTF16BE 取 1201.
@@ -35,6 +37,9 @@ _GetCurrentProcessId 取 _内核 其 绑定 'GetCurrentProcessId' (密 其 签�
 _MultiByteToWideChar 取 _内核 其 绑定 'MultiByteToWideChar' (密 其 签名 _I32 ([_U32,_U32,_PTR,_I32,_PTR,_I32]) 'win64').
 _WideCharToMultiByte 取 _内核 其 绑定 'WideCharToMultiByte' (密 其 签名 _I32 ([_U32,_U32,_PTR,_I32,_PTR,_I32,_PTR,_PTR]) 'win64').
 _LCMapStringW 取 _内核 其 绑定 'LCMapStringW' (密 其 签名 _I32 ([_U32,_U32,_PTR,_I32,_PTR,_I32]) 'win64').
+_RtlMoveMemory 取 _内核 其 绑定 'RtlMoveMemory' (密 其 签名 _VOID ([_PTR,_PTR,_UPTR]) 'win64').
+_GetFileSizeEx 取 _内核 其 绑定 'GetFileSizeEx' (密 其 签名 _I32 ([_PTR,_PTR]) 'win64').
+_大小型 取 密 其 结构 [['n',_I64]].
 _lstrlenW 取 _内核 其 绑定 'lstrlenW' (密 其 签名 _I32 ([_PTR]) 'win64').
 _GetFileSecurityW 取 _安全库 其 绑定 'GetFileSecurityW' (密 其 签名 _I32 ([_PTR,_U32,_PTR,_U32,_PTR]) 'win64').
 _MakeAbsoluteSD 取 _安全库 其 绑定 'MakeAbsoluteSD' (密 其 签名 _I32 ([_PTR,_PTR,_PTR,_PTR,_PTR,_PTR,_PTR,_PTR,_PTR,_PTR,_PTR]) 'win64').
@@ -174,6 +179,11 @@ _状态 取 {'sequence':0}.
         输出 其 关闭.
         _失败 '无法解析文件路径' 成果.
     然
+    验证 取 _WideCharToMultiByte 其 调用 [UTF8,128,输出,长,空,0,空,空].
+    若 (验证 其 值) 其 为空 则
+        输出 其 关闭.
+        卒 '规范化文件路径包含无效 UTF-16；请选择有效的 Unicode 路径'.
+    然
     文 取 输出 其 解UTF16.
     输出 其 关闭.
     若 文 其 量 > 32000 或 文[文 其 量 - 1] == '\\' 或 文[文 其 量 - 1] == '/' 则 卒 '请选择普通文件路径'. 然
@@ -289,84 +299,227 @@ _状态 取 {'sequence':0}.
     得 文.
 法
 
-算 读文件 路径 为 句 代码页 为 数:
+# A reader owns one locked file snapshot. Preparing never reads a body/header.
+算 准备读取 路径 为 句 代码页 为 数:
     _检查编码 代码页 真.
     路径文 取 _绝对路径 路径.
-    内存们 取 [].
-    句柄 取 空.
-    结果 取 空.
+    状态 取 {'path':路径文,'encoding':代码页,'bom':假,'stamp':'','fileIdentity':'','size':0,'bytes':0,'textBytes':0,'position':0,'readCalls':0,'readBytes':0,'bufferBytes':0,'approved':假,'started':假,'done':假,'closed':假,'handle':空,'memory':[]}.
     试
-        路径内存 取 密 其 UTF16 路径文.
-        内存们 其 增 路径内存.
-        句柄 取 _打开读 路径内存.
+        路径存 取 密 其 UTF16 路径文.
+        状态['memory'] 其 增 路径存.
+        句柄 取 _打开读 路径存.
+        状态 其 增 'handle' 句柄.
         信息 取 _取信息 句柄.
-        内存们 其 增 信息.
-        若 (信息 其 读 'sizeHi') 其 数 != 0 或 (信息 其 读 'sizeLo') 其 数 > 最大文件字节 则
-            卒 '本版仅支持不超过 4 MiB 的文件（含 BOM）'.
-        然
-        总长 取 (信息 其 读 'sizeLo') 其 数.
-        原戳 取 _信息戳 信息.
-        头 取 _四字节 其 新建.
-        计数 取 _计数型 其 新建.
-        内存们 其 增 头.
-        内存们 其 增 计数.
-        头长 取 4.
-        若 总长 < 4 则 头长 取 总长. 然
-        若 头长 > 0 则
-            成果 取 _ReadFile 其 调用 [句柄,头,头长,计数,空].
-            _检查成功 成果 '读取文件头失败'.
-            若 (计数 其 读 'n') 其 数 != 头长 则 卒 '文件头读取不完整'. 然
-        然
-        a 取 (头 其 读 'a') 其 数.
-        b 取 (头 其 读 'b') 其 数.
-        c 取 (头 其 读 'c') 其 数.
-        d 取 (头 其 读 'd') 其 数.
-        若 总长 >= 4 且 ((a == 255 且 b == 254 且 c == 0 且 d == 0) 或 (a == 0 且 b == 0 且 c == 254 且 d == 255)) 则
-            卒 '本版不支持 UTF-32；请先转换为 UTF-8 或 UTF-16'.
-        然
-        编码 取 代码页.
-        若 编码 == 0 则 编码 取 UTF8. 然
-        跳过 取 0.
-        若 总长 >= 3 且 a == 239 且 b == 187 且 c == 191 则 编码 取 UTF8. 跳过 取 3. 然
-        若 总长 >= 2 且 a == 255 且 b == 254 则 编码 取 UTF16LE. 跳过 取 2. 然
-        若 总长 >= 2 且 a == 254 且 b == 255 则 编码 取 UTF16BE. 跳过 取 2. 然
-        字节数 取 总长 - 跳过.
-        # Round allocated capacity to even, leaving at least two zero bytes.
-        数据 取 密 其 缓冲 (字节数 + 2 + 字节数 % 2).
-        内存们 其 增 数据.
-        成果 取 _SetFilePointerEx 其 调用 [句柄,跳过,空,0].
-        _检查成功 成果 '无法定位文件正文'.
-        若 字节数 > 0 则
-            成果 取 _ReadFile 其 调用 [句柄,数据,字节数,计数,空].
-            _检查成功 成果 '读取文件失败'.
-            若 (计数 其 读 'n') 其 数 != 字节数 则 卒 '文件读取不完整；原编辑内容未改变'. 然
-        然
-        若 (_句柄戳 句柄) != 原戳 则 卒 '文件在读取期间已改变；请重试'. 然
-        文 取 _解码 数据 字节数 编码.
-        结果 取 {'text':文,'encoding':编码,'bom':跳过 > 0,'stamp':原戳,'path':路径文}.
+        状态['memory'] 其 增 信息.
+        长存 取 _大小型 其 新建.
+        状态['memory'] 其 增 长存.
+        _检查成功 (_GetFileSizeEx 其 调用 [句柄,长存]) '无法读取文件大小'.
+        # Guard BEFORE native->Ru numeric conversion (which is a fatal type
+        # error for out-of-range integers), preserving existing dirty tabs.
+        高 取 (信息 其 读 'sizeHi') 其 数.
+        低 取 (信息 其 读 'sizeLo') 其 数.
+        若 高 > 2097151 则 卒 '文件大小超出本平台可精确寻址范围；原编辑内容未改变'. 然
+        实际 取 长存 其 读 'n'.
+        若 (实际 其 位段 32 32) != 高 或 (实际 其 位段 0 32) != 低 则 卒 '文件大小在预检期间已改变；请重试'. 然
+        大小 取 高*4294967296+低.
+        状态 其 增 'size' 大小.
+        状态 其 增 'bytes' 大小.
+        状态 其 增 'stamp' (_信息戳 信息).
+        状态 其 增 'fileIdentity' ((信息 其 读 'volume') 其 句 + ':' + (信息 其 读 'idHi') 其 句 + ':' + (信息 其 读 'idLo') 其 句).
     救 原因
-        _关句柄 句柄.
-        _清内存 内存们.
+        关闭读取 状态.
         卒 原因.
     终
-    _关句柄 句柄.
-    _清内存 内存们.
-    得 结果.
+    得 状态.
+法
+
+算 关闭读取 状态:
+    若 非 状态['closed'] 则
+        _关句柄 状态['handle'].
+        状态 其 增 'handle' 空.
+        _清内存 状态['memory'].
+        状态 其 增 'memory' ([]).
+        状态 其 增 'closed' 真.
+    然
+    得 空.
+法
+
+算 确认读取 状态 确认 为 算:
+    若 状态['closed'] 则 卒 '文件读取已关闭'. 然
+    若 状态['approved'] 则 得 真. 然
+    试
+        若 状态['size'] > 大文件提示字节 则
+            若 非 (确认 状态['size']) 则
+                关闭读取 状态.
+                得 假.
+            然
+        然
+        状态 其 增 'approved' 真.
+    救 原因
+        关闭读取 状态.
+        卒 原因.
+    终
+    得 真.
+法
+
+作 _读入 状态 数据 长 为 数 计数:
+    状态 其 增 'readCalls' (状态['readCalls']+1).
+    成果 取 _ReadFile 其 调用 [状态['handle'],数据,长,计数,空].
+    _检查成功 成果 '读取文件失败'.
+    状态 其 增 'readBytes' (状态['readBytes']+(计数 其 读 'n') 其 数).
+为
+
+作 _开始读取正文 状态:
+    头 取 _四字节 其 新建.
+    计数 取 _计数型 其 新建.
+    状态['memory'] 其 增 头.
+    状态['memory'] 其 增 计数.
+    状态 其 增 'count' 计数.
+    头长 取 4.
+    总长 取 状态['size'].
+    若 总长 < 4 则 头长 取 总长. 然
+    若 头长 > 0 则
+        _读入 状态 头 头长 计数.
+        若 (计数 其 读 'n') 其 数 != 头长 则 卒 '文件头读取不完整'. 然
+    然
+    a 取 (头 其 读 'a') 其 数.
+    b 取 (头 其 读 'b') 其 数.
+    c 取 (头 其 读 'c') 其 数.
+    d 取 (头 其 读 'd') 其 数.
+    若 总长 >= 4 且 ((a == 255 且 b == 254 且 c == 0 且 d == 0) 或 (a == 0 且 b == 0 且 c == 254 且 d == 255)) 则 卒 '本版不支持 UTF-32；请先转换为 UTF-8 或 UTF-16'. 然
+    编码 取 状态['encoding'].
+    若 编码 == 0 则 编码 取 UTF8. 然
+    跳过 取 0.
+    若 总长 >= 3 且 a == 239 且 b == 187 且 c == 191 则 编码 取 UTF8. 跳过 取 3. 然
+    若 总长 >= 2 且 a == 255 且 b == 254 则 编码 取 UTF16LE. 跳过 取 2. 然
+    若 总长 >= 2 且 a == 254 且 b == 255 则 编码 取 UTF16BE. 跳过 取 2. 然
+    状态 其 增 'encoding' 编码.
+    状态 其 增 'bom' (跳过 > 0).
+    状态 其 增 'position' 跳过.
+    状态 其 增 'started' 真.
+    _检查成功 (_SetFilePointerEx 其 调用 [状态['handle'],跳过,空,0]) '无法定位文件正文'.
+为
+
+算 _解码前缀 数据 长 为 数 编码 为 数:
+    # Copy only the chosen prefix; the extra two zero bytes are owned terminators.
+    副本 取 密 其 缓冲 (长+2+长%2).
+    试
+        _RtlMoveMemory 其 调用 [副本,数据,长].
+        文 取 _解码 副本 长 编码.
+    救 原因
+        副本 其 关闭.
+        卒 原因.
+    终
+    副本 其 关闭.
+    得 文.
+法
+
+算 _解码流块 数据 长 为 数 编码 为 数 末块 为 事实:
+    # First accept a complete valid chunk. Only an invalid nonfinal suffix may
+    # be carried by rereading up to three bytes from the SAME guarded handle.
+    结果 取 {'text':空,'bytes':长,'error':''}.
+    最多 取 0.
+    若 非 末块 则
+        若 编码 == UTF8 或 编码 == UTF16LE 或 编码 == UTF16BE 则 最多 取 3. 然
+        若 编码 == CP936 则 最多 取 1. 然
+    然
+    缩短 取 0.
+    循 (最多+1) 次
+        若 长-缩短 <= 0 则 破. 然
+        试
+            文 取 _解码前缀 数据 (长-缩短) 编码.
+            结果 其 增 'text' 文.
+            结果 其 增 'bytes' (长-缩短).
+        救 原因
+            若 缩短 == 0 则 结果 其 增 'error' 原因. 然
+        终
+        若 结果['text'] != 空 则 得 结果. 然
+        缩短 取 缩短+1.
+    环
+    卒 结果['error'].
+法
+
+算 读取一步 状态:
+    若 状态['done'] 则 得 空. 然
+    若 状态['closed'] 或 非 状态['approved'] 则 卒 '文件读取尚未获准或已经关闭'. 然
+    数据 取 空.
+    试
+        若 非 状态['started'] 则 _开始读取正文 状态. 然
+        剩余 取 状态['size']-状态['position'].
+        长 取 流块字节.
+        若 剩余 < 长 则 长 取 剩余. 然
+        数据 取 密 其 缓冲 (长+2+长%2).
+        状态 其 增 'bufferBytes' (流块字节+4).
+        计数 取 状态['count'].
+        若 长 == 0 则
+            # A final bounded probe detects unexpected growth as well as truncation.
+            _读入 状态 数据 1 计数.
+            若 (计数 其 读 'n') 其 数 != 0 则 卒 '文件在读取期间增长；原编辑内容未改变'. 然
+            若 (_句柄戳 状态['handle']) != 状态['stamp'] 则 卒 '文件在读取期间已改变；请重试'. 然
+            数据 其 关闭.
+            数据 取 空.
+            状态 其 增 'done' 真.
+            关闭读取 状态.
+            得 空.
+        然
+        _读入 状态 数据 长 计数.
+        若 (计数 其 读 'n') 其 数 != 长 则 卒 '文件读取不完整；原编辑内容未改变'. 然
+        块 取 _解码流块 数据 长 状态['encoding'] (长 == 剩余).
+        数据 其 关闭.
+        数据 取 空.
+        状态 其 增 'position' (状态['position']+块['bytes']).
+        若 块['bytes'] != 长 则
+            _检查成功 (_SetFilePointerEx 其 调用 [状态['handle'],状态['position'],空,0]) '无法保留跨块字符'.
+        然
+        文存 取 密 其 UTF8 块['text'].
+        状态 其 增 'textBytes' (状态['textBytes']+(文存 其 大小)-1).
+        文存 其 关闭.
+    救 原因
+        若 数据 != 空 则 数据 其 关闭. 然
+        关闭读取 状态.
+        卒 原因.
+    终
+    得 块['text'].
+法
+
+算 流读文件 路径 为 句 代码页 为 数 确认 为 算 接收 为 算:
+    状态 取 准备读取 路径 代码页.
+    试
+        若 非 (确认读取 状态 确认) 则 得 空. 然
+        循
+            文 取 读取一步 状态.
+            若 文 == 空 则 破. 然
+            接收 文.
+        环
+    救 原因
+        关闭读取 状态.
+        卒 原因.
+    终
+    得 状态.
+法
+
+算 读文件 路径 为 句 代码页 为 数:
+    # Explicit SMALL compatibility API only; document opening has no such cap.
+    状态 取 准备读取 路径 代码页.
+    文本 取 ''.
+    试
+        若 状态['size'] > 1048576 则 卒 '整句兼容读取仅供不超过 1 MiB 的小文本；请使用准备读取/读取一步流式接口'. 然
+        确认读取 状态 (算 大小: 得 假. 法).
+        循
+            文 取 读取一步 状态.
+            若 文 == 空 则 破. 然
+            文本 取 文本+文.
+        环
+    救 原因
+        关闭读取 状态.
+        卒 原因.
+    终
+    状态 其 增 'text' 文本.
+    得 状态.
 法
 
 算 _文本宽存 文本 为 句:
-    # The file cap bounds code points; avoid even transient >16 MiB allocation.
-    字数 取 文本 其 量.
-    若 字数 > 最大文件字节 则 卒 '保存结果超过本版 4 MiB 限制'. 然
-    若 字数 > 2097152 则
-        中点 取 (字数 - 字数 % 2) / 2.
-        左 取 密 其 UTF16 文本[:中点].
-        右 取 密 其 UTF16 文本[中点:].
-        宽字数 取 (左 其 大小 + 右 其 大小 - 4) / 2.
-        左 其 关闭.
-        右 其 关闭.
-        若 宽字数 > 最大文件字节 则 卒 '保存结果超过本版 4 MiB 限制'. 然
-    然
+    若 文本 其 量 > 最大段字符 则 卒 '单个保存块超过 65536 字符；请使用有界流式生产器'. 然
     得 密 其 UTF16 文本.
 法
 
@@ -387,7 +540,6 @@ _状态 取 {'sequence':0}.
         宽长 取 (宽 其 大小 - 2) / 2.
         若 编码 == UTF16LE 或 编码 == UTF16BE 则
             长 取 宽长 * 2.
-            若 长 + 头长 > 最大文件字节 则 卒 '保存结果超过本版 4 MiB 限制（含 BOM）'. 然
             # A separate output buffer avoids ownership/cleanup ambiguities.
             数据 取 密 其 缓冲 (长 + 2).
             若 长 > 0 则
@@ -414,7 +566,6 @@ _状态 取 {'sequence':0}.
                     卒 '所选旧编码不能无损保存这些字符；请选择 Unicode 编码'.
                 然
             然
-            若 长 + 头长 > 最大文件字节 则 卒 '保存结果超过本版 4 MiB 限制（含 BOM）'. 然
             数据 取 密 其 缓冲 (长 + 1).
             若 长 > 0 则
                 默认标志 其 写 'n' 0.
@@ -524,56 +675,96 @@ _状态 取 {'sequence':0}.
     得 属性.
 法
 
-算 写文件 路径 为 句 文本 为 句 编码 为 数 BOM 为 事实 预期stamp 为 句:
+# Cleanup is shared by begin/step/commit errors and explicit cancellation.
+# Recovery-phase failures retain files exactly as the original safe-save path did.
+算 _清写状态 状态 原因 为 句:
+    若 状态['closed'] 则 得 原因. 然
+    _关句柄 状态['tempHandle'].
+    _关句柄 状态['targetHandle'].
+    状态 其 增 'tempHandle' 空.
+    状态 其 增 'targetHandle' 空.
+    若 状态['recovery'] 则
+        若 状态['tempExists'] 则 原因 取 原因+'；待保存内容：'+状态['tempPath']. 然
+        若 状态['backupExists'] 则 原因 取 原因+'；备份路径（可能仍为空占位文件，请同时检查原路径）：'+状态['backupPath']. 然
+    另
+        若 状态['tempExists'] 则
+            成果 取 _DeleteFileW 其 调用 [状态['tempMemory']].
+            若 (成果 其 值) 其 为空 则
+                原因 取 原因+'；未能清理临时文件：'+状态['tempPath'].
+            另
+                状态 其 增 'tempExists' 假.
+            然
+        然
+        若 状态['backupExists'] 则
+            成果 取 _DeleteFileW 其 调用 [状态['backupMemory']].
+            若 (成果 其 值) 其 为空 则
+                原因 取 原因+'；未能清理预留备份：'+状态['backupPath'].
+            另
+                状态 其 增 'backupExists' 假.
+            然
+        然
+    然
+    _清内存 状态['memory'].
+    状态 其 增 'memory' ([]).
+    状态 其 增 'closed' 真.
+    得 原因.
+法
+
+算 取消写入 状态:
+    原因 取 _清写状态 状态 ''.
+    若 原因 != '' 则 卒 原因. 然
+    得 空.
+法
+
+算 准备写入 路径 为 句 编码 为 数 BOM 为 事实 预期stamp 为 句:
+    _检查编码 编码 假.
+    若 BOM 且 (编码 == CP1252 或 编码 == CP936) 则 卒 'Windows-1252 与 GBK 不使用 BOM'. 然
     路径文 取 _绝对路径 路径.
-    编码后 取 _编码数据 文本 编码 BOM.
-    内存们 取 [编码后['data']].
-    临时句柄 取 空.
-    目标句柄 取 空.
-    临时路径内存 取 空.
-    临时存在 取 假.
-    备份存在 取 假.
-    备份路径内存 取 空.
-    备份文 取 ''.
-    保留恢复 取 假.
-    新戳 取 ''.
+    状态 取 {'path':路径文,'encoding':编码,'bom':BOM,'expected':预期stamp,'memory':[],'tempHandle':空,'targetHandle':空,'tempMemory':空,'backupMemory':空,'tempPath':'','backupPath':'','tempExists':假,'backupExists':假,'recovery':假,'closed':假,'committed':假,'bytes':0,'chunks':0,'fileIdentity':''}.
     试
-        路径内存 取 密 其 UTF16 路径文.
-        内存们 其 增 路径内存.
-        目标句柄 取 _确认目标 路径内存 预期stamp.
-        目标初存 取 目标句柄 != 空.
-        有效预期 取 预期stamp.
-        若 目标初存 且 有效预期 == '' 则 有效预期 取 _句柄戳 目标句柄. 然
-        安全属性 取 空.
-        若 目标初存 则 安全属性 取 _复制安全属性 路径内存 内存们. 然
-        _关句柄 目标句柄.
-        目标句柄 取 空.
+        路径存 取 密 其 UTF16 路径文.
+        状态['memory'] 其 增 路径存.
+        状态 其 增 'pathMemory' 路径存.
+        句柄 取 _确认目标 路径存 预期stamp.
+        状态 其 增 'targetHandle' 句柄.
+        初存 取 句柄 != 空.
+        状态 其 增 'originalExists' 初存.
+        若 初存 且 预期stamp == '' 则 状态 其 增 'expected' (_句柄戳 句柄). 然
+        安全 取 空.
+        若 初存 则 安全 取 _复制安全属性 路径存 状态['memory']. 然
+        状态 其 增 'security' 安全.
+        _关句柄 句柄.
+        状态 其 增 'targetHandle' 空.
         进程 取 _GetCurrentProcessId 其 调用 [].
         进程文 取 (进程 其 值) 其 句.
-        # CREATE_NEW never truncates a pre-existing file, including a collision.
         循 64 次
-            _状态 其 增 'sequence' (_状态['sequence'] + 1).
-            临时文 取 路径文 + '.ru-notepad-' + 进程文 + '-' + (_状态['sequence'] 为 句) + '.tmp'.
+            _状态 其 增 'sequence' (_状态['sequence']+1).
+            临时文 取 路径文+'.ru-notepad-'+进程文+'-'+(_状态['sequence'] 为 句)+'.tmp'.
             候选 取 密 其 UTF16 临时文.
-            成果 取 _CreateFileW 其 调用 [候选,1073741824,0,安全属性,1,128,空].
+            成果 取 _CreateFileW 其 调用 [候选,1073741824,0,安全,1,128,空].
             句柄 取 成果 其 值.
             若 非 (_无效句柄 句柄) 则
-                临时句柄 取 句柄.
-                临时路径内存 取 候选.
-                内存们 其 增 候选.
-                临时存在 取 真.
+                状态 其 增 'tempHandle' 句柄.
+                状态 其 增 'tempMemory' 候选.
+                状态 其 增 'tempPath' 临时文.
+                状态 其 增 'tempExists' 真.
+                状态['memory'] 其 增 候选.
                 破.
             然
             候选 其 关闭.
             若 成果 其 错误码 != 80 且 成果 其 错误码 != 183 则 _失败 '无法在原目录创建临时文件' 成果. 然
         环
-        若 临时句柄 == 空 则 卒 '无法创建唯一临时文件；请稍后重试'. 然
+        若 状态['tempHandle'] == 空 则 卒 '无法创建唯一临时文件；请稍后重试'. 然
         计数 取 _计数型 其 新建.
         头 取 _四字节 其 新建.
-        内存们 其 增 计数.
-        内存们 其 增 头.
+        状态['memory'] 其 增 计数.
+        状态['memory'] 其 增 头.
+        状态 其 增 'count' 计数.
+        头长 取 0.
         若 BOM 则
+            头长 取 2.
             若 编码 == UTF8 则
+                头长 取 3.
                 头 其 写 'a' 239. 头 其 写 'b' 187. 头 其 写 'c' 191.
             另
                 若 编码 == UTF16LE 则
@@ -583,92 +774,127 @@ _状态 取 {'sequence':0}.
                 然
             然
         然
-        _写完整 临时句柄 头 编码后['headerBytes'] 计数.
-        _写完整 临时句柄 编码后['data'] 编码后['bytes'] 计数.
-        成果 取 _FlushFileBuffers 其 调用 [临时句柄].
-        _检查成功 成果 '临时文件刷新失败；原文件未替换'.
-        成果 取 _CloseHandle 其 调用 [临时句柄].
-        临时句柄 取 空.
+        _写完整 状态['tempHandle'] 头 头长 计数.
+        状态 其 增 'bytes' 头长.
+    救 原因
+        卒 (_清写状态 状态 原因).
+    终
+    得 状态.
+法
+
+算 写入一段 状态 文本 为 句:
+    若 状态['closed'] 则 卒 '保存流已经关闭'. 然
+    数据 取 空.
+    试
+        编码后 取 _编码数据 文本 状态['encoding'] 假.
+        数据 取 编码后['data'].
+        _写完整 状态['tempHandle'] 数据 编码后['bytes'] 状态['count'].
+        状态 其 增 'bytes' (状态['bytes']+编码后['bytes']).
+        状态 其 增 'chunks' (状态['chunks']+1).
+        数据 其 关闭.
+        数据 取 空.
+    救 原因
+        若 数据 != 空 则 数据 其 关闭. 然
+        卒 (_清写状态 状态 原因).
+    终
+    得 空.
+法
+
+算 完成写入 状态:
+    若 状态['closed'] 则 卒 '保存流已经关闭'. 然
+    新戳 取 ''.
+    试
+        _检查成功 (_FlushFileBuffers 其 调用 [状态['tempHandle']]) '临时文件刷新失败；原文件未替换'.
+        成果 取 _CloseHandle 其 调用 [状态['tempHandle']].
+        状态 其 增 'tempHandle' 空.
         _检查成功 成果 '关闭临时文件失败；原文件未替换'.
-        若 目标初存 则
-            # Reserve our own backup name without overwriting any unrelated file.
+        若 状态['originalExists'] 则
             循 64 次
-                _状态 其 增 'sequence' (_状态['sequence'] + 1).
-                候选文 取 临时文 + '-' + (_状态['sequence'] 为 句) + '.bak'.
+                _状态 其 增 'sequence' (_状态['sequence']+1).
+                候选文 取 状态['tempPath']+'-'+(_状态['sequence'] 为 句)+'.bak'.
                 候选 取 密 其 UTF16 候选文.
-                成果 取 _CreateFileW 其 调用 [候选,1073741824,0,安全属性,1,128,空].
+                成果 取 _CreateFileW 其 调用 [候选,1073741824,0,状态['security'],1,128,空].
                 句柄 取 成果 其 值.
                 若 非 (_无效句柄 句柄) 则
-                    备份路径内存 取 候选.
-                    备份文 取 候选文.
-                    内存们 其 增 候选.
-                    备份存在 取 真.
+                    状态 其 增 'backupMemory' 候选.
+                    状态 其 增 'backupPath' 候选文.
+                    状态 其 增 'backupExists' 真.
+                    状态['memory'] 其 增 候选.
                     _关句柄 句柄.
                     破.
                 然
                 候选 其 关闭.
                 若 成果 其 错误码 != 80 且 成果 其 错误码 != 183 则 _失败 '无法预留恢复备份文件' 成果. 然
             环
-            若 非 备份存在 则 卒 '无法预留唯一恢复备份文件'. 然
-            目标句柄 取 _确认目标 路径内存 有效预期.
-            _关句柄 目标句柄.
-            目标句柄 取 空.
-            # Keep ACLs/streams; never ignore metadata-merge errors.
-            # No API here offers atomic compare-stamp-and-replace.
-            成果 取 _ReplaceFileW 其 调用 [路径内存,临时路径内存,备份路径内存,0,空,空].
+            若 非 状态['backupExists'] 则 卒 '无法预留唯一恢复备份文件'. 然
+            句柄 取 _确认目标 状态['pathMemory'] 状态['expected'].
+            状态 其 增 'targetHandle' 句柄.
+            _关句柄 句柄.
+            状态 其 增 'targetHandle' 空.
+            # Same original check/replace race and recovery contract; never fallback.
+            成果 取 _ReplaceFileW 其 调用 [状态['pathMemory'],状态['tempMemory'],状态['backupMemory'],0,空,空].
             若 (成果 其 值) 其 为空 则
-                保留恢复 取 真.
+                状态 其 增 'recovery' 真.
                 _失败 '替换失败，原文件位置可能已改变；请检查目标并保留恢复文件' 成果.
             然
         另
-            若 _检查属性 路径内存 真 则 卒 '目标文件刚被其他程序创建；未覆盖，请重新选择另存为'. 然
-            # MOVEFILE_WRITE_THROUGH without REPLACE_EXISTING: a new arrival wins.
-            成果 取 _MoveFileExW 其 调用 [临时路径内存,路径内存,8].
-            _检查成功 成果 '创建目标文件失败；未覆盖后来出现的文件'.
+            若 _检查属性 状态['pathMemory'] 真 则 卒 '目标文件刚被其他程序创建；未覆盖，请重新选择另存为'. 然
+            _检查成功 (_MoveFileExW 其 调用 [状态['tempMemory'],状态['pathMemory'],8]) '创建目标文件失败；未覆盖后来出现的文件'.
         然
-        临时存在 取 假.
-        保留恢复 取 真.
-        # Failure here means the replacement succeeded but the new stamp is unknown.
+        状态 其 增 'tempExists' 假.
+        状态 其 增 'recovery' 真.
+        状态 其 增 'committed' 真.
         试
-            目标句柄 取 _打开读 路径内存.
-            新戳 取 _句柄戳 目标句柄.
+            句柄 取 _打开读 状态['pathMemory'].
+            状态 其 增 'targetHandle' 句柄.
+            新戳 取 _句柄戳 句柄.
+            信息 取 _取信息 句柄.
+            状态['memory'] 其 增 信息.
+            状态 其 增 'fileIdentity' ((信息 其 读 'volume') 其 句+':'+(信息 其 读 'idHi') 其 句+':'+(信息 其 读 'idLo') 其 句).
         救 原因
-            卒 '文件已写入，但无法重新取得状态；请重新打开再继续保存。' + 原因.
+            卒 '文件已写入，但无法重新取得状态；请重新打开再继续保存。'+原因.
         终
-        若 备份存在 则
-            成果 取 _DeleteFileW 其 调用 [备份路径内存].
-            若 (成果 其 值) 其 为空 则
-                卒 '文件已写入，但无法清理恢复备份；请检查并手动保留或删除备份'.
-            然
-            备份存在 取 假.
+        若 状态['backupExists'] 则
+            成果 取 _DeleteFileW 其 调用 [状态['backupMemory']].
+            若 (成果 其 值) 其 为空 则 卒 '文件已写入，但无法清理恢复备份；请检查并手动保留或删除备份'. 然
+            状态 其 增 'backupExists' 假.
         然
-        保留恢复 取 假.
+        状态 其 增 'recovery' 假.
+        状态 其 增 'stamp' 新戳.
     救 原因
-        _关句柄 临时句柄.
-        _关句柄 目标句柄.
-        若 保留恢复 则
-            若 临时存在 则 原因 取 原因 + '；待保存内容：' + 临时文. 然
-            若 备份存在 则 原因 取 原因 + '；备份路径（可能仍为空占位文件，请同时检查原路径）：' + 备份文. 然
-        另
-            若 临时存在 且 临时路径内存 != 空 则
-                删除成果 取 _DeleteFileW 其 调用 [临时路径内存].
-                若 (删除成果 其 值) 其 为空 则
-                    原因 取 原因 + '；未能清理临时文件：' + 临时文.
-                然
-            然
-            若 备份存在 则
-                删除成果 取 _DeleteFileW 其 调用 [备份路径内存].
-                若 (删除成果 其 值) 其 为空 则
-                    原因 取 原因 + '；未能清理预留备份：' + 备份文.
-                然
-            然
-        然
-        _清内存 内存们.
-        卒 原因.
+        卒 (_清写状态 状态 原因).
     终
-    _关句柄 目标句柄.
-    _清内存 内存们.
+    _清写状态 状态 ''.
     得 新戳.
+法
+
+算 流写文件 路径 为 句 生产 为 算 编码 为 数 BOM 为 事实 预期stamp 为 句:
+    状态 取 准备写入 路径 编码 BOM 预期stamp.
+    试
+        循
+            文 取 生产().
+            若 文 == 空 则 破. 然
+            写入一段 状态 文.
+        环
+        新戳 取 完成写入 状态.
+    救 原因
+        卒 (_清写状态 状态 原因).
+    终
+    得 新戳.
+法
+
+算 写文件 路径 为 句 文本 为 句 编码 为 数 BOM 为 事实 预期stamp 为 句:
+    # Compatibility string adapter; no native allocation scales with text length.
+    位置 取 [0].
+    生产 取 算:
+        若 位置[0] >= 文本 其 量 则 得 空. 然
+        末 取 位置[0]+最大段字符.
+        若 末 > 文本 其 量 则 末 取 文本 其 量. 然
+        文 取 文本[位置[0]:末].
+        位置[0] 取 末.
+        得 文.
+    法.
+    得 流写文件 路径 生产 编码 BOM 预期stamp.
 法
 
 形 文件接口:

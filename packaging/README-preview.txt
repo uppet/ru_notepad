@@ -1,4 +1,4 @@
-ru_notepad 0.1.2-preview · Windows x64
+ru_notepad 0.1.3-preview · Windows x64
 
 IMPORTANT: EXPERIMENTAL PORTABLE PREVIEW
 Read BUILD.json for this exact package's verification results. A local cross-build
@@ -31,6 +31,22 @@ RUN
 4. Use File > Open or Ctrl+O. Invalid UTF-8 is rejected; reopen with the explicit
    Windows-1252 or GBK command when that is the intended encoding.
 
+FILE ENTRY AND DEFAULTS
+Drag filesystem files onto the main window, or pass multiple Unicode paths on
+its command line. Directories fail explicitly; later valid paths still open.
+Duplicates select the existing document by file identity, preserving dirty text.
+During open/save, Cancel/Esc cancels the operation and any remaining open queue;
+close requests cancel first and leave existing documents open. Retry drop/open
+after the operation finishes. Virtual cloud-shell items are not implemented.
+File drops replace Scintilla's OLE text-drop target: external text drops and
+selection drag-to-move are not supported in this version. Clipboard commands
+are separate. CI injects real child-window drop messages; full Explorer mouse
+drag interaction still requires manual acceptance.
+Settings > Register Open With candidate explicitly registers only this user.
+Settings > Choose defaults opens Windows Settings; select each type yourself.
+No UserChoice or extension default is overwritten. Unregister at the old folder
+before moving the portable copy, then register from its new location.
+
 IMPLEMENTED, WITH ACCEPTANCE SCOPE RECORDED IN BUILD.json
 Independent document tabs; open/save/save-as; UTF-8/BOM and UTF-16 LE/BE;
 Windows-1252 and GBK; undo/redo; literal find/replace; case matching;
@@ -47,17 +63,20 @@ Ctrl+Tab / Ctrl+Shift+Tab and Ctrl+PageDown / Ctrl+PageUp switch tabs.
 Ctrl++ / Ctrl+- zoom; Ctrl+0 resets zoom. Ctrl+Alt/AltGr is left to input methods.
 
 LIMITS
-4 MiB file/save and UTF-8 editor-load limit, 64 tabs.
+No fixed 4 MiB file limit; 64 tabs and 64 queued paths. Full text remains in RAM.
+Files >=32,000,000 bytes use labelled plain-text mode without syntax/wrap.
+Files >500,000,000 bytes ask before any body read. Cancel/Esc stops between
+bounded chunks; an individual disk call or long-line layout can still block.
 Embedded NUL and invalid Unicode text are rejected; no binary-file editing.
-A legacy-encoded file may expand beyond the UTF-8 editor-load limit.
+Legacy text may expand substantially when held as UTF-8; sufficient RAM is needed.
 Not full Notepad++ parity. No regex parity, Ru-specific lexer, additional language
 catalogue, plugin ABI, macros, sessions/recovery, split views, project panels,
-printing, installer/file associations, updater, or network features yet.
-Accessibility, IME, high-DPI/multi-monitor, large-file behavior, and Windows
+printing, installer, updater, or network features yet.
+Accessibility, IME, high-DPI/multi-monitor, broad large-file behavior, and Windows
 version compatibility have not been accepted. Windows 10/11 x64 is the target.
 
 SAVE SAFETY
-Writes encode fully and reject lossy legacy conversion before replacing files.
+Writes encode in bounded chunks and reject lossy conversion before replacement.
 A same-directory temporary file is written and flushed. Existing ordinary files
 use ReplaceFileW with a recovery backup; new files use no-overwrite rename.
 Read-only files, EFS-encrypted saves, hard-linked destinations and selected
@@ -69,7 +88,7 @@ an unavoidable check-to-replace race; this is not a filesystem transaction.
 If replacement or cleanup reports an error, keep the named .tmp/.bak recovery
 files and the editor open. A reported failure after replacement may mean the
 new contents are already on disk. Read the complete message before retrying.
-Orderly sign-out/restart is vetoed while documents are dirty, but Windows can
+Orderly sign-out/restart is vetoed while documents are dirty or I/O is pending, but Windows can
 force termination. No autosave or crash recovery exists yet.
 
 TESTS
@@ -78,6 +97,8 @@ Download the separate tests ZIP only if you want executable checks and CI eviden
 That tests ZIP is self-contained and includes the identical tested runtime bytes.
 Inside the tests ZIP, run-tests.cmd runs native executables against Win32 controls
 and a fresh disposable folder within this package. It does not need Python.
+The test runner includes a full >500MB text roundtrip; allow several minutes,
+roughly 3 GiB free RAM and 2 GiB free disk. Generated large fixtures are not uploaded.
 A test failure is a real failure; a build-only result is not a test pass.
 Save test-results.txt when reporting a problem. GUI smoke tests may open windows.
 The optional ACL script is not run automatically. It intentionally changes ACLs

@@ -47,10 +47,10 @@ function Git-Value([string[]]$Arguments) {
 
 Push-Location $Root
 try {
-    if ((Git-Value @('rev-parse','HEAD')) -ne '5626adb791a8b3949a40e2421b9620fba8d785bf') {
+    if ((Git-Value @('rev-parse','HEAD')) -ne 'dd6cb81b52a426408f7076d82a84c2fdfb644263') {
         throw 'Ru public commit does not match the reviewed pin.'
     }
-    if ((Git-Value @('rev-parse','HEAD^{tree}')) -ne '3a9972dfd17fd570ef992ecffd9b5bccec1cc88d') {
+    if ((Git-Value @('rev-parse','HEAD^{tree}')) -ne '346d9f3f19c64f50f25b9f47ce92df1ea804bdb8') {
         throw 'Ru compiler tree does not match the reviewed pin.'
     }
     if (Git-Value @('status','--porcelain')) { throw 'Ru checkout must be unmodified.' }
@@ -107,7 +107,7 @@ try {
         '--windres',(Join-Path $Bin 'windres.exe'),'--ar',(Join-Path $Bin 'ar.exe'),
         '--ranlib',(Join-Path $Bin 'ranlib.exe'),'--skip-scintilla','--skip-lexilla')
     Invoke-Checked $Python ($BuildArgs + @('--source','src/main.ru','--output',(Join-Path $Output 'ru_notepad.exe')))
-    foreach ($test in @('document_policy','ui_arguments','file_codec_flags','editor_native','app_native','app_features_native','file_codec_tests','file_codec_security_probe','syntax_native','syntax_policy','shortcuts','status_native')) {
+    foreach ($test in @('document_policy','ui_arguments','file_codec_flags','editor_native','app_native','app_features_native','file_codec_tests','file_codec_security_probe','syntax_native','syntax_policy','shortcuts','status_native','file_streaming_native','editor_streaming_native','associations_policy','associations_native','file_drop_native','app_streaming_native')) {
         Invoke-Checked $Python ($BuildArgs + @('--console','--source',"tests/$test.ru",'--output',(Join-Path $Output "$test.exe")))
     }
     $AcceptArgs = @('tools/windows_ci.py','--bin-dir',$Output,'--evidence-dir',$Evidence,

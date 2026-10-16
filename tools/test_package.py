@@ -11,6 +11,7 @@ from unittest.mock import patch
 import zipfile
 
 import package as package
+import windows_ci as ci
 
 
 class PackageTests(unittest.TestCase):
@@ -27,7 +28,7 @@ class PackageTests(unittest.TestCase):
             target = self.root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text('synthetic source\n', encoding='utf-8')
-        (self.root / 'VERSION').write_text('0.1.2', encoding='utf-8')
+        (self.root / 'VERSION').write_text('0.1.3', encoding='utf-8')
         self.dependencies = {name: dict(value) for name, value in package.DEPENDENCIES.items()}
         for dependency in self.dependencies.values():
             source = self.root / 'vendor' / dependency['folder'] / 'License.txt'
@@ -54,7 +55,7 @@ class PackageTests(unittest.TestCase):
             entry.parent.mkdir(parents=True, exist_ok=True)
             if not entry.exists():
                 entry.write_text('synthetic test source\n', encoding='utf-8')
-            receipt = {'app_version': '0.1.2', 'exe_sha256': package.sha(self.binary / name),
+            receipt = {'app_version': '0.1.3', 'exe_sha256': package.sha(self.binary / name),
                 'dll_sha256': package.sha(self.binary / 'Scintilla.dll'),
                 'lexilla_dll_sha256': package.sha(self.binary / 'Lexilla.dll'),
                 'source_sha256': {'src/main.ru': package.sha(self.root / 'src/main.ru')},
@@ -69,8 +70,26 @@ class PackageTests(unittest.TestCase):
                 receipt[dependency['folder'] + '_archive_sha256'] = dependency['sha256']
             package.save_json(self.binary / Path(name).with_suffix('.build.json'), receipt)
         self.summary = {'platform': 'native-windows-x64', 'passed': True,
-                        'native_tests_passed': True, 'tests': [],
+                        'native_tests_passed': True, 'acl_requested': True, 'tests': [],
                         'tested_binary_sha256': package.binary_snapshot(self.binary)}
+        names = [name for name, _ in ci.NATIVE_CONSOLE_TESTS] + [case[0] for case in ci.SYNTAX_FALLBACK_TESTS] + ['file_codec_security', *sorted(ci.GUI_NAMES)]
+        for name in names:
+            result = {'name': name, 'passed': True, 'executed': True, 'cleanup_killed': False,
+                      'exit_code': 0, 'skips': []}
+            if name in ci.GUI_NAMES:
+                result.update(main_hwnd_seen=True, close_posted=True, detached_from_console=True)
+            else:
+                result['assertions_passed'] = ci.expected_assertions(name)
+            if name in {case[0] for case in ci.SYNTAX_FALLBACK_TESTS}:
+                result['fixture_binary_sha256'] = {binary: self.summary['tested_binary_sha256'][binary]
+                                                  for binary in ('syntax_native.exe', 'Scintilla.dll')}
+                if name == 'syntax_bad_lexer':
+                    result['fixture_binary_sha256']['Lexilla.dll'] = self.summary['tested_binary_sha256']['Scintilla.dll']
+            if name == 'main-gui-file-entry':
+                result.update({key: True for key in ci.GUI_FILE_CHECKS})
+                result['fixture_binary_sha256'] = {binary: self.summary['tested_binary_sha256'][binary]
+                                                  for binary in package.RUNTIME_NAMES}
+            self.summary['tests'].append(result)
         package.save_json(self.evidence / 'native-acceptance.json', self.summary)
         (self.evidence / 'msys2-packages.log').write_text('synthetic packages\n')
         (self.evidence / 'document_policy.stdout.log').write_text('synthetic results\n')
@@ -179,6 +198,42 @@ class PackageTests(unittest.TestCase):
         self.summary['native_tests_passed'] = False
         with self.assertRaisesRegex(RuntimeError, 'Native acceptance'):
             self.create()
+
+    def test_native_flags_and_hashes_cannot_bypass_required_results(self):
+        self.summary['tests'] = []
+        with self.assertRaisesRegex(RuntimeError, 'inventory'):
+            self.create()
+        self.assertFalse((self.root / 'dist').exists())
+
+    def test_native_packaging_rejects_every_missing_mandatory_result(self):
+        complete = list(self.summary['tests'])
+        for result in complete:
+            with self.subTest(name=result['name']):
+                self.summary['tests'] = [case for case in complete if case['name'] != result['name']]
+                with self.assertRaisesRegex(RuntimeError, 'inventory'):
+                    self.create()
+                self.assertFalse((self.root / 'dist').exists())
+
+    def test_native_packaging_rejects_cleanup_kill_even_with_true_flags(self):
+        self.summary['tests'][0]['cleanup_killed'] = True
+        with self.assertRaisesRegex(RuntimeError, 'did not pass normally'):
+            self.create()
+
+    def test_all_test_executables_and_receipts_are_required(self):
+        for name in package.TEST_NAMES:
+            with self.subTest(name=name):
+                path = self.binary / name
+                original = path.read_bytes()
+                path.unlink()
+                with self.assertRaisesRegex(RuntimeError, 'Missing'):
+                    self.create()
+                path.write_bytes(original)
+                receipt = path.with_suffix('.build.json')
+                original = receipt.read_bytes()
+                receipt.unlink()
+                with self.assertRaisesRegex(RuntimeError, 'Missing'):
+                    self.create()
+                receipt.write_bytes(original)
 
     def test_cross_build_remains_explicitly_unverified(self):
         self.summary.update(platform='cross-built-unverified', passed=False, native_tests_passed=False)

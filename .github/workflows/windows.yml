@@ -16,7 +16,9 @@ jobs:
   windows-native:
     name: Build and execute on Windows x64
     runs-on: windows-2022
-    timeout-minutes: 40
+    # Include the mandatory full >500 MB native editor case and extra source
+    # checks/builds. Individual execution deadlines and assertions stay strict.
+    timeout-minutes: 60
     defaults:
       run:
         shell: pwsh
@@ -34,7 +36,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: uppet/ru-language
-          ref: 5626adb791a8b3949a40e2421b9620fba8d785bf
+          ref: dd6cb81b52a426408f7076d82a84c2fdfb644263
           path: .ci/ru-language
           persist-credentials: false
       - name: Set up build-time Python

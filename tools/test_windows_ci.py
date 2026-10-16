@@ -16,6 +16,7 @@ import unittest
 from unittest.mock import patch
 
 import windows_ci as ci
+import build as builder
 
 
 class NoDialogs:
@@ -94,7 +95,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertIn('DUPLICATE_PATH_RESOLUTION_PASS', completed.stdout)
 
-    def test_required_native_suite_counts_are_explicit_and_unchanged(self):
+    def test_required_native_suite_counts_are_explicit(self):
         expected = {
             'document_policy': r'^TOTAL PASS: 23\s*$',
             'ui_arguments': r'^TOTAL PASS: 19\s*$',
@@ -102,16 +103,23 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'editor_native': r'^TOTAL PASS: 27\s*$',
             'app_native': r'^TOTAL PASS: 23\s*$',
             'app_features_native': r'^TOTAL PASS: 23\s*$',
+            'app_streaming_native': r'^APP_STREAMING_TESTS_PASS=63\s*$',
             'shortcuts': r'^TOTAL PASS: 34\s*$',
             'syntax_policy': r'^TOTAL PASS: 100\s*$',
             'status_native': r'^TOTAL PASS: 21\s*$',
             'syntax_native': r'^TOTAL PASS: 82\s*$',
-            'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=77\s*$',
+            'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=73\s*$',
+            'file_streaming_native': r'^FILE_STREAMING_TESTS_PASS=99\s*$',
+            'editor_streaming_native': r'^EDITOR_STREAMING_TESTS_PASS=21\s*$',
+            'editor_largefile_native': r'^EDITOR_LARGEFILE_TESTS_PASS=10\s*$',
+            'associations_policy': r'^TOTAL PASS: 19\s*$',
+            'associations_native': r'^TOTAL PASS: 36\s*$',
+            'file_drop_native': r'^TOTAL PASS: 38\s*$',
         }
         self.assertEqual(dict(ci.NATIVE_CONSOLE_TESTS), expected)
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 11)
-        # Eleven console gates, two isolated lexer fallbacks, GUI and ACL.
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + 2, 15)
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 18)
+        # Eighteen console gates, two lexer fallbacks, two real GUIs and ACL.
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 23)
 
     def test_flag_regression_is_built_packaged_and_in_user_test_runner(self):
         source = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
@@ -127,7 +135,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         source = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
         builds = re.search(r"foreach \(\$test in @\(([^)]+)\)\)", source)
         built_tests = set(re.findall(r"'([^']+)'", builds.group(1)))
-        required = {name for name, _ in ci.NATIVE_CONSOLE_TESTS}
+        required = {ci.CONSOLE_EXECUTABLES.get(name, name) for name, _ in ci.NATIVE_CONSOLE_TESTS}
         self.assertEqual(built_tests, required | {'file_codec_security_probe'})
         runner = (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8')
         for name in built_tests:
@@ -137,6 +145,39 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             self.assertRegex(runner, rf'(?m)^{name}\.exe(?: |$)')
         self.assertIn('call :syntax_fallback missing-lexilla --expect-missing', runner)
         self.assertIn('call :syntax_fallback bad-lexer --expect-bad-lexer', runner)
+
+    def test_build_inventory_sources_and_shared_helpers_exist(self):
+        with patch.object(builder, 'ROOT', ci.ROOT):
+            snapshot = builder.source_snapshot()
+        for name in ci.portable.TEST_NAMES:
+            self.assertIn(f'tests/{Path(name).stem}.ru', snapshot)
+        for helper in ('tests/drop_fixture.ru', 'tests/file_streaming_native.ru'):
+            self.assertIn(helper, snapshot)
+        self.assertNotIn('drop_fixture.exe', ci.BINARY_NAMES)
+        self.assertIn('src/main.ru', snapshot)
+        for relative in snapshot:
+            source = ci.ROOT / relative
+            for imported in re.findall(r"外言\s+'([^']+)'", source.read_text(encoding='utf-8')):
+                if not imported.startswith('如:'):
+                    resolved = (source.parent / imported).resolve()
+                    self.assertTrue(resolved.is_file(), f'Missing imported source: {relative}')
+                    self.assertIn(resolved.relative_to(ci.ROOT).as_posix(), snapshot)
+
+    def test_reviewed_compiler_pin_is_consistent_across_all_build_entrypoints(self):
+        commit = 'dd6cb81b52a426408f7076d82a84c2fdfb644263'
+        tree = '346d9f3f19c64f50f25b9f47ce92df1ea804bdb8'
+        self.assertEqual(builder.BASELINE_TREE, tree)
+        script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        self.assertIn(f"-ne '{commit}'", script)
+        self.assertIn(f"-ne '{tree}'", script)
+        self.assertIn(f'ref: {commit}', workflow)
+
+    def test_new_feature_documentation_links_resolve(self):
+        readme = (ci.ROOT / 'README.md').read_text(encoding='utf-8')
+        for relative in ('docs/windows_file_entry.md', 'docs/file_streaming_tests.md'):
+            self.assertIn(f']({relative})', readme)
+            self.assertTrue((ci.ROOT / relative).is_file())
 
     def test_runner_treats_every_nonzero_status_as_failure_without_shadowing(self):
         runner = (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8')
@@ -203,27 +244,31 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
     def acceptance(self):
         summary = {'acl_requested': True, 'tests': [],
                    'tested_binary_sha256': {name: name + '-hash' for name in ci.BINARY_NAMES}}
-        names = [name for name, _ in ci.NATIVE_CONSOLE_TESTS] + [case[0] for case in ci.SYNTAX_FALLBACK_TESTS] + ['file_codec_security', 'main-gui-smoke']
+        names = [name for name, _ in ci.NATIVE_CONSOLE_TESTS] + [case[0] for case in ci.SYNTAX_FALLBACK_TESTS] + ['file_codec_security', *sorted(ci.GUI_NAMES)]
         for name in names:
             result = {'name': name, 'passed': True, 'executed': True, 'cleanup_killed': False,
                       'exit_code': 0, 'skips': []}
-            if name == 'main-gui-smoke':
+            if name in ci.GUI_NAMES:
                 result.update(main_hwnd_seen=True, close_posted=True, detached_from_console=True)
             else:
                 result['assertions_passed'] = ci.expected_assertions(name)
-            if name.startswith('syntax_') and name != 'syntax_native':
+            if name in {case[0] for case in ci.SYNTAX_FALLBACK_TESTS}:
                 result['fixture_binary_sha256'] = {binary: summary['tested_binary_sha256'][binary]
                                                   for binary in ('syntax_native.exe', 'Scintilla.dll')}
                 if name == 'syntax_bad_lexer':
                     result['fixture_binary_sha256']['Lexilla.dll'] = summary['tested_binary_sha256']['Scintilla.dll']
+            if name == 'main-gui-file-entry':
+                result.update({key: True for key in ci.GUI_FILE_CHECKS})
+                result['fixture_binary_sha256'] = {binary: summary['tested_binary_sha256'][binary]
+                                                  for binary in ci.portable.RUNTIME_NAMES}
             summary['tests'].append(result)
         return summary
 
-    def test_acceptance_requires_all_fifteen_groups_and_553_assertions(self):
+    def test_acceptance_requires_all_23_groups_and_835_assertions(self):
         summary = self.acceptance()
         ci.validate_acceptance(summary)
-        self.assertEqual(len(summary['tests']), 15)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 553)
+        self.assertEqual(len(summary['tests']), 23)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 835)
 
     def test_acceptance_rejects_missing_or_duplicated_syntax_branch(self):
         summary = self.acceptance()
@@ -246,12 +291,262 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         with self.assertRaisesRegex(RuntimeError, 'count mismatch'):
             ci.validate_acceptance(summary)
 
+    def test_file_entry_gui_requires_every_check_and_exact_runtime(self):
+        for key in ci.GUI_FILE_CHECKS:
+            with self.subTest(key=key):
+                summary = self.acceptance()
+                next(case for case in summary['tests'] if case['name'] == 'main-gui-file-entry')[key] = False
+                with self.assertRaisesRegex(RuntimeError, 'required Unicode/drop/cancel'):
+                    ci.validate_acceptance(summary)
+        summary = self.acceptance()
+        next(case for case in summary['tests'] if case['name'] == 'main-gui-file-entry')['fixture_binary_sha256']['ru_notepad.exe'] = 'different'
+        with self.assertRaisesRegex(RuntimeError, 'packaged runtime'):
+            ci.validate_acceptance(summary)
+
+    def test_large_editor_mode_is_mandatory_with_explicit_time_and_disk_bound(self):
+        marker = dict(ci.NATIVE_CONSOLE_TESTS)['editor_largefile_native']
+        self.assertEqual(ci.console_command('editor_largefile_native', self.root, self.root),
+                         [str(self.root / 'editor_streaming_native.exe'), str(self.root), '--large'])
+        disk = type('Disk', (), {'free': ci.LARGE_FILE_MIN_FREE_BYTES})()
+        with patch.object(ci.shutil, 'disk_usage', return_value=disk), \
+             patch.object(ci, 'run_console', return_value={'passed': True}) as run:
+            ci.run_native_console(NoDialogs(), 'editor_largefile_native', marker, self.root, self.root, self.root)
+        self.assertEqual(run.call_args.kwargs['timeout'], 900)
+        self.assertEqual(run.call_args.kwargs['expected_assertions'], 10)
+        disk.free -= 1
+        with patch.object(ci.shutil, 'disk_usage', return_value=disk), patch.object(ci, 'run_console') as run:
+            result = ci.run_native_console(NoDialogs(), 'editor_largefile_native', marker, self.root, self.root, self.root)
+        self.assertFalse(result['passed'])
+        self.assertFalse(result['executed'])
+        self.assertFalse(result.get('skips'))
+        run.assert_not_called()
+
+    def test_large_modes_and_fixture_arguments_are_explained_in_portable_runner(self):
+        runner = (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8')
+        self.assertIn('3 GiB RAM, 2 GiB free disk, and 15 minutes', runner)
+        self.assertIn('editor_streaming_native.exe "%TESTDIR%" --large >>test-results.txt 2>&1', runner)
+        for name in ('file_streaming_native', 'editor_streaming_native'):
+            self.assertEqual(ci.console_command(name, self.root, self.root),
+                             [str(self.root / f'{name}.exe'), str(self.root)])
+            self.assertEqual(ci.CONSOLE_TIMEOUT_SECONDS[name], 300)
+        self.assertEqual(ci.console_command('app_streaming_native', self.root, self.root),
+                         [str(self.root / 'app_streaming_native.exe'), str(self.root)])
+        self.assertEqual(ci.CONSOLE_TIMEOUT_SECONDS['app_streaming_native'], 180)
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        self.assertIn('timeout-minutes: 60', workflow)
+        self.assertIn('-RunAclTests', workflow)
+
+    def test_gui_cancel_fixture_has_fixed_byte_budget_and_bounded_writes(self):
+        writes = []
+        class Stream:
+            def __enter__(self): return self
+            def __exit__(self, *_): pass
+            def write(self, data):
+                writes.append(len(data))
+                return len(data)
+        with patch.object(Path, 'open', return_value=Stream()):
+            ci.write_gui_cancel_fixture(self.root / 'unused')
+        self.assertEqual(sum(writes), 128 * 1024 * 1024)
+        self.assertLessEqual(max(writes), 65536)
+
+    def synthetic_drop_api(self, *, allocation=True, lock=True, posted=True):
+        class Kernel:
+            def __init__(self):
+                self.freed = []
+                self.allocations = []
+            def GlobalAlloc(self, flags, size):
+                self.allocations.append((flags, size))
+                self.buffer = ci.ctypes.create_string_buffer(size)
+                return 12345 if allocation else 0
+            def GlobalLock(self, _):
+                return ci.ctypes.addressof(self.buffer) if lock else 0
+            def GlobalUnlock(self, _): return True
+            def GlobalFree(self, handle): self.freed.append(handle)
+        class User:
+            def __init__(self): self.posts = []
+            def PostMessageW(self, *arguments):
+                self.posts.append(arguments)
+                return posted
+        api = object.__new__(ci.Windows)
+        api.kernel, api.user, api.drop_handles = Kernel(), User(), []
+        return api
+
+    def test_successful_drop_never_frees_transferred_handle_again(self):
+        api = self.synthetic_drop_api()
+        paths = [self.root / 'Unicode 路径 😀.txt', self.root / 'second file.txt']
+        api.drop(99, paths)
+        self.assertEqual(api.user.posts, [(99, 0x0233, 12345, 0)])
+        self.assertEqual(api.kernel.freed, [])
+        self.assertEqual(api.drop_handles, [12345])
+        payload = api.kernel.buffer.raw
+        self.assertEqual(struct.unpack_from('<IiiII', payload), (20, 0, 0, 0, 1))
+        self.assertEqual(payload[20:].decode('utf-16-le'), '\0'.join(map(str, paths)) + '\0\0')
+        api.release_drops()
+        self.assertEqual(api.drop_handles, [])
+        self.assertEqual(api.kernel.freed, [])
+
+    def test_failed_drop_and_lock_free_only_sender_owned_allocation(self):
+        for failure in ('post', 'lock', 'allocation'):
+            with self.subTest(failure=failure):
+                api = self.synthetic_drop_api(allocation=failure != 'allocation',
+                                              lock=failure != 'lock', posted=failure != 'post')
+                with patch.object(ci.ctypes, 'get_last_error', return_value=5, create=True), \
+                     patch.object(ci.ctypes, 'WinError', return_value=OSError('synthetic failure'), create=True):
+                    with self.assertRaises(OSError):
+                        api.drop(99, [self.root / 'synthetic.txt'])
+                self.assertEqual(api.kernel.freed, [] if failure == 'allocation' else [12345])
+                self.assertEqual(api.drop_handles, [])
+                self.assertEqual(len(api.user.posts), int(failure == 'post'))
+
+    def test_gui_drop_retention_is_bounded_before_allocation(self):
+        api = self.synthetic_drop_api()
+        api.drop_handles = [1] * ci.MAX_GUI_DROP_BATCHES
+        with self.assertRaisesRegex(RuntimeError, 'bounded allocation budget'):
+            api.drop(99, [self.root / 'synthetic.txt'])
+        self.assertEqual(api.kernel.allocations, [])
+        api.drop_handles.clear()
+        with self.assertRaisesRegex(RuntimeError, 'bounded allocation budget'):
+            api.drop(99, ['x' * ci.MAX_GUI_DROP_PAYLOAD_BYTES])
+        self.assertEqual(api.kernel.allocations, [])
+
+    def gui_file_entry(self, mode='normal'):
+        binary, fixtures, evidence = (self.root / name for name in ('bin', 'fixtures', 'evidence'))
+        for folder in (binary, fixtures, evidence):
+            folder.mkdir()
+        for name in ci.portable.RUNTIME_NAMES:
+            (binary / name).write_bytes(b'synthetic ' + name.encode())
+        process = type('Process', (), {'pid': 123, 'poll': lambda self: None})()
+        class FakeWindows:
+            def __init__(self):
+                self.docs = [('Untitled 1', b'')]
+                self.active = 0
+                self.busy = False
+                self.released = False
+                self.commands = []
+                self.drop_count = 0
+                self.drop_targets = []
+            def add(self, path):
+                data = path.read_bytes()
+                if data.startswith(b'\xff\xfe'):
+                    data = data[2:].decode('utf-16-le').encode('utf-8')
+                self.docs.append((path.name, data))
+                self.active = len(self.docs) - 1
+            def no_dialog(self, _): return []
+            def responsive(self, _): pass
+            def control(self, _, identifier): return identifier
+            def scalar(self, _, message):
+                if message != 0x1304: raise AssertionError('Unexpected synthetic query')
+                return len(self.docs)
+            def text(self, hwnd):
+                if hwnd == 11:
+                    return '  Opening: synthetic' if self.busy else 'Ready'
+                return self.docs[self.active][0] + ' · ru_notepad'
+            def editor_bytes(self, _):
+                data = self.docs[self.active][1]
+                return b'wrong' if mode == 'wrong-text' else data
+            def editor(self, _): return 456
+            def drop(self, hwnd, paths):
+                self.drop_targets.append(hwnd)
+                self.drop_count += 1
+                if self.drop_count == 1:
+                    for path in paths: self.add(path)
+                else:
+                    self.busy = True
+                    self.queued = paths
+            def command(self, _, identifier):
+                self.commands.append(identifier)
+                if identifier == 112:
+                    self.active = (self.active + 1) % len(self.docs)
+                elif identifier == 901:
+                    self.busy = False
+                    if mode == 'queued-after-cancel': self.add(self.queued[1])
+                    if mode == 'partial-after-cancel': self.add(self.queued[0])
+                else:
+                    raise AssertionError('Unexpected synthetic GUI command')
+            def release_drops(self): self.released = True
+        api = FakeWindows()
+        def launch(_, isolated, __, **kwargs):
+            self.assertEqual(kwargs['name'], 'main-gui-file-entry')
+            self.assertEqual(kwargs['log_prefix'], 'main-file-entry-launcher')
+            for path in kwargs['arguments']:
+                self.assertIn('😀', str(path.parent))
+                api.add(path)
+            try:
+                return {'passed': True, **kwargs['exercise'](process, 123)}
+            except RuntimeError as exc:
+                return {'passed': False, 'error': str(exc)}
+        ticks = [0.0]
+        def monotonic():
+            ticks[0] += 0.1
+            return ticks[0]
+        with patch.object(ci, 'run_gui', side_effect=launch), \
+             patch.object(ci, 'write_gui_cancel_fixture', side_effect=lambda path: path.write_bytes(b'small unit fixture')), \
+             patch.object(ci.time, 'monotonic', side_effect=monotonic), patch.object(ci.time, 'sleep'):
+            result = ci.run_gui_file_entry(api, binary, fixtures, evidence)
+        self.assertTrue(api.released)
+        return result, api
+
+    def test_gui_file_entry_exercises_unicode_cli_drop_cancel_and_original_bytes(self):
+        result, api = self.gui_file_entry()
+        self.assertTrue(result['passed'])
+        self.assertTrue(all(result[key] for key in ci.GUI_FILE_CHECKS))
+        self.assertEqual(api.drop_count, 2)
+        self.assertEqual(api.drop_targets, [456, 456], 'Drops must target the actual editor child, not its parent')
+        self.assertIn(901, api.commands)
+        self.assertEqual(set(result['fixture_binary_sha256']), set(ci.portable.RUNTIME_NAMES))
+
+    def test_gui_file_entry_rejects_wrong_content(self):
+        self.assertFalse(self.gui_file_entry('wrong-text')[0]['passed'])
+
+    def test_gui_file_entry_rejects_retained_queue_after_cancel(self):
+        self.assertFalse(self.gui_file_entry('queued-after-cancel')[0]['passed'])
+
+    def test_gui_file_entry_rejects_partial_document_after_cancel(self):
+        self.assertFalse(self.gui_file_entry('partial-after-cancel')[0]['passed'])
+
     def test_receipt_paths_are_portable_on_windows(self):
         build = (ci.ROOT / 'tools/build.py').read_text(encoding='utf-8')
         self.assertNotIn('str(p.relative_to(ROOT))', build)
         self.assertNotIn('str(source.relative_to(ROOT))', build)
-        self.assertEqual(build.count('p.relative_to(ROOT).as_posix()'), 2)
+        self.assertEqual(build.count('p.relative_to(ROOT).as_posix()'), 1)
         self.assertIn('source.relative_to(ROOT).as_posix()', build)
+
+    def test_build_snapshot_includes_imported_test_helpers(self):
+        for folder in ('src', 'tests'):
+            (self.root / folder).mkdir()
+        (self.root / 'src/main.ru').write_text('main source')
+        (self.root / 'tests/entry.ru').write_text('test entry')
+        helper = self.root / 'tests/imported_helper.ru'
+        helper.write_text('helper source')
+        with patch.object(builder, 'ROOT', self.root):
+            before = builder.source_snapshot()
+            self.assertEqual(set(before), {'src/main.ru', 'tests/entry.ru', 'tests/imported_helper.ru'})
+            helper.write_text('changed helper source')
+            after = builder.source_snapshot()
+        self.assertNotEqual(before['tests/imported_helper.ru'], after['tests/imported_helper.ru'])
+        self.assertTrue(all('\\' not in name and ':' not in name for name in after))
+
+    def test_acceptance_rejects_each_missing_or_duplicated_required_group(self):
+        complete = self.acceptance()
+        for name in (case['name'] for case in complete['tests']):
+            with self.subTest(name=name):
+                summary = self.acceptance()
+                summary['tests'] = [case for case in summary['tests'] if case['name'] != name]
+                with self.assertRaisesRegex(RuntimeError, 'inventory'):
+                    ci.validate_acceptance(summary)
+                summary['tests'].append(summary['tests'][0])
+                with self.assertRaisesRegex(RuntimeError, 'inventory'):
+                    ci.validate_acceptance(summary)
+
+    def test_acceptance_rejects_skip_kill_and_unexecuted_each_required_group(self):
+        complete = self.acceptance()
+        for name in (case['name'] for case in complete['tests']):
+            for key, value in (('skips', ['SKIP: case']), ('cleanup_killed', True), ('executed', False)):
+                with self.subTest(name=name, key=key):
+                    summary = self.acceptance()
+                    next(case for case in summary['tests'] if case['name'] == name)[key] = value
+                    with self.assertRaisesRegex(RuntimeError, 'did not pass normally'):
+                        ci.validate_acceptance(summary)
 
     def test_console_requires_execution_exit_zero_and_marker(self):
         result = self.console("print('PASS: synthetic'); print('TOTAL PASS: 1')")
@@ -271,6 +566,16 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
 
     def test_console_conflicting_totals_fail(self):
         self.assertFalse(self.console("print('PASS: one'); print('TOTAL PASS: 2'); print('TOTAL PASS: 1')")['passed'])
+
+    def test_console_conflicting_streaming_total_fails(self):
+        self.assertFalse(self.console("print('PASS: one'); print('FILE_STREAMING_TESTS_PASS=1'); print('TOTAL PASS: 1')")['passed'])
+
+    def test_console_accepts_unique_streaming_marker_with_exact_assertions(self):
+        with patch.object(ci, 'cleanup_process', side_effect=kill_synthetic):
+            result = ci.run_console(NoDialogs(), 'fixture', [sys.executable, '-c',
+                "print('PASS: synthetic'); print('FILE_STREAMING_TESTS_PASS=1')"], self.root,
+                r'^FILE_STREAMING_TESTS_PASS=1\s*$', expected_assertions=1)
+        self.assertTrue(result['passed'])
 
     def test_console_nonzero_fails_even_with_marker(self):
         result = self.console("print('TOTAL PASS: 1'); raise SystemExit(7)")

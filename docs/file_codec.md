@@ -1,50 +1,45 @@
 # File codec: implementation contract
 
-The application file layer is pure Ru source in `src/file_codec.ru`. Its only import is `如:密`; it binds Windows system APIs directly. It does not invoke Python, a C helper, a shell, or another executable when opening or saving. The Ru compiler may be hosted by Python at build time; the Windows executable has no Python runtime requirement.
+The application file layer is pure Ru source in `src/file_codec.ru`. It imports `如:密` and the small attribute predicate module; it binds Windows system APIs directly. It does not invoke Python, a C helper, a shell, or another executable when opening or saving. The Ru compiler may be hosted by Python at build time; the Windows executable has no Python runtime requirement.
 
-## Public API
+## Streaming API and ownership
 
-Import this module at application startup, before registering or entering a native UI callback. All native signatures, DLL bindings, layouts, and the `文件` object are initialized at module import.
+Import the module at application startup before entering native UI callbacks. The production open/save paths use step cursors, never whole-document Ru strings:
 
-```ru
-文件库 取 外言 'file_codec.ru'.
-文档 取 文件库 其 读文件 路径 0.
-新戳 取 文件库 其 写文件 路径 新文本 文档['encoding'] 文档['bom'] 文档['stamp'].
-```
+- `准备读取 路径 代码页` opens an ordinary-file read guard, obtains exact 64-bit size, `stamp`, `fileIdentity` (volume/file ID), and canonical `path`. It performs **no ReadFile**, including BOM reads, and allocates no file-content buffer.
+- `确认读取 状态 确认` invokes `确认(size)` only when the original file is **strictly greater than 500,000,000 bytes**. A false result closes the snapshot and returns false. An exception also closes it. Reconfirming the same approved cursor does not prompt twice.
+- `读取一步 状态` returns one bounded decoded text chunk. It refuses an unapproved cursor. A final `空` is returned only after a one-byte EOF growth probe and an unchanged identity/size/write-time stamp, with the reader closed. Unexpected short reads fail closed rather than returning partial text. `关闭读取 状态` cancels idempotently.
+- Reader metadata includes `size` / `bytes` (original bytes including BOM), `textBytes` (decoded UTF-8 bytes), `encoding`, `bom`, `position`, `readCalls`, `readBytes`, `bufferBytes`, `done`, and `closed`. Counters are per cursor. `bufferBytes` is the raw-buffer high-water bound, not total process memory; decoder scratch and Scintilla are separate.
+- `准备写入 路径 编码 BOM 预期stamp` performs target/ACL preflight and creates protected same-directory staging. `写入一段 状态 文本` validates, losslessly encodes, and writes a bounded chunk. `完成写入 状态` flushes and performs the original guarded replacement/recovery sequence, returning the new stamp. Successful writer metadata also contains `fileIdentity` and `stamp`.
+- `取消写入 状态` closes resources and deletes only owned staging files before replacement. Cleanup failure is reported with paths. Replacement-phase failures retain recovery files and their paths, as described below.
 
-Equivalent object methods are `文件库 其 文件 其 读取 路径 代码页` and `文件库 其 文件 其 写入 路径 文本 编码 BOM 预期stamp`. The top-level name `读取` is a protected Ru builtin, hence the module wrapper is named `读文件`.
+The parent UI advances one or a few bounded steps per message-loop tick; it must never call into Ru from a background native thread. It owns the pending hidden editor, obtains large-file approval before constructing that editor, and commits a tab only after checked EOF. During saving it locks the source read-only and verifies document revision before each step and before commit. Path, identity, encoding state, and the savepoint change only after successful file commit. Cancelling or failing preserves the previously committed tabs and their dirty state.
 
-`读文件` returns a map with these fields:
+`editor.ru` exposes `开始载入(hwnd,size)`, `追加文本(loadState,text)`, `完成载入(loadState)`, `开始取文(hwnd)`, and `取文一步(sourceState)`. Loads disable undo collection until completion and retain CR/LF boundary state. New Scintilla documents use `SC_DOCUMENTOPTION_TEXT_LARGE`; files at least 32,000,000 bytes also use `STYLES_NONE` as a separate performance threshold, not a size limit or confirmation threshold. The application uses plain text and disables wrapping for these large-file loads. `SCI_CREATEDOCUMENT` / `SCI_SETDOCPOINTER` / `SCI_RELEASEDOCUMENT` ownership is balanced. Save extraction uses `SCI_GETTEXTRANGEFULL` with full-width positions and strict UTF-8/NUL validation of each owned range.
 
-- `text`: exact decoded text, including its original line endings
-- `encoding`: 65001 (UTF-8), 1200 (UTF-16LE), 1201 (UTF-16BE), 1252 (Windows-1252), or 936 (Windows GBK)
-- `bom`: whether a recognized BOM was present
-- `stamp`: opaque conflict token for the opened file
-- `path`: canonical absolute path used for the read; retain this path in editor state
+`流读文件(path, codepage, confirm, consume)` and `流写文件(path, produce, encoding, bom, stamp)` are synchronous streaming adapters for tests and non-UI callers. `consume(text)` receives one bounded string; `produce()` returns one string of at most 65,536 Unicode code points or `空` at EOF. These adapters do not collect all chunks.
 
-`绝对路径 路径` returns the same checked canonical absolute path without opening the file. Canonicalize command-line and dialog paths before storing them, because another file dialog may change the process working directory.
+The compatibility whole-string helpers `读文件` and `editor.文本` explicitly refuse inputs over 1 MiB so accidental callers cannot regress to unbounded concatenation. **That is a convenience-API guard, not an editor document-size limit.** `写文件` slices its already-existing input string into bounded output chunks. The UI does not use these helpers for document open/save. `绝对路径` remains the checked path canonicalizer. The `文件.读取/写入` methods retain compatibility-helper semantics.
 
-`写文件` returns the new conflict token. Preserve that token for the next save. An empty expected token allows an initial Save As selection; the caller must obtain overwrite confirmation in its file dialog. An empty token is not an instruction to overwrite whatever appears later.
+Errors use `卒` and should be caught with `试` / `救`. Native allocation exhaustion and an invalid native ABI are not guaranteed recoverable. Streaming bounds scratch buffers; Scintilla still holds the complete editable document and may require substantially more RAM than the file's encoded size. There is no claim of infinite-memory editing. Before native-to-Ru conversion, size words are checked against Ru's precise integer range (2^53−1) and the two native size probes must agree; extreme unsupported sizes raise a recoverable error rather than rounding or invoking a fatal native conversion.
 
-Errors intended for the UI are raised with `卒` and should be caught with `试` / `救`. Opening should replace editor state only after the complete read has succeeded. Saving should clear the dirty flag only after the function returns successfully. Native allocation exhaustion and a fundamentally invalid native ABI are not recoverable file errors.
+## Encoding and bounded chunks
 
-## Encoding and bounds
+There is no 4 MiB, 16 MiB, or 500 MB file-size cap. The 500 MB value is a cancellable pre-read warning. Each raw read is at most 65,536 bytes; owned conversion buffers and text fragments are bounded independently of document length and remain far below the unchanged `如:密` 16 MiB per-allocation ceiling. Saving accepts at most 65,536 code points per step; at worst its UTF-16/UTF-8 scratch is approximately 256 KiB. Paths and copied security descriptors retain their separate pre-existing API bounds.
 
-The maximum file length is 4,194,304 bytes (4 MiB), including any BOM. A file exactly at the limit is accepted if its encoding and text are valid. A save whose encoded bytes plus BOM exceed that limit fails before any destination replacement.
+With code page 0, a recognized BOM determines the encoding; otherwise only strict UTF-8 is attempted. A BOM takes precedence over an explicitly selected code page. BOM-less UTF-16 requires explicit selection. Both UTF-32 BOMs are rejected. No guessing, system ACP fallback, replacement insertion, or silent legacy fallback occurs.
 
-With code page 0, a recognized BOM determines the encoding; otherwise only strict UTF-8 is attempted. Invalid UTF-8 produces an explicit instruction to reopen with Windows-1252 or GBK. No statistical encoding detection, system ACP fallback, replacement character insertion, or silent legacy guessing occurs. A BOM takes precedence even if the caller specifies another code page. BOM-less UTF-16 is supported only when the caller explicitly chooses 1200 or 1201.
+Each nonfinal raw block is decoded whole first. Only on failure may a valid prefix ending up to three bytes earlier be used (one byte for CP936). The remaining bytes are reread by seeking the same guarded handle to the positively advancing accepted offset. This covers UTF-8 multibyte sequences, UTF-16 surrogate pairs/odd bytes, and CP936 double-byte characters without classifying a valid CP936 trail byte as a lead. Final incomplete sequences always fail. An invalid interior or NUL eventually fails and the pending editor is discarded.
 
-- UTF-8 is decoded by `MultiByteToWideChar` with `MB_ERR_INVALID_CHARS`.
-- UTF-16 must contain an even number of bytes. UTF-16BE is byte-swapped into a separate buffer by `LCMapStringW` using only `LCMAP_BYTEREV`, then validated like UTF-16LE.
-- UTF-16 is validated using `WideCharToMultiByte` with UTF-8 plus `WC_ERR_INVALID_CHARS` before Ru's strict decoder runs.
-- Both UTF-32 BOM forms are rejected.
-- Every decoded UTF-16 buffer has an owned, zero-filled extra terminator. The native string length must equal the explicit decoded length, so embedded NUL cannot silently truncate a document.
-- Windows-1252 and CP936 are explicit choices. Legacy output uses `WC_NO_BEST_FIT_CHARS`, rejects a set `lpUsedDefaultChar`, and additionally requires an exact Unicode round trip. Unsupported characters are never changed to `?` or a visually similar character.
-- Legacy encodings cannot have a BOM.
+- UTF-8 and explicit legacy input use `MultiByteToWideChar(MB_ERR_INVALID_CHARS)`.
+- UTF-16BE is byte-swapped with `LCMAP_BYTEREV`; UTF-16 is validated with `WideCharToMultiByte(UTF8, WC_ERR_INVALID_CHARS)`.
+- Prefix copies use bounded `RtlMoveMemory` into owned buffers with extra zero terminators. Native string length must equal the decoded explicit length, preventing NUL truncation. There is no bare pointer arithmetic or decoding of externally owned pointers.
+- Windows-1252 and GBK output use `WC_NO_BEST_FIT_CHARS`, reject `lpUsedDefaultChar`, and require an exact Unicode round trip. Legacy BOMs are rejected.
+- Original line-ending bytes are retained. Detection remembers a trailing CR between chunks so CR|LF is recognized correctly.
 
-Native buffers are individually bounded at or below the `如:密` 16 MiB ceiling. Conversion counts use explicit byte or UTF-16-unit lengths. No pointer arithmetic or unbounded externally owned pointer decoding is used. Paths and text are passed through owned UTF-16 buffers. Binary data containing NUL, invalid UTF-8, and invalid UTF-16 is rejected; the layer does not claim to distinguish all binary formats from valid non-NUL text.
+Reading and writing use synchronous bounded Windows calls. The UI can cancel between steps; a slow or stalled individual filesystem call, including UNC access, can delay cancellation. This implementation does not promise interruptible in-flight I/O.
 
-Reference contracts: [MultiByteToWideChar](https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-multibytetowidechar), [WideCharToMultiByte](https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-widechartomultibyte), [LCMapStringW](https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-lcmapstringw), and [LCMAP_BYTEREV](https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-lcmapstringex).
+Reference contracts: [MultiByteToWideChar](https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-multibytetowidechar), [WideCharToMultiByte](https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-widechartomultibyte), [LCMapStringW](https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-lcmapstringw), and [Scintilla document ownership and options](https://www.scintilla.org/ScintillaDoc.html#SCI_CREATEDOCUMENT).
 
 ## Conflict detection and scope
 
@@ -58,7 +53,7 @@ The codec supports normal file paths and rejects device namespaces (including mi
 
 ## Save and recovery sequence
 
-1. Encode and validate the entire output before any replacement is attempted.
+1. Validate encoding/BOM policy, then encode and validate each bounded chunk into staging. All chunks must succeed before replacement is attempted; a late conversion/source failure removes owned staging and leaves the destination intact.
 2. Inspect the selected target. Capture its current stamp even for a confirmed Save As overwrite. While the existing-file read guard is still held, read its DACL with `GetFileSecurityW`. Fail closed if security information cannot be obtained or validated.
 3. Convert the owned self-relative security copy to an absolute descriptor using `MakeAbsoluteSD`, with separate owned component buffers. Set `SE_DACL_PROTECTED` only on this in-memory copy to prevent parent ACE inheritance from broadening temporary-file access. Supply it through `SECURITY_ATTRIBUTES` at `CREATE_NEW` for both the staged document and reserved backup. All referenced buffers stay alive throughout saving. New destinations without an existing security descriptor use normal creation permissions. Existing temporary files are never truncated.
 4. Write the BOM and body using checked, explicit byte counts. A short write fails. Call `FlushFileBuffers`, then close the temporary handle.
@@ -80,7 +75,7 @@ References: [ReplaceFileW and its recovery/metadata behavior](https://learn.micr
 
 ## Native integration tests
 
-`tests/file_codec_tests.ru` is a pure-Ru Windows x64 test executable. It requires an explicit disposable, existing directory argument and uses only `ru-codec-test-` prefixed fixtures there. It checks exact on-disk bytes and round trips for UTF-8 with/without BOM, UTF-16LE/BE with/without BOM, Windows-1252, CP936, and empty files; supplementary Unicode and non-ASCII filenames; malformed sequences and embedded NUL; refusal of lossy legacy saves; unchanged originals after conversion failure; external modification conflicts; sharing errors; read-only/hard-link replacement refusal; and exact/over-limit 4 MiB cases. The suite has 77 planned assertions, or 76 when its optional hard-link fixture is unsupported. These counts describe coverage, not a completed test run.
+`tests/file_codec_tests.ru` is a pure-Ru Windows x64 test executable. It requires an explicit disposable, existing directory argument and uses only `ru-codec-test-` prefixed fixtures there. It checks exact on-disk bytes and round trips for UTF-8 with/without BOM, UTF-16LE/BE with/without BOM, Windows-1252, CP936, and empty files; supplementary Unicode and non-ASCII filenames; malformed sequences and embedded NUL; refusal of lossy legacy saves; unchanged originals after conversion failure; external modification conflicts; sharing errors; read-only/hard-link replacement refusal; and compatibility API behavior. Historical 4 MiB rejection assertions were removed; new streaming suites cover successful larger files. The legacy suite has 73 planned assertions, or 72 when its optional hard-link fixture is unsupported. These counts describe coverage, not a completed test run. See [streaming coverage](file_streaming_tests.md) for the additional 99 codec assertions and 21 normal / 10 >500 MB editor assertions.
 
 Static checks:
 
