@@ -1,0 +1,9 @@
+{
+  "title": "ru_notepad syntax sample",
+  "unicode": "甲乙 😀",
+  "escaped": "one\ntwo",
+  "count": 42,
+  "enabled": true,
+  "nothing": null,
+  "values": [1, 2, 3]
+}

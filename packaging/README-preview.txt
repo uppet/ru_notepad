@@ -1,4 +1,4 @@
-ru_notepad 0.1.1-preview · Windows x64
+ru_notepad 0.1.2-preview · Windows x64
 
 IMPORTANT: EXPERIMENTAL PORTABLE PREVIEW
 Read BUILD.json for this exact package's verification results. A local cross-build
@@ -24,7 +24,7 @@ forced termination or power loss can produce a diagnostic dialog.
 
 RUN
 1. Extract the complete ZIP into a writable directory.
-2. Keep ru_notepad.exe and Scintilla.dll together.
+2. Keep ru_notepad.exe, Scintilla.dll and Lexilla.dll together.
 3. Run ru_notepad.exe. No Python, Ru compiler, installation or admin rights needed.
    Windows may warn about this unsigned, newly built application. No code-signing
    or SmartScreen reputation is claimed.
@@ -34,14 +34,24 @@ RUN
 IMPLEMENTED, WITH ACCEPTANCE SCOPE RECORDED IN BUILD.json
 Independent document tabs; open/save/save-as; UTF-8/BOM and UTF-16 LE/BE;
 Windows-1252 and GBK; undo/redo; literal find/replace; case matching;
-replace-all as one undo group; word wrap; zoom; line numbers.
+replace-all as one undo group; word wrap; zoom/reset; line numbers; native C/C++
+and JSON highlighting, extension detection and a Language menu. Ru source files
+remain plain text until a dedicated Ru lexer is implemented.
+
+STATUS AND SHORTCUTS
+Ln/Col are one-based. Col uses Scintilla tab-expanded Unicode codepoint columns,
+not UTF-8 bytes, screen pixels or grapheme clusters; combining marks count separately.
+Line EOL describes the caret line (CRLF/LF/CR/None at EOF); Enter describes the
+new-line insertion mode. Mixed files are not claimed to have one uniform EOL.
+Ctrl+Tab / Ctrl+Shift+Tab and Ctrl+PageDown / Ctrl+PageUp switch tabs.
+Ctrl++ / Ctrl+- zoom; Ctrl+0 resets zoom. Ctrl+Alt/AltGr is left to input methods.
 
 LIMITS
 4 MiB file/save and UTF-8 editor-load limit, 64 tabs.
 Embedded NUL and invalid Unicode text are rejected; no binary-file editing.
 A legacy-encoded file may expand beyond the UTF-8 editor-load limit.
-Not full Notepad++ parity. No regex, syntax
-lexers, plugin ABI, macros, sessions/recovery, split views, project panels,
+Not full Notepad++ parity. No regex parity, Ru-specific lexer, additional language
+catalogue, plugin ABI, macros, sessions/recovery, split views, project panels,
 printing, installer/file associations, updater, or network features yet.
 Accessibility, IME, high-DPI/multi-monitor, large-file behavior, and Windows
 version compatibility have not been accepted. Windows 10/11 x64 is the target.
@@ -52,7 +62,8 @@ A same-directory temporary file is written and flushed. Existing ordinary files
 use ReplaceFileW with a recovery backup; new files use no-overwrite rename.
 Read-only files, EFS-encrypted saves, hard-linked destinations and selected
 reparse points are rejected. Existing-file staging uses a protected copy of the
-source DACL; actual NTFS permission preservation still needs runtime acceptance.
+source DACL. BUILD.json records the synthetic protected/inherited NTFS cases;
+those cases do not establish all ACL/EFS/filesystem behavior.
 File identity/time/size guards detect ordinary external changes, but there is
 an unavoidable check-to-replace race; this is not a filesystem transaction.
 If replacement or cleanup reports an error, keep the named .tmp/.bak recovery
@@ -62,7 +73,10 @@ Orderly sign-out/restart is vetoed while documents are dirty, but Windows can
 force termination. No autosave or crash recovery exists yet.
 
 TESTS
-run-tests.cmd runs included native test executables against real Win32 controls
+The normal runtime ZIP has only the editor and its DLLs, with docs and licenses.
+Download the separate tests ZIP only if you want executable checks and CI evidence.
+That tests ZIP is self-contained and includes the identical tested runtime bytes.
+Inside the tests ZIP, run-tests.cmd runs native executables against Win32 controls
 and a fresh disposable folder within this package. It does not need Python.
 A test failure is a real failure; a build-only result is not a test pass.
 Save test-results.txt when reporting a problem. GUI smoke tests may open windows.
@@ -88,5 +102,6 @@ private document contents, or originals just to report a bug.
 COMPONENTS
 Application logic: Ru compiled to native C/Windows PE.
 Editor core: Scintilla 5.6.7, built from official source; license in licenses/.
+Syntax engine: Lexilla 5.5.4, built from official source; license in licenses/.
 Icon: original GPT-generated artwork. No Notepad++ branding or source included.
-This local prototype has no selected public project license.
+The application has no selected public project license.

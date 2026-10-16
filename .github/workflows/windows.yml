@@ -16,7 +16,7 @@ jobs:
   windows-native:
     name: Build and execute on Windows x64
     runs-on: windows-2022
-    timeout-minutes: 30
+    timeout-minutes: 40
     defaults:
       run:
         shell: pwsh
@@ -69,7 +69,7 @@ jobs:
             build/windows-ci/evidence/*.log
           if-no-files-found: warn
           retention-days: 14
-      - name: Upload the native-tested portable preview
+      - name: Upload separate native-tested runtime and tests ZIPs
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

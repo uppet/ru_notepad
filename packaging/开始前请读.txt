@@ -1,4 +1,4 @@
-ru_notepad 0.1.1-preview · Windows x64 便携预览
+ru_notepad 0.1.2-preview · Windows x64 便携预览
 
 重要：这是实验性便携预览。请以 BUILD.json 查看这个包的实际验证结果。
 交叉编译不等于 Windows 实跑；Windows CI 包仅在列明的原生测试和
@@ -16,21 +16,28 @@ ru_notepad 0.1.1-preview · Windows x64 便携预览
 这不等于崩溃恢复，也不能保证强制终止或所有系统级崩溃都有弹窗。
 
 使用方法
-1. 完整解压 ZIP，保持 ru_notepad.exe 与 Scintilla.dll 在同一目录。
+1. 完整解压 ZIP，保持 ru_notepad.exe、Scintilla.dll、Lexilla.dll 在同一目录。
 2. 运行 ru_notepad.exe；不需要 Python、Ru 编译器、安装程序或管理员权限。
 3. 本程序尚未签名，系统可能提醒它是未知应用；不要关闭系统安全保护。
 4. Ctrl+O 打开，Ctrl+S 保存，Ctrl+Shift+S 另存为，Ctrl+W 关闭标签。
-   Ctrl+F 查找，Ctrl+H 替换，F3 查找下一个，Ctrl+Tab 切换标签。
+   Ctrl+F 查找，Ctrl+H 替换，F3 查找下一个。
+   Ctrl+Tab / Ctrl+Shift+Tab 切换下个/上个标签，Ctrl+PageDown/PageUp 也可用。
+   Ctrl++ / Ctrl+- 缩放，Ctrl+0 复位；不拦截 Ctrl+Alt/AltGr 输入法组合。
 
 当前已实现，自动化验收范围见 BUILD.json
 多文档标签；独立撤销/重做；打开/保存/另存为；脏文档保存询问；
 UTF-8/BOM、UTF-16 LE/BE、显式 Windows-1252 和 GBK；
 文字查找/替换、大小写选项、一次撤销的全部替换；行号、折行和缩放。
+Lexilla 提供真实 C/C++、JSON 高亮，可按扩展名自动选择或在 Language 菜单手选。
+如言 .ru 暂为纯文本，没有冒用其它语言 lexer 当作完整如言支持。
+状态栏分别显示光标所在行的换行符和 Enter 新插入的换行模式，混合换行不会误标。
+行列从 1 开始；列按 Scintilla 展开制表符并计算 Unicode 码点，组合字符单独计数，
+不是 UTF-8 字节、屏幕像素或用户感知字符数。
 
 主要限制
 每个文件及保存结果最多 4 MiB，编辑器载入后的 UTF-8 也最多 4 MiB。
 最多 64 个标签。拒绝嵌入 NUL、非法 Unicode 和有损的旧编码保存。
-尚无崩溃恢复、会话恢复、正则、语法高亮、插件、宏、分屏、打印等。
+尚无崩溃恢复、会话恢复、正则对齐、如言专用高亮、插件、宏、分屏、打印等。
 这不是 Notepad++ 全功能替代版本。IME、无障碍、高 DPI 等未验收。
 
 保存注意事项
@@ -42,12 +49,14 @@ NTFS 权限的具体测试结果见 BUILD.json，不能泛化到所有文件系�
 没有自动应急保存或崩溃恢复。注销时会尝试阻止丢失未保存内容，强制结束除外。
 
 测试与反馈
-run-tests.cmd 会运行随包提供的原生测试，并在包目录创建一次性样例目录。
+普通运行包只保留编辑器 EXE、两个 DLL、说明、样例和许可，没有测试 EXE。
+如需自测，请另下完整 tests 测试包；它包含与运行包逐字节相同的程序和依赖。
+测试包内 run-tests.cmd 会运行原生测试，并在包目录创建一次性样例目录。
 结果写入 test-results.txt；测试失败必须按失败报告，不是构建通过就算通过。
 可选 ACL 测试不会自动运行，它会改变新建的合成测试目录权限；详见
 OPTIONAL-ACL-TESTS.txt。不要对真实文档直接运行其 probe 程序。
 反馈请附 Windows 版本、重现步骤、BUILD.json 的版本标识和测试结果。
 无需发送私密文档、密码或唯一原件。
 
-程序逻辑主要用 Ru 编写并编译为本机代码；编辑器核心为 Scintilla 5.6.7。
+程序逻辑主要用 Ru 编写并编译为本机代码；编辑器核心为 Scintilla 5.6.7，语法引擎为 Lexilla 5.5.4。
 图标为原创 GPT 生成。依赖许可见 licenses，详细说明见 README.txt。

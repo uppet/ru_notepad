@@ -20,14 +20,12 @@ import subprocess
 import sys
 import tempfile
 import time
-import zipfile
+import package as portable
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_LOG_BYTES = 1024 * 1024
 MAIN_CLASS = 'RuNotepad.Main.0.1'
-BINARY_NAMES = ['ru_notepad.exe', 'Scintilla.dll', 'document_policy.exe',
-                'ui_arguments.exe', 'file_codec_flags.exe', 'editor_native.exe', 'app_native.exe',
-                'file_codec_tests.exe', 'file_codec_security_probe.exe']
+BINARY_NAMES = list(portable.BINARY_NAMES)
 # Each required console executable must run and report its exact assertion count.
 NATIVE_CONSOLE_TESTS = (
     ('document_policy', r'^TOTAL PASS: 23\s*$'),
@@ -35,12 +33,17 @@ NATIVE_CONSOLE_TESTS = (
     ('file_codec_flags', r'^TOTAL PASS: 80\s*$'),
     ('editor_native', r'^TOTAL PASS: 27\s*$'),
     ('app_native', r'^TOTAL PASS: 23\s*$'),
+    ('app_features_native', r'^TOTAL PASS: 23\s*$'),
     ('file_codec_tests', r'^FILE_CODEC_TESTS_PASS=77\s*$'),
+    ('shortcuts', r'^TOTAL PASS: 34\s*$'),
+    ('status_native', r'^TOTAL PASS: 21\s*$'),
+    ('syntax_native', r'^TOTAL PASS: 82\s*$'),
 )
-SYSTEM_DLLS = {'advapi32.dll', 'gdi32.dll', 'imm32.dll', 'kernel32.dll',
-               'msvcrt.dll', 'ole32.dll', 'oleaut32.dll', 'user32.dll',
-               'comctl32.dll', 'comdlg32.dll', 'shell32.dll', 'shlwapi.dll',
-               'version.dll', 'winmm.dll', 'ntdll.dll', 'uxtheme.dll', 'dwmapi.dll'}
+SYNTAX_FALLBACK_TESTS = (
+    ('syntax_missing_lexilla', '--expect-missing', False),
+    ('syntax_bad_lexer', '--expect-bad-lexer', True),
+)
+SYSTEM_DLLS = portable.SYSTEM_DLLS
 
 
 def sha(path):
@@ -130,14 +133,14 @@ def cleanup_process(process):
     return True
 
 
-def run_console(api, name, command, evidence, marker, timeout=120):
+def run_console(api, name, command, evidence, marker, timeout=120, expected_assertions=None, cwd=None):
     out, err = evidence / f'{name}.stdout.log', evidence / f'{name}.stderr.log'
     result = {'name': name, 'passed': False, 'executed': False, 'cleanup_killed': False}
     started = time.monotonic()
     process = None
     try:
         with out.open('xb') as stdout, err.open('xb') as stderr:
-            process = subprocess.Popen(command, cwd=ROOT, stdout=stdout, stderr=stderr)
+            process = subprocess.Popen(command, cwd=cwd or ROOT, stdout=stdout, stderr=stderr)
             result['executed'] = True
             deadline = time.monotonic() + timeout
             while process.poll() is None:
@@ -155,8 +158,11 @@ def run_console(api, name, command, evidence, marker, timeout=120):
             raise RuntimeError(f'{name}: required native gate skipped a case: {result["skips"]}')
         if process.returncode != 0:
             raise RuntimeError(f'{name}: nonzero exit status {process.returncode}')
-        if not re.search(marker, stdout_text, re.M) or 'FAIL:' in stdout_text + stderr_text:
-            raise RuntimeError(f'{name}: required success marker missing or failure reported')
+        totals = re.findall(r'^(?:TOTAL PASS:|FILE_CODEC_TESTS_PASS=|FILE_CODEC_SECURITY_TESTS_PASS).*$', stdout_text, re.M)
+        if len(totals) != 1 or len(re.findall(marker, stdout_text, re.M)) != 1 or 'FAIL:' in stdout_text + stderr_text:
+            raise RuntimeError(f'{name}: exact unique success marker missing or failure reported')
+        if expected_assertions is not None and result['assertions_passed'] != expected_assertions:
+            raise RuntimeError(f'{name}: expected {expected_assertions} individual PASS lines, got {result["assertions_passed"]}')
         result['passed'] = True
     except Exception as exc:
         result['error'] = str(exc)
@@ -252,19 +258,7 @@ def run_gui(api, binary_dir, evidence):
 
 
 def inspect_pe(path, objdump):
-    data = path.read_bytes()
-    if len(data) < 64 or data[:2] != b'MZ':
-        raise RuntimeError(f'{path.name}: missing PE header')
-    offset = struct.unpack_from('<I', data, 60)[0]
-    if data[offset:offset + 4] != b'PE\0\0' or struct.unpack_from('<H', data, offset + 4)[0] != 0x8664:
-        raise RuntimeError(f'{path.name}: not a Windows x64 executable')
-    output = subprocess.check_output([str(objdump), '-p', str(path)], text=True, timeout=30)
-    imports = re.findall(r'DLL Name:\s*(\S+)', output)
-    # MINGW64 targets msvcrt. No hidden compiler runtime DLL dependency is allowed.
-    unexpected = {name.lower() for name in imports} - SYSTEM_DLLS
-    if unexpected:
-        raise RuntimeError(f'{path.name}: unpackaged non-system DLL imports: {sorted(unexpected)}')
-    return {'sha256': sha(path), 'bytes': len(data), 'machine': 'AMD64', 'imports': imports}
+    return portable.inspect_pe(path, objdump)
 
 
 def copy_runtime_licenses(mingw, destination):
@@ -290,82 +284,74 @@ def copy_runtime_licenses(mingw, destination):
         raise RuntimeError('MinGW-w64 license notices are missing')
 
 
+def run_syntax_fallbacks(api, binary_dir, fixtures, evidence):
+    results = []
+    for name, argument, bad_lexer in SYNTAX_FALLBACK_TESTS:
+        isolated = Path(fixtures) / name
+        isolated.mkdir()
+        for binary in ('syntax_native.exe', 'Scintilla.dll'):
+            shutil.copyfile(binary_dir / binary, isolated / binary)
+        if bad_lexer:
+            # A real loadable DLL with no CreateLexer export, never a mock flag.
+            shutil.copyfile(binary_dir / 'Scintilla.dll', isolated / 'Lexilla.dll')
+        fixture_hashes = {binary: sha(isolated / binary) for binary in ('syntax_native.exe', 'Scintilla.dll')}
+        for binary, digest in fixture_hashes.items():
+            if digest != sha(binary_dir / binary):
+                raise RuntimeError('Syntax fallback fixture differs from the tested binaries')
+        if bad_lexer:
+            fixture_hashes['Lexilla.dll'] = sha(isolated / 'Lexilla.dll')
+            if fixture_hashes['Lexilla.dll'] != fixture_hashes['Scintilla.dll']:
+                raise RuntimeError('Bad-export fixture must contain the exact Scintilla DLL copy')
+        result = dict(run_console(api, name, [str(isolated / 'syntax_native.exe'), argument],
+            evidence, r'^TOTAL PASS: 8\s*$', expected_assertions=8, cwd=isolated))
+        result['fixture_binary_sha256'] = fixture_hashes
+        results.append(result)
+    return results
+
+
+def expected_assertions(name):
+    if name in {case[0] for case in SYNTAX_FALLBACK_TESTS}:
+        return 8
+    if name == 'file_codec_security':
+        return 28
+    marker = dict(NATIVE_CONSOLE_TESTS)[name]
+    return int(re.search(r'(?:PASS: |PASS=)([0-9]+)', marker)[1])
+
+
+def validate_acceptance(summary):
+    expected = {name for name, _ in NATIVE_CONSOLE_TESTS} | {'main-gui-smoke'} | {case[0] for case in SYNTAX_FALLBACK_TESTS}
+    if summary['acl_requested']:
+        expected.add('file_codec_security')
+    results = summary['tests']
+    if len(results) != len(expected) or {test['name'] for test in results} != expected:
+        raise RuntimeError('Native acceptance test inventory is incomplete or duplicated')
+    for test in results:
+        if not test['passed'] or not test['executed'] or test['cleanup_killed'] or test.get('exit_code') != 0 or test.get('skips'):
+            raise RuntimeError(f'Native acceptance test did not pass normally: {test["name"]}')
+        if test['name'] != 'main-gui-smoke' and test.get('assertions_passed') != expected_assertions(test['name']):
+            raise RuntimeError(f'Native acceptance assertion count mismatch: {test["name"]}')
+        if test['name'] in {case[0] for case in SYNTAX_FALLBACK_TESTS}:
+            expected_hashes = {name: summary['tested_binary_sha256'][name]
+                               for name in ('syntax_native.exe', 'Scintilla.dll')}
+            if test['name'] == 'syntax_bad_lexer':
+                expected_hashes['Lexilla.dll'] = expected_hashes['Scintilla.dll']
+            if test.get('fixture_binary_sha256') != expected_hashes:
+                raise RuntimeError('Syntax fallback fixture does not match the packaged test binaries')
+        if test['name'] == 'main-gui-smoke' and not all(test.get(key) for key in
+                ('main_hwnd_seen', 'close_posted', 'detached_from_console')):
+            raise RuntimeError('GUI acceptance lacks ordinary visible-window startup/close')
+
+
 def package(binary_dir, evidence, mingw, objdump, summary):
-    version = (ROOT / 'VERSION').read_text(encoding='utf-8').strip()
-    if not re.fullmatch(r'[0-9A-Za-z.+-]+', version):
-        raise RuntimeError('Unsafe version for portable archive name')
-    destination = evidence.parent / 'dist'
-    destination.mkdir()
-    stage = destination / f'ru_notepad-{version}-windows-x64'
-    stage.mkdir()
-    licenses = stage / 'licenses'
-    licenses.mkdir()
-    pe = {name: inspect_pe(binary_dir / name, objdump) for name in BINARY_NAMES}
-    app = json.loads((binary_dir / 'ru_notepad.build.json').read_text())
-    receipts = {}
-    for name in BINARY_NAMES:
-        shutil.copyfile(binary_dir / name, stage / name)
-        if name.endswith('.exe'):
-            receipt = json.loads((binary_dir / Path(name).with_suffix('.build.json')).read_text())
-            if receipt['exe_sha256'] != pe[name]['sha256'] or receipt['dll_sha256'] != pe['Scintilla.dll']['sha256']:
-                raise RuntimeError(f'Build receipt does not match {name}')
-            if receipt['source_sha256'] != app['source_sha256'] or receipt['ru_tree'] != app['ru_tree']:
-                raise RuntimeError(f'Source/compiler snapshot mismatch for {name}')
-            for relative, digest in {**receipt['source_sha256'], **receipt.get('build_input_sha256', {}),
-                                     receipt['entry_source']: receipt['entry_sha256']}.items():
-                if sha(ROOT / relative) != digest:
-                    raise RuntimeError(f'Source changed since building {name}: {relative}')
-            # Omit absolute build-machine paths and compiler argv from public receipt.
-            receipts[name] = {key: receipt[key] for key in (
-                'entry_source', 'entry_sha256', 'generated_c_sha256', 'translation_unit_sha256',
-                'build_input_sha256', 'exe_sha256', 'dll_sha256')}
-    files = {
-        'VERSION': 'VERSION', 'packaging/README-preview.txt': 'README.txt',
-        'THIRD_PARTY_NOTICES.md': 'THIRD_PARTY_NOTICES.md',
-        'packaging/开始前请读.txt': '开始前请读.txt', 'packaging/run-tests.cmd': 'run-tests.cmd',
-        'packaging/OPTIONAL-ACL-TESTS.txt': 'OPTIONAL-ACL-TESTS.txt',
-        'tests/file_codec_security_tests.ps1': 'optional-acl-tests.ps1',
-        'CHANGELOG.md': 'CHANGELOG.md', 'docs/notepadpp-parity-roadmap.md': 'ROADMAP.md',
-        'docs/startup-fix-0.1.1.md': 'STARTUP-FIX.md',
-        'vendor/scintilla/License.txt': 'licenses/Scintilla.txt',
-        'assets/README.md': 'licenses/Artwork-provenance.md',
-    }
-    for source, target in files.items():
-        shutil.copyfile(ROOT / source, stage / target)
-    shutil.copytree(ROOT / 'packaging' / 'samples', stage / 'samples')
-    copy_runtime_licenses(mingw, licenses)
-    shutil.copyfile(evidence / 'msys2-packages.log', stage / 'MSYS2-PACKAGES.txt')
-    # Tests use only synthetic data. Include bounded logs, never all of build/.
-    shutil.copytree(evidence, stage / 'native-test-evidence')
-    commit = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
-    build = {'schema': 1, 'version': version, 'app_commit': commit,
-             'status': 'native Windows automated acceptance passed; preview, not full manual acceptance',
-             'ru_commit': app['ru_commit'], 'ru_tree': app['ru_tree'],
-             'scintilla_version': '5.6.7', 'scintilla_archive_sha256': app['scintilla_archive_sha256'],
-             'source_sha256': app['source_sha256'], 'build_entries': receipts, 'binaries': pe,
-             'native_acceptance': summary,
-             'remaining_manual_gates': ['Windows user interaction, accessibility, DPI, IME and dialogs',
-                'Broader ACL/reparse/race/fallback acceptance beyond the synthetic automated cases',
-                'Crash recovery, performance, and full Notepad++ parity are not claimed']}
-    save_json(stage / 'BUILD.json', build)
-    (stage / 'NATIVE-CI.txt').write_text(
-        'This ZIP contains the exact Windows-built binaries exercised by the attached native test evidence.\n'
-        'BUILD.json records which tests passed. A forced kill or timeout never counts as a GUI pass.\n'
-        'Earlier cross-build notes describe earlier evidence; this is still a limited preview.\n'
-        'Back up important files before trying it. No user documents were used in CI.\n', encoding='utf-8')
-    (stage / 'SHA256SUMS.txt').write_text(''.join(
-        f'{sha(path)}  {path.relative_to(stage).as_posix()}\n'
-        for path in sorted(stage.rglob('*')) if path.is_file()), encoding='utf-8')
-    archive = destination / f'{stage.name}.zip'
-    with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as output:
-        for path in sorted(stage.rglob('*')):
-            if path.is_file():
-                output.write(path, path.relative_to(destination).as_posix())
-    with zipfile.ZipFile(archive) as check:
-        if check.testzip() is not None:
-            raise RuntimeError('Portable ZIP failed CRC verification')
-    archive.with_suffix('.zip.sha256').write_text(f'{sha(archive)}  {archive.name}\n', encoding='utf-8')
-    return {'name': archive.name, 'sha256': sha(archive), 'bytes': archive.stat().st_size}
+    validate_acceptance(summary)
+    # Only this run's named bounded synthetic files enter the tests ZIP.
+    allowed = portable.evidence_names([name for name, _ in NATIVE_CONSOLE_TESTS] +
+                                      [case[0] for case in SYNTAX_FALLBACK_TESTS] +
+                                      (['file_codec_security'] if summary['acl_requested'] else []))
+    return portable.create_packages(ROOT, binary_dir, evidence.parent / 'dist', evidence,
+        objdump, summary, lambda destination: copy_runtime_licenses(mingw, destination),
+        {'app_commit': subprocess.check_output(
+            ['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()}, allowed)
 
 
 def main():
@@ -384,12 +370,20 @@ def main():
                'synthetic_data_only': True, 'tests': [], 'acl_requested': args.acl,
                'native_tests_passed': False}
     try:
+        portable.validate_dependency_sources(ROOT)
+        portable.validate_receipts(ROOT, binary_dir, args.objdump)
+        summary['tested_binary_sha256'] = portable.binary_snapshot(binary_dir)
         with tempfile.TemporaryDirectory(prefix='ru-notepad-ci-') as fixtures:
             for name, marker in NATIVE_CONSOLE_TESTS:
                 command = [str(binary_dir / f'{name}.exe')]
                 if name == 'file_codec_tests':
                     command.append(fixtures)
-                result = run_console(api, name, command, evidence, marker)
+                result = run_console(api, name, command, evidence, marker,
+                                     expected_assertions=expected_assertions(name))
+                summary['tests'].append(result)
+                save_json(evidence / 'native-acceptance.json', summary)
+                print(json.dumps(result), flush=True)
+            for result in run_syntax_fallbacks(api, binary_dir, fixtures, evidence):
                 summary['tests'].append(result)
                 save_json(evidence / 'native-acceptance.json', summary)
                 print(json.dumps(result), flush=True)
@@ -398,14 +392,14 @@ def main():
                            str(ROOT / 'tests/file_codec_security_tests.ps1'), '-ProbeExe',
                            str(binary_dir / 'file_codec_security_probe.exe'), '-TestDirectory', fixtures]
                 result = run_console(api, 'file_codec_security', command, evidence,
-                                     r'^FILE_CODEC_SECURITY_TESTS_PASS\s*$', timeout=120)
+                                     r'^FILE_CODEC_SECURITY_TESTS_PASS\s*$', timeout=120, expected_assertions=28)
                 summary['tests'].append(result)
                 print(json.dumps(result), flush=True)
             result = run_gui(api, binary_dir, evidence)
             summary['tests'].append(result)
             print(json.dumps(result), flush=True)
-        summary['passed'] = all(test['passed'] and test['executed'] and not test['cleanup_killed']
-                                for test in summary['tests']) and len(summary['tests']) == len(NATIVE_CONSOLE_TESTS) + 1 + int(args.acl)
+        validate_acceptance(summary)
+        summary['passed'] = True
         summary['native_tests_passed'] = summary['passed']
         save_json(evidence / 'native-acceptance.json', summary)
         if not summary['passed']:

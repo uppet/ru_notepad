@@ -28,10 +28,26 @@ def known_fact(x):
             x.kind == 'unary' and x.data['op'] == '非' or
             x.kind == 'binary' and x.data['op'] in ('==','!=','<','>','<=','>=','且','或'))
 def member(x,n): return isinstance(x,Node) and x.kind=="member" and x.data["name"]==n
-bindings={}
+def module_declarations(program):
+    # Only module-level conditional branches, never function bodies/local rebinding.
+    # Optional native DLL exports are declared here before GUI callbacks begin.
+    for node in program:
+        yield node
+        if node.kind == 'if':
+            yield from module_declarations(node.data['yes'])
+            yield from module_declarations(node.data['no'])
+def syntax_shape(value):
+    if isinstance(value,Node):
+        return (value.kind,tuple((key,syntax_shape(item)) for key,item in value.data.items()))
+    if isinstance(value,(list,tuple)):
+        return tuple(syntax_shape(item) for item in value)
+    if isinstance(value,dict):
+        return tuple((key,syntax_shape(item)) for key,item in value.items())
+    return value
+bindings={};binding_conflicts=[]
 for p,program in programs.items():
     b={}
-    for n in program:
+    for n in module_declarations(program):
         if n.kind=="function":
             body=n.data["body"]
             if len(body)==1 and body[0].kind=="return" and body[0].data["expr"].kind=="array":
@@ -45,7 +61,12 @@ for p,program in programs.items():
             sig=x.data["args"][1][1]
             if member(sig,"签名") and len(sig.data["args"])==3:
                 params=sig.data["args"][1][1]
-                if params.kind=="array":b[name]=("native",len(params.data["items"]))
+                if params.kind=="array":
+                    native=("native",len(params.data["items"]),syntax_shape(sig))
+                    if name in b and b[name]!=native:
+                        binding_conflicts.append({'path':str(p.relative_to(ROOT)),
+                            'line':n.token.line,'name':name,'error':'conflicting module native declarations'})
+                    b[name]=native
     bindings[p]=b
 def resolve(p,x):
     if x.kind=="name":return bindings.get(p,{}).get(x.data["name"])
@@ -86,6 +107,6 @@ for p,program in programs.items():
         row.update(expected=native[1],actual=actual,construction=construction)
         records.append(row)
         if row["expected"]!=row["actual"]:bad.append(row)
-print(json.dumps({"checked":len(records),"mismatches":bad,"unresolved":unknown,"member_mismatches":member_bad,"known_type_mismatches":type_bad,"records":records},indent=2))
+print(json.dumps({"checked":len(records),"mismatches":bad,"unresolved":unknown,"member_mismatches":member_bad,"known_type_mismatches":type_bad,"binding_conflicts":binding_conflicts,"records":records},indent=2))
 
-if bad or unknown or member_bad or type_bad:raise SystemExit(1)
+if bad or unknown or member_bad or type_bad or binding_conflicts:raise SystemExit(1)

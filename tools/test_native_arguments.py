@@ -16,6 +16,8 @@ def main():
     args = parser.parse_args()
     native = "密 取 外言 '如:密'.\n库 取 密 其 系统库 'kernel32.dll'.\n函数 取 库 其 绑定 'example' (密 其 签名 (密 其 i32) ([(密 其 i32)]) 'win64').\n"
     cases = [
+        ('conditional native export', native.split('函数 取')[0] + '若 真 则 函数 取' + native.split('函数 取')[1] + '然\n函数 其 调用 [1].', False),
+        ('conflicting conditional signature', native + '若 真 则 ' + native.replace('[(密 其 i32)]','[(密 其 u32)]') + '然\n函数 其 调用 [1].', True),
         ('grouped bit field', '值 取 (属性 其 位段 4 1) == 1.', False),
         ('original swallowed comparison', '若 属性 其 位段 4 1 == 1 则 显 1. 然', True),
         ('explicit fact width', '值 取 属性 其 位段 4 真.', True),
@@ -34,7 +36,7 @@ def main():
                 '--ru-root', str(args.ru_root.resolve()), '--root', str(root)],
                 capture_output=True, text=True)
             report = json.loads(result.stdout)
-            errors = report['member_mismatches'] + report['known_type_mismatches']
+            errors = report['member_mismatches'] + report['known_type_mismatches'] + report['binding_conflicts']
             if result.returncode != int(rejected) or bool(errors) != rejected or report['unresolved']:
                 raise RuntimeError(f'{name}: unexpected audit result: {result.stdout}\n{result.stderr}')
             print('PASS: ' + name)

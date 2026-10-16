@@ -1,6 +1,6 @@
 # File codec validation receipt
 
-Date: 2026-10-16 (UTC). Updated after the second real Windows CI attempt exposed the attribute-bit argument bug.
+Date: 2026-10-16 (UTC). Updated after the successful third real Windows CI run; prior failure evidence is retained below.
 
 ## Observed Windows failure and correction
 
@@ -32,15 +32,15 @@ These portable tests validate argument semantics using a strict receiver, not a 
 
 The earlier pure-Ru expected-failure scope smoke and extracted path-helper smoke also passed, but neither is a substitute for native file testing.
 
-## Windows rerun still required for this correction
+## Successful Windows verification of this correction
 
-- `file_codec_tests.exe`: 77 planned assertions, or 76 if the optional hard-link fixture cannot be created. Coverage includes exact encoding bytes/round trips, UTF-16BE, NUL/invalid input, unchanged originals after failed conversion, conflicts, sharing/read-only/hard-link errors, and the inclusive 4 MiB boundary.
-- `file_codec_security_tests.ps1` with `file_codec_security_probe.exe`: 28 planned assertions over protected/inherited originals and a forced sharing-denied replacement. The prior attempt failed before it established these outcomes.
-- `file_codec_flags.exe`: 80 parameter-semantics assertions using the same production helper; real native-u32 checks remain in the codec executable.
+- `file_codec_tests.exe`: **77/77 assertions passed**, including the hard-link fixture. Coverage includes exact encoding bytes/round trips, UTF-16BE, NUL/invalid input, unchanged originals after failed conversion, conflicts, sharing/read-only/hard-link errors, and the inclusive 4 MiB boundary.
+- `file_codec_security_tests.ps1` with `file_codec_security_probe.exe`: **28/28 assertions passed** over protected/inherited originals and a forced sharing-denied replacement. The earlier failed attempt is not counted as evidence.
+- `file_codec_flags.exe`: **80/80 assertions passed** using the same production helper; real native-u32 checks are in the codec executable.
 
-At the time of this receipt, the corrected codec and ACL tests have not yet completed a real Windows run. Do not promote their prepared assertion counts to pass counts. Current binary identities must come from the rebuilt `.build.json` receipts and package `BUILD.json`; pre-correction executables and their hashes do not validate the changed source.
+These results come from [Windows run 38863597991](https://github.com/uppet/ru_notepad/actions/runs/38863597991), public commit `d8d678206787c924141449e339cee9ebff54fc79`. All required fixtures executed, with no skips. Exact binary identities are in the 0.1.1 package BUILD.json. Pre-correction executables and their hashes do not validate the fix; later releases require their own full run.
 
-The ACL comparisons cover sorted allow-only ACE tuples, not general effective access, ACE ordering, ownership, or conditional ACE preservation. The final original protection-flag assertion remains required. EFS refusal, denied security-descriptor reads, disk-full/flush errors, named-stream/metadata handling, and filesystem fault recovery need additional real-Windows checks even after ordinary codec tests pass.
+The ACL comparisons cover sorted allow-only ACE tuples, not general effective access, ACE ordering, ownership, or conditional ACE preservation. The final original protection-flag assertion passed in that synthetic fixture. EFS refusal, denied security-descriptor reads, disk-full/flush errors, named-stream/metadata handling, and filesystem fault recovery need additional real-Windows checks even after ordinary codec tests pass.
 
 ## Corrected source SHA-256
 

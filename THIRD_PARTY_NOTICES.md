@@ -6,7 +6,11 @@ The application has no selected public project license yet. Individual dependenc
 
 The native editor component is built from the official source archive at https://www.scintilla.org/scintilla567.zip . The locally observed archive SHA-256 is `2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c`. This pin is not an independently signed upstream checksum.
 
-Scintilla is distributed under its permissive copyright/permission notice, available at https://www.scintilla.org/License.txt . The exact `License.txt` from the pinned source must accompany every binary package. No Notepad++ source, branding or logo is included. Lexilla is not bundled in this preview.
+Scintilla is distributed under its permissive copyright/permission notice, available at https://www.scintilla.org/License.txt . The exact `License.txt` from the pinned source must accompany every binary package. No Notepad++ source, branding or logo is included.
+
+## Lexilla 5.5.4
+
+The syntax-lexer library is built from the official source archive at https://www.scintilla.org/lexilla554.zip . Its reproducibility SHA-256 pin is `5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0`; this is not an independently signed upstream checksum. The exact Lexilla `License.txt` from that source accompanies both portable ZIPs. This release exposes C/C++ and JSON lexers only; Ru-specific highlighting is not claimed.
 
 ## Compiler and Windows runtime support
 

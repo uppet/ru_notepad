@@ -1,37 +1,42 @@
-# 0.1.1 preview validation
+# Preview validation
 
-Date: 2026-10-16 UTC. This is an unsigned Windows x64 preview; this document separates source/host checks from native package evidence.
+Date: 2026-10-16 UTC. These are unsigned Windows x64 previews. Build/source checks and actual Windows acceptance are recorded separately.
 
-## Evidence completed
+## Released 0.1.1 evidence
 
-- Real MinGW Windows x64 PE compilation, embedded icon/manifest, bundled source-built Scintilla 5.6.7, and system-only static import inspection.
-- Native launcher portable policy/source tests pass and four Win32 fixtures cross-build with real MinGW headers. The actual detached GUI startup/logging/normal-exit path passed Windows CI; failure-dialog, collision, fallback and reparse fixtures remain unrun.
-- Full Ru native-C static checks for the application and native test sources.
-- Actual shared `src/ui_arguments.ru` GUI argument helpers: 19/19 in the interpreter and 19/19 in Linux native C. The original malformed expression fails with the expected arity error in both. All 104 native calls resolve with zero mismatches after the fix; see `startup-fix-0.1.1.md`.
-- Actual shared `src/document.ru` policy tests: 23/23 in the Ru interpreter and 23/23 in Linux native C. These cover save-state commit-after-success, save failures, close confirmation/cancellation and encoding-dirty policy.
+[Windows run 38863597991](https://github.com/uppet/ru_notepad/actions/runs/38863597991), public commit `d8d678206787c924141449e339cee9ebff54fc79`, passed **277 native assertions**: document policy 23, UI arguments 19, file-attribute flags 80, editor 27, application lifecycle 23, file codec 77, and synthetic NTFS ACL fixtures 28. No required tests were skipped. A separate detached GUI smoke test observed a visible main HWND owned by the launched process, checked responsiveness, sent WM_CLOSE and obtained normal exit 0 without cleanup termination.
+
+That run produced the 0.1.1 ZIP only after all required gates passed. CRC, full SHA-256 inventory, source/build receipts and dependency license checks were verified. These results establish those exact synthetic cases, not universal filesystem safety or complete interactive acceptance.
+
+Earlier failures are retained rather than counted as passes: the 0.1.0 native menu argument grouping caused startup exit; the second 0.1.1 CI run exposed five mis-grouped attribute comparisons. The latter could report failure after creating a new destination file. The fixes and their exact malformed-expression regressions are documented in `startup-fix-0.1.1.md` and `file_codec_validation.md`.
+
+## 0.1.2 acceptance gates
+
+The new syntax, status and shortcut features require a new exact-commit Windows run. Local source checks, Linux policy execution and Windows cross-compilation do not establish their Windows runtime behavior.
+
+Required acceptance retains every 0.1.1 assertion and adds:
+
+- 34 shared shortcut-policy cases, also executable in the Ru interpreter and Linux native C.
+- 21 real Scintilla status cases: mixed CRLF/LF/CR, final unterminated lines, insertion mode, tab/Han/emoji/combining-codepoint columns, unchanged text and savepoint.
+- 23 main-level feature cases through real WM_COMMAND callback dispatch: tab navigation, zoom, language selection, independent documents, unchanged dirty/undo state and normal close.
+- 82 real Lexilla C/C++ and JSON cases, plus two isolated startup fallback cases with 8 assertions each for missing DLL and missing CreateLexer export.
+
+The total is **453 assertions across 13 required assertion results**, plus the separate visible-GUI/normal-close result. CI rejects missing results, skipped tests, inconsistent PASS-line totals, nonzero exits and timeouts. The actual Windows result and exact binary/source hashes are recorded in each successful package's BUILD.json; consult that receipt rather than treating this planned gate as a pass.
+
+## Packaging
+
+The ordinary runtime ZIP contains the application, Scintilla.dll, Lexilla.dll and necessary docs/licenses/samples. The separate tests ZIP is self-contained, includes byte-identical copies of those runtime files, and adds test executables, the test runner and bounded synthetic CI evidence. Both packages are made from the binaries that passed acceptance, without a rebuild between tests and packaging. Full inventory/hash and dependency-source/license gates apply to both.
+
+## Source and build checks
+
+- Pinned Ru native-C static checks and app-specific native argument audit, including conditional optional-library bindings and malformed-expression mutants.
+- Shared document, UI-argument, flags and shortcut policies executed in both the interpreter and Linux native C.
+- MinGW Windows x64 PE compilation, embedded original icon/manifest, pinned source-built Scintilla 5.6.7 and Lexilla 5.5.4, and system-only static import inspection.
 - Independent source review of NUL/byte-count/UTF-8 guards, Scintilla status handling, grouped-undo cleanup, child-window rollback, canonical paths, file-dialog buffer ownership, orderly-shutdown veto, fatal-warning behavior and staged-save ownership.
-- Official Debian package-index signatures/package hashes and pinned Scintilla archive hash; ZIP CRC, SHA-256 inventory and binary import checks are packaging gates.
+- Launcher policy/source checks and four cross-built Win32 diagnostic fixtures. Detached GUI startup/logging/normal exit has real Windows coverage; failure-dialog, collision, fallback and reparse diagnostic fixtures still require dedicated execution.
 
-## Native Windows execution so far
+## Remaining manual acceptance and limits
 
-[Windows run 38862172159](https://github.com/uppet/ru_notepad/actions/runs/38862172159) executed the program and tests. Document policy 23/23, UI arguments 19/19, Scintilla wrapper 27/27 and application lifecycle 23/23 passed. The separate detached GUI test observed its visible main HWND, checked responsiveness, sent WM_CLOSE and received exit 0 with complete startup/logging evidence.
+Physical keyboard layouts, IME composition, clipboard integration, file dialogs and dirty prompts require interactive acceptance. Further coverage is needed for shutdown veto, real-world ACL/EFS configurations, replacement/backup failures, fault injection, accessibility and rendering at different display scales. Local Wine never ran; it is not claimed as evidence.
 
-The same run failed file-codec and ACL tests on a mis-grouped native bit-field argument. It produced no portable ZIP. All five attribute tests now use one explicitly grouped helper; 80/80 strict pure-Ru receiver cases pass in both interpreter and Linux C, and the original malformed expression is rejected in both. This proves argument semantics without pretending Linux ran native u32/Win32 APIs. The corrected codec still requires a new full Windows run.
-
-## Native package evidence
-
-A later Windows CI package is created only after its required native suites and real visible-window/normal-close smoke test pass. Consult that exact package’s BUILD.json for platform, counts and hashes. This document retains the Linux-source-review evidence and does not replace the artifact’s runtime receipt.
-
-## Not established
-
-The 0.1.0 startup failure was reproduced on Windows; the precise cause and repair are documented separately. The successful Windows checks above are limited automated evidence, not full acceptance. Local Wine never ran. Building a PE is not a runtime pass, and source review cannot establish effective NTFS permissions. The corrected codec and ACL suites remain release gates.
-
-Included native executables exercise document policy, the actual Scintilla wrapper, the application lifecycle and the Win32 file codec. An optional synthetic-fixture ACL probe/script covers protected and inherited permissions; it is deliberately separate from the normal test runner.
-
-Actual Windows acceptance must include UTF-8/UTF-16/legacy byte round trips, file dialogs, dirty prompts, failure retention, clipboard/IME, shutdown veto, missing DLL diagnostics, replacement/backup behavior, ACLs/EFS, fault injection and accessibility. No crash recovery exists. Test samples and copies first.
-
-## Milestone status
-
-M0 startup and selected M1 editing internals now have real Windows automated evidence. M1 file safety and complete interactive acceptance remain incomplete. Save All, recent files, backward/whole-word/selection-scope search, explicit EOL conversion, tab reordering and localization are still absent even within the broader M1 roadmap. M2–M5 are future work. Notepad++ parity is not claimed.
-
-The package BUILD.json records exact source and toolchain identities. Test reports must preserve failures and skips separately from passes; update this status only with actual execution evidence.
+No crash recovery exists. Use samples or copies first. The 4 MiB UTF-8 document/save limit and NUL rejection remain. Ru files remain plain text in 0.1.2. Save All, recent files, backward/whole-word/selection-scope search, explicit EOL conversion, tab reordering and localization are absent. Plugins, macros, sessions and full Notepad++ parity remain future work.

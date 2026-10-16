@@ -1,11 +1,14 @@
-# ru_notepad 0.1.1 preview. Application behavior is compiled from Ru.
+# ru_notepad 0.1.2 preview. Application behavior is compiled from Ru.
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
 编 取 外言 'editor.ru'.
 件编 取 外言 'file_codec.ru'.
 模 取 外言 'document.ru'.
 参 取 外言 'ui_arguments.ru'.
-A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假}.
+态 取 外言 'status.ru'.
+键规 取 外言 'shortcuts.ru'.
+语 取 外言 'syntax.ru'.
+A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':''}.
 
 算 当前:
     得 (A 其 查 'docs')[A 其 查 'active'].
@@ -18,6 +21,14 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
 法
 算 错误提示 文 为 句:
     得 窗 其 弹窗 (A 其 查 'window') 文 'ru_notepad · could not finish' 16.
+法
+算 报语法警告:
+    警告 取 语 其 初始化.
+    若 (A 其 查 'visible') 且 警告 != '' 且 警告 != (A 其 查 'syntaxWarning') 则
+        A 其 增 'syntaxWarning' 警告.
+        提示 警告.
+    然
+    得 空.
 法
 算 短名 路 为 句:
     得 模 其 短名 路.
@@ -75,7 +86,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     然
     编文 取 编码名 (文档 其 查 'encoding').
     若 文档 其 查 'bom' 则 编文 取 编文+' BOM'. 然
-    窗 其 标题 (A 其 查 'status') ('  '+(编 其 状态 (文档 其 查 'editor'))+'    '+编文+'    Preview · 4 MiB file limit').
+    窗 其 标题 (A 其 查 'status') ('  '+(态 其 文本 (文档 其 查 'editor'))+'    '+编文+'    '+(语 其 名称 (文档 其 查 'language'))).
     得 空.
 法
 算 移控 柄, 横, 纵, 宽, 高:
@@ -161,6 +172,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     试
         柄 取 编 其 创建 (A 其 查 'window') (A 其 查 'instance') (1000+序).
         编 其 设文本 柄 文.
+        语言 取 语 其 选择 柄 (语 其 识别 路).
         项 取 (窗 其 TCITEM) 其 新建.
         存 取 密 其 UTF16 名.
         项 其 写 'mask' 1.
@@ -175,7 +187,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     终
     存 其 关闭.
     项 其 关闭.
-    文档 取 {'editor':柄,'path':路,'name':名,'encoding':编码,'bom':BOM,'stamp':戳,'encodingDirty':假,'label':'','wrap':假}.
+    文档 取 {'editor':柄,'path':路,'name':名,'encoding':编码,'bom':BOM,'stamp':戳,'encodingDirty':假,'label':'','wrap':假,'language':语言}.
     文们 其 增 文档.
     切页 ((文们 其 量)-1).
     得 文档.
@@ -198,6 +210,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
 算 保存 另存 为 事实:
     文档 取 当前.
     路 取 文档 其 查 'path'.
+    原路 取 路.
     戳 取 文档 其 查 'stamp'.
     若 另存 或 路 == '' 则
         路 取 窗 其 文件对话 (A 其 查 'window') 真 路.
@@ -208,6 +221,11 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     然
     模 其 保存文档 文档 路 (编 其 文本 (文档 其 查 'editor')) 戳 (算 件编 其 写文件).
     编 其 记保存 (文档 其 查 'editor').
+    # A changed extension affects styling only, after the successful file commit.
+    若 路 != 原路 则
+        文档 其 增 'language' (语 其 选择 (文档 其 查 'editor') (语 其 识别 路)).
+        报语法警告.
+    然
     刷新.
     得 真.
 法
@@ -256,12 +274,20 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         若 号 == 108 则 代码页 取 1252. 然
         若 号 == 109 则 代码页 取 936. 然
         打开 (窗 其 文件对话 (A 其 查 'window') 假 '') 代码页.
+        报语法警告.
         得 空.
     然
     若 号 == 103 则 保存 假. 得 空. 然
     若 号 == 104 则 保存 真. 得 空. 然
     若 号 == 105 则 关页. 得 空. 然
     若 号 == 106 则 关程序. 得 空. 然
+    若 号 == 111 或 号 == 112 则
+        数量 取 (A 其 查 'docs') 其 量.
+        目标 取 (A 其 查 'active')+1.
+        若 号 == 111 则 目标 取 (A 其 查 'active')+数量-1. 然
+        切页 (目标%数量).
+        得 空.
+    然
     若 号 == 201 则 窗 其 发送 编辑柄 2176 0 0. 然
     若 号 == 202 则 窗 其 发送 编辑柄 2011 0 0. 然
     若 号 == 203 则 窗 其 发送 编辑柄 2177 0 0. 然
@@ -298,6 +324,13 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     若 号 == 406 则
         模 其 改编码 当前 936 假.
     然
+    若 号 >= 701 且 号 <= 703 则
+        语言 取 'plain'.
+        若 号 == 702 则 语言 取 'cpp'. 然
+        若 号 == 703 则 语言 取 'json'. 然
+        当前 其 增 'language' (语 其 选择 编辑柄 语言).
+        报语法警告.
+    然
     若 号 == 501 则
         当前 其 增 'wrap' (非 (当前 其 查 'wrap')).
         选 取 0.
@@ -306,18 +339,20 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     然
     若 号 == 502 则 窗 其 发送 编辑柄 2333 0 0. 然
     若 号 == 503 则 窗 其 发送 编辑柄 2334 0 0. 然
-    若 号 == 601 则 提示 'ru_notepad 0.1.1 preview\n\nWindows x64 · application logic compiled from Ru\nScintilla native editor component\n\nTabs, safe text saves, undo/redo, literal find/replace.\n4 MiB per file, 64 tabs. Not full Notepad++ parity yet.\nNo Python runtime. No telemetry. No network features.'. 然
+    若 号 == 504 则 窗 其 发送 编辑柄 2373 0 0. 然
+    若 号 == 601 则 提示 'ru_notepad 0.1.2 preview\n\nWindows x64 · application logic compiled from Ru\nScintilla + Lexilla native editor components\n\nTabs, safe text saves, undo/redo, literal find/replace.\n4 MiB per file, 64 tabs. Not full Notepad++ parity yet.\nNo Python runtime. No telemetry. No network features.'. 然
     刷新.
     得 空.
 法
 算 菜单:
     主 取 窗 其 成功 ((窗 其 CreateMenu) 其 调用 []) 'CreateMenu'.
     组们 取 [
-        ['&File',[[101,'&New\tCtrl+N'],[102,'&Open...\tCtrl+O'],[108,'Open as Windows-1252...'],[109,'Open as GBK (CP936)...'],[103,'&Save\tCtrl+S'],[104,'Save &As...\tCtrl+Shift+S'],[105,'&Close tab\tCtrl+W'],[106,'E&xit']]],
+        ['&File',[[101,'&New\tCtrl+N'],[102,'&Open...\tCtrl+O'],[108,'Open as Windows-1252...'],[109,'Open as GBK (CP936)...'],[103,'&Save\tCtrl+S'],[104,'Save &As...\tCtrl+Shift+S'],[105,'&Close tab\tCtrl+W'],[111,'Previous tab\tCtrl+Shift+Tab'],[112,'Next tab\tCtrl+Tab'],[106,'E&xit']]],
         ['&Edit',[[201,'&Undo\tCtrl+Z'],[202,'&Redo\tCtrl+Y'],[203,'Cu&t\tCtrl+X'],[204,'&Copy\tCtrl+C'],[205,'&Paste\tCtrl+V'],[206,'Select &All\tCtrl+A']]],
         ['&Search',[[301,'&Find...\tCtrl+F'],[302,'&Replace...\tCtrl+H'],[303,'Find &Next\tF3']]],
         ['E&ncoding',[[401,'Save as UTF-8'],[402,'Save as UTF-8 with BOM'],[403,'Save as UTF-16 LE'],[404,'Save as UTF-16 BE'],[405,'Save as Windows-1252'],[406,'Save as GBK (CP936)']]],
-        ['&View',[[501,'Toggle word &wrap'],[502,'Zoom &in'],[503,'Zoom &out']]],
+        ['&Language',[[701,'Plain text'],[702,'C / C++'],[703,'JSON']]],
+        ['&View',[[501,'Toggle word &wrap'],[502,'Zoom &in\tCtrl++'],[503,'Zoom &out\tCtrl+-'],[504,'Reset zoom\tCtrl+0']]],
         ['&Help',[[601,'&About ru_notepad']]]
     ].
     组位 取 0.
@@ -378,25 +413,8 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     键 取 (消息 其 读 'wParam') 其 数.
     Ctrl 取 ((窗 其 结果 ((窗 其 GetKeyState) 其 调用 [17])) 其 位段 15 1) == 1.
     Shift 取 ((窗 其 结果 ((窗 其 GetKeyState) 其 调用 [16])) 其 位段 15 1) == 1.
-    号令 取 0.
-    若 Ctrl 则
-        若 键 == 78 则 号令 取 101. 然
-        若 键 == 79 则 号令 取 102. 然
-        若 键 == 83 则
-            号令 取 103.
-            若 Shift 则 号令 取 104. 然
-        然
-        若 键 == 87 则 号令 取 105. 然
-        若 键 == 70 则 号令 取 301. 然
-        若 键 == 72 则 号令 取 302. 然
-        若 键 == 9 则
-            文们 取 A 其 查 'docs'.
-            切页 (((A 其 查 'active')+1)%(文们 其 量)).
-            得 真.
-        然
-    然
-    若 键 == 114 则 号令 取 303. 然
-    若 键 == 27 且 (A 其 查 'search') 则 号令 取 307. 然
+    Alt 取 ((窗 其 结果 ((窗 其 GetKeyState) 其 调用 [18])) 其 位段 15 1) == 1.
+    号令 取 键规 其 命令号 键 Ctrl Shift Alt (A 其 查 'search').
     若 号令 == 0 则 得 假. 然
     试
         命令 号令.
@@ -408,6 +426,8 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
 
 算 初始化 参数 为 句 阵, 显示 为 事实:
     # Every dependency is loaded before WNDPROC can run.
+    A 其 增 'visible' 显示.
+    语 其 初始化.
     库路径 取 (窗 其 目录)+'Scintilla.dll'.
     路径存 取 密 其 UTF16 库路径.
     预载成果 取 (窗 其 LoadLibraryExW) 其 调用 [路径存,空,2304].
@@ -476,6 +496,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         窗 其 结果 ((窗 其 ShowWindow) 其 调用 [主窗,5]).
         窗 其 结果 ((窗 其 UpdateWindow) 其 调用 [主窗]).
         显 '[startup] main window shown'.
+        报语法警告.
     然
     A 其 增 'className' 类名.
     A 其 增 'callback' 回调.

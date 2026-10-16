@@ -10,7 +10,7 @@ def run(cmd, log, expected=0, contains=None):
  if p.returncode!=expected or (contains and contains not in p.stdout):
   raise SystemExit(f'{log}: unexpected result {p.returncode}\n{p.stdout}')
  print(f'PASS: {log}')
-for source,slug,count in [('document_policy','document-policy',23),('ui_arguments','ui-arguments',19),('file_codec_flags','file-codec-flags',80)]:
+for source,slug,count in [('document_policy','document-policy',23),('ui_arguments','ui-arguments',19),('file_codec_flags','file-codec-flags',80),('shortcuts','shortcuts',34)]:
  src=ROOT/'tests'/f'{source}.ru';exe=build/f'{source}_linux'
  run([sys.executable,ru,'run',src],f'{slug}-python.log',contains=f'TOTAL PASS: {count}')
  run([sys.executable,ru,'build','--cc','gcc',src,'-o',exe],f'{slug}-linux-build.log')

@@ -5,6 +5,7 @@ These verify orchestration/fail-closed policy only. They are NOT native editor,
 GUI, DLL, file-codec, ACL, or Windows runtime acceptance evidence.
 """
 from pathlib import Path
+import os
 import re
 import shutil
 import subprocess
@@ -39,7 +40,7 @@ class HarnessTests(unittest.TestCase):
     def console(self, code, timeout=3):
         with patch.object(ci, 'cleanup_process', side_effect=kill_synthetic):
             return ci.run_console(NoDialogs(), 'fixture', [sys.executable, '-c', code],
-                                  self.root, r'^TOTAL PASS: 1\s*$', timeout=timeout)
+                                  self.root, r'^TOTAL PASS: 1\s*$', timeout=timeout, expected_assertions=1)
 
     def powershell_resolver(self):
         source = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
@@ -100,12 +101,16 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'file_codec_flags': r'^TOTAL PASS: 80\s*$',
             'editor_native': r'^TOTAL PASS: 27\s*$',
             'app_native': r'^TOTAL PASS: 23\s*$',
+            'app_features_native': r'^TOTAL PASS: 23\s*$',
+            'shortcuts': r'^TOTAL PASS: 34\s*$',
+            'status_native': r'^TOTAL PASS: 21\s*$',
+            'syntax_native': r'^TOTAL PASS: 82\s*$',
             'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=77\s*$',
         }
         self.assertEqual(dict(ci.NATIVE_CONSOLE_TESTS), expected)
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 6)
-        # Six console gates + normal GUI close + required ACL gate in the workflow.
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + 1 + 1, 8)
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 10)
+        # Ten console gates, two isolated lexer fallbacks, GUI and ACL.
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + 2, 14)
 
     def test_flag_regression_is_built_packaged_and_in_user_test_runner(self):
         source = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
@@ -115,7 +120,137 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertEqual(ci.BINARY_NAMES.count('file_codec_flags.exe'), 1)
         runner = (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8')
         self.assertIn('file_codec_flags.exe >>test-results.txt 2>&1\n'
-                      'if errorlevel 1 set "FAILED=1"', runner)
+                      'if not "%ERRORLEVEL%"=="0" set "FAILED=1"', runner)
+
+    def test_every_required_suite_is_built_packaged_and_explained_in_runner(self):
+        source = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        builds = re.search(r"foreach \(\$test in @\(([^)]+)\)\)", source)
+        built_tests = set(re.findall(r"'([^']+)'", builds.group(1)))
+        required = {name for name, _ in ci.NATIVE_CONSOLE_TESTS}
+        self.assertEqual(built_tests, required | {'file_codec_security_probe'})
+        runner = (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8')
+        for name in built_tests:
+            self.assertEqual(ci.BINARY_NAMES.count(name + '.exe'), 1)
+            self.assertIn(name + '.exe:', runner, 'Each executable needs a plain purpose label')
+        for name in required:
+            self.assertRegex(runner, rf'(?m)^{name}\.exe(?: |$)')
+        self.assertIn('call :syntax_fallback missing-lexilla --expect-missing', runner)
+        self.assertIn('call :syntax_fallback bad-lexer --expect-bad-lexer', runner)
+
+    def test_runner_treats_every_nonzero_status_as_failure_without_shadowing(self):
+        runner = (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8')
+        self.assertIn('setlocal EnableExtensions DisableDelayedExpansion\nset "ERRORLEVEL="\n', runner)
+        self.assertNotIn('if errorlevel 1', runner.lower())
+        lines = runner.split('\n:syntax_fallback\n', 1)[0].splitlines()
+        commands = [index for index, line in enumerate(lines)
+                    if re.match(r'^[a-z_]+\.exe(?: |$)|^call :syntax_fallback ', line)]
+        self.assertEqual(len(commands), len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS))
+        for index in commands:
+            self.assertEqual(lines[index + 1], 'if not "%ERRORLEVEL%"=="0" set "FAILED=1"')
+        self.assertIn('set "FALLBACK_STATUS=%ERRORLEVEL%"', runner)
+        self.assertIn('exit /b %FALLBACK_STATUS%', runner)
+
+    @unittest.skipUnless(sys.platform == 'win32',
+                         'Real cmd.exe signed-exit regression requires the Windows CI host')
+    def test_cmd_runner_handles_zero_positive_negative_and_shadowed_exit_codes(self):
+        command = shutil.which('cmd.exe')
+        self.assertIsNotNone(command, 'Windows CI must execute the real batch regression')
+        runner = (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8')
+        lines = runner.splitlines()
+        prologue = '\n'.join(lines[:3])
+        failure_check = next(line for line in lines if line.startswith('if not "%ERRORLEVEL%"'))
+        capture = next(line for line in lines if line.startswith('set "FALLBACK_STATUS='))
+        propagate = next(line for line in lines if line == 'exit /b %FALLBACK_STATUS%')
+        for code in (0, 7, -1, -1073741819):
+            for inherited in ('0', '123'):
+                for use_call in (False, True):
+                    with self.subTest(code=code, inherited=inherited, call=use_call):
+                        invoke = f'cmd.exe /d /c exit /b {code}'
+                        body = 'call :probe' if use_call else invoke
+                        script = self.root / 'exit policy probe.cmd'
+                        script.write_text(prologue + '\nset "FAILED=0"\n' + body + '\n' +
+                            failure_check + '\necho FAILED=%FAILED%\nexit /b 0\n' +
+                            ':probe\n' + invoke + '\n' + capture + '\n' + propagate + '\n', encoding='ascii')
+                        environment = {key: value for key, value in os.environ.items() if key.upper() != 'ERRORLEVEL'}
+                        environment['ERRORLEVEL'] = inherited
+                        result = subprocess.run([command, '/d', '/e:off', '/v:on', '/c', str(script)],
+                            env=environment, capture_output=True, text=True, timeout=20)
+                        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                        self.assertRegex(result.stdout, rf'(?m)^FAILED={int(code != 0)}\s*$')
+
+    def test_syntax_fallbacks_use_isolated_actual_dependency_layouts(self):
+        binary, fixtures, evidence = (self.root / name for name in ('bin', 'fixtures', 'evidence'))
+        for folder in (binary, fixtures, evidence):
+            folder.mkdir()
+        (binary / 'syntax_native.exe').write_bytes(b'synthetic executable')
+        (binary / 'Scintilla.dll').write_bytes(b'synthetic editor DLL')
+        (binary / 'Lexilla.dll').write_bytes(b'synthetic correct lexer DLL')
+        with patch.object(ci, 'run_console', return_value={'passed': True}) as run:
+            results = ci.run_syntax_fallbacks(NoDialogs(), binary, fixtures, evidence)
+        self.assertEqual(len(results), 2)
+        for call, (name, argument, bad) in zip(run.call_args_list, ci.SYNTAX_FALLBACK_TESTS):
+            isolated = fixtures / name
+            self.assertEqual(call.kwargs['cwd'], isolated)
+            self.assertEqual(call.kwargs['expected_assertions'], 8)
+            self.assertEqual(call.args[2], [str(isolated / 'syntax_native.exe'), argument])
+            self.assertEqual((isolated / 'syntax_native.exe').read_bytes(), (binary / 'syntax_native.exe').read_bytes())
+            self.assertEqual((isolated / 'Scintilla.dll').read_bytes(), (binary / 'Scintilla.dll').read_bytes())
+            self.assertEqual((isolated / 'Lexilla.dll').exists(), bad)
+            if bad:
+                self.assertEqual((isolated / 'Lexilla.dll').read_bytes(), (binary / 'Scintilla.dll').read_bytes())
+
+    def acceptance(self):
+        summary = {'acl_requested': True, 'tests': [],
+                   'tested_binary_sha256': {name: name + '-hash' for name in ci.BINARY_NAMES}}
+        names = [name for name, _ in ci.NATIVE_CONSOLE_TESTS] + [case[0] for case in ci.SYNTAX_FALLBACK_TESTS] + ['file_codec_security', 'main-gui-smoke']
+        for name in names:
+            result = {'name': name, 'passed': True, 'executed': True, 'cleanup_killed': False,
+                      'exit_code': 0, 'skips': []}
+            if name == 'main-gui-smoke':
+                result.update(main_hwnd_seen=True, close_posted=True, detached_from_console=True)
+            else:
+                result['assertions_passed'] = ci.expected_assertions(name)
+            if name.startswith('syntax_') and name != 'syntax_native':
+                result['fixture_binary_sha256'] = {binary: summary['tested_binary_sha256'][binary]
+                                                  for binary in ('syntax_native.exe', 'Scintilla.dll')}
+                if name == 'syntax_bad_lexer':
+                    result['fixture_binary_sha256']['Lexilla.dll'] = summary['tested_binary_sha256']['Scintilla.dll']
+            summary['tests'].append(result)
+        return summary
+
+    def test_acceptance_requires_all_fourteen_groups_and_453_assertions(self):
+        summary = self.acceptance()
+        ci.validate_acceptance(summary)
+        self.assertEqual(len(summary['tests']), 14)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 453)
+
+    def test_acceptance_rejects_missing_or_duplicated_syntax_branch(self):
+        summary = self.acceptance()
+        summary['tests'] = [test for test in summary['tests'] if test['name'] != 'syntax_missing_lexilla']
+        with self.assertRaisesRegex(RuntimeError, 'inventory'):
+            ci.validate_acceptance(summary)
+        summary['tests'].append(summary['tests'][0])
+        with self.assertRaisesRegex(RuntimeError, 'inventory'):
+            ci.validate_acceptance(summary)
+
+    def test_acceptance_rejects_fallback_binary_hash_mismatch(self):
+        summary = self.acceptance()
+        next(test for test in summary['tests'] if test['name'] == 'syntax_bad_lexer')['fixture_binary_sha256']['Lexilla.dll'] = 'wrong'
+        with self.assertRaisesRegex(RuntimeError, 'fixture does not match'):
+            ci.validate_acceptance(summary)
+
+    def test_acceptance_rechecks_individual_assertion_count(self):
+        summary = self.acceptance()
+        summary['tests'][0]['assertions_passed'] -= 1
+        with self.assertRaisesRegex(RuntimeError, 'count mismatch'):
+            ci.validate_acceptance(summary)
+
+    def test_receipt_paths_are_portable_on_windows(self):
+        build = (ci.ROOT / 'tools/build.py').read_text(encoding='utf-8')
+        self.assertNotIn('str(p.relative_to(ROOT))', build)
+        self.assertNotIn('str(source.relative_to(ROOT))', build)
+        self.assertEqual(build.count('p.relative_to(ROOT).as_posix()'), 2)
+        self.assertIn('source.relative_to(ROOT).as_posix()', build)
 
     def test_console_requires_execution_exit_zero_and_marker(self):
         result = self.console("print('PASS: synthetic'); print('TOTAL PASS: 1')")
@@ -123,6 +258,18 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertTrue(result['executed'])
         self.assertFalse(result['cleanup_killed'])
         self.assertEqual(result['assertions_passed'], 1)
+
+    def test_console_marker_without_individual_assertions_fails(self):
+        self.assertFalse(self.console("print('TOTAL PASS: 1')")['passed'])
+
+    def test_console_extra_individual_assertions_fail(self):
+        self.assertFalse(self.console("print('PASS: one'); print('PASS: two'); print('TOTAL PASS: 1')")['passed'])
+
+    def test_console_duplicate_totals_fail(self):
+        self.assertFalse(self.console("print('PASS: one'); print('TOTAL PASS: 1'); print('TOTAL PASS: 1')")['passed'])
+
+    def test_console_conflicting_totals_fail(self):
+        self.assertFalse(self.console("print('PASS: one'); print('TOTAL PASS: 2'); print('TOTAL PASS: 1')")['passed'])
 
     def test_console_nonzero_fails_even_with_marker(self):
         result = self.console("print('TOTAL PASS: 1'); raise SystemExit(7)")

@@ -69,6 +69,7 @@ try {
     Invoke-Checked $Python @('--version')
     # Orchestration tests are separate from the native application acceptance.
     Invoke-Checked $Python @('tools/test_windows_ci.py')
+    Invoke-Checked $Python @('tools/test_package.py')
 
     $Downloads = Join-Path $Root 'vendor/downloads'
     New-Item -ItemType Directory -Path $Downloads -Force | Out-Null
@@ -81,18 +82,32 @@ try {
         throw 'Use a fresh checkout: vendor/scintilla already exists.'
     }
     Expand-Archive -LiteralPath $Archive -DestinationPath (Join-Path $Root 'vendor')
+    $LexillaArchive = Join-Path $Downloads 'lexilla554.zip'
+    Invoke-WebRequest -Uri 'https://www.scintilla.org/lexilla554.zip' -OutFile $LexillaArchive -TimeoutSec 120
+    if ((Get-FileHash -LiteralPath $LexillaArchive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0') {
+        throw 'Official Lexilla archive hash mismatch; refusing extraction or execution.'
+    }
+    if (Test-Path -LiteralPath (Join-Path $Root 'vendor/lexilla')) {
+        throw 'Use a fresh checkout: vendor/lexilla already exists.'
+    }
+    Expand-Archive -LiteralPath $LexillaArchive -DestinationPath (Join-Path $Root 'vendor')
     # Native MinGW make uses the official Windows makefile and static C++ runtime.
     Invoke-Checked (Join-Path $Bin 'mingw32-make.exe') @(
         '-j2','-C',(Join-Path $Root 'vendor/scintilla/win32'),'../bin/Scintilla.dll',
         'CXX=g++.exe','WINDRES=windres.exe','AR=ar.exe','RANLIB=ranlib.exe'
     )
+    Invoke-Checked (Join-Path $Bin 'mingw32-make.exe') @(
+        '-j2','-C',(Join-Path $Root 'vendor/lexilla/src'),'../bin/lexilla.dll',
+        'CXX=g++.exe','WINDRES=windres.exe','AR=ar.exe','RANLIB=ranlib.exe',
+        'LDFLAGS=-shared -static -mwindows -Wl,--kill-at -s'
+    )
     Invoke-Checked $Python @('tools/check_static.py','--ru-root',$RuRoot)
     $BuildArgs = @('tools/build.py','--ru-root',$RuRoot,
         '--cc',(Join-Path $Bin 'gcc.exe'),'--cxx',(Join-Path $Bin 'g++.exe'),
         '--windres',(Join-Path $Bin 'windres.exe'),'--ar',(Join-Path $Bin 'ar.exe'),
-        '--ranlib',(Join-Path $Bin 'ranlib.exe'),'--skip-scintilla')
+        '--ranlib',(Join-Path $Bin 'ranlib.exe'),'--skip-scintilla','--skip-lexilla')
     Invoke-Checked $Python ($BuildArgs + @('--source','src/main.ru','--output',(Join-Path $Output 'ru_notepad.exe')))
-    foreach ($test in @('document_policy','ui_arguments','file_codec_flags','editor_native','app_native','file_codec_tests','file_codec_security_probe')) {
+    foreach ($test in @('document_policy','ui_arguments','file_codec_flags','editor_native','app_native','app_features_native','file_codec_tests','file_codec_security_probe','syntax_native','shortcuts','status_native')) {
         Invoke-Checked $Python ($BuildArgs + @('--console','--source',"tests/$test.ru",'--output',(Join-Path $Output "$test.exe")))
     }
     $AcceptArgs = @('tools/windows_ci.py','--bin-dir',$Output,'--evidence-dir',$Evidence,

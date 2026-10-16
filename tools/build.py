@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Build-time helper only. The distributed app does not execute Python."""
 from __future__ import annotations
-import argparse, hashlib, json, os, shutil, subprocess, sys, time
+import argparse, hashlib, json, os, shutil, subprocess, sys, time, zipfile
+from package import DEPENDENCIES
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCINTILLA_SHA256 = '2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c'
+SCINTILLA_SHA256 = DEPENDENCIES['Scintilla.dll']['sha256']
+LEXILLA_SHA256 = DEPENDENCIES['Lexilla.dll']['sha256']
 BASELINE_TREE = '3a9972dfd17fd570ef992ecffd9b5bccec1cc88d'
 
 def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -28,6 +30,7 @@ def main():
     ap.add_argument('--output',type=Path,default=ROOT/'build/ru_notepad.exe')
     ap.add_argument('--console',action='store_true')
     ap.add_argument('--skip-scintilla',action='store_true')
+    ap.add_argument('--skip-lexilla',action='store_true')
     args=ap.parse_args()
     ru=args.ru_root.resolve()
     tree=git(ru,'rev-parse','HEAD^{tree}')
@@ -38,19 +41,32 @@ def main():
     audit=subprocess.run([sys.executable,str(ROOT/'tools/check_native_arguments.py'),'--ru-root',str(ru)],text=True,stdout=subprocess.PIPE)
     if audit.returncode:
         print(audit.stdout);raise SystemExit('Native argument audit failed; refusing build.')
-    archive=ROOT/'vendor/downloads/scintilla567.zip'
-    if not archive.is_file() or sha(archive)!=SCINTILLA_SHA256:
-        raise SystemExit('Missing or mismatched official Scintilla 5.6.7 source archive.')
+    for dependency in DEPENDENCIES.values():
+        archive=ROOT/'vendor/downloads'/dependency['archive']
+        if not archive.is_file() or sha(archive)!=dependency['sha256']:
+            raise SystemExit(f'Missing or mismatched official {dependency["folder"]} source archive.')
+        # Make may add objects, but all original source bytes must remain pinned.
+        with zipfile.ZipFile(archive) as pinned:
+            for member in pinned.infolist():
+                if not member.is_dir():
+                    source=ROOT/'vendor'/member.filename
+                    if source.is_symlink() or not source.is_file() or source.read_bytes()!=pinned.read(member):
+                        raise SystemExit(f'Dependency source differs from pinned archive: {member.filename}')
     build=ROOT/'build'; build.mkdir(exist_ok=True)
     if not args.skip_scintilla:
         run(['make','-j2','-C',ROOT/'vendor/scintilla/win32','../bin/Scintilla.dll',
              'CXX='+args.cxx,'WINDRES='+args.windres,'AR='+args.ar,'RANLIB='+args.ranlib])
+    if not args.skip_lexilla:
+        run(['make','-j2','-C',ROOT/'vendor/lexilla/src','../bin/lexilla.dll',
+             'windir=C:/Windows','CXX='+args.cxx,'WINDRES='+args.windres,
+             'AR='+args.ar,'RANLIB='+args.ranlib,
+             'LDFLAGS=-shared -static -mwindows -Wl,--kill-at -s'])
     sys.path.insert(0,str(ru))
     from rulang.frontend import parse
     from rulang.modules import load_module_graph
     from rulang.compiler import Compiler
     source=args.source.resolve()
-    snapshot={str(p.relative_to(ROOT)):sha(p) for p in sorted((ROOT/'src').glob('*.ru'))}
+    snapshot={p.relative_to(ROOT).as_posix():sha(p) for p in sorted((ROOT/'src').glob('*.ru'))}
     build_inputs={} if args.console else {rel:sha(ROOT/rel) for rel in ['packaging/diagnostic_launcher.c','packaging/app.rc','packaging/app.manifest','assets/app-icon.ico','VERSION']}
     entry_sha=sha(source)
     text=source.read_text(encoding='utf-8-sig')
@@ -75,19 +91,22 @@ def main():
     run(cmd,timeout=600)
     if build_inputs != {rel:sha(ROOT/rel) for rel in build_inputs}:
         raise SystemExit('Launcher/resource inputs changed during build; no receipt published.')
-    if snapshot != {str(p.relative_to(ROOT)):sha(p) for p in sorted((ROOT/'src').glob('*.ru'))} or entry_sha != sha(source):
+    if snapshot != {p.relative_to(ROOT).as_posix():sha(p) for p in sorted((ROOT/'src').glob('*.ru'))} or entry_sha != sha(source):
         raise SystemExit('Source changed during build; no verified receipt will be published. Rebuild from a stable snapshot.')
     shutil.copy2(ROOT/'vendor/scintilla/bin/Scintilla.dll',args.output.parent/'Scintilla.dll')
+    shutil.copy2(ROOT/'vendor/lexilla/bin/lexilla.dll',args.output.parent/'Lexilla.dll')
     receipt={'schema':1,'utc':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),
              'ru_commit':git(ru,'rev-parse','HEAD'),'ru_tree':tree,
              'app_version':(ROOT/'VERSION').read_text().strip(),
              'scintilla_version':'5.6.7','scintilla_archive_sha256':SCINTILLA_SHA256,
-             'entry_source':str(source.relative_to(ROOT)),'entry_sha256':entry_sha,
+             'lexilla_version':'5.5.4','lexilla_archive_sha256':LEXILLA_SHA256,
+             'entry_source':source.relative_to(ROOT).as_posix(),'entry_sha256':entry_sha,
              'source_sha256':snapshot,
              'build_input_sha256':build_inputs,
              'translation_unit_sha256':sha(translation),'translation_unit_bytes':translation.stat().st_size,
              'exe_sha256':sha(args.output),'exe_bytes':args.output.stat().st_size,
              'dll_sha256':sha(args.output.parent/'Scintilla.dll'),
+             'lexilla_dll_sha256':sha(args.output.parent/'Lexilla.dll'),
              'generated_c_sha256':sha(emitted),'generated_c_bytes':emitted.stat().st_size,
              'seconds':time.monotonic()-started,'runtime_tested':False,
              'compiler_command':cmd}
