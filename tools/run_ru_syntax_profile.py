@@ -136,7 +136,7 @@ def read_json(path):
 
 def save_json(path, data):
     path = unlinked(path, must_exist=False)
-    encoded = (json.dumps(data, indent=2, sort_keys=True, ensure_ascii=True, allow_nan=False) + '\n').encode()
+    encoded = (json.dumps(data, indent=2, sort_keys=True, ensure_ascii=True, allow_nan=False) + '\n').encode('utf-8')
     require(len(encoded) <= MAX_JSON_BYTES, 'oversize_json')
     pending = unlinked(path.with_suffix(path.suffix + '.pending'), must_exist=False)
     with pending.open('xb') as out:
@@ -185,14 +185,14 @@ def production_tree(root):
         if not entry:
             continue
         metadata, raw_name = entry.split(b'\t', 1)
-        mode, _, stage = metadata.decode().split()
+        mode, _, stage = metadata.decode('ascii').split()
         name = raw_name.decode('utf-8')
         require(stage == '0' and mode in ('100644', '100755'), 'unsupported_git_index_entry')
         if name in OWNED:
             continue
         data = relative_file(root, name).read_bytes()
         hashes[name] = digest_bytes(data)
-        blob = hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).digest()
+        blob = hashlib.sha1(b'blob ' + str(len(data)).encode('utf-8') + b'\0' + data).digest()
         if name == 'benchmarks/README.md':
             require(blob.hex() == BASELINE_DOC_BLOB or hashes[name] == REVIEWED_DOC_SHA256, 'unreviewed_benchmark_document')
             blob = bytes.fromhex(BASELINE_DOC_BLOB)
@@ -204,10 +204,10 @@ def production_tree(root):
     require(len(hashes) == 109, 'baseline_file_set_changed')
     def encode(node):
         contents = b''
-        for name, value in sorted(node.items(), key=lambda item: (item[0] + ('/' if isinstance(item[1], dict) else '')).encode()):
+        for name, value in sorted(node.items(), key=lambda item: (item[0] + ('/' if isinstance(item[1], dict) else '')).encode('utf-8')):
             mode, digest = ('40000', encode(value)) if isinstance(value, dict) else value
-            contents += mode.encode() + b' ' + name.encode() + b'\0' + digest
-        return hashlib.sha1(b'tree ' + str(len(contents)).encode() + b'\0' + contents).digest()
+            contents += mode.encode('utf-8') + b' ' + name.encode('utf-8') + b'\0' + digest
+        return hashlib.sha1(b'tree ' + str(len(contents)).encode('utf-8') + b'\0' + contents).digest()
     require(encode(tree).hex() == BASELINE_TREE, 'production_source_tree_changed')
     return hashes
 
@@ -948,11 +948,11 @@ def sanitize_runtime_log(path):
             output.append(line)
         elif line.startswith((PROFILE_PREFIX, OUTPUT_CHECK_PREFIX, PREFLIGHT_PREFIX)):
             # Profile is delivered separately only after closed-schema validation.
-            output.append('PROFILE_RECORD_SHA256 ' + digest_bytes(line.encode()))
+            output.append('PROFILE_RECORD_SHA256 ' + digest_bytes(line.encode('utf-8')))
         elif line:
             redacted += 1
-            output.append('OMITTED_LINE_SHA256 ' + digest_bytes(line.encode()))
-    return ('\n'.join(output) + '\n').encode(), redacted
+            output.append('OMITTED_LINE_SHA256 ' + digest_bytes(line.encode('utf-8')))
+    return ('\n'.join(output) + '\n').encode('utf-8'), redacted
 
 
 def validate_prepare_receipt(record):
@@ -1125,11 +1125,21 @@ def validate_results_receipt(summary):
 
 def collect():
     root = unlinked(ROOT / 'build/profile', must_exist=False)
-    destination = ROOT / 'build/ru-syntax-profile-evidence'
+    build = unlinked(ROOT / 'build', must_exist=False)
+    if not build.exists():
+        build.mkdir()
+    require(unlinked(build).is_dir(), 'invalid_build_directory')
+    destination = unlinked(build / 'ru-syntax-profile-evidence', must_exist=False)
     require(not destination.exists(), 'fresh_public_evidence_directory_required')
     destination.mkdir()
+    unlinked(destination)
     files = []
     total = 0
+    prepared = False
+    verified = False
+    native_execution_recorded = False
+    prepare_present = (root / 'prepare.json').exists()
+    results_present = (root / 'results.json').exists()
     def publish(name, value):
         nonlocal total
         check_public_tree(value)
@@ -1161,9 +1171,12 @@ def collect():
                  'initial_build_estimate_seconds', 'elapsed_seconds', 'estimate_exceeded', 'generation_seconds', 'preflight_builds'}
         require(set(receipt) <= allow, 'unexpected_prepare_field')
         validate_prepare_receipt(receipt)
+        prepared = receipt['prepared']
         publish('prepare.json', receipt)
     if (root / 'results.json').exists():
         summary = validate_results_receipt(read_json(root / 'results.json'))
+        native_execution_recorded = any((row['outcome'] or {}).get('executed') is True
+                                        for row in summary['preflight'] + summary['runs'])
         for row in summary.get('runs', []):
             if row.get('profile') is not None:
                 validate_profile(row['profile'], row, require_complete=False)
@@ -1174,6 +1187,7 @@ def collect():
         verification = read_json(root / 'verification.json')
         require(verification == verify_results(read_json(root / 'results.json')), 'verification_receipt_mismatch')
         publish('verification.json', verification)
+        verified = prepared and results_present
     for row in matrix():
         logs = root / 'runs' / row['id'] / 'logs'
         if not logs.exists():
@@ -1205,8 +1219,13 @@ def collect():
             files.append({'name': published_name, 'bytes': len(content), 'sha256': digest_bytes(content),
                           'original_sha256': sha(path), 'omitted_lines': redactions})
     publish('collection.json', {'schema': 1, 'synthetic_data_only': True, 'files': files.copy(),
-                               'binaries_uploaded': False, 'generated_sources_uploaded': False})
-    return {'files': len(files), 'bytes': total}
+                               'binaries_uploaded': False, 'generated_sources_uploaded': False,
+                               'prepare_receipt_present': prepare_present, 'results_receipt_present': results_present,
+                               'native_execution_recorded': native_execution_recorded, 'profile_verified': verified, 'passed': verified,
+                               'error_code': None if verified else ('profile_evidence_incomplete' if prepare_present or results_present
+                                                                    else 'profile_evidence_missing'),
+                               'product_acceptance': {'separate': True, 'status': 'not_claimed'}})
+    return {'files': len(files), 'bytes': total, 'passed': verified}
 
 
 def main():
@@ -1231,8 +1250,7 @@ def main():
             save_json(ROOT / 'build/profile/verification.json', result)
             ok = result['verified']
         else:
-            collect()
-            ok = True
+            ok = collect()['passed']
         print('RU_SYNTAX_PROFILE_' + args.action.upper() + '=' + ('PASS' if ok else 'FAIL'))
         return 0 if ok else 1
     except Exception as exc:

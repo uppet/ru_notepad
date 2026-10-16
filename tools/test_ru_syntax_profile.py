@@ -119,7 +119,7 @@ class PlanTests(unittest.TestCase):
         self.assertNotIn('native/profile_counters.h', hashes)
 
     def test_workflow_is_separate_and_narrow(self):
-        workflow = (ROOT / '.github/workflows/ru-syntax-profile.yml').read_text()
+        workflow = (ROOT / '.github/workflows/ru-syntax-profile.yml').read_text(encoding='utf-8')
         self.assertIn('branches: [wip]', workflow)
         self.assertIn('workflow_dispatch:', workflow)
         for name in runner.OWNED:
@@ -232,7 +232,7 @@ class ProfileTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'runtime.log'
             line = runner.PROFILE_PREFIX + json.dumps(profile(self.row)) + '\n'
-            path.write_text(line * 2)
+            path.write_text(line * 2, encoding='utf-8')
             with self.assertRaisesRegex(runner.ProfileError, 'exactly_one_profile_record_required'):
                 runner.profile_from_logs([path], self.row)
 
@@ -241,7 +241,7 @@ class ProfileTests(unittest.TestCase):
         value['complete'] = False
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'runtime.log'
-            path.write_text(runner.PROFILE_PREFIX + json.dumps(value) + '\n')
+            path.write_text(runner.PROFILE_PREFIX + json.dumps(value) + '\n', encoding='utf-8')
             self.assertFalse(runner.profile_from_logs([path], self.row)['complete'])
 
 
@@ -361,8 +361,8 @@ class OutputAndCollectionTests(unittest.TestCase):
             row = summary['runs'][0]
             logs = work / 'runs' / row['id'] / 'logs'
             logs.mkdir(parents=True)
-            (logs / 'profile_pipeline.stdout.log').write_text('TOTAL PASS: 6\nprivate generated source snippet\n')
-            (work / 'private.c').write_text('forbidden generated source')
+            (logs / 'profile_pipeline.stdout.log').write_text('TOTAL PASS: 6\nprivate generated source snippet\n', encoding='utf-8')
+            (work / 'private.c').write_text('forbidden generated source', encoding='utf-8')
             (work / 'private.exe').write_bytes(b'forbidden executable')
             with patch.object(runner, 'ROOT', root):
                 runner.collect()
@@ -374,6 +374,9 @@ class OutputAndCollectionTests(unittest.TestCase):
             self.assertNotIn(b'forbidden', contents)
             self.assertIn(b'OMITTED_LINE_SHA256', contents)
             self.assertIn(b'not_claimed', contents)
+            collection = runner.read_json(published / 'collection.json')
+            self.assertFalse(collection['passed'])  # A missing preparation cannot grant success.
+            self.assertEqual(collection['error_code'], 'profile_evidence_incomplete')
 
     def test_collect_retains_failed_zero_progress_receipt(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -468,7 +471,7 @@ class GeneratedContractTests(unittest.TestCase):
         manifest = runner.read_json(generated / 'manifest.json')
         unit = next(unit for unit in manifest['units'] if unit['path'] == 'gui')
         generator = runner.load_generator()
-        original = (generated / unit['generated_c']).read_text()
+        original = (generated / unit['generated_c']).read_text(encoding='utf-8')
         def windows_source(match):
             basename = generator.decode_c_source_path(match[1]).rsplit('/', 1)[-1]
             return 'ru_source = "' + generator.octal('C:/工作目录/src/'.replace('/', chr(92)) + basename) + '";'
@@ -499,7 +502,7 @@ class RunIsolationTests(unittest.TestCase):
                 files[name] = runner.sha(source / name)
             build = {'files': files}
             first = runner.stage_run_binaries(build, source, root / 'first-bin')
-            (first / 'ru_notepad-previous.log').write_text('preserved previous evidence')
+            (first / 'ru_notepad-previous.log').write_text('preserved previous evidence', encoding='utf-8')
             second = runner.stage_run_binaries(build, source, root / 'second-bin')
             self.assertEqual({p.name for p in second.iterdir()}, set(files))
             self.assertEqual(list(second.glob('ru_notepad-*.log')), [])
@@ -541,10 +544,85 @@ class PreflightTests(unittest.TestCase):
             runner.verify_results(summary)
 
     def test_generation_failure_codes_preserved(self):
-        source = (ROOT / 'tools/profile_ru_syntax.py').read_text() + (ROOT / 'native/profile_counters.h').read_text()
+        source = (ROOT / 'tools/profile_ru_syntax.py').read_text(encoding='utf-8') + (ROOT / 'native/profile_counters.h').read_text(encoding='utf-8')
         import re
         observed = set(re.findall(r'rp_invalid\("([a-z_]+)"\)', source))
         self.assertTrue(observed <= runner.FAILURES, observed - runner.FAILURES)
+
+
+class ExplicitEncodingTests(unittest.TestCase):
+    def test_owned_text_io_declares_utf8_without_locale_defaults(self):
+        import ast
+        import textwrap
+        sources = [(name, (ROOT / name).read_text(encoding='utf-8')) for name in
+                   ('tools/run_ru_syntax_profile.py', 'tools/test_ru_syntax_profile.py')]
+        workflow = (ROOT / '.github/workflows/ru-syntax-profile.yml').read_text(encoding='utf-8')
+        sources.append(('workflow_python', textwrap.dedent(workflow.split("@'\n", 1)[1].split("          '@ |", 1)[0])))
+        for name, source in sources:
+            for node in ast.walk(ast.parse(source)):
+                if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                    continue
+                if node.func.attr in ('read_text', 'write_text'):
+                    encoding = next((item.value for item in node.keywords if item.arg == 'encoding'), None)
+                    with self.subTest(source=name, line=node.lineno):
+                        self.assertIsInstance(encoding, ast.Constant)
+                        self.assertEqual(encoding.value, 'utf-8')
+                elif node.func.attr in ('encode', 'decode'):
+                    with self.subTest(source=name, line=node.lineno):
+                        self.assertTrue(node.args or any(item.arg == 'encoding' for item in node.keywords))
+
+    def test_source_scan_survives_forced_cp1252_default(self):
+        import io
+        # Reproduce Windows' non-UTF-8 default deterministically, independent
+        # of PYTHONUTF8 (which isolated Python intentionally ignores).
+        data = (ROOT / 'tools/profile_ru_syntax.py').read_bytes()
+        with self.assertRaises(UnicodeDecodeError):
+            data.decode('cp1252')
+        def cp1252_default(encoding, stacklevel=2):
+            return 'cp1252' if encoding is None or encoding == 'locale' else encoding
+        with patch.object(io, 'text_encoding', side_effect=cp1252_default):
+            with self.assertRaises(UnicodeDecodeError):
+                (ROOT / 'tools/profile_ru_syntax.py').read_bytes().decode(io.text_encoding(None))
+            PreflightTests().test_generation_failure_codes_preserved()
+            PlanTests().test_workflow_is_separate_and_narrow()
+
+
+class EarlyCollectionTests(unittest.TestCase):
+    def test_empty_root_yields_explicit_failure_receipt_and_nonzero_cli(self):
+        import contextlib
+        import io
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = io.StringIO()
+            self.assertFalse((root / 'build').exists())
+            with patch.object(runner, 'ROOT', root), patch.object(sys, 'argv', ['runner', '--action', 'collect']), \
+                    contextlib.redirect_stdout(output):
+                self.assertEqual(runner.main(), 1)
+            self.assertIn('RU_SYNTAX_PROFILE_COLLECT=FAIL', output.getvalue())
+            evidence = root / 'build/ru-syntax-profile-evidence'
+            self.assertEqual([path.name for path in evidence.iterdir()], ['collection.json'])
+            receipt = runner.read_json(evidence / 'collection.json')
+            self.assertEqual(receipt['files'], [])
+            self.assertEqual(receipt['error_code'], 'profile_evidence_missing')
+            for key in ('prepare_receipt_present', 'results_receipt_present', 'native_execution_recorded',
+                        'profile_verified', 'passed', 'binaries_uploaded', 'generated_sources_uploaded'):
+                self.assertIs(receipt[key], False)
+            self.assertEqual(receipt['product_acceptance'], {'separate': True, 'status': 'not_claimed'})
+            self.assertFalse((root / 'build/profile').exists())
+
+    def test_linked_build_parent_is_rejected_before_publication(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'root'
+            outside = Path(directory) / 'outside'
+            root.mkdir()
+            outside.mkdir()
+            try:
+                (root / 'build').symlink_to(outside, target_is_directory=True)
+            except OSError:
+                self.skipTest('Host cannot create symlinks; Windows reparse checks remain required.')
+            with patch.object(runner, 'ROOT', root), self.assertRaisesRegex(runner.ProfileError, 'linked_owned_path'):
+                runner.collect()
+            self.assertEqual(list(outside.iterdir()), [])
 
 
 class EvidenceSafetyTests(unittest.TestCase):
@@ -563,7 +641,7 @@ class EvidenceSafetyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'real').mkdir()
-            (root / 'real/file.log').write_text('test')
+            (root / 'real/file.log').write_text('test', encoding='utf-8')
             try:
                 (root / 'linked').symlink_to(root / 'real', target_is_directory=True)
             except OSError:
@@ -580,7 +658,7 @@ class EvidenceSafetyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'runtime.log'
             path.write_text('C:\\private\\generated.c: source snippet\nint secret = 42;\n'
-                            'RU_GUI_SYNC size=1000000 wall_ms=1.2\nTOTAL PASS: 8\n')
+                            'RU_GUI_SYNC size=1000000 wall_ms=1.2\nTOTAL PASS: 8\n', encoding='utf-8')
             content, omitted = runner.sanitize_runtime_log(path)
             self.assertEqual(omitted, 2)
             self.assertNotIn(b'private', content)
