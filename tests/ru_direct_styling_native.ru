@@ -214,11 +214,11 @@ _子型 取 密 其 签名 (窗 其 IP) ([(窗 其 PTR),(窗 其 U),(窗 其 UP)
     拒批 甲 态 果 长 'invalid contiguous style bound rejects whole batch before pointer acquisition or writes'.
     果 其 增 'styleLength' 真长.
     原段 取 果['spans'].
-    果 其 增 'spans' [[0,65,4]].
+    果 其 增 'spans' ([[0,65,4]]).
     拒批 甲 态 果 长 'invalid correction span rejects whole batch before pointer acquisition or writes'.
     果 其 增 'spans' 原段.
     原折 取 果['folds'].
-    果 其 增 'folds' [[999999,0,假]].
+    果 其 增 'folds' ([[999999,0,假]]).
     拒批 甲 态 果 长 'invalid fold rejects styles as well as folds before pointer acquisition'.
     果 其 增 'folds' 原折.
     果 其 增 'batchRevision' (态['revision']+1).

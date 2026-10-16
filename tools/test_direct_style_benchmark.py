@@ -468,6 +468,23 @@ class FinalContractTests(unittest.TestCase):
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_actual_fixture_portable_regression_is_required_before_native_preparation(self):
+        paired = (ROOT / '.github/workflows/direct-style-benchmark.yml').read_text(encoding='utf-8')
+        name = '      - name: Verify exact direct-fixture call boundaries in both ordinary Ru backends\n'
+        self.assertEqual(paired.count(name), 1)
+        step = paired.split(name, 1)[1].split('      - name:', 1)[0]
+        self.assertEqual(step, '''        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PATH = "$env:MSYS2_ROOT/mingw64/bin;$env:PATH"
+          python -I tests/ru_direct_fixture_portable.py --ru-root .ci/ru-language --cc gcc
+''')
+        self.assertLess(paired.index(name), paired.index('      - name: Prepare exact official Scintilla and Lexilla inputs'))
+        self.assertIn('      - tests/ru_direct_fixture_portable.py\n', paired)
+        self.assertIn('tests/ru_direct_fixture_portable.py', runner.NEW_INPUTS)
+        self.assertIn('tests/ru_direct_fixture_portable.py', runner.REVIEWED_CHANGED_SHA256)
+
     def test_wip_research_only_and_full_product_unchanged(self):
         paired = (ROOT / '.github/workflows/direct-style-benchmark.yml').read_text(encoding='utf-8')
         self.assertIn('branches: [wip]', paired)

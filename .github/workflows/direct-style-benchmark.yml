@@ -8,6 +8,7 @@ on:
       - src/syntax.ru
       - src/ru_syntax.ru
       - tests/ru_direct_styling_native.ru
+      - tests/ru_direct_fixture_portable.py
       - tools/run_direct_style_benchmark.py
       - tools/test_direct_style_benchmark.py
       - tools/run_ru_syntax_profile.py
@@ -68,6 +69,13 @@ jobs:
             mingw-w64-x86_64-make
       - name: Execute fail-closed paired and reused reporting controls
         run: python -I tools/test_direct_style_benchmark.py
+      - name: Verify exact direct-fixture call boundaries in both ordinary Ru backends
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PATH = "$env:MSYS2_ROOT/mingw64/bin;$env:PATH"
+          python -I tests/ru_direct_fixture_portable.py --ru-root .ci/ru-language --cc gcc
       - name: Prepare exact official Scintilla and Lexilla inputs
         timeout-minutes: 12
         env:

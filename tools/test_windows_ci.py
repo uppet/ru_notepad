@@ -16,7 +16,7 @@ import sys
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
 import windows_ci as ci
 import build as builder
@@ -302,9 +302,22 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         (binary / 'Lexilla.dll').write_bytes(b'synthetic correct lexer DLL')
         (binary / ci.portable.NATIVE_HELPER_NAME).write_bytes(b'synthetic correct native scanner DLL')
         (binary / ci.portable.NATIVE_WRONG_ABI_NAME).write_bytes(b'synthetic wrong ABI scanner DLL')
-        with patch.object(ci, 'run_console', return_value={'passed': True}) as run:
+        events = []
+        def preflight(api, library, expected_hash):
+            events.append('preflight')
+            self.assertEqual(library.read_bytes(), (binary / ci.portable.NATIVE_HELPER_NAME).read_bytes())
+            self.assertEqual(ci.sha(library), expected_hash)
+            return dict(loadable=True, createlexer_missing=True, released=True, library_sha256=expected_hash)
+        def console(api, name, *args, **kwargs):
+            events.append(name)
+            return {'passed': True}
+        with patch.object(ci, 'run_console', side_effect=console) as run, \
+             patch.object(ci, 'preflight_wrong_lexer', side_effect=preflight) as probe:
             results = ci.run_syntax_fallbacks(NoDialogs(), binary, fixtures, evidence)
         self.assertEqual(len(results), 6)
+        self.assertEqual(events, ['syntax_missing_lexilla', 'preflight', *[case[0] for case in ci.SYNTAX_FALLBACK_TESTS[1:]]])
+        probe.assert_called_once()
+        self.assertEqual(results[1]['fixture_preflight']['library_sha256'], ci.sha(binary / ci.portable.NATIVE_HELPER_NAME))
         for call, (name, argument, bad) in zip(run.call_args_list, ci.SYNTAX_FALLBACK_TESTS):
             isolated = fixtures / name
             executable = ci.SYNTAX_FALLBACK_EXECUTABLES.get(name, 'syntax_native.exe')
@@ -317,6 +330,122 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             self.assertEqual({path.name for path in isolated.iterdir()}, set(layout))
             for target, source in layout.items():
                 self.assertEqual((isolated / target).read_bytes(), (binary / source).read_bytes())
+
+    def test_wrong_lexer_layout_avoids_window_registration_and_matches_portable_runner(self):
+        layout = ci.syntax_fallback_layout('syntax_bad_lexer')
+        self.assertEqual(layout['Lexilla.dll'], ci.portable.NATIVE_HELPER_NAME)
+        self.assertEqual(layout['Scintilla.dll'], 'Scintilla.dll')
+        self.assertEqual(layout[ci.portable.NATIVE_HELPER_NAME], ci.portable.NATIVE_HELPER_NAME)
+        runner = (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8')
+        copies = [line for line in runner.splitlines() if line.startswith('if "%~1"=="bad-lexer" copy /b ')]
+        self.assertEqual(copies, ['if "%~1"=="bad-lexer" copy /b "RuSyntax.dll" "%FALLBACKDIR%\\Lexilla.dll" >nul || exit /b 1'])
+        source = (ci.ROOT / 'tests/syntax_native.ru').read_text(encoding='utf-8')
+        self.assertEqual(source.count(ci.WRONG_LEXER_PREFLIGHT_MARKER), 1)
+        self.assertIn("确认 (警告 其 含 'does not export CreateLexer') 'actual wrong DLL is caught before native symbol binding'.", source)
+        self.assertNotIn('Production warning:', source)
+        self.assertIn("Production import-time preflight has already run", source)
+        self.assertIn("若 策 其 含词 参数 '--expect-bad-lexer' 则 验错误词法库. 然", source)
+        self.assertEqual(ci.expected_assertions('syntax_bad_lexer'), 8)
+
+    def test_wrong_lexer_loader_preflight_secure_path_lifetime_and_hash(self):
+        library = self.root / 'Lexilla.dll'
+        library.write_bytes(b'synthetic exact helper bytes')
+        digest = ci.sha(library)
+        for mode in ('good', 'load-fails', 'export-present', 'release-fails', 'lookup-raises', 'changed'):
+            with self.subTest(mode=mode):
+                library.write_bytes(b'synthetic exact helper bytes')
+                api = Mock()
+                api.kernel.LoadLibraryExW.return_value = 0 if mode == 'load-fails' else 17
+                api.kernel.GetProcAddress.return_value = 123 if mode == 'export-present' else 0
+                api.kernel.FreeLibrary.return_value = 0 if mode == 'release-fails' else 1
+                if mode == 'lookup-raises':
+                    api.kernel.GetProcAddress.side_effect = RuntimeError('synthetic lookup failure')
+                if mode == 'changed':
+                    def mutate(_):
+                        library.write_bytes(b'changed')
+                        return 1
+                    api.kernel.FreeLibrary.side_effect = mutate
+                if mode in {'lookup-raises', 'changed'}:
+                    with self.assertRaises(RuntimeError):
+                        ci.preflight_wrong_lexer(api, library, digest)
+                else:
+                    record = ci.preflight_wrong_lexer(api, library, digest)
+                    self.assertEqual(record, dict(loadable=mode != 'load-fails',
+                        createlexer_missing=mode not in {'load-fails', 'export-present'},
+                        released=mode not in {'load-fails', 'release-fails'}, library_sha256=digest))
+                    if mode == 'good': ci.validate_wrong_lexer_preflight(record, digest)
+                    else:
+                        with self.assertRaises(RuntimeError): ci.validate_wrong_lexer_preflight(record, digest)
+                expected = [call.LoadLibraryExW(str(library.resolve()), None, 2304)]
+                if mode != 'load-fails':
+                    expected += [call.GetProcAddress(17, b'CreateLexer'), call.FreeLibrary(17)]
+                self.assertEqual(api.kernel.mock_calls, expected)
+        api = Mock()
+        with self.assertRaisesRegex(RuntimeError, 'before its loader preflight'):
+            ci.preflight_wrong_lexer(api, library, digest)
+        self.assertEqual(api.kernel.mock_calls, [])
+
+    def test_wrong_lexer_preflight_failure_never_launches_target(self):
+        for mode in ('loadable', 'createlexer_missing', 'released', 'exception'):
+            with self.subTest(mode=mode):
+                root = self.root / mode
+                binary, fixtures, evidence = (root / name for name in ('bin', 'fixtures', 'evidence'))
+                for folder in (binary, fixtures, evidence): folder.mkdir(parents=True)
+                for name in set(ci.syntax_fallback_layout('syntax_bad_lexer').values()):
+                    (binary / name).write_bytes(name.encode())
+                record = dict(loadable=True, createlexer_missing=True, released=True,
+                              library_sha256=ci.sha(binary / ci.portable.NATIVE_HELPER_NAME))
+                if mode != 'exception': record[mode] = False
+                with patch.object(ci, 'SYNTAX_FALLBACK_TESTS', (('syntax_bad_lexer', '--expect-bad-lexer', True),)), \
+                     patch.object(ci, 'preflight_wrong_lexer', return_value=record,
+                         side_effect=RuntimeError('synthetic private-path sentinel') if mode == 'exception' else None), \
+                     patch.object(ci, 'run_console') as run:
+                    result, = ci.run_syntax_fallbacks(NoDialogs(), binary, fixtures, evidence)
+                run.assert_not_called()
+                self.assertIs(result['passed'], False)
+                self.assertIs(result['executed'], False)
+                self.assertEqual(result['error'], 'Wrong-lexer fixture OS preflight failed')
+                self.assertNotIn('private-path', json.dumps(result))
+                if mode != 'exception': self.assertEqual(result['fixture_preflight'], record)
+
+    def test_wrong_lexer_native_marker_is_exact_unique_and_exclusive(self):
+        marker = ci.WRONG_LEXER_PREFLIGHT_MARKER
+        cases = [('good', 'syntax_bad_lexer', marker, ''),
+                 ('missing', 'syntax_bad_lexer', '', ''),
+                 ('duplicate', 'syntax_bad_lexer', marker + '\n' + marker, ''),
+                 ('false', 'syntax_bad_lexer', marker.replace('released=1', 'released=0'), ''),
+                 ('stderr', 'syntax_bad_lexer', marker, marker),
+                 ('wrong-case', 'syntax_missing_lexilla', marker, ''),
+                 ('prefixed', 'syntax_missing_lexilla', 'extra ' + marker, '')]
+        for label, name, text, error in cases:
+            with self.subTest(label=label):
+                evidence = self.root / label
+                evidence.mkdir()
+                stdout = text + '\n' + 'PASS: synthetic\n' * 8 + 'TOTAL PASS: 8\n'
+                code = f'import sys; print({stdout!r}); sys.stderr.write({error!r})'
+                with patch.object(ci, 'cleanup_process', side_effect=kill_synthetic):
+                    result = ci.run_console(NoDialogs(), name, [sys.executable, '-c', code],
+                        evidence, r'^TOTAL PASS: 8\s*$', expected_assertions=8)
+                self.assertEqual(result['passed'], label == 'good')
+                self.assertEqual(result.get('native_fixture_preflight'), True if label == 'good' else None)
+
+    def test_acceptance_requires_both_wrong_lexer_preflights_and_exact_hash(self):
+        for field in ('loadable', 'createlexer_missing', 'released', 'library_sha256', 'native_fixture_preflight'):
+            for mutation in ('missing', 'false', 'integer'):
+                with self.subTest(field=field, mutation=mutation):
+                    summary = self.acceptance()
+                    record = next(item for item in summary['tests'] if item['name'] == 'syntax_bad_lexer')
+                    target = record if field == 'native_fixture_preflight' else record['fixture_preflight']
+                    if mutation == 'missing': target.pop(field)
+                    else: target[field] = False if mutation == 'false' else 1
+                    with self.assertRaisesRegex(RuntimeError, '[Ww]rong-lexer'):
+                        ci.validate_acceptance(summary)
+        for field in ('fixture_preflight', 'native_fixture_preflight'):
+            summary = self.acceptance()
+            target = next(item for item in summary['tests'] if item['name'] == 'syntax_missing_lexilla')
+            target[field] = True
+            with self.assertRaisesRegex(RuntimeError, 'Unexpected wrong-lexer'):
+                ci.validate_acceptance(summary)
 
     def acceptance(self):
         summary = {'acl_requested': True, 'tests': [],
@@ -341,6 +470,10 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             if name in {case[0] for case in ci.SYNTAX_FALLBACK_TESTS}:
                 result['fixture_binary_sha256'] = {target: summary['tested_binary_sha256'][source]
                                                   for target, source in ci.syntax_fallback_layout(name).items()}
+            if name == 'syntax_bad_lexer':
+                result['fixture_preflight'] = dict(loadable=True, createlexer_missing=True, released=True,
+                    library_sha256=summary['tested_binary_sha256'][ci.portable.NATIVE_HELPER_NAME])
+                result['native_fixture_preflight'] = True
             if name in {'main-gui-file-entry', 'main-gui-ru-syntax'}:
                 checks = ci.GUI_FILE_CHECKS if name == 'main-gui-file-entry' else ci.GUI_RU_CHECKS
                 result.update({key: True for key in checks})

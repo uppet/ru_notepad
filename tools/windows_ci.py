@@ -64,6 +64,8 @@ SYNTAX_FALLBACK_TESTS = (
     ('ru_syntax_bad_helper', '--expect-bad-helper', False),
     ('ru_syntax_wrong_helper_abi', '--expect-wrong-helper-abi', False),
 )
+WRONG_LEXER_PREFLIGHT_MARKER = 'WRONG_LEXER_FIXTURE_PREFLIGHT loadable=1 createlexer_missing=1 released=1'
+WRONG_LEXER_PREFLIGHT_FIELDS = {'loadable', 'createlexer_missing', 'released', 'library_sha256'}
 SYNTAX_FALLBACK_EXECUTABLES = {name: 'ru_syntax_native.exe' for name, _, _ in
                                SYNTAX_FALLBACK_TESTS if name.startswith('ru_syntax_')}
 HELPER_FALLBACK_LAYOUTS = {'ru_syntax_missing_helper': 'missing',
@@ -287,6 +289,12 @@ class Windows:
         self.user.GetUpdateRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT), wintypes.BOOL]
         self.user.GetUpdateRect.restype = wintypes.BOOL
         self.kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        self.kernel.LoadLibraryExW.argtypes = [wintypes.LPCWSTR, wintypes.HANDLE, wintypes.DWORD]
+        self.kernel.LoadLibraryExW.restype = wintypes.HMODULE
+        self.kernel.GetProcAddress.argtypes = [wintypes.HMODULE, wintypes.LPCSTR]
+        self.kernel.GetProcAddress.restype = ctypes.c_void_p
+        self.kernel.FreeLibrary.argtypes = [wintypes.HMODULE]
+        self.kernel.FreeLibrary.restype = wintypes.BOOL
         self.kernel.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
         self.kernel.GlobalAlloc.restype = wintypes.HGLOBAL
         self.kernel.GlobalLock.argtypes = [wintypes.HGLOBAL]
@@ -607,6 +615,15 @@ def run_console(api, name, command, evidence, marker, timeout=120, expected_asse
             raise RuntimeError(f'{name}: exact unique success marker missing or failure reported')
         if expected_assertions is not None and result['assertions_passed'] != expected_assertions:
             raise RuntimeError(f'{name}: expected {expected_assertions} individual PASS lines, got {result["assertions_passed"]}')
+        fixture_markers = re.findall(r'^WRONG_LEXER_FIXTURE_PREFLIGHT[^\r\n]*', stdout_text, re.M)
+        if name == 'syntax_bad_lexer':
+            if (fixture_markers != [WRONG_LEXER_PREFLIGHT_MARKER] or
+                    stdout_text.count('WRONG_LEXER_FIXTURE_PREFLIGHT') != 1 or
+                    'WRONG_LEXER_FIXTURE_PREFLIGHT' in stderr_text):
+                raise RuntimeError('Wrong-lexer native fixture preflight marker is missing or malformed')
+            result['native_fixture_preflight'] = True
+        elif 'WRONG_LEXER_FIXTURE_PREFLIGHT' in stdout_text + stderr_text:
+            raise RuntimeError('Unexpected wrong-lexer fixture preflight marker')
         if name == 'ru_syntax_native':
             result['performance'] = parse_ru_performance(stdout_text)
         if name in RU_GUI_CONSOLE_MEASUREMENTS:
@@ -1958,8 +1975,9 @@ def syntax_fallback_layout(name):
     executable = SYNTAX_FALLBACK_EXECUTABLES.get(name, 'syntax_native.exe')
     layout = {executable: executable, 'Scintilla.dll': 'Scintilla.dll'}
     if name == 'syntax_bad_lexer':
-        # A real loadable DLL without CreateLexer, never a mock failure flag.
-        layout['Lexilla.dll'] = 'Scintilla.dll'
+        # A real DLL without CreateLexer or process-global window registration.
+        # A second renamed Scintilla can fail DllMain when the real one is loaded.
+        layout['Lexilla.dll'] = portable.NATIVE_HELPER_NAME
     if name in HELPER_FALLBACK_LAYOUTS:
         layout['Lexilla.dll'] = 'Lexilla.dll'
     helper_mode = HELPER_FALLBACK_LAYOUTS.get(name)
@@ -1968,6 +1986,31 @@ def syntax_fallback_layout(name):
             'Scintilla.dll' if helper_mode == 'bad-exports' else
             portable.NATIVE_WRONG_ABI_NAME if helper_mode == 'wrong-abi' else portable.NATIVE_HELPER_NAME)
     return layout
+
+
+def validate_wrong_lexer_preflight(record, expected_hash):
+    if (not isinstance(record, dict) or set(record) != WRONG_LEXER_PREFLIGHT_FIELDS or
+            any(record[field] is not True for field in ('loadable', 'createlexer_missing', 'released')) or
+            record['library_sha256'] != expected_hash):
+        raise RuntimeError('Wrong-lexer fixture preflight did not prove exact loadable missing-export bytes and release')
+
+
+def preflight_wrong_lexer(api, library, expected_hash):
+    """Probe the exact staged bytes before launching the native child; no symbol calls."""
+    record = dict(loadable=False, createlexer_missing=False, released=False,
+                  library_sha256=sha(library))
+    if record['library_sha256'] != expected_hash:
+        raise RuntimeError('Wrong-lexer fixture changed before its loader preflight')
+    handle = api.kernel.LoadLibraryExW(str(library.resolve(strict=True)), None, 2304)
+    if handle:
+        record['loadable'] = True
+        try:
+            record['createlexer_missing'] = not bool(api.kernel.GetProcAddress(handle, b'CreateLexer'))
+        finally:
+            record['released'] = bool(api.kernel.FreeLibrary(handle))
+    if sha(library) != expected_hash:
+        raise RuntimeError('Wrong-lexer fixture changed during its loader preflight')
+    return record
 
 
 def run_syntax_fallbacks(api, binary_dir, fixtures, evidence):
@@ -1983,8 +2026,21 @@ def run_syntax_fallbacks(api, binary_dir, fixtures, evidence):
             fixture_hashes[target] = sha(isolated / target)
             if fixture_hashes[target] != sha(binary_dir / source):
                 raise RuntimeError('Syntax fallback fixture differs from the tested binaries')
-        result = dict(run_console(api, name, [str(isolated / executable), argument],
-            evidence, r'^TOTAL PASS: 8\s*$', expected_assertions=8, cwd=isolated))
+        preflight = None
+        preflight_error = None
+        try:
+            if name == 'syntax_bad_lexer':
+                preflight = preflight_wrong_lexer(api, isolated / 'Lexilla.dll', fixture_hashes['Lexilla.dll'])
+                validate_wrong_lexer_preflight(preflight, fixture_hashes['Lexilla.dll'])
+        except Exception:
+            preflight_error = 'Wrong-lexer fixture OS preflight failed'
+        if preflight_error is not None:
+            result = dict(name=name, passed=False, executed=False, cleanup_killed=False, error=preflight_error)
+        else:
+            result = dict(run_console(api, name, [str(isolated / executable), argument],
+                evidence, r'^TOTAL PASS: 8\s*$', expected_assertions=8, cwd=isolated))
+        if preflight is not None:
+            result['fixture_preflight'] = preflight
         result['fixture_binary_sha256'] = fixture_hashes
         results.append(result)
     return results
@@ -2023,6 +2079,13 @@ def validate_acceptance(summary, root=None):
                                for target, source in syntax_fallback_layout(test['name']).items()}
             if test.get('fixture_binary_sha256') != expected_hashes:
                 raise RuntimeError('Syntax fallback fixture does not match the packaged test binaries')
+        if test['name'] == 'syntax_bad_lexer':
+            validate_wrong_lexer_preflight(test.get('fixture_preflight'),
+                                           summary['tested_binary_sha256'][portable.NATIVE_HELPER_NAME])
+            if test.get('native_fixture_preflight') is not True:
+                raise RuntimeError('Wrong-lexer native fixture preflight evidence is missing')
+        elif 'fixture_preflight' in test or 'native_fixture_preflight' in test:
+            raise RuntimeError('Unexpected wrong-lexer fixture preflight evidence')
         if test['name'] in GUI_NAMES and not all(test.get(key) for key in
                 ('main_hwnd_seen', 'close_posted', 'detached_from_console')):
             raise RuntimeError('GUI acceptance lacks ordinary visible-window startup/close')

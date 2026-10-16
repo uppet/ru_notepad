@@ -157,6 +157,10 @@ class PackageTests(unittest.TestCase):
             if name in {case[0] for case in ci.SYNTAX_FALLBACK_TESTS}:
                 result['fixture_binary_sha256'] = {target: self.summary['tested_binary_sha256'][source]
                                                   for target, source in ci.syntax_fallback_layout(name).items()}
+            if name == 'syntax_bad_lexer':
+                result['fixture_preflight'] = dict(loadable=True, createlexer_missing=True, released=True,
+                    library_sha256=self.summary['tested_binary_sha256'][ci.portable.NATIVE_HELPER_NAME])
+                result['native_fixture_preflight'] = True
             if name in {'main-gui-file-entry', 'main-gui-ru-syntax'}:
                 checks = ci.GUI_FILE_CHECKS if name == 'main-gui-file-entry' else ci.GUI_RU_CHECKS
                 result.update({key: True for key in checks})

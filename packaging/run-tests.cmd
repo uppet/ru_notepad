@@ -117,7 +117,7 @@ if "%~4"=="" copy /b "RuSyntax.dll" "%FALLBACKDIR%\RuSyntax.dll" >nul || exit /b
 if "%~4"=="bad-helper" copy /b "Scintilla.dll" "%FALLBACKDIR%\RuSyntax.dll" >nul || exit /b 1
 if "%~4"=="wrong-helper-abi" copy /b "RuSyntaxWrongAbi.dll" "%FALLBACKDIR%\RuSyntax.dll" >nul || exit /b 1
 if not "%~4"=="" copy /b "Lexilla.dll" "%FALLBACKDIR%\Lexilla.dll" >nul || exit /b 1
-if "%~1"=="bad-lexer" copy /b "Scintilla.dll" "%FALLBACKDIR%\Lexilla.dll" >nul || exit /b 1
+if "%~1"=="bad-lexer" copy /b "RuSyntax.dll" "%FALLBACKDIR%\Lexilla.dll" >nul || exit /b 1
 pushd "%FALLBACKDIR%" || exit /b 1
 "%FALLBACKEXE%.exe" %~2 >>"%~dp0test-results.txt" 2>&1
 set "FALLBACK_STATUS=%ERRORLEVEL%"

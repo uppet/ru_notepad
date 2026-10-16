@@ -22,7 +22,35 @@
     环
     确认 合格 文.
 为
+算 验错误词法库:
+    # Production import-time preflight has already run. This independent check
+    # proves the staged wrong-export fixture is loadable in this same process.
+    # It also runs from the portable CMD runner, before the unchanged 8 assertions.
+    路径存 取 密 其 UTF16 ((窗 其 目录)+'Lexilla.dll').
+    成果 取 (窗 其 LoadLibraryExW) 其 调用 [路径存,空,2304].
+    路径存 其 关闭.
+    库 取 窗 其 结果 成果.
+    若 库 其 为空 则 卒 'Wrong-lexer fixture could not be loaded.'. 然
+    缺出口 取 [假].
+    名存们 取 [空].
+    试
+        名存们[0] 取 密 其 UTF8 'CreateLexer'.
+        导出 取 窗 其 结果 ((语法 其 GetProcAddress) 其 调用 [库,名存们[0]]).
+        (名存们[0]) 其 关闭.
+        名存们[0] 取 空.
+        缺出口[0] 取 导出 其 为空.
+    救 原因
+        若 名存们[0] != 空 则 (名存们[0]) 其 关闭. 然
+        窗 其 结果 ((窗 其 FreeLibrary) 其 调用 [库]).
+        卒 原因.
+    终
+    窗 其 成功 ((窗 其 FreeLibrary) 其 调用 [库]) 'wrong-lexer fixture FreeLibrary'.
+    若 非 缺出口[0] 则 卒 'Wrong-lexer fixture unexpectedly exports CreateLexer.'. 然
+    显 'WRONG_LEXER_FIXTURE_PREFLIGHT loadable=1 createlexer_missing=1 released=1'.
+    得 空.
+法
 算 元初 参数 为 句 阵:
+    若 策 其 含词 参数 '--expect-bad-lexer' 则 验错误词法库. 然
     编辑库 取 密 其 动态库 ((窗 其 目录)+'Scintilla.dll').
     实例 取 窗 其 成功 ((窗 其 GetModuleHandleW) 其 调用 [空]) 'instance'.
     父 取 窗 其 控制 空 实例 'STATIC' 'ru_notepad syntax tests' 13565952 0.

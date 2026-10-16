@@ -51,7 +51,8 @@ ROUTES = ('direct', 'message')
 OWNED = ('tools/run_direct_style_benchmark.py', 'tools/test_direct_style_benchmark.py',
          '.github/workflows/direct-style-benchmark.yml', '.github/workflows/ru-syntax-profile.yml',
          'benchmarks/README.md')
-NEW_INPUTS = ('tests/ru_direct_styling_native.ru', 'docs/direct-style-publication.md')
+NEW_INPUTS = ('tests/ru_direct_styling_native.ru', 'tests/ru_direct_fixture_portable.py',
+              'docs/direct-style-publication.md')
 # Filled only after independent review of the final candidate delta. A missing
 # reviewed digest fails closed; this is not the historical profiler's PINNED map.
 REVIEWED_CHANGED_SHA256 = {
@@ -66,18 +67,21 @@ REVIEWED_CHANGED_SHA256 = {
     "docs/syntax-highlighting.md": "aef85b9971ec9437303823c20236bfdc06cdc61f640eca9edc1a7e4d8c6d37d9",
     "packaging/README-preview.txt": "d884b6d6e5ddb1817d29ac93d86ce9c329fa788f6ceff1631a3b3ef0697ce556",
     "packaging/app.rc": "f7e7910a803b732916380fbc420467790ff6942d226b24aa6a2c220f992b104d",
-    "packaging/run-tests.cmd": "1295b6c327a6c651a30faa35559b1bcff1de8122904b984436c399d581b93b36",
+    "packaging/run-tests.cmd": "af5cb9b71e0b9c618f0f5e261278a803c3d465c371ee776752168993bbb4ad73",
     "packaging/开始前请读.txt": "981bbb5652e08aacd00e9b623992ae7fe04ec05ffc4eb3d961a0d5e9fb7891d8",
     "src/main.ru": "9583177061ffaf3b12dfadd7a79ca5fcce8a3e253aad701cfee62f7f2b2db335",
     "src/ru_syntax.ru": "8f23bb79ad9d8f36823272ff9bf1d55300aa3dce9e89ce82ff5a319111d812bf",
     "src/syntax.ru": "c1f9c6559c5fb7ad404aef38bffab025b946fbe3bc893312c5b2e1ef4e214e14",
-    "tests/ru_direct_styling_native.ru": "c823e0268220893fe2f4b4b2c9e4d7651388d559cba3ba6b28e230b5c7cbfe9d",
+    "tests/ru_direct_fixture_portable.py": "883b98219690d5fa759844201c9c26a38dfcb4af1b3e01e2c1091f76f68fd542",
+    "tests/ru_direct_styling_native.ru": "530df39232952313bca7c5b3c4ed94af894ab6936ebd4fa9577c2eb6fd2e499c",
+    "tests/syntax_native.ru": "9b26324f0fa2824881fc2d0e66ee47385c893388ff37d4bf23e668a68b1c9f36",
     "tools/package.py": "584b7ee1fc4f584aced77c824f156f24e1218b89b1cc392ff77d899f5841ed58",
     "tools/run_ru_syntax_profile.py": "8797a158214653ddb7c6dddb3d6fe8df6cc13eddff53a83d2485660d905850e3",
+    "tools/test_package.py": "e575654e7c26ebd36ce90559cccf2727d92dd2ac5caa1a65f85aa7ee1dc8d0f4",
     "tools/test_ru_syntax_profile.py": "799aadee00f5fcf4f38ebe77797c7e82588c3775b7925ddc216889800d89ff14",
-    "tools/test_windows_ci.py": "50e9678d9f7c3066d3bec26f197c5b1e6f8ec049d8b963eb66f6080b36ca1f7f",
+    "tools/test_windows_ci.py": "b25abdc83b57fa42737106fd2902fcb626332d30e4d8259ef5861efd8c7015c3",
     "tools/windows_ci.ps1": "c19497026fc33889762dfa04be4430bb9d6407ee76a0aa819cd7256a85d421b7",
-    "tools/windows_ci.py": "54abd6a81c3c7c79af0edf925f08344e914ec2194376166cc90db55a3e984b26"
+    "tools/windows_ci.py": "adcd769863de108e43f51dc8cb7286d1f3438c4aa27f5fb9be8d63a1e0db7400"
 }
 BUILD_BUDGET_SECONDS = 900
 COMPILE_TIMEOUT_SECONDS = 180
