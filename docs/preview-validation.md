@@ -35,11 +35,28 @@ Registration tests operate only inside a disposable HKCU test namespace; they do
 
 ## 0.1.4 Ru syntax gates (pending)
 
+The first [0.1.4 run 38927433174](https://github.com/uppet/ru_notepad/actions/runs/38927433174)
+passed the full Linux oracle/sanitizer job, including LeakSanitizer, but failed
+Windows acceptance: 1,261 assertion lines and 29 of 31 results passed. The native
+container fixture stopped after its first assertion because a rescue-local
+scalar flag did not update its outer binding. The 1 MB detached GUI reached its
+head-token styles in 156 ms and had a measured maximum WM_NULL response of
+47 ms, but did **not** meet the unchanged 30-second complete-styling deadline;
+the six subsequent editing measurements did not run. These partial metrics are
+not a completed performance result, and no ZIP was produced.
+
+The next revision fixes that fixture and the same scope mistake in initialization
+recovery and cleanup-error reporting. It retains the GUI deadline and adds a
+bounded final length/end-styled/status/style-probe snapshot to diagnose the
+unresolved completion failure. New portable controls execute the actual rescue
+bodies and their original failing scalar variants; actual Windows cleanup and
+styling still require the next full run.
+
 This revision retains every 0.1.3 assertion and adds 8 shortcut and 8 suffix-policy
-cases, 338 production lexer/fold-policy cases, 116 real Scintilla container cases,
+cases, 338 production lexer/fold-policy cases, 119 real Scintilla container cases,
 39 main-window integration cases, and an isolated 8-case Ru run without Lexilla, and three 8-case helper rejection runs
 for missing DLL, missing exports and ABI mismatch.
-The required total is **1,376 individual assertions / 31 results**, including
+The required total is **1,379 individual assertions / 31 results**, including
 three detached GUI results. The existing complete >500 MB roundtrip is retained.
 
 New native gates check actual UTF-8 style bytes and fold levels, incomplete edits,

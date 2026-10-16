@@ -52,7 +52,7 @@ NATIVE_CONSOLE_TESTS = (
     ('syntax_native', r'^TOTAL PASS: 82\s*$'),
     ('app_ru_native', r'^TOTAL PASS: 39\s*$'),
     ('ru_lexical_policy', r'^TOTAL PASS: 338\s*$'),
-    ('ru_syntax_native', r'^TOTAL PASS: 116\s*$'),
+    ('ru_syntax_native', r'^TOTAL PASS: 119\s*$'),
 )
 SYNTAX_FALLBACK_TESTS = (
     ('syntax_missing_lexilla', '--expect-missing', False),
@@ -106,13 +106,15 @@ GUI_RU_EDIT_CHECKS = ('edit_fixture_loaded', 'edit_all_operations', 'edit_style_
 GUI_RU_EDIT_MEASUREMENT = ('Real child WM_CHAR/Backspace length-changing input; wall time includes '
     'production Reset Zoom 504 status refresh and WM_NULL polling; bounded style/fold/context probes.')
 GUI_RU_TIMER_FIELDS = {'size', 'wall_ms', 'first_head_style_ms', 'max_response_ms', 'probes',
-                       'source_sha256', 'style_probes'}
+                       'source_sha256', 'style_probes', 'last_probe'}
 SCANNER_PREFLIGHT_SOURCES = ('tools/test_ru_scan.py', 'src/ru_lexical.ru',
                             'tests/ru_lexical_policy.ru')
 SCANNER_PREFLIGHT_REPORT_FIELDS = {'cases', 'chunk_checks', 'ru_assertions_per_backend',
                                   'library_sha256', 'source_sha256', 'sanitizer'}
 SCANNER_SANITIZER_SUCCESS = 'PASS: 20000 ASan/UBSan bounded random buffer cases'
 HELPER_POLICY_EVIDENCE_FILES = ('helper-policy.stdout.log', 'helper-policy.stderr.log',
+    'cleanup-control.stdout.log', 'cleanup-control.stderr.log',
+    'bridge-failure.stdout.log', 'bridge-failure.stderr.log',
     'scanner-build.log', 'differential-python.log', 'differential-build.log',
     'differential-c.log', 'sanitize-build.log', 'sanitize.log', 'report.json')
 HELPER_POLICY_COMMIT = 'dd6cb81b52a426408f7076d82a84c2fdfb644263'
@@ -408,7 +410,9 @@ def helper_policy_inputs(root):
         raise RuntimeError('Helper-policy gate requires the clean reviewed Ru compiler commit/tree')
     return {'ru_commit': commit, 'ru_tree': tree, 'source_sha256': scanner_preflight_sources(root) | {
         name: sha(portable.source_file(root, name))
-        for name in ('tools/windows_ci.py', '.github/workflows/windows.yml')}}
+        for name in ('tools/windows_ci.py', '.github/workflows/windows.yml',
+                     'tools/test_cleanup_paths.py', 'tests/ru_syntax_failure_portable.py',
+                     'src/main.ru', 'src/ru_syntax.ru', 'tests/ru_syntax_native.ru')}}
 
 
 def helper_policy_action(action, root):
@@ -453,6 +457,20 @@ def helper_policy_action(action, root):
             raise RuntimeError('Linux helper policy lacks 314 full style/fold assertions in each real backend')
     if texts['sanitize.log'].strip() != SCANNER_SANITIZER_SUCCESS:
         raise RuntimeError('Linux helper policy lacks the real clean ASan/UBSan execution marker')
+    cleanup = texts['cleanup-control.stdout.log']
+    if (re.findall(r'^TOTAL PASS: ([0-9]+)\s*$', cleanup, re.M) != ['8', '8'] or
+            re.findall(r'^BACKEND: (.+)$', cleanup, re.M) != ['python', 'c'] or
+            len(re.findall(r'^PASS:', cleanup, re.M)) != 17 or
+            re.search(r'^(FAIL:|SKIP:)', cleanup, re.M) or
+            not cleanup.endswith('PASS: production cleanup rescue bodies and original scalar negative controls in both Ru backends\n') or
+            texts['cleanup-control.stderr.log'].strip()):
+        raise RuntimeError('Linux cleanup control requires eight real assertions in each backend and both negative controls')
+    failure_text = texts['bridge-failure.stderr.log']
+    if (texts['bridge-failure.stdout.log'].strip() != 'RU_SYNTAX_FAILURE_PORTABLE_PASS: 6' or
+            not re.search(r'^Ran 6 tests in [0-9.]+s$', failure_text, re.M) or
+            not re.search(r'^OK$', failure_text, re.M) or
+            re.search(r'^(FAILED|ERROR:|FAIL:|OK \(skipped=)', failure_text, re.M)):
+        raise RuntimeError('Linux bridge failure controls require all six ordinary Ru tests without skips')
     result = {'passed': True, 'executed': True, 'report': report, **inputs}
     save_json(directory / 'helper-policy-acceptance.json', result)
     return result
@@ -779,6 +797,19 @@ def validate_gui_ru_timer(record):
             any(type(value) is not int for probe in record['style_probes'].values()
                 for value in probe.values())):
         raise RuntimeError('GUI Ru timer source hash or head/tail probe shape differs from its fixture')
+    # Diagnostic scalar snapshot is independent of the complete-style gate.
+    # GETENDSTYLED alone can already be EOF after CLEARDOCUMENTSTYLE.
+    last = record['last_probe']
+    if (not isinstance(last, dict) or set(last) !=
+            {'opened', 'length', 'clean', 'end_styled', 'status', 'style_matches'} or
+            last['opened'] is not True or last['clean'] is not True or
+            type(last['length']) is not int or last['length'] != len(data) or
+            type(last['end_styled']) is not int or not 0 <= last['end_styled'] <= len(data) or
+            not isinstance(last['status'], str) or not last['status'].strip() or len(last['status']) > 512 or
+            'Styling Ru' in last['status'] or last['status'].lstrip().startswith('Opening:') or
+            not isinstance(last['style_matches'], dict) or set(last['style_matches']) != set(probes) or
+            any(value is not True for value in last['style_matches'].values())):
+        raise RuntimeError('GUI Ru timer final bounded diagnostic probe is incomplete or malformed')
     if type(record['probes']) is not int or record['probes'] < 1:
         raise RuntimeError('GUI Ru timer lacks actual WM_NULL response probes')
     for field in ('wall_ms', 'first_head_style_ms', 'max_response_ms'):
@@ -977,7 +1008,7 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
     timer_source.write_bytes(timer_data)
     timer_sha = sha(timer_source)
     timer_record = {'size': len(timer_data), 'wall_ms': 0.0, 'first_head_style_ms': None, 'max_response_ms': 0.0,
-                    'probes': 0, 'source_sha256': timer_sha, 'style_probes': timer_probes}
+                    'probes': 0, 'source_sha256': timer_sha, 'style_probes': timer_probes, 'last_probe': None}
     edit_source = inputs / '真实编辑 十万字节 😀.ru'
     edit_data, edit_probes, edit_folds, _ = gui_ru_edit_fixture()
     edit_source.write_bytes(edit_data)
@@ -1074,10 +1105,15 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
                 opened = (tab_count() == 3 and
                           api.text(hwnd) == timer_source.name + ' · ru_notepad')
                 complete = False
+                last_probe = {'opened': opened, 'length': None, 'clean': None,
+                              'end_styled': None, 'status': '', 'style_matches': {}}
+                timer_record['last_probe'] = last_probe
                 if opened:
                     active = api.editor(hwnd)
-                    length_ok = api.scalar(active, 2006) == len(timer_data)
+                    length = api.scalar(active, 2006)
+                    length_ok = length == len(timer_data)
                     clean = api.scalar(active, 2159) == 0
+                    last_probe.update(length=length, clean=clean, end_styled=api.scalar(active, 2028))
                     if not clean:
                         raise RuntimeError('GUI timer styling made the 1 MB document dirty')
                     matched = {}
@@ -1091,6 +1127,7 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
                                 # about a painted first screen or all lines.
                                 timer_record['first_head_style_ms'] = round((time.monotonic() - started) * 1000, 3)
                     status = api.text(api.control(hwnd, 11))
+                    last_probe.update(status=status[:512], style_matches=matched)
                     status_done = bool(status.strip()) and 'Styling Ru' not in status and not status.lstrip().startswith('Opening:')
                     complete = length_ok and clean and all(matched.values()) and status_done
                 elapsed = time.monotonic() - started

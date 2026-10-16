@@ -125,7 +125,10 @@ class PackageTests(unittest.TestCase):
                 data, probes = ci.gui_ru_timer_fixture()
                 result['timer_performance'] = {'size': len(data), 'wall_ms': 100.0,
                     'first_head_style_ms': 10.0, 'max_response_ms': 2.0, 'probes': 3,
-                    'source_sha256': hashlib.sha256(data).hexdigest(), 'style_probes': probes}
+                    'source_sha256': hashlib.sha256(data).hexdigest(), 'style_probes': probes,
+                    'last_probe': {'opened': True, 'length': len(data), 'clean': True,
+                        'end_styled': len(data), 'status': 'Ln 1    UTF-8    Ru',
+                        'style_matches': {name: True for name in probes}}}
                 edit_data, edit_probes, edit_folds, _ = ci.gui_ru_edit_fixture()
                 result['edit_performance'] = {'size': len(edit_data), 'source_sha256': hashlib.sha256(edit_data).hexdigest(),
                     'style_probes': edit_probes, 'fold_probes': edit_folds, 'undo_commands': 6,

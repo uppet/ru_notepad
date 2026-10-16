@@ -460,9 +460,12 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         A 其 增 'operation' 操.
         操 其 增 'source' (编 其 开始取文 (文档 其 查 'editor')).
     救 原因
-        试 清操作. 救 清因 原因 取 原因+'\n'+清因. 终
+        报错 取 [原因].
+        # A nested rescue has its own bindings. Mutate the shared holder so
+        # staging cleanup failures remain visible alongside the original error.
+        试 清操作. 救 清因 报错[0] 取 报错[0]+'\n'+清因. 终
         结束工作.
-        卒 原因.
+        卒 报错[0].
     终
     得 真.
 法
@@ -559,14 +562,15 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     救 原因
         操 取 A 其 查 'operation'.
         为保存 取 操 != 空 且 操['kind'] == 'save'.
-        试 清操作. 救 清因 原因 取 原因+'\n'+清因. 终
+        报错 取 [原因].
+        试 清操作. 救 清因 报错[0] 取 报错[0]+'\n'+清因. 终
         A 其 增 'lastOutcome' 'failed'.
         A 其 增 'closeIndex' (-1).
         若 为保存 则
             A 其 增 'queue' ([]).
             结束工作.
         然
-        错误提示 原因.
+        错误提示 报错[0].
     终
     A 其 增 'inTick' 假.
     得 空.

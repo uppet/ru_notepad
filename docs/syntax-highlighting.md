@@ -200,7 +200,7 @@ passed; see that run's exact-commit results and distribution validation receipt.
 ## Ru-owned native acceptance
 
 The production lexical policy has **338 portable assertions**, replaying small
-fixtures at different scalar boundaries. The real Scintilla bridge adds **116
+fixtures at different scalar boundaries. The real Scintilla bridge adds **119
 assertions** for byte styles, fold levels, incomplete multiline edits, bounded
 reads, checkpoint convergence, stale document generations, fallback visibility,
 and text/savepoint/undo preservation. Length-changing insertion/deletion at the

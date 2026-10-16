@@ -41,6 +41,16 @@ jobs:
           python-version: '3.12'
       - name: Record fresh source and pinned compiler inputs
         run: python -I tools/windows_ci.py --helper-policy-action prepare
+      - name: Verify actual cleanup rescue bodies and original scalar negative controls
+        run: >-
+          python -I tools/test_cleanup_paths.py --ru-root .ci/ru-language
+          > build/logs/014/ru-scan/cleanup-control.stdout.log
+          2> build/logs/014/ru-scan/cleanup-control.stderr.log
+      - name: Verify ordinary Ru initialization recovery without platform overrides
+        run: >-
+          python -I tests/ru_syntax_failure_portable.py --ru-root .ci/ru-language -v
+          > build/logs/014/ru-scan/bridge-failure.stdout.log
+          2> build/logs/014/ru-scan/bridge-failure.stderr.log
       - name: Run full pure-Ru oracle and bounded scanner sanitizer cases
         run: >-
           python -I tools/test_ru_scan.py --ru-root .ci/ru-language --sanitize --fuzz 100

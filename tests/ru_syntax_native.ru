@@ -16,6 +16,12 @@
 memcmp 取 比较库 其 绑定 'memcmp' (密 其 签名 (窗 其 I) ([(窗 其 PTR),(窗 其 PTR),(窗 其 UP)]) 'win64').
 次数 取 [0].
 通知 取 {'text':0,'needed':0,'other':0}.
+初始化故障 取 [空,假].
+算 故障复制 态:
+    初始化故障[0] 取 态.
+    初始化故障[1] 取 态['references'] == 1 且 态['native'] != 空.
+    卒 'injected initial checkpoint copy failure'.
+法
 作 确认 条件 为 事实 文 为 句:
     若 非 条件 则 卒 ('FAIL: '+文). 然
     次数[0] 取 次数[0]+1.
@@ -300,13 +306,24 @@ memcmp 取 比较库 其 绑定 'memcmp' (密 其 签名 (窗 其 I) ([(窗 其 
     边头 取 (密 其 u64) 其 值 '536870895877895'.
     边码 取 原桥 其 _头数 边头.
     确认 (边码 == 536870895877895 且 (边码-(边码 % 16777216))/16777216 == 31999999 且 边码 % 256 == 7 且 ((边码 % 65536)-(边码 % 256))/256 == 255 且 ((边码 % 16777216)-(边码 % 65536))/65536 == 9) 'checked low49 decoding preserves event coordinates near the 32 MB boundary'.
-    拒头 取 假.
+    拒头 取 [假].
     试
         原桥 其 _头数 ((密 其 u64) 其 值 '18446744073709551615').
     救 原因
-        拒头 取 (原因 为 句) 其 含 'oversized event head bits'.
+        拒头[0] 取 (原因 为 句) 其 含 'oversized event head bits'.
     终
-    确认 拒头 'corrupt high event bits fail ordinarily before any lossy native conversion'.
+    确认 拒头[0] 'corrupt high event bits fail ordinarily before any lossy native conversion'.
+    活前 取 原桥 其 存活上下文.
+    失败初态 取 {'lexical':(原桥 其 新状态),'points':[],'warning':''}.
+    试
+        故障复制 失败初态['lexical'].
+    救 原因
+        如语 其 _初始化失败 失败初态 (原因 为 句).
+    终
+    确认 (初始化故障[1] 且 (初始化故障[0])['references'] == 0 且 (初始化故障[0])['native'] == 空 且 (原桥 其 存活上下文) == 活前) 'initial checkpoint failure releases the already-created native context exactly once'.
+    确认 (失败初态['lexical'] == 空 且 (失败初态['points'] 其 量) == 0) 'failed initialization returns no released context or checkpoint to the plain fallback'.
+    确认 ((失败初态['warning'] 其 含 'Ru scanner initialization failed:') 且 (失败初态['warning'] 其 含 'injected initial checkpoint copy failure') 且 (失败初态['warning'] 其 含 'editable as plain text')) 'initial checkpoint failure keeps its specific visible warning outside rescue scope'.
+    初始化故障[0] 取 空.
     原文 取 "算 示范:\n    若 真 则\n        得 '甲😀'.\n    另\n        得 42.\n    然\n法\n".
     编 其 设文本 甲 原文.
     窗 其 发送 甲 2160 4 10.

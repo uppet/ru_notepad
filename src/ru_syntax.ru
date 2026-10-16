@@ -125,6 +125,15 @@ _时存 取 _计数型 其 新建. # UI-thread-only QPC call never invokes appli
     环
     得 空.
 法
+算 _初始化失败 初 原因 为 句:
+    # Rescue has its own binding scope. Mutate one shared holder so a failed
+    # checkpoint copy cannot leave a released context or hide the warning.
+    词 其 释放 初['lexical'].
+    初 其 增 'lexical' 空.
+    初 其 增 'points' ([]).
+    初 其 增 'warning' ('Ru scanner initialization failed: '+原因+'. Your document remains editable as plain text.').
+    得 空.
+法
 算 选择 柄:
     停用 柄.
     若 非 (_存在 柄) 或 (_受限 柄) 则 得 'plain'. 然
@@ -132,25 +141,21 @@ _时存 取 _计数型 其 新建. # UI-thread-only QPC call never invokes appli
     窗 其 发送 柄 2005 0 0.
     窗 其 发送 柄 2692 0 0. # Our timer owns bounded work even while wrapping.
     _序号[0] 取 _序号[0]+1.
-    初态 取 空.
-    点们 取 [].
-    初警告 取 词 其 初始化.
+    初 取 {'lexical':空,'points':[],'warning':(词 其 初始化)}.
     若 词 其 可用 则
         试
-            初态 取 词 其 新状态.
-            点们 其 增 [0,(词 其 复制状态 初态),假].
+            初 其 增 'lexical' (词 其 新状态).
+            (初['points']) 其 增 [0,(词 其 复制状态 初['lexical']),假].
         救 原因
-            词 其 释放 初态.
-            初态 取 空.
-            初警告 取 'Ru scanner initialization failed: '+(原因 为 句)+'. Your document remains editable as plain text.'.
+            _初始化失败 初 (原因 为 句).
         终
     然
-    态 取 {'document':(窗 其 发送 柄 2357 0 0) 其 句,'generation':_序号[0], 'revision':0,'language':'ru','warning':'','feed':0,'readEnd':0,'bytes':0,'lexical':初态,'points':点们,'pending':真,'inTick':假,'requested':0,'chunks':0,'readBytes':0,'restart':0,'maxRead':0,'maxTickMs':0,'maxChunkMs':0,'candidates':[],'candidateIndex':0,'delta':0,'lineDelta':0,'dirtyEnd':0,'reuseComplete':假,'reusedBytes':0,'editReadBytes':0,'converged':假}.
+    态 取 {'document':(窗 其 发送 柄 2357 0 0) 其 句,'generation':_序号[0], 'revision':0,'language':'ru','warning':'','feed':0,'readEnd':0,'bytes':0,'lexical':初['lexical'],'points':初['points'],'pending':真,'inTick':假,'requested':0,'chunks':0,'readBytes':0,'restart':0,'maxRead':0,'maxTickMs':0,'maxChunkMs':0,'candidates':[],'candidateIndex':0,'delta':0,'lineDelta':0,'dirtyEnd':0,'reuseComplete':假,'reusedBytes':0,'editReadBytes':0,'converged':假}.
     _编辑们 其 增 (柄 其 句) 态.
-    若 初态 == 空 则
+    若 初['lexical'] == 空 则
         态 其 增 'pending' 假.
         态 其 增 'language' 'plain'.
-        态 其 增 'warning' 初警告.
+        态 其 增 'warning' 初['warning'].
         得 'plain'.
     然
     _配折叠 柄.
