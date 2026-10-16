@@ -2,7 +2,9 @@
 
 ## Supported languages
 
-The application owns language selection and colours in `src/syntax.ru`. Scintilla
+The application owns colours and native integration in `src/syntax.ru`; its
+`识别` / `名称` wrappers delegate to the exact pure production policy in
+`src/syntax_policy.ru`. Scintilla
 owns text, rendering, selection and undo. Lexilla supplies real native lexers:
 
 | File suffix, case-insensitive | Display | Lexilla lexer |
@@ -11,7 +13,9 @@ owns text, rendering, selection and undo. Lexilla supplies real native lexers:
 | `.json` | JSON | `json` (`SCLEX_JSON=120`) |
 | Other suffixes, no suffix, new unsaved documents | Plain text | No lexer |
 
-Only the final filename suffix is considered. A directory named `examples.cpp`
+Only the final filename suffix is considered. The shared `含词` helper performs
+explicit whole-string comparisons when checking string arrays; Ru
+`其 含` is string containment and must not be used as array membership. A directory named `examples.cpp`
 does not make its extensionless child a C++ document. `.jsonc` and `.json5` are
 not advertised as JSON support. JSON comments are disabled. Keywords, numbers,
 strings, property names, operators and escape sequences receive distinct styles.
@@ -124,6 +128,21 @@ checks that undo restores the changed byte and original savepoint. The measured
 elapsed time is a diagnostic, not a pass/fail speed threshold or a benchmark.
 
 ## Acceptance coverage
+
+`tests/syntax_policy.ru` runs the exact `src/syntax_policy.ru` production module,
+without importing Win32 or loading substitute DLLs. Its **100 assertions** run
+in both the pinned Ru interpreter and compiled Linux C. They cover all supported
+suffixes in lower/upper/mixed case, JSON, Unicode and network paths, directory
+boundaries, unknown extensions, display names, and the same `含词` helper used by
+the native test executable's CLI. CLI cases include empty arrays/strings, flags
+in different positions, duplicates, nonmatching prefixes/suffixes, case and
+whitespace significance, Unicode elements, and preservation of the input array.
+
+This portable coverage was added after real Windows CI exposed two uses of
+string-only `含` with an array receiver: production C-family suffix selection and
+the native fixture's CLI argument checks. Both now use the same explicit equality
+helper, rather than a test-only replacement. The original unsupported expression
+is also retained as a negative regression fixture by the portable test runner.
 
 `tests/syntax_native.ru` is a compiled Windows executable using the real
 Scintilla and Lexilla DLLs. It is not a lexer mock. Normal execution has **82

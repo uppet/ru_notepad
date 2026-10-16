@@ -2,6 +2,7 @@
 # Import/initialise this module before registering any native window callback.
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
+策 取 外言 'syntax_policy.ru'.
 词法状态 取 {'ready':假,'library':空,'warning':''}.
 GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 (窗 其 PTR) ([(窗 其 PTR),(窗 其 PTR)]) 'win64').
 
@@ -35,42 +36,10 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
     得 词法状态 其 查 'warning'.
 法
 算 名称 语言 为 句:
-    若 语言 == 'cpp' 则 得 'C / C++'. 然
-    若 语言 == 'json' 则 得 'JSON'. 然
-    得 'Plain text'.
+    得 策 其 名称 语言.
 法
 算 识别 路 为 句:
-    位 取 路 其 量.
-    后缀 取 ''.
-    循
-        若 位 <= 0 则 得 'plain'. 然
-        位 取 位-1.
-        字 取 路[位].
-        若 字 == '/' 或 字 == '\\' 则 得 'plain'. 然
-        若 字 == '.' 则 破. 然
-        后缀 取 字+后缀.
-        若 (后缀 其 量) > 4 则 得 'plain'. 然
-    环
-    小写 取 ''.
-    大字 取 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.
-    小字 取 'abcdefghijklmnopqrstuvwxyz'.
-    位 取 0.
-    循 后缀 其 量 次
-        字 取 后缀[位].
-        字位 取 0.
-        循 26 次
-            若 字 == 大字[字位] 则
-                字 取 小字[字位].
-                破.
-            然
-            字位 取 字位+1.
-        环
-        小写 取 小写+字.
-        位 取 位+1.
-    环
-    若 小写 == 'json' 则 得 'json'. 然
-    若 (['c','h','cc','hh','cpp','hpp','cxx','hxx','c++','h++','inl'] 其 含 小写) 则 得 'cpp'. 然
-    得 'plain'.
+    得 策 其 识别 路.
 法
 算 性质 柄, 键 为 句, 值 为 句:
     键存 取 密 其 UTF8 键.

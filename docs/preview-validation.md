@@ -12,16 +12,18 @@ Earlier failures are retained rather than counted as passes: the 0.1.0 native me
 
 ## 0.1.2 acceptance gates
 
+The first [0.1.2 Windows run 38868967636](https://github.com/uppet/ru_notepad/actions/runs/38868967636) built all executables and passed the original 277 assertions, the new shortcut34/status21 groups, and real GUI startup/normal close. Four syntax-related groups failed because the string-only `含` operation was applied to arrays in suffix selection and test argument handling. No ZIP was produced. The corrected implementation uses an explicit array-equality loop in a shared pure policy, executed directly by 100 portable cases; the original invalid API usage is retained as an expected-failure fixture in both runtimes.
+
 The new syntax, status and shortcut features require a new exact-commit Windows run. Local source checks, Linux policy execution and Windows cross-compilation do not establish their Windows runtime behavior.
 
 Required acceptance retains every 0.1.1 assertion and adds:
 
-- 34 shared shortcut-policy cases, also executable in the Ru interpreter and Linux native C.
+- 100 production syntax-policy cases covering suffixes, language labels and exact argument-array matching, plus 34 shared shortcut-policy cases, also executable in the Ru interpreter and Linux native C.
 - 21 real Scintilla status cases: mixed CRLF/LF/CR, final unterminated lines, insertion mode, tab/Han/emoji/combining-codepoint columns, unchanged text and savepoint.
 - 23 main-level feature cases through real WM_COMMAND callback dispatch: tab navigation, zoom, language selection, independent documents, unchanged dirty/undo state and normal close.
 - 82 real Lexilla C/C++ and JSON cases, plus two isolated startup fallback cases with 8 assertions each for missing DLL and missing CreateLexer export.
 
-The total is **453 assertions across 13 required assertion results**, plus the separate visible-GUI/normal-close result. CI rejects missing results, skipped tests, inconsistent PASS-line totals, nonzero exits and timeouts. The actual Windows result and exact binary/source hashes are recorded in each successful package's BUILD.json; consult that receipt rather than treating this planned gate as a pass.
+The total is **553 assertions across 14 required assertion results**, plus the separate visible-GUI/normal-close result. CI rejects missing results, skipped tests, inconsistent PASS-line totals, nonzero exits and timeouts. The actual Windows result and exact binary/source hashes are recorded in each successful package's BUILD.json; consult that receipt rather than treating this planned gate as a pass.
 
 ## Packaging
 

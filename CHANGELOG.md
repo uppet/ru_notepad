@@ -6,6 +6,7 @@
 - Show current-line EOL separately from Enter insertion mode. Define columns as Scintilla tab-expanded Unicode codepoint columns and retain byte length/encoding.
 - Add reverse/alternative tab navigation and zoom reset; preserve AltGr/input-method combinations.
 - Split the ordinary runtime ZIP from a self-contained tests ZIP. Both contain byte-identical tested runtime files and dependency licenses; test executables/evidence stay out of the ordinary ZIP.
+- Replace unsupported array `含` calls exposed by the first native run with a shared explicit-match policy, directly exercised by 100 interpreter/Linux C cases and required in the Windows suite. Preserve all original syntax assertions and an expected-failure fixture for the invalid API call.
 - Require exact assertion counts, isolated missing-Lexilla fallback checks, stronger package-inventory/hash regressions, and real Windows execution before delivery. These additions are pending their own CI receipt.
 
 ## 0.1.1-preview — 2026-10-16

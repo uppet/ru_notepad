@@ -18,6 +18,10 @@ def main():
     cases = [
         ('conditional native export', native.split('函数 取')[0] + '若 真 则 函数 取' + native.split('函数 取')[1] + '然\n函数 其 调用 [1].', False),
         ('conflicting conditional signature', native + '若 真 则 ' + native.replace('[(密 其 i32)]','[(密 其 u32)]') + '然\n函数 其 调用 [1].', True),
+        ('array literal string-only member', "若 (['cpp','json'] 其 含 'cpp') 则 显 1. 然", True),
+        ('typed array parameter string-only member', "算 检查 参数 为 句 阵: 得 参数 其 含 'x'. 法", True),
+        ('string contains contract', "若 ('cpp,json' 其 含 'cpp') 则 显 1. 然", False),
+        ('typed string parameter contract', "算 检查 参数 为 句: 得 参数 其 含 'x'. 法", False),
         ('grouped bit field', '值 取 (属性 其 位段 4 1) == 1.', False),
         ('original swallowed comparison', '若 属性 其 位段 4 1 == 1 则 显 1. 然', True),
         ('explicit fact width', '值 取 属性 其 位段 4 真.', True),

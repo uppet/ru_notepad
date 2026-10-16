@@ -36,6 +36,7 @@ NATIVE_CONSOLE_TESTS = (
     ('app_features_native', r'^TOTAL PASS: 23\s*$'),
     ('file_codec_tests', r'^FILE_CODEC_TESTS_PASS=77\s*$'),
     ('shortcuts', r'^TOTAL PASS: 34\s*$'),
+    ('syntax_policy', r'^TOTAL PASS: 100\s*$'),
     ('status_native', r'^TOTAL PASS: 21\s*$'),
     ('syntax_native', r'^TOTAL PASS: 82\s*$'),
 )

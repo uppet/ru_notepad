@@ -27,6 +27,32 @@ def known_fact(x):
     return (x.kind == 'fact' or
             x.kind == 'unary' and x.data['op'] == '非' or
             x.kind == 'binary' and x.data['op'] in ('==','!=','<','>','<=','>=','且','或'))
+def array_contains_errors(value, path, array_parameters=frozenset()):
+    # Project contract: builtin 含 is string-only. This deliberately recognizes
+    # only literal arrays and un-rebound typed array parameters, not arbitrary
+    # receiver/dataflow types or user-defined members.
+    if isinstance(value, Node):
+        if value.kind == 'function':
+            parameters = {name for name, kind in value.data['params']
+                          if kind and (kind == '阵' or kind.endswith(' 阵'))}
+            rebound = {node.data['name'] for node in walk(value.data['body'])
+                       if node.kind == 'bind'}
+            yield from array_contains_errors(value.data['body'], path, parameters - rebound)
+            return
+        if value.kind == 'member' and value.data['name'] == '含':
+            receiver = value.data['receiver']
+            if (receiver.kind == 'array' or
+                    receiver.kind == 'name' and receiver.data['name'] in array_parameters):
+                yield {'path': str(path.relative_to(ROOT)), 'line': value.token.line,
+                       'member': '含', 'error': 'string-only member used on a known array receiver'}
+        for child in value.data.values():
+            yield from array_contains_errors(child, path, array_parameters)
+    elif isinstance(value, (list, tuple)):
+        for child in value:
+            yield from array_contains_errors(child, path, array_parameters)
+    elif isinstance(value, dict):
+        for child in value.values():
+            yield from array_contains_errors(child, path, array_parameters)
 def member(x,n): return isinstance(x,Node) and x.kind=="member" and x.data["name"]==n
 def module_declarations(program):
     # Only module-level conditional branches, never function bodies/local rebinding.
@@ -75,6 +101,7 @@ def resolve(p,x):
         if r and r[0]=="module":return bindings.get(r[1],{}).get(x.data["name"])
 records=[];unknown=[];bad=[];member_bad=[];type_bad=[]
 for p,program in programs.items():
+    type_bad.extend(array_contains_errors(program, p))
     for n in walk(program):
         if n.kind=="member":
             name=n.data['name']; argc=len(n.data['args'])

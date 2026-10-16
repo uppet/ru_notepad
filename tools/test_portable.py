@@ -10,7 +10,7 @@ def run(cmd, log, expected=0, contains=None):
  if p.returncode!=expected or (contains and contains not in p.stdout):
   raise SystemExit(f'{log}: unexpected result {p.returncode}\n{p.stdout}')
  print(f'PASS: {log}')
-for source,slug,count in [('document_policy','document-policy',23),('ui_arguments','ui-arguments',19),('file_codec_flags','file-codec-flags',80),('shortcuts','shortcuts',34)]:
+for source,slug,count in [('document_policy','document-policy',23),('ui_arguments','ui-arguments',19),('file_codec_flags','file-codec-flags',80),('shortcuts','shortcuts',34),('syntax_policy','syntax-policy',100)]:
  src=ROOT/'tests'/f'{source}.ru';exe=build/f'{source}_linux'
  run([sys.executable,ru,'run',src],f'{slug}-python.log',contains=f'TOTAL PASS: {count}')
  run([sys.executable,ru,'build','--cc','gcc',src,'-o',exe],f'{slug}-linux-build.log')
@@ -24,4 +24,8 @@ wrong=ROOT/'tests/fixtures/bad_bitfield_arguments.ru';exe=build/'bad_bitfield_ar
 run([sys.executable,ru,'run',wrong],'bad-bitfield-python.log',expected=1,contains='实际收到事实')
 run([sys.executable,ru,'build','--cc','gcc',wrong,'-o',exe],'bad-bitfield-linux-build.log')
 run([exe],'bad-bitfield-c.log',expected=1,contains='实际收到事实')
+wrong=ROOT/'tests/fixtures/unsupported_array_contains.ru';exe=build/'unsupported_array_contains_linux'
+run([sys.executable,ru,'run',wrong],'array-contains-python.log',expected=1,contains='未知成员：含')
+run([sys.executable,ru,'build','--cc','gcc',wrong,'-o',exe],'array-contains-linux-build.log')
+run([exe],'array-contains-c.log',expected=1,contains='含 需要两个字符串')
 print('Portable policies and exact original failures verified in interpreter and native C.')

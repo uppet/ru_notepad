@@ -103,14 +103,15 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'app_native': r'^TOTAL PASS: 23\s*$',
             'app_features_native': r'^TOTAL PASS: 23\s*$',
             'shortcuts': r'^TOTAL PASS: 34\s*$',
+            'syntax_policy': r'^TOTAL PASS: 100\s*$',
             'status_native': r'^TOTAL PASS: 21\s*$',
             'syntax_native': r'^TOTAL PASS: 82\s*$',
             'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=77\s*$',
         }
         self.assertEqual(dict(ci.NATIVE_CONSOLE_TESTS), expected)
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 10)
-        # Ten console gates, two isolated lexer fallbacks, GUI and ACL.
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + 2, 14)
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 11)
+        # Eleven console gates, two isolated lexer fallbacks, GUI and ACL.
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + 2, 15)
 
     def test_flag_regression_is_built_packaged_and_in_user_test_runner(self):
         source = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
@@ -218,11 +219,11 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             summary['tests'].append(result)
         return summary
 
-    def test_acceptance_requires_all_fourteen_groups_and_453_assertions(self):
+    def test_acceptance_requires_all_fifteen_groups_and_553_assertions(self):
         summary = self.acceptance()
         ci.validate_acceptance(summary)
-        self.assertEqual(len(summary['tests']), 14)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 453)
+        self.assertEqual(len(summary['tests']), 15)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 553)
 
     def test_acceptance_rejects_missing_or_duplicated_syntax_branch(self):
         summary = self.acceptance()

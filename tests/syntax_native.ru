@@ -3,6 +3,7 @@
 窗 取 外言 '../src/win32.ru'.
 编 取 外言 '../src/editor.ru'.
 语法 取 外言 '../src/syntax.ru'.
+策 取 外言 '../src/syntax_policy.ru'.
 次数 取 [0].
 作 确认 条件 为 事实, 文 为 句:
     若 非 条件 则 卒 ('FAIL: '+文). 然
@@ -28,9 +29,9 @@
     甲 取 编 其 创建 父 实例 1.
     乙 取 编 其 创建 父 实例 2.
     警告 取 语法 其 初始化.
-    若 (参数 其 含 '--expect-missing') 或 (参数 其 含 '--expect-bad-lexer') 则
+    若 (策 其 含词 参数 '--expect-missing') 或 (策 其 含词 参数 '--expect-bad-lexer') 则
         确认 (警告 != '') 'dependency failure reports a visible-warning message'.
-        若 参数 其 含 '--expect-missing' 则
+        若 策 其 含词 参数 '--expect-missing' 则
             确认 (警告 其 含 'could not be loaded') 'actual absent Lexilla DLL is caught before managed loading'.
         另
             确认 (警告 其 含 'does not export CreateLexer') 'actual wrong DLL is caught before native symbol binding'.

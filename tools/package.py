@@ -29,7 +29,7 @@ DEPENDENCIES = {
 RUNTIME_NAMES = ('ru_notepad.exe', *DEPENDENCIES)
 TEST_NAMES = ('document_policy.exe', 'ui_arguments.exe', 'file_codec_flags.exe',
               'editor_native.exe', 'app_native.exe', 'app_features_native.exe', 'file_codec_tests.exe',
-              'file_codec_security_probe.exe', 'syntax_native.exe', 'shortcuts.exe', 'status_native.exe')
+              'file_codec_security_probe.exe', 'syntax_native.exe', 'syntax_policy.exe', 'shortcuts.exe', 'status_native.exe')
 BINARY_NAMES = (*RUNTIME_NAMES, *TEST_NAMES)
 SYSTEM_DLLS = {'advapi32.dll', 'gdi32.dll', 'imm32.dll', 'kernel32.dll',
     'msvcrt.dll', 'ole32.dll', 'oleaut32.dll', 'user32.dll', 'comctl32.dll',
