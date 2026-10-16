@@ -36,10 +36,10 @@ def main():
   raise SystemExit('The repaired GUI requires a hash-verified diagnostic launcher.')
  for rel,digest in receipt['source_sha256'].items():
   if sha(ROOT/rel)!=digest:raise SystemExit(f'Source changed after app build: {rel}')
- for name,count in [('document-policy-python.log',23),('document-policy-c.log',23),('ui-arguments-python.log',19),('ui-arguments-c.log',19)]:
+ for name,count in [('document-policy-python.log',23),('document-policy-c.log',23),('ui-arguments-python.log',19),('ui-arguments-c.log',19),('file-codec-flags-python.log',80),('file-codec-flags-c.log',80)]:
   txt=(build/'logs'/name).read_text()
   if f'TOTAL PASS: {count}' not in txt or 'FAIL:' in txt:raise SystemExit(f'Policy test not verified: {name}')
- names=['ru_notepad.exe','Scintilla.dll','document_policy.exe','editor_native.exe','app_native.exe','file_codec_tests.exe','file_codec_security_probe.exe','ui_arguments.exe']
+ names=['ru_notepad.exe','Scintilla.dll','document_policy.exe','editor_native.exe','app_native.exe','file_codec_tests.exe','file_codec_security_probe.exe','ui_arguments.exe','file_codec_flags.exe']
  test_receipts={}
  for name in names:
   if name=='Scintilla.dll':continue
@@ -86,7 +86,7 @@ def main():
   'package_inrelease_sha256':deps['inrelease_sha256'],
   'source_sha256':receipt['source_sha256'],'scintilla_version':receipt['scintilla_version'],
   'scintilla_archive_sha256':receipt['scintilla_archive_sha256'],'binaries':pe,
-  'verification':{'passed':['Ru portable document policy: 23/23 Python interpreter','Ru portable document policy: 23/23 Linux native C','Shared GUI argument helpers: 19/19 interpreter and 19/19 Linux native C','104 native call arities resolved with zero mismatches','Windows x64 PE build and DLL import inspection'],
+  'verification':{'passed':['Ru portable document policy: 23/23 Python interpreter','Ru portable document policy: 23/23 Linux native C','Shared GUI argument helpers: 19/19 interpreter and 19/19 Linux native C','Shared numeric flag predicate: 80/80 interpreter and 80/80 Linux C with a strict pure-Ru receiver','104 native call arities and known-syntax boolean parameter gate passed','Windows x64 PE build and DLL import inspection'],
     'not_run':['Windows application UI and dialogs','Scintilla editor integration native test','Win32 file codec native test','Application native integration test','Windows NTFS ACL integration test'],
     'blocker':'The build execution environment could not launch Wine/Xvfb. No Windows or Wine app execution pass is claimed.'}}
  (stage/'BUILD.json').write_text(json.dumps(provenance,indent=2)+'\n')

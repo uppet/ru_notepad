@@ -35,3 +35,11 @@ A narrow native launcher initializes local diagnostic logging before Ru module i
 ## Verification boundary
 
 The Linux cross-build and portable checks do not establish Windows GUI or diagnostic behavior. A later Windows CI artifact must record its own native suite and main-window results in BUILD.json; only those listed checks count as executed. Broader interactive Windows acceptance remains open. The original 0.1.0 ZIP, PE, build receipt, generated C and symbol mapping are retained for reproducibility. The repair does not turn the previous build-only checks into a Windows pass.
+
+## Additional file-attribute regression found by Windows CI
+
+The second Windows run passed startup and editor/application tests but failed codec and ACL tests at the first existing-file attribute check. The original `属性 其 位段 4 1 == 1` parses as `位段(4, 1 == 1)`: a fact is passed as numeric width. Five directory/reparse/EFS/read-only checks had this form. They now call the same explicitly grouped predicate in `src/file_codec_flags.ru`.
+
+A strict pure-Ru receiver executes that production predicate with 80 cases on both interpreter and Linux C. It checks the four attribute bits across all combinations and unrelated high bits. The exact old expression fails type checking in both runtimes. Eight parser/gate mutants additionally verify that known boolean scalar arguments and swallowed comparisons are rejected. These are argument-semantic checks, not substitutes for actual Windows native-scalar and file operations.
+
+The failed run must not be described as universally leaving targets unchanged: an existing file fails during preflight, but a new-file rename may already succeed before the subsequent metadata read reaches the malformed test. No ZIP was published from that failed run. A corrected full Windows codec/ACL pass is required before packaging.

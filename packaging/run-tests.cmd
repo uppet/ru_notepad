@@ -10,6 +10,8 @@ document_policy.exe >>test-results.txt 2>&1
 if errorlevel 1 set "FAILED=1"
 ui_arguments.exe >>test-results.txt 2>&1
 if errorlevel 1 set "FAILED=1"
+file_codec_flags.exe >>test-results.txt 2>&1
+if errorlevel 1 set "FAILED=1"
 editor_native.exe >>test-results.txt 2>&1
 if errorlevel 1 set "FAILED=1"
 app_native.exe >>test-results.txt 2>&1

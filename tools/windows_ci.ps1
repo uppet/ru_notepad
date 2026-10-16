@@ -92,7 +92,7 @@ try {
         '--windres',(Join-Path $Bin 'windres.exe'),'--ar',(Join-Path $Bin 'ar.exe'),
         '--ranlib',(Join-Path $Bin 'ranlib.exe'),'--skip-scintilla')
     Invoke-Checked $Python ($BuildArgs + @('--source','src/main.ru','--output',(Join-Path $Output 'ru_notepad.exe')))
-    foreach ($test in @('document_policy','ui_arguments','editor_native','app_native','file_codec_tests','file_codec_security_probe')) {
+    foreach ($test in @('document_policy','ui_arguments','file_codec_flags','editor_native','app_native','file_codec_tests','file_codec_security_probe')) {
         Invoke-Checked $Python ($BuildArgs + @('--console','--source',"tests/$test.ru",'--output',(Join-Path $Output "$test.exe")))
     }
     $AcceptArgs = @('tools/windows_ci.py','--bin-dir',$Output,'--evidence-dir',$Evidence,

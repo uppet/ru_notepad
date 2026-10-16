@@ -93,6 +93,30 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertIn('DUPLICATE_PATH_RESOLUTION_PASS', completed.stdout)
 
+    def test_required_native_suite_counts_are_explicit_and_unchanged(self):
+        expected = {
+            'document_policy': r'^TOTAL PASS: 23\s*$',
+            'ui_arguments': r'^TOTAL PASS: 19\s*$',
+            'file_codec_flags': r'^TOTAL PASS: 80\s*$',
+            'editor_native': r'^TOTAL PASS: 27\s*$',
+            'app_native': r'^TOTAL PASS: 23\s*$',
+            'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=77\s*$',
+        }
+        self.assertEqual(dict(ci.NATIVE_CONSOLE_TESTS), expected)
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 6)
+        # Six console gates + normal GUI close + required ACL gate in the workflow.
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + 1 + 1, 8)
+
+    def test_flag_regression_is_built_packaged_and_in_user_test_runner(self):
+        source = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        builds = re.search(r"foreach \(\$test in @\(([^)]+)\)\)", source)
+        self.assertIsNotNone(builds)
+        self.assertIn("'file_codec_flags'", builds.group(1))
+        self.assertEqual(ci.BINARY_NAMES.count('file_codec_flags.exe'), 1)
+        runner = (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8')
+        self.assertIn('file_codec_flags.exe >>test-results.txt 2>&1\n'
+                      'if errorlevel 1 set "FAILED=1"', runner)
+
     def test_console_requires_execution_exit_zero_and_marker(self):
         result = self.console("print('PASS: synthetic'); print('TOTAL PASS: 1')")
         self.assertTrue(result['passed'])

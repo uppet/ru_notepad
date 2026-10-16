@@ -1,46 +1,54 @@
 # File codec validation receipt
 
-Date: 2026-10-16 (UTC).
+Date: 2026-10-16 (UTC). Updated after the second real Windows CI attempt exposed the attribute-bit argument bug.
 
-This records the 0.1.0 codec validation snapshot. The codec source is unchanged in the 0.1.1 startup repair. Current binary identities are in each rebuilt `.build.json` and the package `BUILD.json`; older executable hashes below are historical, not the new package hashes. The current source and Windows executables are cross-built previews. No Windows native integration test has run.
+## Observed Windows failure and correction
 
-## Verified for the current source
+The pre-correction codec failed on real Windows at `src/file_codec.ru:196` with `原生整数需要安全整数数、精确十进制句或原生整数`. Both the main codec suite and the ACL probe reached this failure; the ACL harness printed its protected-source fixture check, then failed ordinary replacement. These were executed failures, not skipped or never-run tests, and they establish no successful codec/ACL acceptance.
 
-- `src/file_codec.ru`: Python-target syntax/import check passed without execution or DLL loading; standalone C-target `--allow-native` static ABI/signature check passed.
-- `src/file_codec.ru`, `tests/file_codec_tests.ru`, and `tests/file_codec_security_probe.ru`: included in the final ten-entry native-C static check, all passed. The local build log is `build/logs/static-checks.log`.
-- Both test entries were emitted to standalone C and compiled with real MinGW Windows x64 GCC using `tools/build.py` and the pinned Ru 0.21.1 snapshot below. No fabricated platform macros or application C shim were used.
-- `file` identifies both outputs as PE32+, Windows x86-64, console subsystem. Static PE imports are `KERNEL32.dll` and `msvcrt.dll`; no Python or libffi runtime dependency is present. Windows system functions such as `advapi32.dll` security APIs are additionally bound at runtime by the Ru native module.
-- Source hashes were checked against both build receipts after compilation. The receipts explicitly record `runtime_tested: false`.
+The parsed AST confirms the cause: `属性 其 位段 4 1 == 1` means a member call with arguments `4` and `(1 == 1)`. The bit width therefore becomes a fact rather than an integer. All five affected production checks have been changed to call `src/file_codec_flags.ru`:
 
-The expected-failure helper was separately extracted unchanged and executed as a pure-Ru non-native scope smoke test. It correctly catches `卒` by mutating a shared array and reported one pass. Exact path-helper source fragments were also executed on Linux: 15 assertions passed (eight reserved/trailing-character rejections and seven namespace checks), plus eight ordinary path-component calls returned normally. These narrow helper runs do not exercise any Windows API, native file access, conversion, security descriptor, or replacement behavior.
+- Directory attribute from `GetFileAttributesW`
+- Reparse-point attribute from `GetFileAttributesW`
+- Directory attribute from `GetFileInformationByHandle`
+- EFS attribute before overwrite
+- Read-only attribute before overwrite
 
-## Test coverage prepared, not executed
+The shared predicate uses `(属性 其 位段 起位 1) == 1`. Its AST has comparison outside the member call and numeric width `1`. The codec now contains exactly five shared-helper calls, with bit offsets `[0, 4, 4, 10, 14]`, and no raw `位段` call. Other member-call arguments were audited; buffer-size arithmetic, sequence increments, and the intentionally boolean missing-target parameter remain intentional.
 
-- `file_codec_tests.exe`: 77 planned assertions, or 76 if the filesystem cannot create the optional hard-link fixture. This includes 16 encoding/empty round trips with exact-byte checks, malformed/NUL input, strict legacy failure preservation, external-modification conflicts, filename guards, sharing/read-only/hard-link refusals, and the inclusive 4 MiB boundary.
-- `file_codec_security_tests.ps1` with `file_codec_security_probe.exe`: 28 planned assertions across protected-original and inherited-original fixtures in a deliberately permissive synthetic parent directory. The script exercises successful replacement and a forced sharing-denied replacement, checking retained staging/backup contents, copied ACE tuples, and protection flags.
-- The ACL script has been statically reviewed only. Its comparisons cover sorted allow-only ACE tuples, not general effective access, ACE ordering, owner or conditional-ACE preservation. Final original protection-flag equality remains an explicit test, not an established result.
+This correction changes argument grouping only. Directory/reparse/EFS/read-only refusals, hard-link refusal, protected staging permissions, lossless conversion, conflict checks, and recovery/dirty-state behavior are retained. The previous expression could fail while inspecting an existing target or after a newly saved file was moved into place and its stamp was being read. Re-running actual Windows save and recovery tests is required; a portable predicate pass cannot establish that a file operation succeeded.
 
-The test executables have not run on Wine or real Windows. The execution environment could not start Wine's required socket server; no workaround for restricted host paths was attempted. No native runtime pass, screenshot, ACL result, crash-durability result, or UI acceptance is claimed.
+## Current portable verification
 
-UTF-16BE `LCMAP_BYTEREV`, strict encoding conversion, replacement/backup behavior, resulting NTFS permissions, inherited protection flags, and all failure branches require actual Windows execution. EFS refusal, denied security-descriptor reads, disk-full/flush failures, metadata/named streams, and filesystem fault recovery need additional real-Windows tests. A later Wine pass would be compatibility evidence, not a substitute for those checks.
+`tests/file_codec_flags.ru` imports the actual production helper. A pure-Ru receiver requires numeric offset and width, rejects width other than `1`, extracts the requested bit, and records calls. It covers all sixteen combinations of read-only/directory/reparse/EFS flags, normal attributes `128`, high unsigned bit `2147483648`, and maximum u32 value `4294967295`.
 
-## Reproducible build records
+- Ru interpreter: **80/80 assertions passed**.
+- Linux native C compiled with real Linux GCC: **80/80 assertions passed**.
+- `tests/fixtures/bad_bitfield_arguments.ru` retains the original malformed expression: both runtimes exit 1 with `函数「位段」的实参「宽」须为数，实际收到事实`, before its method body runs.
+- Current codec Python syntax/import and native-C static checks passed; no DLL was loaded by these checks.
+- AST inspection verifies the five production call sites and the grouped shared expression. The repository's argument-shape checks provide additional regression protection, not a complete dynamic type proof.
 
-Pinned Ru commit: `7f1b4348e461c7dc98b8b9dfe0c831f6e40d1b34`.
-Pinned Ru tree: `3a9972dfd17fd570ef992ecffd9b5bccec1cc88d`.
+These portable tests validate argument semantics using a strict receiver, not a Windows/native-u32 simulation. The pinned toolchain does not support importing `如:密` on Linux, even just to construct an integer. No platform guard was bypassed, no Windows macros were fabricated, and no Wine execution was attempted for this repair. Genuine native scalars and Windows APIs must be exercised by the Windows codec suite.
 
-- `build/file_codec_tests.build.json`, built at 2026-10-16T05:14:55Z, records the current suite source, all application-source hashes, generated C, compiler command and PE digest.
-- `build/file_codec_security_probe.build.json`, built at 2026-10-16T05:15:08Z, records the same information for the optional ACL probe.
+The earlier pure-Ru expected-failure scope smoke and extracted path-helper smoke also passed, but neither is a substitute for native file testing.
 
-The common build helper passes an explicit `.exe` output path to MinGW. An earlier baseline CLI attempt encountered a Linux-host MinGW temporary-output naming issue, and an earlier full-suite check hit that baseline's analyzer budget. Those older ignored artifacts under `tests/file_codec_artifacts/` predate the secure-staging changes and are not validation of the current source. Use the final common build receipts above; do not distribute the earlier artifacts.
+## Windows rerun still required for this correction
 
-## Current source/artifact SHA-256
+- `file_codec_tests.exe`: 77 planned assertions, or 76 if the optional hard-link fixture cannot be created. Coverage includes exact encoding bytes/round trips, UTF-16BE, NUL/invalid input, unchanged originals after failed conversion, conflicts, sharing/read-only/hard-link errors, and the inclusive 4 MiB boundary.
+- `file_codec_security_tests.ps1` with `file_codec_security_probe.exe`: 28 planned assertions over protected/inherited originals and a forced sharing-denied replacement. The prior attempt failed before it established these outcomes.
+- `file_codec_flags.exe`: 80 parameter-semantics assertions using the same production helper; real native-u32 checks remain in the codec executable.
+
+At the time of this receipt, the corrected codec and ACL tests have not yet completed a real Windows run. Do not promote their prepared assertion counts to pass counts. Current binary identities must come from the rebuilt `.build.json` receipts and package `BUILD.json`; pre-correction executables and their hashes do not validate the changed source.
+
+The ACL comparisons cover sorted allow-only ACE tuples, not general effective access, ACE ordering, ownership, or conditional ACE preservation. The final original protection-flag assertion remains required. EFS refusal, denied security-descriptor reads, disk-full/flush errors, named-stream/metadata handling, and filesystem fault recovery need additional real-Windows checks even after ordinary codec tests pass.
+
+## Corrected source SHA-256
 
 ```text
-eb1b8a3a8d2f11ffe24b48fa700ceaa9593cd5f67259cb35f2c704e9f78d7b10  src/file_codec.ru
-79198de222447c817c5ef35779b3e2b2db679f97fd5f5e1f1075032012ff1f13  tests/file_codec_tests.ru
-8cae54600a49562d651fd29c31825861bbf95a827846d75b12c5d61b790a0624  tests/file_codec_security_probe.ru
-746b1c4b066e4029602fbd69c4f401ba3055b329ac3bfe50c1d5b5c9f117b51b  tests/file_codec_security_tests.ps1
-2e84ceb8b9f289c5ceb484311b26377bb5defc109b5f3fa3ca3fb5daba27d283  build/file_codec_tests.exe
-e05525f33e3f8ea1730b290865afa84071c907fb77b1c897ca230c227dcce636  build/file_codec_security_probe.exe
+7bc9d72f8dda856cb2e10c67633004fd1167596cdc34b00b751215b494f76f95  src/file_codec.ru
+5aa2376e2c9efca36aa2f8798a6d6526ec915bfeb9bc02003e21775176884bb2  src/file_codec_flags.ru
+d5e549ee86b9900fff8a530d2baefc8f05abe4071e3c80876cdb8b072d8e71c1  tests/file_codec_flags.ru
+7a27f613d072fb2bd08a9afe8e7a1041a767905c4db8ee69683a58012aba14c2  tests/fixtures/bad_bitfield_arguments.ru
 ```
+
+The original codec integration and security-probe test sources remain unchanged by this grouping repair. The pinned Ru 0.21.1 toolchain is also unchanged; no language semantic change is part of this fix.

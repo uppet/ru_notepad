@@ -8,7 +8,10 @@ Repairs the first preview's confirmed Windows startup failure. The prior native 
 - Share actual GUI argument construction with 19 portable assertions, passing in both interpreter and Linux native C.
 - Add fail-closed native argument audit: all 104 calls resolved, zero corrected mismatches.
 - Add startup phases and a small native diagnostic launcher for visible fatal errors and unique local logs, without changing Ru runtime semantics or saving documents automatically.
-- Retain the original failure artifacts. Actual Windows GUI/diagnostic/file acceptance for this revision remains pending.
+- Fix five attribute bit-field comparisons found by real Windows codec testing. Use one production predicate, exercised by 80 strict-receiver assertions in both portable runtimes, plus exact malformed-expression regressions.
+- Reject explicit boolean native arguments and swallowed bit-field comparisons in the project AST gate; eight mutation cases exercise the gate.
+- Real Windows startup, normal close, and the document/UI/Scintilla/application suites passed. Codec and ACL tests blocked that run from packaging; the corrected full run remains required.
+- Retain original failure evidence and keep all test/packaging gates fail-closed.
 
 ## 0.1.0-preview — 2026-10-16
 

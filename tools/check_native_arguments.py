@@ -21,6 +21,12 @@ def walk(x):
         for v in x:yield from walk(v)
     elif isinstance(x,dict):
         for v in x.values():yield from walk(v)
+def known_fact(x):
+    # A deliberately narrow syntax check, not general type inference. Native
+    # scalar parameters do not accept Ru facts. Catch swallowed comparisons.
+    return (x.kind == 'fact' or
+            x.kind == 'unary' and x.data['op'] == '非' or
+            x.kind == 'binary' and x.data['op'] in ('==','!=','<','>','<=','>=','且','或'))
 def member(x,n): return isinstance(x,Node) and x.kind=="member" and x.data["name"]==n
 bindings={}
 for p,program in programs.items():
@@ -46,14 +52,19 @@ def resolve(p,x):
     if x.kind=="member":
         r=resolve(p,x.data["receiver"])
         if r and r[0]=="module":return bindings.get(r[1],{}).get(x.data["name"])
-records=[];unknown=[];bad=[];member_bad=[]
+records=[];unknown=[];bad=[];member_bad=[];type_bad=[]
 for p,program in programs.items():
     for n in walk(program):
         if n.kind=="member":
             name=n.data['name']; argc=len(n.data['args'])
-            expected=1 if name=='查' else 0 if name in ('量','大小','地址','数','句') else None
+            expected=2 if name=='位段' else 1 if name=='查' else 0 if name in ('量','大小','地址','数','句') else None
             if expected is not None and argc!=expected:
                 member_bad.append({'path':str(p.relative_to(ROOT)),'line':n.token.line,'member':name,'expected':expected,'actual':argc})
+            if name=='位段':
+                for index, (_, value) in enumerate(n.data['args']):
+                    if known_fact(value):
+                        type_bad.append({'path':str(p.relative_to(ROOT)),'line':n.token.line,
+                            'member':name,'argument':index+1,'error':'known fact used as native numeric bit-field argument'})
         if not member(n,"调用"):continue
         row={"path":str(p.relative_to(ROOT)),"line":n.token.line}
         native=resolve(p,n.data["receiver"])
@@ -63,6 +74,10 @@ for p,program in programs.items():
         argument_array=args[0][1]
         if argument_array.kind=="array":
             actual=len(argument_array.data["items"]);construction="literal"
+            for index,value in enumerate(argument_array.data['items']):
+                if known_fact(value):
+                    type_bad.append({**row,'member':'调用','argument':index+1,
+                                     'error':'known fact used as native scalar argument'})
         else:
             helper=resolve(p,argument_array)
             if not helper or helper[0]!="array_helper" or len(argument_array.data.get("args",[]))!=helper[2]:
@@ -71,6 +86,6 @@ for p,program in programs.items():
         row.update(expected=native[1],actual=actual,construction=construction)
         records.append(row)
         if row["expected"]!=row["actual"]:bad.append(row)
-print(json.dumps({"checked":len(records),"mismatches":bad,"unresolved":unknown,"member_mismatches":member_bad,"records":records},indent=2))
+print(json.dumps({"checked":len(records),"mismatches":bad,"unresolved":unknown,"member_mismatches":member_bad,"known_type_mismatches":type_bad,"records":records},indent=2))
 
-if bad or unknown or member_bad:raise SystemExit(1)
+if bad or unknown or member_bad or type_bad:raise SystemExit(1)

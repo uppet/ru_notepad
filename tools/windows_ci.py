@@ -26,8 +26,17 @@ ROOT = Path(__file__).resolve().parents[1]
 MAX_LOG_BYTES = 1024 * 1024
 MAIN_CLASS = 'RuNotepad.Main.0.1'
 BINARY_NAMES = ['ru_notepad.exe', 'Scintilla.dll', 'document_policy.exe',
-                'ui_arguments.exe', 'editor_native.exe', 'app_native.exe',
+                'ui_arguments.exe', 'file_codec_flags.exe', 'editor_native.exe', 'app_native.exe',
                 'file_codec_tests.exe', 'file_codec_security_probe.exe']
+# Each required console executable must run and report its exact assertion count.
+NATIVE_CONSOLE_TESTS = (
+    ('document_policy', r'^TOTAL PASS: 23\s*$'),
+    ('ui_arguments', r'^TOTAL PASS: 19\s*$'),
+    ('file_codec_flags', r'^TOTAL PASS: 80\s*$'),
+    ('editor_native', r'^TOTAL PASS: 27\s*$'),
+    ('app_native', r'^TOTAL PASS: 23\s*$'),
+    ('file_codec_tests', r'^FILE_CODEC_TESTS_PASS=77\s*$'),
+)
 SYSTEM_DLLS = {'advapi32.dll', 'gdi32.dll', 'imm32.dll', 'kernel32.dll',
                'msvcrt.dll', 'ole32.dll', 'oleaut32.dll', 'user32.dll',
                'comctl32.dll', 'comdlg32.dll', 'shell32.dll', 'shlwapi.dll',
@@ -376,11 +385,7 @@ def main():
                'native_tests_passed': False}
     try:
         with tempfile.TemporaryDirectory(prefix='ru-notepad-ci-') as fixtures:
-            for name, marker in [('document_policy', r'^TOTAL PASS: 23\s*$'),
-                                 ('ui_arguments', r'^TOTAL PASS: 19\s*$'),
-                                 ('editor_native', r'^TOTAL PASS: 27\s*$'),
-                                 ('app_native', r'^TOTAL PASS: 23\s*$'),
-                                 ('file_codec_tests', r'^FILE_CODEC_TESTS_PASS=77\s*$')]:
+            for name, marker in NATIVE_CONSOLE_TESTS:
                 command = [str(binary_dir / f'{name}.exe')]
                 if name == 'file_codec_tests':
                     command.append(fixtures)
@@ -400,7 +405,7 @@ def main():
             summary['tests'].append(result)
             print(json.dumps(result), flush=True)
         summary['passed'] = all(test['passed'] and test['executed'] and not test['cleanup_killed']
-                                for test in summary['tests']) and len(summary['tests']) == (7 if args.acl else 6)
+                                for test in summary['tests']) and len(summary['tests']) == len(NATIVE_CONSOLE_TESTS) + 1 + int(args.acl)
         summary['native_tests_passed'] = summary['passed']
         save_json(evidence / 'native-acceptance.json', summary)
         if not summary['passed']:
