@@ -44,24 +44,43 @@ GetUpdateRect 取 (窗 其 用户) 其 绑定 'GetUpdateRect' (密 其 签名 (�
 为
 算 准备续信:
     状 取 应用 其 A.
-    # Pause scanner entry only while draining setup paint/focus messages. This
-    # is test isolation, not the separate real file-operation busy test below.
-    应用 其 停止语法.
-    状 其 增 'busy' 真.
+    原忙 取 状 其 查 'busy'.
     消 取 (窗 其 MSG) 其 新建.
+    代 取 [0].
     起 取 计时.
-    循
-        若 计时-起 > 3000 则 卒 'Scheduler fixture setup queue did not settle.'. 然
-        若 非 (取消息 消 空 0) 则 破. 然
-        若 (消 其 读 'message') 其 数 == 18 则 卒 'Unexpected WM_QUIT preparing scheduler fixture.'. 然
-        派送 消.
-    环
+    试
+        # Pause scanner entry while ordinary dispatch settles setup messages.
+        # A visible window lets native paint dispatch validate its regions.
+        应用 其 停止语法.
+        状 其 增 'busy' 真.
+        窗 其 结果 ((窗 其 ShowWindow) 其 调用 [(状 其 查 'window'),5]).
+        循
+            若 计时-起 > 3000 则 卒 'Scheduler fixture setup queue did not settle.'. 然
+            循
+                若 计时-起 > 3000 则 卒 'Scheduler fixture setup queue did not settle.'. 然
+                若 非 (取消息 消 空 0) 则 破. 然
+                若 (消 其 读 'message') 其 数 == 18 则 卒 'Unexpected WM_QUIT preparing scheduler fixture.'. 然
+                派送 消.
+            环
+            应用 其 停止语法.
+            状 其 增 'busy' 原忙.
+            应用 其 安排语法.
+            代[0] 取 状 其 查 'syntaxQueued'.
+            若 代[0] != 0 则 破. 然
+            # GetQueueStatus is a hint: fresh paint/timer work may defer this
+            # attempt even after PeekMessage returned false. Retry while paused.
+            应用 其 停止语法.
+            状 其 增 'busy' 真.
+            Sleep 其 调用 [1].
+        环
+    救 原因
+        状 其 增 'busy' 原忙.
+        消 其 关闭.
+        应用 其 停止语法.
+        卒 原因.
+    终
     消 其 关闭.
-    应用 其 停止语法.
-    状 其 增 'busy' 假.
-    应用 其 安排语法.
-    若 (状 其 查 'syntaxQueued') == 0 则 卒 'Scheduler fixture could not queue its first continuation.'. 然
-    得 状 其 查 'syntaxQueued'.
+    得 代[0].
 法
 作 调度测试 主, 入路 为 句:
     状 取 应用 其 A.
@@ -341,6 +360,39 @@ GetUpdateRect 取 (窗 其 用户) 其 绑定 'GetUpdateRect' (密 其 签名 (�
     泵.
     确认 ((编 其 文本 另柄) == 源) 'queued timer cannot mutate another document after close'.
     确认 (((状 其 查 'errors') 其 量) == 0) 'ordinary Ru styling/folding lifecycle reports no errors'.
+    # Fixed diagnostic messages carry no pointers or user-selected output.
+    诊页 取 应用 其 当前.
+    诊柄 取 应用 其 编辑柄.
+    诊文 取 编 其 文本 诊柄.
+    诊改 取 应用 其 脏 诊页.
+    诊次 取 状 其 查 'syntaxTicks'.
+    窗 其 发送 主 33671 1 0.
+    窗 其 发送 主 33671 0 (-1).
+    窗 其 发送 主 33671 ((窗 其 UP) 其 值 '18446744073709551615') 0.
+    确认 ((状 其 查 'syntaxSnapshots') == 0) 'diagnostic protocol rejects nonzero and oversized parameters before reserving its cap'.
+    状 其 增 'busy' 真.
+    窗 其 发送 主 33671 0 0.
+    状 其 增 'busy' 假.
+    状 其 增 'syntaxTick' 真.
+    窗 其 发送 主 33671 0 0.
+    状 其 增 'syntaxTick' 假.
+    确认 ((状 其 查 'syntaxSnapshots') == 0) 'diagnostic protocol defers while file work or a styling callback is active'.
+    诊位 取 状 其 查 'active'.
+    状 其 增 'active' (-1).
+    窗 其 发送 主 33671 0 0.
+    状 其 增 'active' 诊位.
+    确认 ((状 其 查 'syntaxSnapshots') == 0) 'diagnostic protocol rejects a missing active document without reading it'.
+    窗 其 发送 主 33671 0 0.
+    确认 ((状 其 查 'syntaxSnapshots') == 1 且 (状 其 查 'syntaxTicks') == 诊次 且 (编 其 文本 诊柄) == 诊文 且 (应用 其 脏 诊页) == 诊改) 'numeric diagnostic projection leaves source, savepoint and styling work unchanged'.
+    应用 其 新页 'diagnostic-plain.txt' 'synthetic private-looking body is never a diagnostic field' 65001 假 ''.
+    窗 其 发送 主 33671 0 0.
+    确认 ((状 其 查 'syntaxSnapshots') == 2 且 ((状 其 查 'errors') 其 量) == 0) 'missing Ru projection consumes one diagnostic slot and recovers without a modal error'.
+    应用 其 删除当前页.
+    应用 其 切页 诊位.
+    窗 其 发送 主 33671 0 0.
+    确认 ((状 其 查 'syntaxSnapshots') == 3 且 ((状 其 查 'errors') 其 量) == 0) 'diagnostic projection remains available after its ordinary failure until the fixed cap'.
+    窗 其 发送 主 33671 0 0.
+    确认 ((状 其 查 'syntaxSnapshots') == 3 且 (编 其 文本 诊柄) == 诊文 且 (应用 其 脏 诊页) == 诊改) 'diagnostic requests beyond three produce no new snapshot or document mutation'.
     应用 其 新页 'pending-close.ru' 源 65001 假 ''.
     末柄 取 应用 其 编辑柄.
     末代 取 准备续信.

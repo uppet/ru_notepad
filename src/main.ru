@@ -11,7 +11,7 @@
 关联 取 外言 'associations.ru'.
 拖放 取 外言 'file_drop.ru'.
 修改头 取 密 其 结构 [['header',窗 其 NMHDR],['position',窗 其 IP],['ch',窗 其 I],['modifiers',窗 其 I],['modificationType',窗 其 I],['text',窗 其 PTR],['length',窗 其 IP],['linesAdded',窗 其 IP],['message',窗 其 I],['wParam',窗 其 UP],['lParam',窗 其 IP],['line',窗 其 IP],['foldLevelNow',窗 其 I],['foldLevelPrev',窗 其 I],['margin',窗 其 I]].
-A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0}.
+A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0}.
 
 # Syntax work is deferred out of Scintilla callbacks, with one shared UI budget.
 算 所属文档 柄:
@@ -148,6 +148,28 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     A 其 增 'syntaxTick' 假.
     续投语法.
     得 真.
+法
+# A bounded diagnostic request writes numbers only to the existing launcher log.
+# It never scans text, refreshes the UI, or exposes document/path contents.
+算 诊断语法:
+    若 非 (A 其 查 'ready') 或 (A 其 查 'busy') 或 (A 其 查 'syntaxTick') 则 得 空. 然
+    活动 取 A 其 查 'active'.
+    文们 取 A 其 查 'docs'.
+    若 活动 < 0 或 活动 >= (文们 其 量) 或 (A 其 查 'syntaxSnapshots') >= 3 则 得 空. 然
+    序 取 (A 其 查 'syntaxSnapshots')+1.
+    # Reserve before the safe projection, so ordinary errors consume the cap too.
+    A 其 增 'syntaxSnapshots' 序.
+    试
+        扫 取 语 其 状态 (文们[活动] 其 查 'editor').
+        若 扫 == 空 则 卒 'No active Ru diagnostic projection.'. 然
+        待办 取 0.
+        若 扫['pending'] 则 待办 取 1. 然
+        显 'RU_GUI_SNAPSHOT seq='+(序 为 句)+' ok=1 generation='+(扫['generation'] 为 句)+' revision='+(扫['revision'] 为 句)+' pending='+(待办 为 句)+' bytes='+(扫['bytes'] 为 句)+' feed='+(扫['feed'] 为 句)+' read_bytes='+(扫['readBytes'] 为 句)+' restart='+(扫['restart'] 为 句)+' chunks='+(扫['chunks'] 为 句)+' ticks='+((A 其 查 'syntaxTicks') 为 句)+' work_ms='+((A 其 查 'syntaxWorkMs') 为 句)+' gap_ms='+((A 其 查 'syntaxGapMs') 为 句)+' max_tick_ms='+((A 其 查 'syntaxMaxTickMs') 为 句)+' max_gap_ms='+((A 其 查 'syntaxMaxGapMs') 为 句)+' posts='+((A 其 查 'syntaxPosts') 为 句)+' continuation_ticks='+((A 其 查 'syntaxContinuations') 为 句)+' queue_yields='+((A 其 查 'syntaxYields') 为 句)+' stale_messages='+((A 其 查 'syntaxStale') 为 句)+' text_notifications='+((A 其 查 'syntaxTextNotifications') 为 句)+' style_notifications='+((A 其 查 'syntaxStyleNotifications') 为 句)+' fold_notifications='+((A 其 查 'syntaxFoldNotifications') 为 句).
+    救 原因
+        # Do not disclose an original exception or document data in diagnostics.
+        显 'RU_GUI_SNAPSHOT seq='+(序 为 句)+' ok=0'.
+    终
+    得 空.
 法
 算 当前:
     得 (A 其 查 'docs')[A 其 查 'active'].
@@ -870,6 +892,10 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
             若 号 == 17 则 得 关机会话. 然
             若 号 == 275 且 (宽参 其 数) == 901 则 工作时钟. 得 0. 然
             若 号 == 275 且 (宽参 其 数) == 902 则 语法时钟. 得 0. 然
+            若 号 == 33671 则
+                若 (柄 其 句) == ((A 其 查 'window') 其 句) 且 (宽参 其 位段 0 32) == 0 且 (宽参 其 位段 32 32) == 0 且 (长参 其 位段 0 32) == 0 且 (长参 其 位段 32 32) == 0 则 诊断语法. 然
+                得 0.
+            然
             若 号 == 33670 则
                 # Do not convert an arbitrary external uintptr to a Ru number.
                 若 (宽参 其 位段 32 32) == 0 且 (长参 其 位段 0 32) == 0 且 (长参 其 位段 32 32) == 0 则

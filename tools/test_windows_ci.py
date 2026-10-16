@@ -22,6 +22,31 @@ import windows_ci as ci
 import build as builder
 
 
+def observer_evidence():
+    """Synthetic receipt data only; never native or GUI execution evidence."""
+    observer = ci.gui_ru_observer_record()
+    observer.update(scalar_calls=24, wm_null_calls=3, sendmessage_calls=27,
+        query_wall_ms=20.0, max_query_ms=2.0, snapshot_count=1, snapshot_wall_ms=50.0,
+        max_snapshot_ms=50.0, max_snapshot_messages=24,
+        snapshots=[{'start_ms': 10.0, 'wall_ms': 50.0, 'messages': 24, 'final': True}],
+        response_starts_ms=[0.0, 50.0, 100.0])
+    receipts = []
+    for seq in range(1, 4):
+        receipt = dict.fromkeys(ci.GUI_RU_SNAPSHOT_INTEGER_FIELDS | ci.GUI_RU_SNAPSHOT_TIME_FIELDS, 0)
+        receipt.update(seq=seq, ok=1, generation=1 if seq == 1 else 2,
+            pending=int(seq == 2), bytes=1000000 if seq == 3 else 100,
+            feed=1000000 if seq == 3 else 100, read_bytes=1000000 if seq == 3 else 100)
+        receipts.append(receipt)
+    diagnostics = {'message': ci.GUI_RU_DIAGNOSTIC_MESSAGE, 'capture_limit_ms': 1000,
+        'requests': [{'phase': phase, 'post_wall_ms': 0.1, 'accepted': True}
+                     for phase in ('baseline', 'pending', 'final')],
+        'receipts': receipts, 'post_wall_ms': 0.3, 'log_reads': 2,
+        'captures': [{'phase': phase, 'wall_ms': 0.2, 'log_reads': 1} for phase in ('baseline', 'final')],
+        'log_read_wall_ms': 0.2, 'max_log_read_ms': 0.1}
+    return {'observer': observer, 'diagnostics': diagnostics,
+            'head_style_measurement': ci.GUI_RU_HEAD_MEASUREMENT}
+
+
 class NoDialogs:
     def no_dialog(self, _):
         return []
@@ -111,7 +136,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'syntax_policy': r'^TOTAL PASS: 108\s*$',
             'status_native': r'^TOTAL PASS: 21\s*$',
             'syntax_native': r'^TOTAL PASS: 82\s*$',
-            'app_ru_native': r'^TOTAL PASS: 66\s*$',
+            'app_ru_native': r'^TOTAL PASS: 73\s*$',
             'app_ru_timer_native': r'^TOTAL PASS: 8\s*$',
             'ru_lexical_policy': r'^TOTAL PASS: 338\s*$',
             'ru_syntax_native': r'^TOTAL PASS: 125\s*$',
@@ -327,6 +352,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     'last_probe': {'opened': True, 'length': len(data), 'clean': True,
                         'end_styled': len(data), 'status': 'Ln 1    UTF-8    Ru',
                         'style_matches': {name: True for name in probes}}}
+                result['timer_performance'].update(observer_evidence())
                 edit_data, edit_probes, edit_folds, _ = ci.gui_ru_edit_fixture()
                 result['edit_performance'] = {'size': len(edit_data), 'source_sha256': hashlib.sha256(edit_data).hexdigest(),
                     'style_probes': edit_probes, 'fold_probes': edit_folds, 'undo_commands': 6,
@@ -445,6 +471,14 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             f'PASS: {backend} {fixture} exact UTF-8 corpus\n'
             for fixture in ('ru_syntax_native', 'app_ru_native') for backend in ('python', 'c')) +
             'RU_TIMER_CORPUS_PASS: 4\n')
+        import test_syntax_diagnostics as diagnostic_control
+        base = dict(zip(diagnostic_control.FIELDS, [1, 1, 9, 2, 1, 123, 124, 128, 0, 4, 5,
+            1.5, 2.25, 0.75, 1.25, 7, 6, 8, 1, 3, 0, 0]))
+        records = [base, {'seq': 2, 'ok': 0}, {**base, 'seq': 3, 'pending': 0}, {'seq': 1, 'ok': 0}]
+        body = 'PASS: fixture\n' * 10 + ''.join('RU_GUI_SNAPSHOT ' +
+            ' '.join(f'{key}={value}' for key, value in record.items()) + '\n' for record in records) + 'TOTAL PASS: 10\n'
+        (directory / 'diagnostic-control.stdout.log').write_text('BACKEND: python\n' + body +
+            'BACKEND: c\n' + body + 'RU_DIAGNOSTIC_PORTABLE_PASS: 2\n')
         (directory / 'bridge-failure.stdout.log').write_text('RU_SYNTAX_FAILURE_PORTABLE_PASS: 6\n')
         (directory / 'bridge-failure.stderr.log').write_text('Ran 6 tests in 1.000s\n\nOK\n')
         return directory, inputs
@@ -566,7 +600,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertEqual(len(summary['tests']), 32)
         # Repair 3 preserves all 1401 prior assertions and adds nineteen actual
         # native scheduler/lifecycle assertions in the same app executable.
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1401 + 19)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1408 + 19)
 
     def test_acceptance_rejects_missing_or_duplicated_syntax_branch(self):
         summary = self.acceptance()
@@ -691,6 +725,30 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         api.release_drops()
         self.assertEqual(api.drop_handles, [])
         self.assertEqual(api.kernel.freed, [])
+
+    def test_ru_snapshot_post_has_only_fixed_numeric_message_and_zero_parameters(self):
+        api = self.synthetic_drop_api()
+        api.post_ru_snapshot(123)
+        self.assertEqual(api.user.posts, [(123, 33671, 0, 0)])
+
+    def test_cached_gui_handles_require_matching_live_visible_process(self):
+        class User:
+            def __init__(self, mode): self.mode, self.calls = mode, []
+            def GetWindowThreadProcessId(self, hwnd, pointer):
+                self.calls.append(hwnd)
+                owner = ci.ctypes.cast(pointer, ci.ctypes.POINTER(ci.wintypes.DWORD)).contents
+                owner.value = 999 if self.mode == 'other-process' else 123
+                return 0 if self.mode == 'invalid' else 1
+            def IsWindowVisible(self, hwnd): return self.mode != 'hidden'
+        for mode in ('normal', 'other-process', 'invalid', 'hidden'):
+            api = object.__new__(ci.Windows)
+            api.user = User(mode)
+            with self.subTest(mode=mode):
+                if mode == 'normal':
+                    api.verify_owned_handles(123, 456, 11)
+                    self.assertEqual(api.user.calls, [456, 11])
+                else:
+                    with self.assertRaises(RuntimeError): api.verify_owned_handles(123, 456, 11)
 
     def test_navigation_posts_only_matched_scalar_child_extended_keys(self):
         api = self.synthetic_drop_api()
@@ -906,18 +964,45 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 self.queued_key = None
                 self.invalidations = 0
                 self.paint_queries = 0
+                self.snapshot_posts = 0
+                self.editor_lookups = 0
             def no_dialog(self, _): return []
             def responsive(self, _):
                 if self.large:
                     self.timer_rounds += 1
                     if mode == 'timer-unresponsive': raise RuntimeError('WM_NULL failed')
             def control(self, _, identifier): return identifier
-            def text(self, hwnd):
+            def _text(self, hwnd):
                 if hwnd == 11:
                     if mode == 'timer-empty-status': return ''
-                    return 'Ru    Styling Ru...' if self.timer_rounds < 2 or mode == 'timer-stalled' else 'Ln 1    UTF-8    Ru'
+                    return 'Ru    Styling Ru...' if self.timer_rounds < (12 if mode == 'timer-slow' else 2) or mode == 'timer-stalled' else 'Ln 1    UTF-8    Ru'
                 return self.source.name + ' · ru_notepad'
-            def editor(self, _): return 456
+            def text(self, hwnd):
+                self.scalar(hwnd, 0x000E)
+                self.scalar(hwnd, 0x000D)
+                return self._text(hwnd)
+            def editor(self, _):
+                self.editor_lookups += 1
+                return 456
+            def verify_owned_handles(self, process_id, *handles):
+                if process_id != 123 or handles != (456, 11): raise AssertionError('Unexpected cached GUI controls')
+                if mode == 'timer-wrong-owner' or (mode == 'timer-final-wrong-owner' and self.timer_rounds >= 2):
+                    raise RuntimeError('Cached GUI control belongs to another process')
+            def post_ru_snapshot(self, hwnd):
+                if hwnd != 123: raise AssertionError('Diagnostic must target the main HWND')
+                self.snapshot_posts += 1
+                if mode == 'snapshot-post-failure': raise RuntimeError('PostMessage failed')
+                if mode == 'snapshot-missing': return
+                receipt = observer_evidence()['diagnostics']['receipts'][self.snapshot_posts - 1].copy()
+                if self.large:
+                    receipt['pending'] = int(self.timer_rounds < (12 if mode == 'timer-slow' else 2) or mode == 'timer-stalled')
+                if mode == 'snapshot-error': receipt = {'seq': self.snapshot_posts, 'ok': 0}
+                if mode == 'snapshot-wrong-generation' and self.snapshot_posts == 3: receipt['generation'] += 1
+                if mode == 'snapshot-final-pending' and self.snapshot_posts == 3: receipt['pending'] = 1
+                if mode == 'snapshot-final-short' and self.snapshot_posts == 3: receipt['bytes'] -= 1
+                log = self.source.parent.parent / 'ru_notepad-unit.log'
+                with log.open('a', encoding='utf-8') as out:
+                    out.write('RU_GUI_SNAPSHOT ' + ' '.join(f'{key}={value}' for key, value in receipt.items()) + '\n')
             def editor_bytes(self, _):
                 if self.large: raise AssertionError('Never fetch the 1 MB document byte by byte')
                 return b'wrong' if mode == 'wrong-text' else original
@@ -927,6 +1012,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 self.source = paths[0]
                 if self.source.read_bytes() != timer_data: raise AssertionError('Incorrect 1 MB fixture')
                 self.large = True
+                self.timer_query_start = len(self.queries)
                 if mode == 'timer-changed-source': self.source.write_bytes(b'changed')
             def release_drops(self): self.released = True
             def post_navigation(self, hwnd, key):
@@ -945,6 +1031,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 return mode == 'timer-paint-stalled'
             def scalar(self, hwnd, message, wparam=0, lparam=0):
                 self.queries.append((hwnd, message, wparam, lparam))
+                if message == 0x000E: return len(self._text(hwnd))
+                if message == 0x000D: return 1
                 if message == 0x1304: return 3 if self.large else 2
                 if hwnd != 456 or lparam != 0 or not isinstance(wparam, int):
                     raise AssertionError('Private GUI messages may carry only scalar values')
@@ -963,7 +1051,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     if message == 2028: return len(timer_data)
                     if message != 2010: raise AssertionError('No whole-document or line scans in timer stage')
                     return next((probe['style'] if mode != 'timer-wrong-' + label and
-                                 not (label.startswith('tail') and self.timer_rounds < 2) else 0
+                                 not (label.startswith('tail') and self.timer_rounds < (12 if mode == 'timer-slow' else 2)) and
+                                 not (mode == 'timer-head-regresses' and label.startswith('head') and self.timer_rounds >= 2) else 0
                                  for label, probe in timer_probes.items()
                                  if probe['offset'] <= wparam < probe['offset'] + probe['length']), 0)
                 if message == 2154: return original.count(b'\n') + 1
@@ -1005,6 +1094,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             self.assertEqual(kwargs['log_prefix'], 'main-ru-syntax-launcher')
             self.assertEqual(len(kwargs['arguments']), 1)
             api.source = kwargs['arguments'][0]
+            (isolated / 'ru_notepad-unit.log').write_text('', encoding='utf-8')
             self.assertEqual(api.source.suffix, '.ru')
             self.assertIn('😀', str(api.source))
             self.assertEqual(api.source.read_bytes(), original)
@@ -1014,8 +1104,10 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 return {'passed': False, 'error': str(exc)}
         ticks = [0.0]
         def monotonic():
-            ticks[0] += 0.1
+            ticks[0] += 0.0001
             return ticks[0]
+        def sleep(seconds):
+            ticks[0] += seconds
         def edit_stage(_, child, hwnd, source, record):
             self.assertIs(child, process)
             self.assertEqual(hwnd, 123)
@@ -1026,7 +1118,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             return {name: True for name in ci.GUI_RU_EDIT_CHECKS}
         with patch.object(ci, 'run_gui', side_effect=launch), \
              patch.object(ci, 'run_gui_ru_edits', side_effect=edit_stage), \
-             patch.object(ci.time, 'monotonic', side_effect=monotonic), patch.object(ci.time, 'sleep'):
+             patch.object(ci.time, 'monotonic', side_effect=monotonic), patch.object(ci.time, 'sleep', side_effect=sleep):
             result = ci.run_gui_ru_syntax(api, binary, fixtures, evidence)
         return result, api
 
@@ -1036,14 +1128,14 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertTrue(all(result[key] for key in ci.GUI_RU_CHECKS))
         self.assertEqual(api.commands, [505, 704, 506, 505, 701, 704])
         self.assertEqual(set(result['fixture_binary_sha256']), set(ci.portable.RUNTIME_NAMES))
-        self.assertEqual(set(query[1] for query in api.queries), {0x1304, 2006, 2008, 2028, 2154, 2159, 2010, 2223, 2228, 2378})
+        self.assertEqual(set(query[1] for query in api.queries), {0x000E, 0x000D, 0x1304, 2006, 2008, 2028, 2154, 2159, 2010, 2223, 2228, 2378})
         self.assertTrue(all(query[3] == 0 for query in api.queries))
         self.assertEqual(api.drop_targets, [456])
         self.assertTrue(api.released)
         self.assertEqual(api.navigation, ['RIGHT', 'LEFT'])
         self.assertEqual(api.caret, 0)
         self.assertEqual(api.invalidations, 1)
-        self.assertEqual(result['timer_performance']['probes'], 2)
+        self.assertGreaterEqual(result['timer_performance']['probes'], 2)
         ci.validate_gui_ru_timer(result['timer_performance'])
 
     def test_ru_gui_fails_closed_for_wrong_style_fold_visibility_dirty_or_bytes(self):
@@ -1063,7 +1155,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         for mode in ('timer-wrong-head_identifier', 'timer-wrong-head_keyword', 'timer-wrong-head_number',
                      'timer-wrong-tail_keyword', 'timer-wrong-tail_number',
                      'timer-stalled', 'timer-empty-status', 'timer-wrong-length',
-                     'timer-dirty', 'timer-changed-source', 'timer-unresponsive', 'timer-wrong-mask'):
+                     'timer-dirty', 'timer-changed-source', 'timer-unresponsive', 'timer-wrong-mask',
+                     'timer-wrong-owner', 'timer-final-wrong-owner'):
             with self.subTest(mode=mode):
                 for name in ('bin', 'fixtures', 'evidence'):
                     shutil.rmtree(self.root / name, ignore_errors=True)
@@ -1071,7 +1164,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 self.assertFalse(result['passed'])
                 self.assertTrue(api.released)
                 self.assertGreater(result['timer_performance']['wall_ms'], 0)
-                if (mode.startswith('timer-wrong-') and mode != 'timer-wrong-mask') or mode in ('timer-stalled', 'timer-empty-status'):
+                if (mode.startswith('timer-wrong-') and mode not in ('timer-wrong-mask', 'timer-wrong-owner')) or mode in ('timer-stalled', 'timer-empty-status'):
                     self.assertIn('30 seconds', result['error'])
 
     def test_ru_timer_failure_retains_bounded_progress_without_treating_endstyled_as_completion(self):
@@ -1152,6 +1245,171 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             record['last_probe'][field] = value
             with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
                 ci.validate_gui_ru_timer(record)
+
+    def test_ru_observer_measures_nested_text_calls_and_restores_wrappers_after_failure(self):
+        class Fake:
+            def scalar(self, *args): return 1
+            def responsive(self, *args): return None
+            def text(self, hwnd):
+                self.scalar(hwnd, 14)
+                self.scalar(hwnd, 13)
+                return 'bounded'
+        api = Fake()
+        record = ci.gui_ru_observer_record()
+        original = api.scalar
+        with self.assertRaisesRegex(RuntimeError, 'synthetic failure'):
+            with ci.GuiRuObserver(api, record, ci.time.monotonic()) as observer:
+                observer.snapshot(lambda: api.text(123) == 'bounded')
+                api.responsive(123)
+                raise RuntimeError('synthetic failure')
+        self.assertEqual(api.scalar, original)
+        self.assertNotIn('scalar', api.__dict__)
+        self.assertNotIn('responsive', api.__dict__)
+        self.assertEqual(record['scalar_calls'], 2)
+        self.assertEqual(record['wm_null_calls'], 1)
+        self.assertEqual(record['sendmessage_calls'], 3)
+        self.assertEqual(record['snapshots'][0]['messages'], 2)
+        self.assertGreaterEqual(record['query_wall_ms'], 0)
+
+    def test_ru_observer_blocks_33rd_actual_snapshot_message_and_preserves_costs(self):
+        class Fake:
+            def scalar(self, *args): return 1
+            def responsive(self, *args): return None
+        api = Fake()
+        record = ci.gui_ru_observer_record()
+        with ci.GuiRuObserver(api, record, ci.time.monotonic()) as observer:
+            with self.assertRaisesRegex(RuntimeError, '32 synchronous'):
+                observer.snapshot(lambda: [api.scalar(123, 2006) for _ in range(33)])
+        self.assertEqual(record['scalar_calls'], 32)
+        self.assertEqual(record['snapshots'][0]['messages'], 32)
+        self.assertFalse(record['snapshots'][0]['final'])
+        self.assertNotIn('scalar', api.__dict__)
+
+    def test_ru_observer_caches_open_handles_and_head_but_rechecks_final_16_bytes(self):
+        result, api = self.gui_ru_syntax('timer-slow')
+        self.assertTrue(result['passed'], result.get('error'))
+        record = result['timer_performance']
+        measured = record['observer']
+        self.assertGreaterEqual(measured['snapshot_count'], 3)
+        self.assertEqual(measured['scalar_calls'], len(api.queries) - api.timer_query_start)
+        self.assertEqual(api.snapshot_posts, 3)
+        self.assertLessEqual(measured['max_snapshot_messages'], 32)
+        for probe in record['style_probes'].values():
+            for position in range(probe['offset'], probe['offset'] + probe['length']):
+                reads = [query for query in api.queries[api.timer_query_start:] if query[1:3] == (2010, position)]
+                self.assertGreaterEqual(len(reads), 2)
+                if probe['offset'] < 16: self.assertEqual(len(reads), 2)
+        self.assertNotIn('scalar', api.__dict__)
+        self.assertNotIn('responsive', api.__dict__)
+        self.assertEqual(measured['snapshots'][-1]['messages'], 25)
+        self.assertTrue(all(right - left >= 50 for left, right in
+                            zip(measured['response_starts_ms'], measured['response_starts_ms'][1:])))
+
+    def test_ru_observer_rejects_regressed_cached_head_styles(self):
+        result, api = self.gui_ru_syntax('timer-head-regresses')
+        self.assertFalse(result['passed'])
+        self.assertIsNotNone(result['timer_performance']['first_head_style_ms'])
+        self.assertFalse(result['timer_performance']['last_probe']['style_matches']['head_identifier'])
+        self.assertNotIn('scalar', api.__dict__)
+
+    def test_ru_observer_receipt_schema_and_frequency_are_fail_closed(self):
+        import copy
+        good = next(case for case in self.acceptance()['tests'] if case['name'] == 'main-gui-ru-syntax')['timer_performance']
+        cases = [('response_interval_ms', 1), ('snapshot_interval_ms', 1), ('snapshot_message_limit', 33),
+                 ('scalar_calls', True), ('wm_null_calls', 4), ('sendmessage_calls', 999),
+                 ('query_wall_ms', float('nan')), ('query_wall_ms', 101), ('max_query_ms', 99),
+                 ('snapshot_count', 122), ('max_snapshot_messages', 33), ('max_snapshot_ms', 1),
+                 ('snapshot_wall_ms', 1), ('response_starts_ms', [0, 1, 2]), ('snapshots', [])]
+        for field, value in cases:
+            with self.subTest(field=field):
+                record = copy.deepcopy(good)
+                record['observer'][field] = value
+                with self.assertRaises(RuntimeError): ci.validate_gui_ru_timer(record)
+        for field, value in [('messages', 33), ('wall_ms', float('inf')), ('start_ms', -1), ('final', False), ('final', 1)]:
+            record = copy.deepcopy(good)
+            record['observer']['snapshots'][0][field] = value
+            with self.subTest(snapshot=field), self.assertRaises(RuntimeError): ci.validate_gui_ru_timer(record)
+
+    def test_ru_snapshot_parser_rejects_duplicate_missing_unsafe_or_unbounded_records(self):
+        good = observer_evidence()['diagnostics']['receipts']
+        def encode(records):
+            return ''.join('RU_GUI_SNAPSHOT ' + ' '.join(f'{key}={value}' for key, value in row.items()) + '\n'
+                           for row in records)
+        text = encode(good)
+        self.assertEqual(ci.parse_gui_ru_snapshots('ordinary startup\n' + text), good)
+        self.assertEqual(ci.parse_gui_ru_snapshots('RU_GUI_SNAPSHOT seq=1 ok=0\n'), [{'seq': 1, 'ok': 0}])
+        self.assertEqual(ci.parse_gui_ru_snapshots(text.rstrip('\n')), good[:2])
+        for broken in (text.replace('seq=1', 'seq=2', 1), text.replace('seq=1', 'seq=1 seq=1', 1),
+                       text.replace('ok=1', 'ok=0', 1), text.replace('ok=1', 'ok=true', 1),
+                       text.replace('revision=0', 'revision=9007199254740992', 1),
+                       text.replace('revision=0', 'revision=1.0', 1), text.replace('work_ms=0', 'work_ms=nan', 1),
+                       text.replace('work_ms=0', 'work_ms=1e999', 1), text.replace('bytes=100 ', 'bytes=-1 ', 1),
+                       text.replace(' pending=0', '', 1), text + encode([good[0]]),
+                       text.replace('RU_GUI_SNAPSHOT ', 'prefix RU_GUI_SNAPSHOT ', 1),
+                       text.replace('ok=1', 'ok=1 private=body', 1)):
+            with self.subTest(broken=broken[:120]), self.assertRaises(RuntimeError): ci.parse_gui_ru_snapshots(broken)
+
+    def test_ru_snapshot_receipts_validate_fixed_phases_generation_and_completion(self):
+        import copy
+        good = observer_evidence()['diagnostics']
+        for index, field, value in [(0, 'seq', True), (1, 'pending', 0), (1, 'revision', 1),
+                                  (2, 'generation', 3), (2, 'pending', 1), (2, 'bytes', 999999),
+                                  (2, 'feed', 0), (2, 'read_bytes', 1000001), (2, 'restart', 1024),
+                                  (2, 'style_notifications', 1), (2, 'fold_notifications', 1),
+                                  (2, 'ticks', -1), (2, 'work_ms', float('inf')),
+                                  (1, 'bytes', 101), (1, 'feed', 101), (1, 'read_bytes', 1000001),
+                                  (1, 'continuation_ticks', 1), (1, 'max_tick_ms', 1), (1, 'max_gap_ms', 1),
+                                  (1, 'chunks', 1), (1, 'work_ms', 1), (1, 'posts', 1)]:
+            record = copy.deepcopy(good)
+            record['receipts'][index][field] = value
+            with self.subTest(index=index, field=field), self.assertRaises(RuntimeError):
+                ci.validate_gui_ru_diagnostics(record)
+        baseline_unavailable = copy.deepcopy(good)
+        baseline_unavailable['receipts'][0] = {'seq': 1, 'ok': 0}
+        ci.validate_gui_ru_diagnostics(baseline_unavailable)
+        for field, value in [('phase', 'pending'), ('wall_ms', 1001), ('log_reads', 23)]:
+            record = copy.deepcopy(good)
+            record['captures'][1][field] = value
+            with self.subTest(capture=field), self.assertRaises(RuntimeError): ci.validate_gui_ru_diagnostics(record)
+
+    def test_ru_snapshot_failures_cannot_bless_timer_success_and_keep_partial_costs(self):
+        for mode in ('snapshot-post-failure', 'snapshot-missing', 'snapshot-error',
+                     'snapshot-wrong-generation', 'snapshot-final-pending', 'snapshot-final-short'):
+            for name in ('bin', 'fixtures', 'evidence'): shutil.rmtree(self.root / name, ignore_errors=True)
+            result, api = self.gui_ru_syntax(mode)
+            with self.subTest(mode=mode):
+                self.assertFalse(result['passed'])
+                self.assertIn('error', result)
+                self.assertLessEqual(api.snapshot_posts, 3)
+                self.assertLessEqual(result['timer_performance']['diagnostics']['log_reads'], 44)
+                self.assertNotIn('scalar', api.__dict__)
+
+    def test_ru_snapshot_timeout_collection_never_extends_timer_success_window(self):
+        result, api = self.gui_ru_syntax('timer-wrong-tail_number')
+        record = result['timer_performance']
+        self.assertFalse(result['passed'])
+        self.assertGreater(record['wall_ms'], 30000)
+        self.assertEqual(api.snapshot_posts, 3)
+        self.assertEqual(len(record['diagnostics']['receipts']), 3)
+        self.assertFalse(record['observer']['snapshots'][-1]['final'])
+        self.assertNotIn('scalar', api.__dict__)
+
+    def test_linux_diagnostic_control_rejects_missing_changed_private_or_partial_outputs(self):
+        for mutation in ('missing', 'stderr', 'marker', 'backend', 'fields', 'private', 'skip', 'extra'):
+            shutil.rmtree(self.root / 'build', ignore_errors=True)
+            directory, inputs = self.helper_policy_fixture()
+            path = directory / 'diagnostic-control.stdout.log'
+            text = path.read_text()
+            if mutation == 'missing': path.unlink()
+            elif mutation == 'stderr': (directory / 'diagnostic-control.stderr.log').write_text('warning')
+            else:
+                replacements = {'marker': ('RU_DIAGNOSTIC_PORTABLE_PASS: 2', 'RU_DIAGNOSTIC_PORTABLE_PASS: 1'),
+                    'backend': ('BACKEND: c', 'BACKEND: python'), 'fields': ('generation=9', 'generation=8'),
+                    'private': ('PASS: fixture', 'PASS: PRIVATE_BODY_SENTINEL'),
+                    'skip': ('PASS: fixture', 'SKIP: fixture'), 'extra': ('TOTAL PASS: 10', 'TOTAL PASS: 10\nunexpected')}
+                path.write_text(text.replace(*replacements[mutation]))
+            with patch.object(ci, 'helper_policy_inputs', return_value=inputs), self.subTest(mutation=mutation), self.assertRaises((RuntimeError, FileNotFoundError)):
+                ci.helper_policy_action('verify', self.root)
 
     def test_ru_timer_fixture_is_exact_unicode_megabyte_with_bounded_head_tail_probes(self):
         data, probes = ci.gui_ru_timer_fixture()

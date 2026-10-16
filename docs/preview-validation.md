@@ -67,23 +67,41 @@ bytes, with first-token styles at 141 ms and maximum measured WM_NULL response
 not run. The timer's eight post-completion assertions did not execute. No ZIP
 was produced; the faster partial progress is not a completed acceptance result.
 
-The next revision retains the text-only subscription and the full-notification
-core control, and targets the measured scheduling gaps. A single coalesced
-continuation message can request the next bounded styling slice when no
-higher-priority UI work is pending. The existing timer remains a fallback;
-queued input and paint work must receive control, and stale continuation
-messages must be rejected after cancellation, completion or window teardown.
-The 8 ms slice budget, exact corpus bytes, lexical/fold policy and 30-second
-completion gate remain unchanged. This scheduler has not yet passed Windows
-acceptance. Both actual corpus builders must still match the complete original
-UTF-8 bytes in both portable backends.
+The [cooperative-scheduler run 38946131401](https://github.com/uppet/ru_notepad/actions/runs/38946131401)
+passed 1,417 assertions and 30 of 32 results. The same 1 MB corpus completed on
+the main-window scheduler in 19.754 seconds, with 19.116 seconds of measured
+work and 0.477 seconds between callbacks. The synchronous control took 14.215
+seconds on that run. However, the detached GUI still timed out at 646,656 styled
+bytes after 30 seconds. Head-token styles were first observed at 203 ms; queued navigation,
+natural paint, and measured WM_NULL responses remained responsive. The six edit
+measurements did not run. The normal application fixture passed 63 assertions
+then rejected a setup state in which newly pending UI work could legitimately
+defer posting. No ZIP was produced.
+
+The next revision makes that fixture setup retry within a fixed bound while
+still requiring a real queued continuation before close. It also bounds the
+GUI observer: full completion snapshots are spaced by at least 250 ms and
+WM_NULL probes by at least 50 ms, with actual synchronous message counts and
+observer time recorded. Frequent synchronous inspection can itself affect the
+scheduler's sent-message priority; this remains a hypothesis to measure, not a
+claimed explanation or performance fix. At most three explicit diagnostic
+requests project fixed numeric work/progress counters to the existing launcher
+log, without scanning or reading document text. Ordinary projection failure
+prints only a fixed failed-result marker. The complete final snapshot, all six
+edits, real navigation/paint checks, and 30-second gate remain mandatory.
+
+The text-only subscription, full-notification core control, single coalesced
+continuation slot, timer fallback and 8 ms work budget remain unchanged. Both
+actual corpus builders must still match the complete original UTF-8 bytes in
+both portable backends. Portable diagnostic controls check fixed output,
+privacy, failure recovery and request caps separately from native message proof.
 
 This revision retains every 0.1.3 assertion and adds 8 shortcut and 8 suffix-policy
 cases, 338 production lexer/fold-policy cases, 125 real Scintilla container cases,
-66 main-window integration cases, 8 separate main-timer measurement cases,
+73 main-window integration cases, 8 separate main-timer measurement cases,
 and an isolated 8-case Ru run without Lexilla, and three 8-case helper rejection runs
 for missing DLL, missing exports and ABI mismatch.
-The required total is **1,420 individual assertions / 32 results**, including
+The required total is **1,427 individual assertions / 32 results**, including
 three detached GUI results. The existing complete >500 MB roundtrip is retained.
 
 New native gates check actual UTF-8 style bytes and fold levels, incomplete edits,

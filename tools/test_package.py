@@ -14,6 +14,31 @@ import package as package
 import windows_ci as ci
 
 
+def observer_evidence():
+    """Synthetic receipt data only; never native or GUI execution evidence."""
+    observer = ci.gui_ru_observer_record()
+    observer.update(scalar_calls=24, wm_null_calls=3, sendmessage_calls=27,
+        query_wall_ms=20.0, max_query_ms=2.0, snapshot_count=1, snapshot_wall_ms=50.0,
+        max_snapshot_ms=50.0, max_snapshot_messages=24,
+        snapshots=[{'start_ms': 10.0, 'wall_ms': 50.0, 'messages': 24, 'final': True}],
+        response_starts_ms=[0.0, 50.0, 100.0])
+    receipts = []
+    for seq in range(1, 4):
+        receipt = dict.fromkeys(ci.GUI_RU_SNAPSHOT_INTEGER_FIELDS | ci.GUI_RU_SNAPSHOT_TIME_FIELDS, 0)
+        receipt.update(seq=seq, ok=1, generation=1 if seq == 1 else 2,
+            pending=int(seq == 2), bytes=1000000 if seq == 3 else 100,
+            feed=1000000 if seq == 3 else 100, read_bytes=1000000 if seq == 3 else 100)
+        receipts.append(receipt)
+    diagnostics = {'message': ci.GUI_RU_DIAGNOSTIC_MESSAGE, 'capture_limit_ms': 1000,
+        'requests': [{'phase': phase, 'post_wall_ms': 0.1, 'accepted': True}
+                     for phase in ('baseline', 'pending', 'final')],
+        'receipts': receipts, 'post_wall_ms': 0.3, 'log_reads': 2,
+        'captures': [{'phase': phase, 'wall_ms': 0.2, 'log_reads': 1} for phase in ('baseline', 'final')],
+        'log_read_wall_ms': 0.2, 'max_log_read_ms': 0.1}
+    return {'observer': observer, 'diagnostics': diagnostics,
+            'head_style_measurement': ci.GUI_RU_HEAD_MEASUREMENT}
+
+
 class PackageTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='ru-package-unit-')
@@ -146,6 +171,7 @@ class PackageTests(unittest.TestCase):
                     'last_probe': {'opened': True, 'length': len(data), 'clean': True,
                         'end_styled': len(data), 'status': 'Ln 1    UTF-8    Ru',
                         'style_matches': {name: True for name in probes}}}
+                result['timer_performance'].update(observer_evidence())
                 edit_data, edit_probes, edit_folds, _ = ci.gui_ru_edit_fixture()
                 result['edit_performance'] = {'size': len(edit_data), 'source_sha256': hashlib.sha256(edit_data).hexdigest(),
                     'style_probes': edit_probes, 'fold_probes': edit_folds, 'undo_commands': 6,
@@ -406,7 +432,10 @@ class PackageTests(unittest.TestCase):
                          'missing-timer', 'wrong-timer-source', 'wrong-timer-probes', 'timer-timeout',
                          'missing-responsiveness', 'navigation-after-style', 'navigation-no-return',
                          'navigation-timeout', 'paint-not-cleared', 'paint-inconsistent-observation',
-                         'missing-edit', 'wrong-edit-source', 'missing-edit-operation', 'edit-timeout'):
+                         'missing-edit', 'wrong-edit-source', 'missing-edit-operation', 'edit-timeout',
+                         'missing-observer', 'fast-observer', 'uncounted-observer', 'oversize-snapshot',
+                         'missing-diagnostics', 'wrong-snapshot-generation', 'incomplete-final-snapshot',
+                         'missing-snapshot-receipt', 'extended-diagnostic-capture'):
             with self.subTest(mutation=mutation):
                 original = json.loads(json.dumps(self.summary))
                 core = next(case for case in self.summary['tests'] if case['name'] == 'ru_syntax_native')
@@ -419,6 +448,15 @@ class PackageTests(unittest.TestCase):
                 if mutation == 'wrong-timer-source': gui['timer_performance']['source_sha256'] = 'different'
                 if mutation == 'wrong-timer-probes': gui['timer_performance']['style_probes']['tail_keyword']['style'] = 0
                 if mutation == 'timer-timeout': gui['timer_performance']['wall_ms'] = 30001
+                if mutation == 'missing-observer': gui['timer_performance'].pop('observer')
+                if mutation == 'fast-observer': gui['timer_performance']['observer']['response_interval_ms'] = 1
+                if mutation == 'uncounted-observer': gui['timer_performance']['observer']['scalar_calls'] = 0
+                if mutation == 'oversize-snapshot': gui['timer_performance']['observer']['snapshots'][0]['messages'] = 33
+                if mutation == 'missing-diagnostics': gui['timer_performance'].pop('diagnostics')
+                if mutation == 'wrong-snapshot-generation': gui['timer_performance']['diagnostics']['receipts'][2]['generation'] = 9
+                if mutation == 'incomplete-final-snapshot': gui['timer_performance']['diagnostics']['receipts'][2]['pending'] = 1
+                if mutation == 'missing-snapshot-receipt': gui['timer_performance']['diagnostics']['receipts'].pop()
+                if mutation == 'extended-diagnostic-capture': gui['timer_performance']['diagnostics']['captures'][1]['wall_ms'] = 1001
                 if mutation == 'missing-responsiveness': gui['timer_performance'].pop('responsiveness')
                 if mutation == 'navigation-after-style': gui['timer_performance']['responsiveness']['navigation'][0]['while_styling'] = False
                 if mutation == 'navigation-no-return': gui['timer_performance']['responsiveness']['navigation'][1]['after'] = 3

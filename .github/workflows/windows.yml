@@ -56,6 +56,11 @@ jobs:
           python -I tools/test_ru_timer_corpus.py --ru-root .ci/ru-language
           > build/logs/014/ru-scan/timer-corpus.stdout.log
           2> build/logs/014/ru-scan/timer-corpus.stderr.log
+      - name: Verify actual bounded numeric diagnostic control flow
+        run: >-
+          python -I tools/test_syntax_diagnostics.py --ru-root .ci/ru-language
+          > build/logs/014/ru-scan/diagnostic-control.stdout.log
+          2> build/logs/014/ru-scan/diagnostic-control.stderr.log
       - name: Run full pure-Ru oracle and bounded scanner sanitizer cases
         run: >-
           python -I tools/test_ru_scan.py --ru-root .ci/ru-language --sanitize --fuzz 100

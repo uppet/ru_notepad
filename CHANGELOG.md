@@ -10,6 +10,8 @@
 - The scope-repair run passed all 1,379 native assertions but still reached only 470,180 styled bytes within the GUI's 30-second deadline. Subscribe the main application only to text modification events, retain the full-notification core control, and add exact-same-corpus work/cadence diagnostics. Performance acceptance remains pending.
 - The notification-filter run confirmed zero unused style/fold callbacks, but still missed full GUI completion (947,418 bytes / 30 seconds). Exact-corpus synchronous scanning took 9.967 seconds; the main timer spent 17.844 seconds between callbacks. Add a coalesced, UI-yielding continuation path with the same work budget and strict completion deadline; real Windows acceptance remains required.
 
+- The cooperative scheduler completed the native 1 MB case in 19.754 seconds, but the detached GUI still timed out at 646,656 bytes. Bound and measure the GUI observer's own message traffic, add capped numeric progress projections, and repair the closing fixture's queue-hint setup race. These diagnostic/test changes do not yet establish a performance fix; full Windows acceptance remains pending.
+
 ## 0.1.3-preview — 2026-10-16
 
 - Add explicit per-user Open With / Default Apps candidate registration, ownership-safe removal, status, and a Windows Settings link. Windows retains control of default choices.

@@ -50,7 +50,7 @@ NATIVE_CONSOLE_TESTS = (
     ('syntax_policy', r'^TOTAL PASS: 108\s*$'),
     ('status_native', r'^TOTAL PASS: 21\s*$'),
     ('syntax_native', r'^TOTAL PASS: 82\s*$'),
-    ('app_ru_native', r'^TOTAL PASS: 66\s*$'),
+    ('app_ru_native', r'^TOTAL PASS: 73\s*$'),
     ('app_ru_timer_native', r'^TOTAL PASS: 8\s*$'),
     ('ru_lexical_policy', r'^TOTAL PASS: 338\s*$'),
     ('ru_syntax_native', r'^TOTAL PASS: 125\s*$'),
@@ -124,7 +124,8 @@ GUI_RU_EDIT_CHECKS = ('edit_fixture_loaded', 'edit_all_operations', 'edit_style_
 GUI_RU_EDIT_MEASUREMENT = ('Real child WM_CHAR/Backspace length-changing input; wall time includes '
     'production Reset Zoom 504 status refresh and WM_NULL polling; bounded style/fold/context probes.')
 GUI_RU_TIMER_FIELDS = {'size', 'wall_ms', 'first_head_style_ms', 'max_response_ms', 'probes',
-                       'source_sha256', 'style_probes', 'last_probe', 'responsiveness'}
+                       'source_sha256', 'style_probes', 'last_probe', 'responsiveness',
+                       'observer', 'diagnostics', 'head_style_measurement'}
 GUI_RU_RESPONSE_TIMEOUT_MS = 5000
 GUI_RU_RESPONSE_MEASUREMENT = ('Synthetic queued RIGHT/LEFT navigation and natural invalidated-region '
     'service while Ru styling remains pending; no text edits, forced paint or pixel-render claim. '
@@ -140,6 +141,7 @@ HELPER_POLICY_EVIDENCE_FILES = ('helper-policy.stdout.log', 'helper-policy.stder
     'cleanup-control.stdout.log', 'cleanup-control.stderr.log',
     'bridge-failure.stdout.log', 'bridge-failure.stderr.log',
     'timer-corpus.stdout.log', 'timer-corpus.stderr.log',
+    'diagnostic-control.stdout.log', 'diagnostic-control.stderr.log',
     'scanner-build.log', 'differential-python.log', 'differential-build.log',
     'differential-c.log', 'sanitize-build.log', 'sanitize.log', 'report.json')
 HELPER_POLICY_COMMIT = 'dd6cb81b52a426408f7076d82a84c2fdfb644263'
@@ -279,6 +281,15 @@ class Windows:
             raise RuntimeError('Expected exactly one visible native editor')
         return matches[0]
 
+    def verify_owned_handles(self, process_id, *handles):
+        # These direct user32 queries do not synchronously message the UI thread.
+        # Recheck cached child handles before trusting their final scalar values.
+        for handle in handles:
+            owner = wintypes.DWORD()
+            if (not self.user.GetWindowThreadProcessId(handle, ctypes.byref(owner)) or
+                    owner.value != process_id or not self.user.IsWindowVisible(handle)):
+                raise RuntimeError('Cached GUI Ru control is invalid, hidden, or belongs to another process')
+
     def editor_bytes(self, hwnd):
         editor = self.editor(hwnd)
         length = self.scalar(editor, 2006)  # SCI_GETLENGTH, no pointer argument
@@ -288,6 +299,10 @@ class Windows:
 
     def command(self, hwnd, identifier):
         self.scalar(hwnd, 0x0111, identifier)  # actual WM_COMMAND routing
+
+    def post_ru_snapshot(self, hwnd):
+        if not self.user.PostMessageW(hwnd, GUI_RU_DIAGNOSTIC_MESSAGE, 0, 0):
+            raise ctypes.WinError(ctypes.get_last_error())
 
     def post_navigation(self, hwnd, key):
         virtual_key, scan_code = {'RIGHT': (0x27, 0x4d), 'LEFT': (0x25, 0x4b)}[key]
@@ -545,7 +560,8 @@ def helper_policy_inputs(root):
         for name in ('tools/windows_ci.py', '.github/workflows/windows.yml',
                      'tools/test_cleanup_paths.py', 'tests/ru_syntax_failure_portable.py',
                      'src/main.ru', 'src/ru_syntax.ru', 'tests/ru_syntax_native.ru',
-                     'tests/app_ru_native.ru', 'tools/test_ru_timer_corpus.py')}}
+                     'tests/app_ru_native.ru', 'tools/test_ru_timer_corpus.py',
+                     'tools/test_syntax_diagnostics.py')}}
 
 
 def helper_policy_action(action, root):
@@ -604,6 +620,26 @@ def helper_policy_action(action, root):
     if (corpus_lines != expected_corpus_lines + ['RU_TIMER_CORPUS_PASS: 4'] or
             texts['timer-corpus.stderr.log']):
         raise RuntimeError('Linux timer corpus requires exact complete bytes in both fixtures and both real backends')
+    # The exact reviewed production-diagnostic probe validates every numeric
+    # projection, ordinary-error record, field order and privacy sentinel.
+    import test_syntax_diagnostics as diagnostic_control
+    diagnostic = texts['diagnostic-control.stdout.log']
+    marker = 'RU_DIAGNOSTIC_PORTABLE_PASS: 2\n'
+    if (texts['diagnostic-control.stderr.log'] or not diagnostic.endswith(marker) or
+            diagnostic.count(marker) != 1):
+        raise RuntimeError('Linux diagnostic control requires both real backends with empty stderr')
+    sections = diagnostic[:-len(marker)].split('BACKEND: ')
+    if len(sections) != 3 or sections[0] or not sections[1].startswith('python\n') or not sections[2].startswith('c\n'):
+        raise RuntimeError('Linux diagnostic control is missing its exact backend sequence')
+    bodies = [section.split('\n', 1)[1] for section in sections[1:]]
+    if bodies[0] != bodies[1] or any(not line.startswith(('PASS: ', 'TOTAL PASS: ', 'RU_GUI_SNAPSHOT '))
+                                    for line in bodies[0].splitlines()):
+        raise RuntimeError('Linux diagnostic control has inconsistent or unexpected output')
+    for body in bodies:
+        try:
+            diagnostic_control.validate(body)
+        except ValueError as exc:
+            raise RuntimeError('Linux diagnostic control lacks exact safe production projections') from exc
     failure_text = texts['bridge-failure.stderr.log']
     if (texts['bridge-failure.stdout.log'].strip() != 'RU_SYNTAX_FAILURE_PORTABLE_PASS: 6' or
             not re.search(r'^Ran 6 tests in [0-9.]+s$', failure_text, re.M) or
@@ -926,6 +962,301 @@ def gui_ru_timer_fixture():
     return data, probes
 
 
+
+# GUI observer settings are fixed acceptance policy, not command-line tunables.
+GUI_RU_RESPONSE_INTERVAL_MS = 50
+GUI_RU_SNAPSHOT_INTERVAL_MS = 250
+GUI_RU_SNAPSHOT_MESSAGE_LIMIT = 32
+GUI_RU_DIAGNOSTIC_MESSAGE = 33671
+GUI_RU_DIAGNOSTIC_TIMEOUT_SECONDS = 1
+GUI_RU_SNAPSHOT_TIME_FIELDS = {'work_ms', 'gap_ms', 'max_tick_ms', 'max_gap_ms'}
+GUI_RU_SNAPSHOT_INTEGER_FIELDS = {'seq', 'ok', 'generation', 'revision', 'pending',
+    'bytes', 'feed', 'read_bytes', 'restart', 'chunks', 'ticks', 'posts',
+    'continuation_ticks', 'queue_yields', 'stale_messages', 'text_notifications',
+    'style_notifications', 'fold_notifications'}
+GUI_RU_HEAD_MEASUREMENT = ('First observed matching head-token styles are an upper bound; '
+    'full scalar snapshots are sampled no more often than every 250 ms, not a paint measurement.')
+
+
+def finite_nonnegative(value):
+    return type(value) in (int, float) and math.isfinite(value) and value >= 0
+
+
+def gui_ru_observer_record():
+    return {'response_interval_ms': GUI_RU_RESPONSE_INTERVAL_MS,
+        'snapshot_interval_ms': GUI_RU_SNAPSHOT_INTERVAL_MS,
+        'snapshot_message_limit': GUI_RU_SNAPSHOT_MESSAGE_LIMIT,
+        'scalar_calls': 0, 'wm_null_calls': 0, 'sendmessage_calls': 0,
+        'query_wall_ms': 0.0, 'max_query_ms': 0.0,
+        'snapshot_count': 0, 'snapshot_wall_ms': 0.0, 'max_snapshot_ms': 0.0,
+        'max_snapshot_messages': 0, 'snapshots': [], 'response_starts_ms': []}
+
+
+class GuiRuObserver:
+    """Count actual synchronous calls, including text()'s two scalar calls."""
+    def __init__(self, api, record, started):
+        self.api, self.record, self.started = api, record, started
+        self.current = None
+        self.originals = {}
+        self.shadows = {}
+
+    def __enter__(self):
+        for name in ('scalar', 'responsive'):
+            self.originals[name] = getattr(self.api, name)
+            self.shadows[name] = self.api.__dict__.get(name)
+            setattr(self.api, name, self.wrap(name))
+        return self
+
+    def wrap(self, name):
+        def measured(*args, **kwargs):
+            if self.current is not None and self.current['messages'] >= GUI_RU_SNAPSHOT_MESSAGE_LIMIT:
+                raise RuntimeError('GUI Ru snapshot exceeded its 32 synchronous message limit')
+            begin = time.monotonic()
+            if begin - self.started > GUI_RU_TIMER_TIMEOUT_SECONDS:
+                raise RuntimeError('GUI 1 MB open and Ru timer styling exceeded 30 seconds')
+            if name == 'responsive':
+                starts = self.record['response_starts_ms']
+                offset = (begin - self.started) * 1000
+                if starts and offset - starts[-1] < GUI_RU_RESPONSE_INTERVAL_MS - 0.001:
+                    raise RuntimeError('GUI Ru WM_NULL sampling exceeded its fixed frequency')
+                starts.append(round(offset, 3))
+            key = 'scalar_calls' if name == 'scalar' else 'wm_null_calls'
+            self.record[key] += 1
+            self.record['sendmessage_calls'] += 1
+            if self.current is not None:
+                self.current['messages'] += 1
+            try:
+                return self.originals[name](*args, **kwargs)
+            finally:
+                elapsed = (time.monotonic() - begin) * 1000
+                self.record['query_wall_ms'] += elapsed
+                self.record['max_query_ms'] = max(self.record['max_query_ms'], elapsed)
+        return measured
+
+    def snapshot(self, callback):
+        begin = time.monotonic()
+        current = {'start_ms': round((begin - self.started) * 1000, 3),
+                   'wall_ms': 0.0, 'messages': 0, 'final': False}
+        previous = self.record['snapshots']
+        if previous and current['start_ms'] - previous[-1]['start_ms'] < GUI_RU_SNAPSHOT_INTERVAL_MS - 0.001:
+            raise RuntimeError('GUI Ru full snapshots exceeded their fixed frequency')
+        if len(previous) >= 121:
+            raise RuntimeError('GUI Ru exceeded its bounded snapshot count')
+        previous.append(current)
+        self.current = current
+        try:
+            current['final'] = bool(callback())
+            return current['final']
+        finally:
+            current['wall_ms'] = round((time.monotonic() - begin) * 1000, 3)
+            self.record['snapshot_count'] += 1
+            self.record['snapshot_wall_ms'] += current['wall_ms']
+            self.record['max_snapshot_ms'] = max(self.record['max_snapshot_ms'], current['wall_ms'])
+            self.record['max_snapshot_messages'] = max(self.record['max_snapshot_messages'], current['messages'])
+            self.current = None
+
+    def __exit__(self, *unused):
+        for name in self.originals:
+            if self.shadows[name] is None:
+                delattr(self.api, name)
+            else:
+                setattr(self.api, name, self.shadows[name])
+        for field in ('query_wall_ms', 'max_query_ms', 'snapshot_wall_ms', 'max_snapshot_ms'):
+            self.record[field] = round(self.record[field], 3)
+
+
+def parse_gui_ru_snapshots(text):
+    records = []
+    fields = GUI_RU_SNAPSHOT_INTEGER_FIELDS | GUI_RU_SNAPSHOT_TIME_FIELDS
+    lines = text.splitlines(keepends=True)
+    for index, raw in enumerate(lines):
+        line = raw.rstrip('\r\n')
+        if 'RU_GUI_SNAPSHOT' not in line:
+            continue
+        # A concurrent append may expose an unfinished final line. Never
+        # accept it; capture retries only within its separate fixed bound.
+        if index == len(lines) - 1 and not raw.endswith('\n'):
+            break
+        if not line.startswith('RU_GUI_SNAPSHOT ') or len(records) >= 3:
+            raise RuntimeError('GUI Ru diagnostic snapshot marker or count is malformed')
+        values = {}
+        for token in line.split()[1:]:
+            if token.count('=') != 1:
+                raise RuntimeError('GUI Ru diagnostic snapshot token is malformed')
+            key, value = token.split('=')
+            if key not in fields or key in values or not re.fullmatch(r'\d+(?:\.\d+)?(?:[eE][+-]?\d+)?', value):
+                raise RuntimeError('GUI Ru diagnostic snapshot field is malformed or duplicated')
+            if key in GUI_RU_SNAPSHOT_INTEGER_FIELDS:
+                if not re.fullmatch(r'0|[1-9]\d*', value) or int(value) > 9007199254740991:
+                    raise RuntimeError('GUI Ru diagnostic snapshot integer is unsafe')
+                values[key] = int(value)
+            else:
+                values[key] = float(value)
+                if not finite_nonnegative(values[key]):
+                    raise RuntimeError('GUI Ru diagnostic snapshot time is not finite')
+        expected = fields if values.get('ok') == 1 else {'seq', 'ok'}
+        if (set(values) != expected or values.get('ok') not in (0, 1) or
+                values.get('seq') != len(records) + 1 or
+                (values.get('ok') == 1 and values['pending'] not in (0, 1))):
+            raise RuntimeError('GUI Ru diagnostic snapshot shape or sequence is malformed')
+        records.append(values)
+    return records
+
+
+class GuiRuDiagnostics:
+    def __init__(self, api, hwnd, binary_dir, record):
+        self.api, self.hwnd, self.binary_dir, self.record = api, hwnd, binary_dir, record
+        record.update(message=GUI_RU_DIAGNOSTIC_MESSAGE, capture_limit_ms=1000,
+                      requests=[], receipts=[], captures=[], post_wall_ms=0.0, log_reads=0,
+                      log_read_wall_ms=0.0, max_log_read_ms=0.0)
+        self.path = None
+
+    def request(self, phase):
+        if phase not in ('baseline', 'pending', 'final') or len(self.record['requests']) >= 3:
+            raise RuntimeError('GUI Ru diagnostic request is outside its bounded phases')
+        begin = time.monotonic()
+        entry = {'phase': phase, 'post_wall_ms': 0.0, 'accepted': False}
+        self.record['requests'].append(entry)
+        try:
+            self.api.post_ru_snapshot(self.hwnd)
+            entry['accepted'] = True
+        finally:
+            entry['post_wall_ms'] = round((time.monotonic() - begin) * 1000, 3)
+            self.record['post_wall_ms'] = round(sum(item['post_wall_ms'] for item in self.record['requests']), 3)
+
+    def read(self):
+        begin = time.monotonic()
+        if self.record['log_reads'] >= 44:
+            raise RuntimeError('GUI Ru diagnostic log reads exceeded their fixed bound')
+        self.record['log_reads'] += 1
+        try:
+            if self.path is None:
+                paths = list(self.binary_dir.glob('ru_notepad-*.log'))
+                if len(paths) != 1 or paths[0].is_symlink():
+                    raise RuntimeError('GUI Ru diagnostics require one fresh owned launcher log')
+                self.path = paths[0]
+            records = parse_gui_ru_snapshots(bounded_text(portable.checked_file(self.path)))
+            if records[:len(self.record['receipts'])] != self.record['receipts']:
+                raise RuntimeError('GUI Ru diagnostic log changed its accepted prefix')
+            if len(records) > len(self.record['requests']):
+                raise RuntimeError('GUI Ru diagnostic receipt has no matching request')
+            self.record['receipts'] = records
+            return len(records)
+        finally:
+            elapsed = (time.monotonic() - begin) * 1000
+            self.record['log_read_wall_ms'] = round(self.record['log_read_wall_ms'] + elapsed, 3)
+            self.record['max_log_read_ms'] = round(max(self.record['max_log_read_ms'], elapsed), 3)
+
+    def capture(self, expected):
+        begin = time.monotonic()
+        first_read = self.record['log_reads']
+        entry = {'phase': self.record['requests'][-1]['phase'], 'wall_ms': 0.0, 'log_reads': 0}
+        self.record['captures'].append(entry)
+        try:
+            while True:
+                count = self.read()
+                elapsed = time.monotonic() - begin
+                if elapsed > GUI_RU_DIAGNOSTIC_TIMEOUT_SECONDS:
+                    raise RuntimeError('GUI Ru diagnostic receipt did not arrive within its separate 1-second limit')
+                if count == expected:
+                    return
+                time.sleep(GUI_RU_RESPONSE_INTERVAL_MS / 1000)
+        finally:
+            entry['wall_ms'] = round((time.monotonic() - begin) * 1000, 3)
+            entry['log_reads'] = self.record['log_reads'] - first_read
+
+
+def validate_gui_ru_observer(record, wall_ms, probes):
+    if not isinstance(record, dict) or set(record) != set(gui_ru_observer_record()):
+        raise RuntimeError('GUI Ru observer cost record is missing or malformed')
+    for field, fixed in [('response_interval_ms', 50), ('snapshot_interval_ms', 250), ('snapshot_message_limit', 32)]:
+        if type(record[field]) is not int or record[field] != fixed:
+            raise RuntimeError('GUI Ru observer sampling policy was changed')
+    for field in ('scalar_calls', 'wm_null_calls', 'sendmessage_calls', 'snapshot_count', 'max_snapshot_messages'):
+        if type(record[field]) is not int or record[field] < 1:
+            raise RuntimeError('GUI Ru observer lacks actual message or snapshot counts')
+    for field in ('query_wall_ms', 'max_query_ms', 'snapshot_wall_ms', 'max_snapshot_ms'):
+        if not finite_nonnegative(record[field]) or record[field] > wall_ms + 0.01:
+            raise RuntimeError('GUI Ru observer cost is not finite or exceeds its measured stage')
+    if (record['wm_null_calls'] != probes or record['sendmessage_calls'] != record['scalar_calls'] + probes or
+            record['max_query_ms'] > record['query_wall_ms'] + 0.01):
+        raise RuntimeError('GUI Ru observer synchronous message counts or costs disagree')
+    starts = record['response_starts_ms']
+    if (not isinstance(starts, list) or len(starts) != probes or not 1 <= len(starts) <= 601 or
+            any(not finite_nonnegative(value) or value > wall_ms for value in starts) or
+            any(right - left < 49.999 for left, right in zip(starts, starts[1:]))):
+        raise RuntimeError('GUI Ru WM_NULL frequency is unbounded or inconsistent')
+    snapshots = record['snapshots']
+    if not isinstance(snapshots, list) or not 1 <= len(snapshots) <= 121 or record['snapshot_count'] != len(snapshots):
+        raise RuntimeError('GUI Ru full snapshot count is unbounded or inconsistent')
+    for entry in snapshots:
+        if (not isinstance(entry, dict) or set(entry) != {'start_ms', 'wall_ms', 'messages', 'final'} or
+                not finite_nonnegative(entry['start_ms']) or not finite_nonnegative(entry['wall_ms']) or
+                entry['start_ms'] + entry['wall_ms'] > wall_ms + 0.01 or type(entry['final']) is not bool or
+                type(entry['messages']) is not int or not 1 <= entry['messages'] <= 32):
+            raise RuntimeError('GUI Ru full snapshot duration or actual message bound is invalid')
+    if (any(right['start_ms'] - left['start_ms'] < 249.999 for left, right in zip(snapshots, snapshots[1:])) or
+            snapshots[-1]['final'] is not True or any(entry['final'] for entry in snapshots[:-1]) or
+            record['max_snapshot_messages'] != max(entry['messages'] for entry in snapshots) or
+            record['max_snapshot_ms'] != max(entry['wall_ms'] for entry in snapshots) or
+            abs(record['snapshot_wall_ms'] - sum(entry['wall_ms'] for entry in snapshots)) > 0.01 or
+            sum(entry['messages'] for entry in snapshots) > record['scalar_calls']):
+        raise RuntimeError('GUI Ru snapshot frequencies, final proof, or cost totals disagree')
+
+
+def validate_gui_ru_diagnostics(record):
+    expected = {'message', 'capture_limit_ms', 'requests', 'receipts', 'captures', 'post_wall_ms',
+                'log_reads', 'log_read_wall_ms', 'max_log_read_ms'}
+    if (not isinstance(record, dict) or set(record) != expected or
+            type(record['message']) is not int or record['message'] != GUI_RU_DIAGNOSTIC_MESSAGE or
+            type(record['capture_limit_ms']) is not int or record['capture_limit_ms'] != 1000 or
+            type(record['log_reads']) is not int or not 2 <= record['log_reads'] <= 44 or
+            not isinstance(record['requests'], list) or len(record['requests']) != 3 or
+            not isinstance(record['receipts'], list) or len(record['receipts']) != 3 or
+            not isinstance(record['captures'], list) or len(record['captures']) != 2):
+        raise RuntimeError('GUI Ru diagnostic capture record is missing or malformed')
+    for entry, phase in zip(record['captures'], ('baseline', 'final')):
+        if (not isinstance(entry, dict) or set(entry) != {'phase', 'wall_ms', 'log_reads'} or
+                entry['phase'] != phase or not finite_nonnegative(entry['wall_ms']) or entry['wall_ms'] > 1000.01 or
+                type(entry['log_reads']) is not int or not 1 <= entry['log_reads'] <= 22):
+            raise RuntimeError('GUI Ru diagnostic capture phase or independent deadline is invalid')
+    if sum(entry['log_reads'] for entry in record['captures']) != record['log_reads']:
+        raise RuntimeError('GUI Ru diagnostic capture counts disagree')
+    for field in ('post_wall_ms', 'log_read_wall_ms', 'max_log_read_ms'):
+        if not finite_nonnegative(record[field]):
+            raise RuntimeError('GUI Ru diagnostic cost must be finite and nonnegative')
+    for request, phase in zip(record['requests'], ('baseline', 'pending', 'final')):
+        if (not isinstance(request, dict) or set(request) != {'phase', 'post_wall_ms', 'accepted'} or
+                request['phase'] != phase or request['accepted'] is not True or not finite_nonnegative(request['post_wall_ms'])):
+            raise RuntimeError('GUI Ru diagnostic requests do not match their fixed phases')
+    if (abs(sum(item['post_wall_ms'] for item in record['requests']) - record['post_wall_ms']) > 0.01 or
+            record['max_log_read_ms'] > record['log_read_wall_ms'] + 0.01):
+        raise RuntimeError('GUI Ru diagnostic post or log-read costs disagree')
+    for index, receipt in enumerate(record['receipts']):
+        if index == 0 and receipt == {'seq': 1, 'ok': 0} and all(type(value) is int for value in receipt.values()):
+            continue
+        if (not isinstance(receipt, dict) or set(receipt) != GUI_RU_SNAPSHOT_INTEGER_FIELDS | GUI_RU_SNAPSHOT_TIME_FIELDS or
+                any(type(receipt[key]) is not int or not 0 <= receipt[key] <= 9007199254740991 for key in GUI_RU_SNAPSHOT_INTEGER_FIELDS) or
+                any(not finite_nonnegative(receipt[key]) for key in GUI_RU_SNAPSHOT_TIME_FIELDS) or
+                receipt['seq'] != index + 1 or receipt['ok'] != 1 or receipt['pending'] not in (0, 1)):
+            raise RuntimeError('GUI Ru diagnostic receipt is incomplete or malformed')
+        if (not 0 <= receipt['bytes'] <= receipt['feed'] <= receipt['read_bytes'] <= GUI_RU_TIMER_BYTES or
+                receipt['continuation_ticks'] > min(receipt['ticks'], receipt['posts']) or
+                receipt['max_tick_ms'] > receipt['work_ms'] + 0.000001 or
+                receipt['max_gap_ms'] > receipt['gap_ms'] + 0.000001):
+            raise RuntimeError('GUI Ru diagnostic partial-byte or cost invariants are invalid')
+    baseline, pending, final = record['receipts']
+    if ((baseline['ok'] == 1 and (baseline['pending'] != 0 or pending['generation'] <= baseline['generation'])) or pending['pending'] != 1 or
+            final['generation'] != pending['generation'] or pending['revision'] != 0 or final['revision'] != 0 or
+            final['pending'] != 0 or any(final[key] != GUI_RU_TIMER_BYTES for key in ('bytes', 'feed', 'read_bytes')) or
+            final['restart'] != 0 or any(final[key] != 0 for key in ('style_notifications', 'fold_notifications')) or
+            final['continuation_ticks'] > final['ticks']):
+        raise RuntimeError('GUI Ru diagnostic receipts do not prove the same complete untouched timer document')
+    monotonic_fields = (GUI_RU_SNAPSHOT_INTEGER_FIELDS | GUI_RU_SNAPSHOT_TIME_FIELDS) - {'seq', 'ok', 'generation', 'revision', 'pending'}
+    if any(final[key] < pending[key] for key in monotonic_fields):
+        raise RuntimeError('GUI Ru same-generation diagnostic counters moved backwards')
+
+
 def validate_gui_ru_timer(record):
     data, probes = gui_ru_timer_fixture()
     if not isinstance(record, dict) or set(record) != GUI_RU_TIMER_FIELDS:
@@ -959,6 +1290,10 @@ def validate_gui_ru_timer(record):
             record['first_head_style_ms'] > record['wall_ms'] or
             record['max_response_ms'] > record['wall_ms']):
         raise RuntimeError('GUI Ru timer exceeded its unchanged 30-second execution deadline')
+    if record['head_style_measurement'] != GUI_RU_HEAD_MEASUREMENT:
+        raise RuntimeError('GUI Ru first head-style timing must disclose its sampling upper bound')
+    validate_gui_ru_observer(record['observer'], record['wall_ms'], record['probes'])
+    validate_gui_ru_diagnostics(record['diagnostics'])
     validate_gui_ru_responsiveness(record['responsiveness'], record['wall_ms'])
 
 
@@ -1033,7 +1368,7 @@ def run_gui_ru_responsiveness(api, process, hwnd, editor, record, timer_started,
                 if not paint['while_styling']:
                     raise RuntimeError('GUI Ru paint region was only serviced after styling completed')
         if len(record['navigation']) < 2 or not paint['cleared']:
-            time.sleep(0.01)
+            time.sleep(GUI_RU_RESPONSE_INTERVAL_MS / 1000)
     if api.scalar(editor, 2008) != 0 or api.scalar(editor, 2159) != 0:
         raise RuntimeError('GUI Ru responsiveness probes changed the document or did not restore its caret')
 
@@ -1225,7 +1560,8 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
     timer_sha = sha(timer_source)
     timer_record = {'size': len(timer_data), 'wall_ms': 0.0, 'first_head_style_ms': None, 'max_response_ms': 0.0,
                     'probes': 0, 'source_sha256': timer_sha, 'style_probes': timer_probes,
-                    'last_probe': None, 'responsiveness': {}}
+                    'last_probe': None, 'responsiveness': {}, 'observer': gui_ru_observer_record(),
+                    'diagnostics': {}, 'head_style_measurement': GUI_RU_HEAD_MEASUREMENT}
     edit_source = inputs / '真实编辑 十万字节 😀.ru'
     edit_data, edit_probes, edit_folds, _ = gui_ru_edit_fixture()
     edit_source.write_bytes(edit_data)
@@ -1308,70 +1644,115 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
         # This is the production timer path, in the same detached process.
         # Inspect only 16 token bytes, never fetch or scan the 1 MB document
         # cross-process. The native suite independently checks complete bytes.
+        diagnostics = GuiRuDiagnostics(api, hwnd, isolated, timer_record['diagnostics'])
+        diagnostics.request('baseline')
+        diagnostics.capture(1)
         started = time.monotonic()
         finished_elapsed = None
-        try:
-            api.drop(api.editor(hwnd), [timer_source])
-            checks['timer_child_drop_routed'] = True
-            while True:
-                api.no_dialog(process.pid)
-                if process.poll() is not None:
-                    raise RuntimeError('GUI exited during the 1 MB Ru timer stage')
-                response_started = time.monotonic()
-                api.responsive(hwnd)  # actual WM_NULL, unchanged 5-second limit
-                timer_record['max_response_ms'] = max(timer_record['max_response_ms'],
-                    (time.monotonic() - response_started) * 1000)
-                timer_record['probes'] += 1
-                opened = (tab_count() == 3 and
-                          api.text(hwnd) == timer_source.name + ' · ru_notepad')
-                complete = False
-                last_probe = {'opened': opened, 'length': None, 'clean': None,
-                              'end_styled': None, 'status': '', 'style_matches': {}}
-                timer_record['last_probe'] = last_probe
+        active = status_handle = None
+        matched_head = {}
+        needs_responsiveness = False
+        next_response = next_snapshot = started
+
+        def snapshot():
+            nonlocal active, status_handle, matched_head, needs_responsiveness
+            if active is None:
+                opened = tab_count() == 3 and api.text(hwnd) == timer_source.name + ' · ru_notepad'
                 if opened:
-                    active = api.editor(hwnd)
+                    active, status_handle = api.editor(hwnd), api.control(hwnd, 11)
+                    api.verify_owned_handles(process.pid, active, status_handle)
                     if api.scalar(active, 2378) != 3:
                         raise RuntimeError('GUI Ru timer child must use the production insert/delete notification mask')
                     checks['timer_mod_event_mask'] = True
-                    length = api.scalar(active, 2006)
-                    length_ok = length == len(timer_data)
-                    clean = api.scalar(active, 2159) == 0
-                    last_probe.update(length=length, clean=clean, end_styled=api.scalar(active, 2028))
-                    if not clean:
-                        raise RuntimeError('GUI timer styling made the 1 MB document dirty')
-                    matched = {}
-                    if length_ok:
-                        for group in ('head', 'tail'):
-                            matched.update({label: all(api.scalar(active, 2010, position) == probe['style']
-                                for position in range(probe['offset'], probe['offset'] + probe['length']))
-                                for label, probe in timer_probes.items() if label.startswith(group)})
-                            if group == 'head' and all(matched.values()) and timer_record['first_head_style_ms'] is None:
-                                # First matching head-token styles, not a claim
-                                # about a painted first screen or all lines.
-                                timer_record['first_head_style_ms'] = round((time.monotonic() - started) * 1000, 3)
-                    status = api.text(api.control(hwnd, 11))
-                    last_probe.update(status=status[:512], style_matches=matched)
-                    if (not timer_record['responsiveness'] and length_ok and 'Styling Ru' in status and
-                            not all(matched[name] for name in matched if name.startswith('tail'))):
+            else:
+                opened = True
+            last = {'opened': opened, 'length': None, 'clean': None,
+                    'end_styled': None, 'status': '', 'style_matches': {}}
+            timer_record['last_probe'] = last
+            if not opened:
+                return False
+            length, clean = api.scalar(active, 2006), api.scalar(active, 2159) == 0
+            last.update(length=length, clean=clean, end_styled=api.scalar(active, 2028))
+            if not clean:
+                raise RuntimeError('GUI timer styling made the 1 MB document dirty')
+            status = api.text(status_handle)
+            status_done = bool(status.strip()) and 'Styling Ru' not in status and not status.lstrip().startswith('Opening:')
+            matched = {}
+            if length == len(timer_data):
+                for label, probe in timer_probes.items():
+                    if label.startswith('head') and matched_head.get(label) and not status_done:
+                        matched[label] = True
+                    else:
+                        # Evaluate every byte even after a mismatch. At final
+                        # completion none of the cached head results are used.
+                        values = [api.scalar(active, 2010, position) == probe['style']
+                                  for position in range(probe['offset'], probe['offset'] + probe['length'])]
+                        matched[label] = all(values)
+                matched_head = {label: value for label, value in matched.items() if label.startswith('head')}
+                if all(matched_head.values()) and timer_record['first_head_style_ms'] is None:
+                    timer_record['first_head_style_ms'] = round((time.monotonic() - started) * 1000, 3)
+            last.update(status=status[:512], style_matches=matched)
+            needs_responsiveness = (not timer_record['responsiveness'] and length == len(timer_data) and
+                'Styling Ru' in status and not all(matched[name] for name in matched if name.startswith('tail')))
+            if not (length == len(timer_data) and clean and all(matched.values()) and status_done):
+                return False
+            # The immutable <=30s success point follows all 16 fresh style
+            # bytes AND a final length/clean/status recheck. Diagnostics never
+            # establish or extend success after this point.
+            length, clean = api.scalar(active, 2006), api.scalar(active, 2159) == 0
+            status = api.text(status_handle)
+            last.update(length=length, clean=clean, status=status[:512])
+            api.verify_owned_handles(process.pid, active, status_handle)
+            return (length == len(timer_data) and clean and bool(status.strip()) and
+                    'Styling Ru' not in status and not status.lstrip().startswith('Opening:'))
+
+        try:
+            with GuiRuObserver(api, timer_record['observer'], started) as observer:
+                api.drop(editor, [timer_source])
+                checks['timer_child_drop_routed'] = True
+                while True:
+                    api.no_dialog(process.pid)
+                    if process.poll() is not None:
+                        raise RuntimeError('GUI exited during the 1 MB Ru timer stage')
+                    now = time.monotonic()
+                    if now - started > GUI_RU_TIMER_TIMEOUT_SECONDS:
+                        raise RuntimeError('GUI 1 MB open and Ru timer styling exceeded 30 seconds')
+                    if now >= next_response:
+                        response_started = time.monotonic()
+                        try:
+                            api.responsive(hwnd)
+                        finally:
+                            timer_record['probes'] = timer_record['observer']['wm_null_calls']
+                            timer_record['max_response_ms'] = max(timer_record['max_response_ms'],
+                                (time.monotonic() - response_started) * 1000)
+                        next_response = time.monotonic() + GUI_RU_RESPONSE_INTERVAL_MS / 1000
+                    complete = False
+                    if time.monotonic() >= next_snapshot:
+                        complete = observer.snapshot(snapshot)
+                        next_snapshot = time.monotonic() + GUI_RU_SNAPSHOT_INTERVAL_MS / 1000
+                    if needs_responsiveness:
+                        needs_responsiveness = False
+                        diagnostics.request('pending')
                         def still_styling():
-                            return ('Styling Ru' in api.text(api.control(hwnd, 11)) and
+                            return ('Styling Ru' in api.text(status_handle) and
                                 not all(api.scalar(active, 2010, position) == probe['style']
                                     for label, probe in timer_probes.items() if label.startswith('tail')
                                     for position in range(probe['offset'], probe['offset'] + probe['length'])))
                         run_gui_ru_responsiveness(api, process, hwnd, active,
                             timer_record['responsiveness'], started, still_styling)
                         checks.update(timer_queued_navigation=True, timer_paint_region_serviced=True)
-                    status_done = bool(status.strip()) and 'Styling Ru' not in status and not status.lstrip().startswith('Opening:')
-                    complete = length_ok and clean and all(matched.values()) and status_done
-                elapsed = time.monotonic() - started
-                if elapsed > GUI_RU_TIMER_TIMEOUT_SECONDS:
-                    raise RuntimeError('GUI 1 MB open and Ru timer styling exceeded 30 seconds')
-                if complete:
-                    finished_elapsed = elapsed
-                    checks.update(timer_exact_length=True, timer_document_clean=True,
-                                  timer_head_styles=True, timer_tail_styles=True, timer_status_cleared=True)
-                    break
-                time.sleep(0.01)
+                    elapsed = time.monotonic() - started
+                    if elapsed > GUI_RU_TIMER_TIMEOUT_SECONDS:
+                        raise RuntimeError('GUI 1 MB open and Ru timer styling exceeded 30 seconds')
+                    if complete:
+                        finished_elapsed = elapsed
+                        checks.update(timer_exact_length=True, timer_document_clean=True,
+                                      timer_head_styles=True, timer_tail_styles=True, timer_status_cleared=True)
+                        break
+                    # No busy spin or catch-up burst: the next send is due at
+                    # least 50 ms after the last completed WM_NULL query.
+                    delay = min(next_response, next_snapshot, started + GUI_RU_TIMER_TIMEOUT_SECONDS) - time.monotonic()
+                    time.sleep(max(0.001, delay))
             if sha(timer_source) != timer_sha:
                 raise RuntimeError('GUI timer styling modified the 1 MB source file')
             checks['timer_source_bytes_preserved'] = True
@@ -1379,6 +1760,14 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
             timer_record['wall_ms'] = round((finished_elapsed if finished_elapsed is not None
                                             else time.monotonic() - started) * 1000, 3)
             timer_record['max_response_ms'] = round(timer_record['max_response_ms'], 3)
+            failing = sys.exc_info()[0] is not None
+            try:
+                diagnostics.request('final')
+                diagnostics.capture(len(timer_record['diagnostics']['requests']))
+            except Exception as exc:
+                timer_record['diagnostics']['error'] = str(exc)
+                if not failing:
+                    raise
         validate_gui_ru_timer(timer_record)
         checks.update(run_gui_ru_edits(api, process, hwnd, edit_source, edit_record))
         return checks

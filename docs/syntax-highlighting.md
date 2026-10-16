@@ -230,7 +230,7 @@ Three further **8-assertion** runs independently omit the helper, provide a DLL
 without its exports, or provide an incompatible ABI version. Each requires a
 clear ordinary warning and continued plain-text editing, without unsafe binding.
 
-The main-window integration suite has **66 assertions**. It exercises real timer
+The main-window integration suite has **73 assertions**. It exercises real timer
 dispatch, Unicode `.ru` CLI input, Language/View menu commands, Scintilla margin
 hit-testing and the owning callback, independent tabs, dirty/undo preservation,
 automatic selection after successful Save As, and closing a pending styling job.
@@ -238,7 +238,9 @@ It also compares a deliberately full-notification small control with the actual
 text-only application subscription, including insertion, undo, redo, line
 counts and savepoint transitions. Actual message-queue cases cover single-slot
 coalescing, stale burst tokens, busy/input/paint deferral, timer resumption and
-close while work is queued. A separate **8-assertion** mode uses the
+close while work is queued. Fixed diagnostic requests additionally verify
+parameter rejection, busy/in-callback/active-document guards, ordinary failure
+recovery and the three-request cap without text or dirty-state mutation. A separate **8-assertion** mode uses the
 production scheduler on the exact 1 MB GUI corpus, records cumulative work,
 callback gaps, successful posts, continuation ticks and yield/stale counts,
 and requires completion within 30 seconds. Both fixture corpus
@@ -248,7 +250,12 @@ The separate detached GUI gate checks actual style/fold values, hidden-line
 visibility, unchanged source, responsiveness and normal close. During pending
 styling, posted navigation must move/restore the caret and a real invalidation
 must drain naturally, without forcing a paint or modifying the corpus. It also measures
-1 MB timer completion and representative 100 KB real insertion/Backspace at
+1 MB completion with full snapshots at least 250 ms apart and WM_NULL probes
+at least 50 ms apart, recording actual observer message counts and elapsed cost.
+Up to three explicitly requested numeric projections expose work/progress only;
+they do not scan or read document text. Diagnostic collection cannot turn a
+post-deadline completion into a pass. The gate also measures representative
+100 KB real insertion/Backspace at
 the beginning, middle and end. These are required
 Windows gates for 0.1.4; a local compile is not evidence that they passed.
 
