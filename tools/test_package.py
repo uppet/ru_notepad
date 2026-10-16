@@ -24,6 +24,7 @@ class PackageTests(unittest.TestCase):
         self.evidence = self.root / 'evidence'
         self.evidence.mkdir()
         for relative in {*package.RUNTIME_FILES, *package.TEST_FILES, 'src/main.ru',
+                         *package.RESOURCE_INPUTS,
                          'packaging/diagnostic_launcher.c', 'packaging/samples/example.txt'}:
             target = self.root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -61,7 +62,8 @@ class PackageTests(unittest.TestCase):
                 'source_sha256': {'src/main.ru': package.sha(self.root / 'src/main.ru')},
                 'entry_source': source, 'entry_sha256': package.sha(entry),
                 'generated_c_sha256': 'c' * 64, 'translation_unit_sha256': 'd' * 64,
-                'build_input_sha256': {'packaging/diagnostic_launcher.c': package.sha(self.root / 'packaging/diagnostic_launcher.c')},
+                'build_input_sha256': {relative: package.sha(self.root / relative)
+                    for relative in (*package.RESOURCE_INPUTS, 'packaging/diagnostic_launcher.c')},
                 'ru_tree': 'a' * 40, 'ru_commit': 'b' * 40,
                 'compiler_command': ['PRIVATE_WORKSPACE/home/private/compiler', 'PRIVATE_SECRET'],
             }
@@ -156,6 +158,21 @@ class PackageTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Missing'):
             self.create()
         self.assertFalse((self.root / 'dist').exists())
+
+    def test_every_executable_requires_common_manifest_build_receipt(self):
+        for name in ('ru_notepad.exe', *package.TEST_NAMES):
+            with self.subTest(name=name):
+                path = self.binary / Path(name).with_suffix('.build.json')
+                original = path.read_bytes()
+                self.modify_receipt(name, lambda r: r['build_input_sha256'].pop('packaging/app.manifest'))
+                with self.assertRaisesRegex(RuntimeError, 'common-controls manifest'):
+                    self.create()
+                path.write_bytes(original)
+
+    def test_changed_manifest_invalidates_existing_executable_receipts(self):
+        (self.root / 'packaging/app.manifest').write_text('changed manifest')
+        with self.assertRaisesRegex(RuntimeError, 'Source changed since building'):
+            self.create()
 
     def test_incorrect_lexilla_blocks_both_packages(self):
         with (self.binary / 'Lexilla.dll').open('ab') as output:

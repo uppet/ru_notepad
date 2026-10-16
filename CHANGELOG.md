@@ -8,6 +8,7 @@
 - Advance open/save through bounded timer batches with Cancel/Esc, mutation locking, revision checks and safe asynchronous close continuations. Retain conflict checks, protected staging, recovery backups and checked final commits.
 - Require native chunk-boundary/cancellation/registry/drop/main-operation tests, full 500,039,680-byte editor roundtrip, and detached GUI file-entry/cancel acceptance. These changes await exact-build Windows CI.
 - Pin the independently validated Ru 0.21.3 toolchain; keep runtime/tests ZIPs separate and byte-identical for shared runtime files.
+- First Windows run passed 797 assertions, both GUI gates and the complete 500,039,680-byte roundtrip, but could not package because the file-drop console fixture lacked the v6 manifest required by GetWindowSubclass. Embed the same reviewed manifest in every executable; keep all 38 file-drop assertions and require a full corrected 835-assertion/23-result run.
 
 ## 0.1.2-preview — 2026-10-16
 

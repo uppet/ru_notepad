@@ -1,3 +1,5 @@
+# GetWindowSubclass requires the Common Controls v6 application manifest.
+# Build this console fixture with the same embedded app.rc/app.manifest as the GUI.
 密 取 外言 '如:密'.
 窗 取 外言 '../src/win32.ru'.
 拖 取 外言 '../src/file_drop.ru'.

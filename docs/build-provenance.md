@@ -19,7 +19,7 @@ Use a Windows x64 GCC/MinGW-compatible toolchain with GCC, G++, windres, ar, ran
 python tools/build.py --help
 ```
 
-The build audits native-call argument counts, emits C, compiles the application or selected test source, embeds the app icon and manifest for the GUI executable, and copies both built dependency DLLs beside it. A build receipt records input and output hashes, including all src/*.ru and tests/*.ru files so imported test helpers cannot drift from the executed snapshot. Generated files belong in ignored `build/` and `dist/` directories.
+The build audits native-call argument counts, emits C, compiles the application or selected test source, embeds the same app resource and Common Controls v6 manifest in every executable, and copies both built dependency DLLs beside it. Test executables retain the console subsystem; only the application uses the GUI diagnostic launcher. Every executable receipt covers the manifest, resource script, icon and version, along with all src/*.ru and tests/*.ru files. Missing or changed resource inputs block packaging. Generated files belong in ignored `build/` and `dist/` directories.
 
 The normal build command does not silently launch the resulting program. Linux-to-MinGW cross-compilation can produce a Windows PE executable, but it does not establish native Windows runtime behavior. Wine results, when available, must likewise be identified separately from Windows results.
 

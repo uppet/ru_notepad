@@ -114,6 +114,13 @@ large-file cancellation, and per-file errors remain application policy.
   are installed, repeated enable does not duplicate forwarding, wrong-parent
   routing is rejected, child-body drops preserve all paths without editing text,
   malformed drops recover, and destruction/new editor creation is safe.
+  The console executable must embed the same `app.rc` / `app.manifest` resources
+  as the GUI, including the Common Controls v6 dependency. Microsoft's
+  `GetWindowSubclass` contract specifically requires this manifest; an
+  unmanifested console process can resolve the v5.8-compatible mutation helpers
+  while failing to bind the v6-only inspection export before any assertion runs.
+  The fixture keeps all 38 assertions and its console subsystem; the build
+  receipt must account for the embedded resource inputs.
 - `tests/drop_fixture.ru`: reusable native synthetic HDROP construction for
   application-level queue tests; it is a helper, not a standalone test target.
 
@@ -132,5 +139,6 @@ native fixtures must execute in the real Windows CI lane, never Wine.
 - [DROPFILES](https://learn.microsoft.com/windows/win32/api/shlobj_core/ns-shlobj_core-dropfiles)
 - [CF_HDROP OLE-to-WM_DROPFILES fallback](https://learn.microsoft.com/windows/win32/shell/clipboard)
 - [SetWindowSubclass](https://learn.microsoft.com/windows/win32/api/commctrl/nf-commctrl-setwindowsubclass)
+- [GetWindowSubclass v6 manifest requirement](https://learn.microsoft.com/windows/win32/api/commctrl/nf-commctrl-getwindowsubclass)
 - [SUBCLASSPROC](https://learn.microsoft.com/windows/win32/api/commctrl/nc-commctrl-subclassproc)
 - [RevokeDragDrop](https://learn.microsoft.com/windows/win32/api/ole2/nf-ole2-revokedragdrop)

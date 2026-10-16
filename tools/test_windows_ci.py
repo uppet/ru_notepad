@@ -13,6 +13,7 @@ import struct
 import sys
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from unittest.mock import patch
 
 import windows_ci as ci
@@ -120,6 +121,31 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 18)
         # Eighteen console gates, two lexer fallbacks, two real GUIs and ACL.
         self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 23)
+
+    def test_console_and_gui_receipts_share_all_manifest_resource_inputs(self):
+        common = {'packaging/app.rc', 'packaging/app.manifest', 'assets/app-icon.ico', 'VERSION'}
+        self.assertEqual(set(builder.build_input_paths(True)), common)
+        self.assertEqual(set(builder.build_input_paths(False)), common | {'packaging/diagnostic_launcher.c'})
+
+    def test_shared_resource_compilation_uses_existing_application_manifest(self):
+        with patch.object(builder, 'run') as run:
+            resource = builder.compile_resources('fixture-windres', self.root)
+        self.assertEqual(resource, self.root / 'app-resource.o')
+        run.assert_called_once_with(['fixture-windres', '-I', builder.ROOT / 'packaging',
+                                     builder.ROOT / 'packaging/app.rc', resource])
+        rc = (builder.ROOT / 'packaging/app.rc').read_text()
+        self.assertRegex(rc, r'(?m)^1 RT_MANIFEST "app\.manifest"$')
+
+    def test_shared_manifest_requests_common_controls_v6_without_elevation(self):
+        manifest = ET.parse(builder.ROOT / 'packaging/app.manifest')
+        assembly = '{urn:schemas-microsoft-com:asm.v1}'
+        identity = manifest.find(f'{assembly}dependency/{assembly}dependentAssembly/{assembly}assemblyIdentity')
+        self.assertIsNotNone(identity)
+        self.assertEqual(identity.attrib['name'], 'Microsoft.Windows.Common-Controls')
+        self.assertEqual(identity.attrib['version'], '6.0.0.0')
+        self.assertEqual(identity.attrib['processorArchitecture'], 'amd64')
+        level = manifest.find('.//{urn:schemas-microsoft-com:asm.v3}requestedExecutionLevel')
+        self.assertEqual(level.attrib, {'level': 'asInvoker', 'uiAccess': 'false'})
 
     def test_flag_regression_is_built_packaged_and_in_user_test_runner(self):
         source = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')

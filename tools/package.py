@@ -33,6 +33,7 @@ TEST_NAMES = ('document_policy.exe', 'ui_arguments.exe', 'file_codec_flags.exe',
               'file_streaming_native.exe', 'editor_streaming_native.exe',
               'associations_policy.exe', 'associations_native.exe', 'file_drop_native.exe', 'app_streaming_native.exe')
 BINARY_NAMES = (*RUNTIME_NAMES, *TEST_NAMES)
+RESOURCE_INPUTS = ('packaging/app.rc', 'packaging/app.manifest', 'assets/app-icon.ico', 'VERSION')
 SYSTEM_DLLS = {'advapi32.dll', 'gdi32.dll', 'imm32.dll', 'kernel32.dll',
     'msvcrt.dll', 'ole32.dll', 'oleaut32.dll', 'user32.dll', 'comctl32.dll',
     'comdlg32.dll', 'shell32.dll', 'shlwapi.dll', 'version.dll', 'winmm.dll',
@@ -133,6 +134,8 @@ def validate_receipts(root, binary_dir, objdump):
                 raise RuntimeError(f'Dependency build receipt does not match {name}: {dll}')
         if receipt['source_sha256'] != app['source_sha256'] or receipt['ru_tree'] != app['ru_tree'] or receipt['ru_commit'] != app['ru_commit']:
             raise RuntimeError(f'Source/compiler snapshot mismatch for {name}')
+        if not set(RESOURCE_INPUTS) <= receipt.get('build_input_sha256', {}).keys():
+            raise RuntimeError(f'{name}: requires hash-verified common-controls manifest/resource inputs')
         for relative, digest in {**receipt['source_sha256'], **receipt.get('build_input_sha256', {}),
                                  receipt['entry_source']: receipt['entry_sha256']}.items():
             if sha(source_file(root, relative)) != digest:

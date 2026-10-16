@@ -2,7 +2,7 @@
 """Build-time helper only. The distributed app does not execute Python."""
 from __future__ import annotations
 import argparse, hashlib, json, os, shutil, subprocess, sys, time, zipfile
-from package import DEPENDENCIES
+from package import DEPENDENCIES, RESOURCE_INPUTS
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +22,16 @@ def source_snapshot():
     # one common source/test snapshot, including helpers without an entry point.
     return {p.relative_to(ROOT).as_posix(): sha(p)
             for folder in ('src', 'tests') for p in sorted((ROOT / folder).glob('*.ru'))}
+
+def build_input_paths(console):
+    # Native console fixtures must use the same common-controls v6 activation
+    # context as the GUI. GetWindowSubclass is unavailable without this manifest.
+    return RESOURCE_INPUTS + (() if console else ('packaging/diagnostic_launcher.c',))
+
+def compile_resources(windres, build):
+    resource = build / 'app-resource.o'
+    run([windres, '-I', ROOT / 'packaging', ROOT / 'packaging/app.rc', resource])
+    return resource
 
 def main():
     ap=argparse.ArgumentParser()
@@ -73,7 +83,7 @@ def main():
     from rulang.compiler import Compiler
     source=args.source.resolve()
     snapshot=source_snapshot()
-    build_inputs={} if args.console else {rel:sha(ROOT/rel) for rel in ['packaging/diagnostic_launcher.c','packaging/app.rc','packaging/app.manifest','assets/app-icon.ico','VERSION']}
+    build_inputs={rel:sha(ROOT/rel) for rel in build_input_paths(args.console)}
     entry_sha=sha(source)
     text=source.read_text(encoding='utf-8-sig')
     program=parse(text)
@@ -89,11 +99,10 @@ def main():
         launcher=(ROOT/'packaging/diagnostic_launcher.c').read_text()
         translation.write_text('#define main ru_program_main\n'+code+'\n#undef main\n'+launcher,encoding='utf-8')
     args.output.parent.mkdir(parents=True,exist_ok=True)
-    cmd=[args.cc,'-std=c99','-O2','-Wall','-Wextra','-Wno-unused-function','-static-libgcc',str(translation),'-o',str(args.output),'-lm']
+    res=compile_resources(args.windres,build)
+    cmd=[args.cc,'-std=c99','-O2','-Wall','-Wextra','-Wno-unused-function','-static-libgcc',str(translation),'-o',str(args.output),'-lm',str(res)]
     if not args.console:
-        res=build/'app-resource.o'
-        run([args.windres,'-I',ROOT/'packaging',ROOT/'packaging/app.rc',res])
-        cmd += ['-mwindows',str(res),'-lshell32','-luser32']
+        cmd += ['-mwindows','-lshell32','-luser32']
     run(cmd,timeout=600)
     if build_inputs != {rel:sha(ROOT/rel) for rel in build_inputs}:
         raise SystemExit('Launcher/resource inputs changed during build; no receipt published.')
