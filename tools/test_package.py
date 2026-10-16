@@ -124,6 +124,7 @@ class PackageTests(unittest.TestCase):
                     'max_gap_ms': 6, 'read_bytes': 1000000, 'max_read': 1024, 'chunks': 1000,
                     'feed': 1000000, 'bytes': 1000000, 'pending': 0, 'text_notifications': 0,
                     'style_notifications': 0, 'fold_notifications': 0,
+                    'posts': 9, 'continuation_ticks': 8, 'queue_yields': 2, 'stale_messages': 0,
                     'source_sha256': hashlib.sha256(ci.gui_ru_timer_fixture()[0]).hexdigest()}
             if name in {case[0] for case in ci.SYNTAX_FALLBACK_TESTS}:
                 result['fixture_binary_sha256'] = {target: self.summary['tested_binary_sha256'][source]
@@ -138,6 +139,10 @@ class PackageTests(unittest.TestCase):
                 result['timer_performance'] = {'size': len(data), 'wall_ms': 100.0,
                     'first_head_style_ms': 10.0, 'max_response_ms': 2.0, 'probes': 3,
                     'source_sha256': hashlib.sha256(data).hexdigest(), 'style_probes': probes,
+                    'responsiveness': {'measurement': ci.GUI_RU_RESPONSE_MEASUREMENT,
+                        'navigation': [dict(step, wall_ms=1.0, while_styling=True) for step in ci.GUI_RU_NAVIGATION],
+                        'paint': {'invalidations': 1, 'pending_observed': True, 'already_serviced': False,
+                                  'cleared': True, 'wall_ms': 2.0, 'while_styling': True}},
                     'last_probe': {'opened': True, 'length': len(data), 'clean': True,
                         'end_styled': len(data), 'status': 'Ln 1    UTF-8    Ru',
                         'style_matches': {name: True for name in probes}}}
@@ -399,6 +404,8 @@ class PackageTests(unittest.TestCase):
     def test_native_packaging_rechecks_ru_performance_and_gui_contracts(self):
         for mutation in ('missing-performance', 'unbounded-performance', 'missing-gui-style', 'wrong-gui-hash',
                          'missing-timer', 'wrong-timer-source', 'wrong-timer-probes', 'timer-timeout',
+                         'missing-responsiveness', 'navigation-after-style', 'navigation-no-return',
+                         'navigation-timeout', 'paint-not-cleared', 'paint-inconsistent-observation',
                          'missing-edit', 'wrong-edit-source', 'missing-edit-operation', 'edit-timeout'):
             with self.subTest(mutation=mutation):
                 original = json.loads(json.dumps(self.summary))
@@ -412,6 +419,12 @@ class PackageTests(unittest.TestCase):
                 if mutation == 'wrong-timer-source': gui['timer_performance']['source_sha256'] = 'different'
                 if mutation == 'wrong-timer-probes': gui['timer_performance']['style_probes']['tail_keyword']['style'] = 0
                 if mutation == 'timer-timeout': gui['timer_performance']['wall_ms'] = 30001
+                if mutation == 'missing-responsiveness': gui['timer_performance'].pop('responsiveness')
+                if mutation == 'navigation-after-style': gui['timer_performance']['responsiveness']['navigation'][0]['while_styling'] = False
+                if mutation == 'navigation-no-return': gui['timer_performance']['responsiveness']['navigation'][1]['after'] = 3
+                if mutation == 'navigation-timeout': gui['timer_performance']['responsiveness']['navigation'][0]['wall_ms'] = 5001
+                if mutation == 'paint-not-cleared': gui['timer_performance']['responsiveness']['paint']['cleared'] = False
+                if mutation == 'paint-inconsistent-observation': gui['timer_performance']['responsiveness']['paint']['already_serviced'] = True
                 if mutation == 'missing-edit': gui.pop('edit_performance')
                 if mutation == 'wrong-edit-source': gui['edit_performance']['source_sha256'] = 'different'
                 if mutation == 'missing-edit-operation': gui['edit_performance']['operations'].pop()
@@ -425,7 +438,9 @@ class PackageTests(unittest.TestCase):
         for name, key in (('ru_syntax_native', 'gui_sync_performance'),
                           ('app_ru_timer_native', 'timer_performance')):
             for mutation in ('missing', 'source', 'characters', 'incomplete', 'unbounded', 'nonfinite',
-                             'extra-field', 'timer-pending', 'timer-timeout', 'timer-style', 'timer-fold'):
+                             'extra-field', 'timer-pending', 'timer-timeout', 'timer-style', 'timer-fold',
+                             'timer-no-posts', 'timer-no-continuations', 'timer-inconsistent-continuations',
+                             'timer-negative-yields', 'timer-negative-stale'):
                 if mutation.startswith('timer-') and name != 'app_ru_timer_native':
                     continue
                 with self.subTest(name=name, mutation=mutation):
@@ -443,6 +458,11 @@ class PackageTests(unittest.TestCase):
                     if mutation == 'timer-timeout': record['wall_ms'] = 30001
                     if mutation == 'timer-style': record['style_notifications'] = 1
                     if mutation == 'timer-fold': record['fold_notifications'] = 1
+                    if mutation == 'timer-no-posts': record['posts'] = 0
+                    if mutation == 'timer-no-continuations': record['continuation_ticks'] = 0
+                    if mutation == 'timer-inconsistent-continuations': record['continuation_ticks'] = record['ticks'] + 1
+                    if mutation == 'timer-negative-yields': record['queue_yields'] = -1
+                    if mutation == 'timer-negative-stale': record['stale_messages'] = -1
                     with self.assertRaises(RuntimeError): self.create()
                     self.assertFalse((self.root / 'dist').exists())
                     self.summary = original

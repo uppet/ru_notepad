@@ -36,10 +36,10 @@ if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo ru_syntax_native.exe: real Scintilla Ru styles, edits, folding, margin callbacks and bounded performance probes.
 ru_syntax_native.exe >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"
->>test-results.txt echo app_ru_native.exe: actual Ru language menu routing, fold commands, tab isolation and unchanged document state.
+>>test-results.txt echo app_ru_native.exe: actual Ru menu routing, folding, tab isolation, bounded cooperative scheduling and unchanged document state.
 app_ru_native.exe "%TESTDIR%" >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"
->>test-results.txt echo app_ru_native.exe --measure-ru-timer: exact 1 MB Unicode source on production timer, bounded reads and filtered notification diagnostics.
+>>test-results.txt echo app_ru_native.exe --measure-ru-timer: exact 1 MB Unicode source on production cooperative scheduler with timer fallback, bounded reads and filtered notification diagnostics.
 app_ru_native.exe "%TESTDIR%" --measure-ru-timer >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo shortcuts.exe: keyboard shortcut routing and modifier combinations.

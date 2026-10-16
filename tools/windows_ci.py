@@ -50,7 +50,7 @@ NATIVE_CONSOLE_TESTS = (
     ('syntax_policy', r'^TOTAL PASS: 108\s*$'),
     ('status_native', r'^TOTAL PASS: 21\s*$'),
     ('syntax_native', r'^TOTAL PASS: 82\s*$'),
-    ('app_ru_native', r'^TOTAL PASS: 47\s*$'),
+    ('app_ru_native', r'^TOTAL PASS: 66\s*$'),
     ('app_ru_timer_native', r'^TOTAL PASS: 8\s*$'),
     ('ru_lexical_policy', r'^TOTAL PASS: 338\s*$'),
     ('ru_syntax_native', r'^TOTAL PASS: 125\s*$'),
@@ -92,7 +92,8 @@ GUI_RU_CHECKS = ('initial_mod_event_mask', 'timer_mod_event_mask', 'cli_unicode_
                  'document_clean', 'text_bytes_preserved', 'source_bytes_preserved',
                  'timer_child_drop_routed', 'timer_exact_length', 'timer_document_clean',
                  'timer_head_styles', 'timer_tail_styles', 'timer_status_cleared',
-                 'timer_source_bytes_preserved', 'edit_fixture_loaded', 'edit_all_operations',
+                 'timer_source_bytes_preserved', 'timer_queued_navigation', 'timer_paint_region_serviced',
+                 'edit_fixture_loaded', 'edit_all_operations',
                  'edit_style_fold_probes', 'edit_dirty_transitions', 'edit_source_bytes_preserved',
                  'edit_undo_clean')
 GUI_NAMES = {'main-gui-smoke', 'main-gui-file-entry', 'main-gui-ru-syntax'}
@@ -108,7 +109,8 @@ GUI_RU_TIMER_TIMEOUT_SECONDS = 30
 RU_GUI_SYNC_INTEGER_FIELDS = {'size', 'source_chars', 'read_bytes', 'max_read', 'chunks'}
 RU_GUI_SYNC_TIME_FIELDS = {'wall_ms', 'max_tick_ms', 'max_chunk_ms'}
 RU_GUI_TIMER_INTEGER_FIELDS = {'size', 'source_chars', 'ticks', 'read_bytes', 'max_read',
-    'chunks', 'feed', 'bytes', 'pending', 'text_notifications', 'style_notifications', 'fold_notifications'}
+    'chunks', 'feed', 'bytes', 'pending', 'text_notifications', 'style_notifications', 'fold_notifications',
+    'posts', 'continuation_ticks', 'queue_yields', 'stale_messages'}
 RU_GUI_TIMER_TIME_FIELDS = {'wall_ms', 'work_ms', 'gap_ms', 'max_tick_ms', 'max_gap_ms'}
 RU_GUI_MEASUREMENTS = {
     'RU_GUI_SYNC': (RU_GUI_SYNC_INTEGER_FIELDS, RU_GUI_SYNC_TIME_FIELDS),
@@ -122,7 +124,13 @@ GUI_RU_EDIT_CHECKS = ('edit_fixture_loaded', 'edit_all_operations', 'edit_style_
 GUI_RU_EDIT_MEASUREMENT = ('Real child WM_CHAR/Backspace length-changing input; wall time includes '
     'production Reset Zoom 504 status refresh and WM_NULL polling; bounded style/fold/context probes.')
 GUI_RU_TIMER_FIELDS = {'size', 'wall_ms', 'first_head_style_ms', 'max_response_ms', 'probes',
-                       'source_sha256', 'style_probes', 'last_probe'}
+                       'source_sha256', 'style_probes', 'last_probe', 'responsiveness'}
+GUI_RU_RESPONSE_TIMEOUT_MS = 5000
+GUI_RU_RESPONSE_MEASUREMENT = ('Synthetic queued RIGHT/LEFT navigation and natural invalidated-region '
+    'service while Ru styling remains pending; no text edits, forced paint or pixel-render claim. '
+    'The existing 5-second response limit is a fail-stop upper bound, not a low-latency target.')
+GUI_RU_NAVIGATION = ({'key': 'RIGHT', 'before': 0, 'after': 3},
+                     {'key': 'LEFT', 'before': 3, 'after': 0})
 SCANNER_PREFLIGHT_SOURCES = ('tools/test_ru_scan.py', 'src/ru_lexical.ru',
                             'tests/ru_lexical_policy.ru')
 SCANNER_PREFLIGHT_REPORT_FIELDS = {'cases', 'chunk_checks', 'ru_assertions_per_backend',
@@ -187,6 +195,12 @@ class Windows:
         self.user.EnumChildWindows.restype = wintypes.BOOL
         self.user.GetDlgItem.argtypes = [wintypes.HWND, ctypes.c_int]
         self.user.GetDlgItem.restype = wintypes.HWND
+        self.user.GetClientRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+        self.user.GetClientRect.restype = wintypes.BOOL
+        self.user.InvalidateRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT), wintypes.BOOL]
+        self.user.InvalidateRect.restype = wintypes.BOOL
+        self.user.GetUpdateRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT), wintypes.BOOL]
+        self.user.GetUpdateRect.restype = wintypes.BOOL
         self.kernel = ctypes.WinDLL('kernel32', use_last_error=True)
         self.kernel.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
         self.kernel.GlobalAlloc.restype = wintypes.HGLOBAL
@@ -274,6 +288,30 @@ class Windows:
 
     def command(self, hwnd, identifier):
         self.scalar(hwnd, 0x0111, identifier)  # actual WM_COMMAND routing
+
+    def post_navigation(self, hwnd, key):
+        virtual_key, scan_code = {'RIGHT': (0x27, 0x4d), 'LEFT': (0x25, 0x4b)}[key]
+        # Matched extended-key down/up posted to this synthetic Scintilla child
+        # only; never global SendInput, focus changes or text-producing WM_CHAR.
+        down = 1 | (scan_code << 16) | (1 << 24)
+        for message, flags in ((0x0100, down), (0x0101, down | 0xc0000000)):
+            if not self.user.PostMessageW(hwnd, message, virtual_key, flags):
+                raise ctypes.WinError(ctypes.get_last_error())
+
+    def paint_pending(self, hwnd):
+        return bool(self.user.GetUpdateRect(hwnd, None, False))
+
+    def invalidate_for_paint(self, hwnd):
+        rectangle = wintypes.RECT()
+        if (not self.user.IsWindowVisible(hwnd) or
+                not self.user.GetClientRect(hwnd, ctypes.byref(rectangle)) or
+                rectangle.right <= rectangle.left or rectangle.bottom <= rectangle.top):
+            raise RuntimeError('Synthetic paint probe requires a visible nonempty editor child')
+        if not self.user.InvalidateRect(hwnd, None, False):
+            raise ctypes.WinError(ctypes.get_last_error())
+        # The UI thread may naturally BeginPaint before this first read. Keep
+        # that observation distinct; demanding an initial true would race.
+        return self.paint_pending(hwnd)
 
     def drop(self, hwnd, paths):
         # DROPFILES is five fixed-width fields followed by a double-NUL UTF-16
@@ -386,7 +424,8 @@ def validate_ru_gui_measurement(record, marker, *, require_complete=True):
         if (not 0 <= record['bytes'] <= record['feed'] <= record['read_bytes'] <= len(data) or
                 record['pending'] not in (0, 1) or record['work_ms'] > record['wall_ms'] or
                 record['gap_ms'] > record['wall_ms'] or
-                record['max_tick_ms'] > record['work_ms'] or record['max_gap_ms'] > record['gap_ms']):
+                record['max_tick_ms'] > record['work_ms'] or record['max_gap_ms'] > record['gap_ms'] or
+                record['continuation_ticks'] > record['ticks'] or record['continuation_ticks'] > record['posts']):
             raise RuntimeError(f'{marker}: timer work/gap or byte progress is inconsistent')
     if not require_complete:
         return
@@ -395,9 +434,10 @@ def validate_ru_gui_measurement(record, marker, *, require_complete=True):
     if marker == 'RU_GUI_TIMER' and (
             record['wall_ms'] > GUI_RU_TIMER_TIMEOUT_SECONDS * 1000 or record['ticks'] < 1 or
             record['work_ms'] <= 0 or record['max_tick_ms'] <= 0 or
+            record['posts'] < 1 or record['continuation_ticks'] < 1 or
             record['feed'] != len(data) or record['bytes'] != len(data) or record['pending'] != 0 or
             record['style_notifications'] != 0 or record['fold_notifications'] != 0):
-        raise RuntimeError(f'{marker}: production timer must complete within 30 seconds without style/fold callbacks')
+        raise RuntimeError(f'{marker}: production cooperative scheduler must complete within 30 seconds without style/fold callbacks')
 
 
 def parse_ru_gui_measurement(stdout, marker, *, require_complete=True):
@@ -919,6 +959,83 @@ def validate_gui_ru_timer(record):
             record['first_head_style_ms'] > record['wall_ms'] or
             record['max_response_ms'] > record['wall_ms']):
         raise RuntimeError('GUI Ru timer exceeded its unchanged 30-second execution deadline')
+    validate_gui_ru_responsiveness(record['responsiveness'], record['wall_ms'])
+
+
+def validate_gui_ru_responsiveness(record, wall_ms):
+    if (not isinstance(record, dict) or set(record) != {'measurement', 'navigation', 'paint'} or
+            record['measurement'] != GUI_RU_RESPONSE_MEASUREMENT or
+            not isinstance(record['navigation'], list) or len(record['navigation']) != 2):
+        raise RuntimeError('GUI Ru styling lacks bounded real queued navigation and paint-region evidence')
+    def valid_time(value):
+        return (type(value) in (int, float) and math.isfinite(value) and
+                0 <= value <= min(GUI_RU_RESPONSE_TIMEOUT_MS, wall_ms))
+    for actual, expected in zip(record['navigation'], GUI_RU_NAVIGATION):
+        if (not isinstance(actual, dict) or set(actual) != set(expected) | {'wall_ms', 'while_styling'} or
+                any(actual.get(key) != value for key, value in expected.items()) or
+                any(type(actual[key]) is not int for key in ('before', 'after')) or
+                actual['while_styling'] is not True or not valid_time(actual['wall_ms'])):
+            raise RuntimeError('GUI Ru queued navigation did not prove bounded 0-to-3-to-0 caret movement while styling')
+    paint = record['paint']
+    if (not isinstance(paint, dict) or set(paint) !=
+            {'invalidations', 'pending_observed', 'already_serviced', 'cleared', 'wall_ms', 'while_styling'} or
+            type(paint['invalidations']) is not int or paint['invalidations'] != 1 or
+            type(paint['pending_observed']) is not bool or type(paint['already_serviced']) is not bool or
+            paint['pending_observed'] == paint['already_serviced'] or
+            paint['cleared'] is not True or paint['while_styling'] is not True or not valid_time(paint['wall_ms'])):
+        raise RuntimeError('GUI Ru invalidated region was not naturally serviced within its styling window')
+
+
+def run_gui_ru_responsiveness(api, process, hwnd, editor, record, timer_started, still_styling):
+    # A single bounded interaction on the untouched 1 MB corpus. All waits use
+    # the original timer-stage deadline; no new completion window is created.
+    record.update(measurement=GUI_RU_RESPONSE_MEASUREMENT, navigation=[], paint={})
+    if api.scalar(editor, 2008) != 0 or not still_styling():  # SCI_GETCURRENTPOS
+        raise RuntimeError('GUI Ru responsiveness probe did not begin at BOF while styling was pending')
+    input_started = time.monotonic()
+    api.post_navigation(editor, 'RIGHT')
+    paint_started = time.monotonic()
+    initial_pending = api.invalidate_for_paint(editor)
+    paint = record['paint']
+    paint.update(invalidations=1, pending_observed=initial_pending,
+                 already_serviced=not initial_pending, cleared=False, wall_ms=0.0, while_styling=False)
+    while len(record['navigation']) < 2 or not paint['cleared']:
+        api.no_dialog(process.pid)
+        if process.poll() is not None:
+            raise RuntimeError('GUI exited during pending-style input/paint probes')
+        now = time.monotonic()
+        if now - timer_started > GUI_RU_TIMER_TIMEOUT_SECONDS:
+            raise RuntimeError('GUI 1 MB open and Ru timer styling exceeded 30 seconds')
+        if len(record['navigation']) < 2:
+            expected = GUI_RU_NAVIGATION[len(record['navigation'])]
+            position = api.scalar(editor, 2008)
+            input_ms = (time.monotonic() - input_started) * 1000
+            if input_ms > GUI_RU_RESPONSE_TIMEOUT_MS:
+                raise RuntimeError('GUI Ru queued navigation exceeded the existing 5-second response limit')
+            if position == expected['after']:
+                pending = still_styling()
+                record['navigation'].append(dict(expected, wall_ms=round(input_ms, 3), while_styling=pending))
+                if not pending:
+                    raise RuntimeError('GUI Ru queued navigation was only observed after styling completed')
+                if len(record['navigation']) == 1:
+                    input_started = time.monotonic()
+                    api.post_navigation(editor, 'LEFT')
+            elif position != expected['before']:
+                raise RuntimeError('GUI Ru queued navigation reached an unexpected UTF-8 caret position')
+        if not paint['cleared']:
+            pending_region = api.paint_pending(editor)
+            paint_ms = (time.monotonic() - paint_started) * 1000
+            paint['wall_ms'] = round(paint_ms, 3)
+            if paint_ms > GUI_RU_RESPONSE_TIMEOUT_MS:
+                raise RuntimeError('GUI Ru paint-region service exceeded the existing 5-second response limit')
+            if not pending_region:
+                paint.update(cleared=True, while_styling=still_styling())
+                if not paint['while_styling']:
+                    raise RuntimeError('GUI Ru paint region was only serviced after styling completed')
+        if len(record['navigation']) < 2 or not paint['cleared']:
+            time.sleep(0.01)
+    if api.scalar(editor, 2008) != 0 or api.scalar(editor, 2159) != 0:
+        raise RuntimeError('GUI Ru responsiveness probes changed the document or did not restore its caret')
 
 
 def gui_ru_edit_fixture():
@@ -1107,7 +1224,8 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
     timer_source.write_bytes(timer_data)
     timer_sha = sha(timer_source)
     timer_record = {'size': len(timer_data), 'wall_ms': 0.0, 'first_head_style_ms': None, 'max_response_ms': 0.0,
-                    'probes': 0, 'source_sha256': timer_sha, 'style_probes': timer_probes, 'last_probe': None}
+                    'probes': 0, 'source_sha256': timer_sha, 'style_probes': timer_probes,
+                    'last_probe': None, 'responsiveness': {}}
     edit_source = inputs / '真实编辑 十万字节 😀.ru'
     edit_data, edit_probes, edit_folds, _ = gui_ru_edit_fixture()
     edit_source.write_bytes(edit_data)
@@ -1233,6 +1351,16 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
                                 timer_record['first_head_style_ms'] = round((time.monotonic() - started) * 1000, 3)
                     status = api.text(api.control(hwnd, 11))
                     last_probe.update(status=status[:512], style_matches=matched)
+                    if (not timer_record['responsiveness'] and length_ok and 'Styling Ru' in status and
+                            not all(matched[name] for name in matched if name.startswith('tail'))):
+                        def still_styling():
+                            return ('Styling Ru' in api.text(api.control(hwnd, 11)) and
+                                not all(api.scalar(active, 2010, position) == probe['style']
+                                    for label, probe in timer_probes.items() if label.startswith('tail')
+                                    for position in range(probe['offset'], probe['offset'] + probe['length'])))
+                        run_gui_ru_responsiveness(api, process, hwnd, active,
+                            timer_record['responsiveness'], started, still_styling)
+                        checks.update(timer_queued_navigation=True, timer_paint_region_serviced=True)
                     status_done = bool(status.strip()) and 'Styling Ru' not in status and not status.lstrip().startswith('Opening:')
                     complete = length_ok and clean and all(matched.values()) and status_done
                 elapsed = time.monotonic() - started

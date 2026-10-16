@@ -56,22 +56,34 @@ different, 200,000-line ASCII corpus completed synchronously in 20.22 seconds;
 these different workloads do not establish the GUI's CPU or scheduling cost.
 No ZIP was produced.
 
-The next revision narrows the main application's modification subscription to
-actual text insertion/deletion. Scintilla still performs its internal styling,
-folding and undo work, but no longer calls the Ru main callback for unused
-style/fold modification events. The core fixture retains all notifications as
-a control. New native measurements use exactly the detached-GUI Chinese corpus
-for synchronous and main-timer paths, with separate work/gap/tick and notification
-counts. Both actual corpus builders must match the original complete UTF-8 bytes
-in both portable backends. Timer settings, budgets and the 30-second GUI gate
-remain unchanged. This optimization has not yet passed Windows acceptance.
+The [notification-filter run 38940854329](https://github.com/uppet/ru_notepad/actions/runs/38940854329)
+passed 1,393 individual assertions and 30 of 32 results. The exact Chinese GUI
+corpus completed synchronously in 9.967 seconds. The main-window timer recorded
+12.005 seconds of work and 17.844 seconds between callbacks before its unchanged
+30-second deadline, with 850,358 bytes processed. Actual style/fold notifications
+were zero under the text-only subscription. The detached GUI reached 947,418
+bytes, with first-token styles at 141 ms and maximum measured WM_NULL response
+16 ms, but its tail remained unstyled. Its six editing measurements again did
+not run. The timer's eight post-completion assertions did not execute. No ZIP
+was produced; the faster partial progress is not a completed acceptance result.
+
+The next revision retains the text-only subscription and the full-notification
+core control, and targets the measured scheduling gaps. A single coalesced
+continuation message can request the next bounded styling slice when no
+higher-priority UI work is pending. The existing timer remains a fallback;
+queued input and paint work must receive control, and stale continuation
+messages must be rejected after cancellation, completion or window teardown.
+The 8 ms slice budget, exact corpus bytes, lexical/fold policy and 30-second
+completion gate remain unchanged. This scheduler has not yet passed Windows
+acceptance. Both actual corpus builders must still match the complete original
+UTF-8 bytes in both portable backends.
 
 This revision retains every 0.1.3 assertion and adds 8 shortcut and 8 suffix-policy
 cases, 338 production lexer/fold-policy cases, 125 real Scintilla container cases,
-47 main-window integration cases, 8 separate main-timer measurement cases,
+66 main-window integration cases, 8 separate main-timer measurement cases,
 and an isolated 8-case Ru run without Lexilla, and three 8-case helper rejection runs
 for missing DLL, missing exports and ABI mismatch.
-The required total is **1,401 individual assertions / 32 results**, including
+The required total is **1,420 individual assertions / 32 results**, including
 three detached GUI results. The existing complete >500 MB roundtrip is retained.
 
 New native gates check actual UTF-8 style bytes and fold levels, incomplete edits,
@@ -87,7 +99,12 @@ differential and ASan/UBSan checks; Windows packaging depends on its success. No
 The detached Ru GUI gate additionally loads a 1,000,000-byte synthetic Chinese
 Ru source through the actual child drop/timer path. It verifies byte length,
 clean state, known head/tail style bytes and completed status while probing
-WM_NULL responsiveness; completion must occur within 30 seconds. Its wall time
+WM_NULL responsiveness; completion must occur within 30 seconds. While styling
+is still pending, queued Right/Left navigation must move and restore the caret
+without changing text, and a real invalidation must naturally drain through
+paint handling. Cross-thread paint sampling records whether the invalid region
+was still pending at the first poll rather than treating an already completed
+paint as failure. Its wall time
 and maximum measured response time are retained independently of synchronous
 scanner timings. A separate approximately 100 KB source exercises real insertion
 and Backspace at the beginning, middle and end, with each response/completion

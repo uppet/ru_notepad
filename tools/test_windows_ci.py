@@ -111,7 +111,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'syntax_policy': r'^TOTAL PASS: 108\s*$',
             'status_native': r'^TOTAL PASS: 21\s*$',
             'syntax_native': r'^TOTAL PASS: 82\s*$',
-            'app_ru_native': r'^TOTAL PASS: 47\s*$',
+            'app_ru_native': r'^TOTAL PASS: 66\s*$',
             'app_ru_timer_native': r'^TOTAL PASS: 8\s*$',
             'ru_lexical_policy': r'^TOTAL PASS: 338\s*$',
             'ru_syntax_native': r'^TOTAL PASS: 125\s*$',
@@ -320,6 +320,10 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 result['timer_performance'] = {'size': len(data), 'wall_ms': 100.0,
                     'first_head_style_ms': 10.0, 'max_response_ms': 2.0, 'probes': 3,
                     'source_sha256': hashlib.sha256(data).hexdigest(), 'style_probes': probes,
+                    'responsiveness': {'measurement': ci.GUI_RU_RESPONSE_MEASUREMENT,
+                        'navigation': [dict(step, wall_ms=1.0, while_styling=True) for step in ci.GUI_RU_NAVIGATION],
+                        'paint': {'invalidations': 1, 'pending_observed': True, 'already_serviced': False,
+                                  'cleared': True, 'wall_ms': 2.0, 'while_styling': True}},
                     'last_probe': {'opened': True, 'length': len(data), 'clean': True,
                         'end_styled': len(data), 'status': 'Ln 1    UTF-8    Ru',
                         'style_matches': {name: True for name in probes}}}
@@ -560,7 +564,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         summary = self.acceptance()
         ci.validate_acceptance(summary)
         self.assertEqual(len(summary['tests']), 32)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1401)
+        # Repair 3 preserves all 1401 prior assertions and adds nineteen actual
+        # native scheduler/lifecycle assertions in the same app executable.
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1401 + 19)
 
     def test_acceptance_rejects_missing_or_duplicated_syntax_branch(self):
         summary = self.acceptance()
@@ -685,6 +691,49 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         api.release_drops()
         self.assertEqual(api.drop_handles, [])
         self.assertEqual(api.kernel.freed, [])
+
+    def test_navigation_posts_only_matched_scalar_child_extended_keys(self):
+        api = self.synthetic_drop_api()
+        api.post_navigation(456, 'RIGHT')
+        api.post_navigation(456, 'LEFT')
+        self.assertEqual(api.user.posts, [(456, 0x0100, 0x27, 0x014d0001),
+            (456, 0x0101, 0x27, 0xc14d0001), (456, 0x0100, 0x25, 0x014b0001),
+            (456, 0x0101, 0x25, 0xc14b0001)])
+        with self.assertRaises(KeyError): api.post_navigation(456, 'CHAR')
+        self.assertEqual(len(api.user.posts), 4)
+
+    def test_paint_probe_requires_visible_nonempty_child_and_never_forces_paint(self):
+        class User:
+            def __init__(self, mode):
+                self.mode, self.calls = mode, []
+            def IsWindowVisible(self, hwnd): return self.mode != 'hidden'
+            def GetClientRect(self, hwnd, pointer):
+                rectangle = ci.ctypes.cast(pointer, ci.ctypes.POINTER(ci.wintypes.RECT)).contents
+                rectangle.left = rectangle.top = 0
+                rectangle.right, rectangle.bottom = (0 if self.mode == 'empty' else 200), 100
+                return self.mode != 'bad-rectangle'
+            def InvalidateRect(self, *args):
+                self.calls.append(('invalidate', args))
+                return self.mode != 'failed'
+            def GetUpdateRect(self, *args):
+                self.calls.append(('query', args))
+                return self.mode != 'already-serviced'
+        for mode in ('pending', 'already-serviced', 'hidden', 'empty', 'bad-rectangle', 'failed'):
+            with self.subTest(mode=mode):
+                api = object.__new__(ci.Windows)
+                api.user = User(mode)
+                with patch.object(ci.ctypes, 'get_last_error', return_value=5, create=True), \
+                     patch.object(ci.ctypes, 'WinError', return_value=OSError('synthetic failure'), create=True):
+                    if mode in ('hidden', 'empty', 'bad-rectangle'):
+                        with self.assertRaises(RuntimeError): api.invalidate_for_paint(456)
+                        self.assertEqual(api.user.calls, [])
+                    elif mode == 'failed':
+                        with self.assertRaises(OSError): api.invalidate_for_paint(456)
+                        self.assertEqual(api.user.calls, [('invalidate', (456, None, False))])
+                    else:
+                        self.assertEqual(api.invalidate_for_paint(456), mode == 'pending')
+                        self.assertEqual(api.user.calls, [('invalidate', (456, None, False)),
+                                                         ('query', (456, None, False))])
 
     def test_failed_drop_and_lock_free_only_sender_owned_allocation(self):
         for failure in ('post', 'lock', 'allocation'):
@@ -852,6 +901,11 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 self.timer_rounds = 0
                 self.drop_targets = []
                 self.released = False
+                self.caret = 0
+                self.navigation = []
+                self.queued_key = None
+                self.invalidations = 0
+                self.paint_queries = 0
             def no_dialog(self, _): return []
             def responsive(self, _):
                 if self.large:
@@ -875,6 +929,20 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 self.large = True
                 if mode == 'timer-changed-source': self.source.write_bytes(b'changed')
             def release_drops(self): self.released = True
+            def post_navigation(self, hwnd, key):
+                if hwnd != 456: raise AssertionError('Navigation must target only the synthetic editor')
+                self.navigation.append(key)
+                self.queued_key = key
+                if mode == 'timer-navigation-post-failure': raise RuntimeError('PostMessage failed')
+            def invalidate_for_paint(self, hwnd):
+                if hwnd != 456: raise AssertionError('Paint must target only the synthetic editor')
+                self.invalidations += 1
+                if mode == 'timer-paint-invalidate-failure': raise RuntimeError('InvalidateRect failed')
+                return mode != 'timer-paint-already-serviced'
+            def paint_pending(self, hwnd):
+                if hwnd != 456: raise AssertionError('Paint must target only the synthetic editor')
+                self.paint_queries += 1
+                return mode == 'timer-paint-stalled'
             def scalar(self, hwnd, message, wparam=0, lparam=0):
                 self.queries.append((hwnd, message, wparam, lparam))
                 if message == 0x1304: return 3 if self.large else 2
@@ -883,11 +951,19 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 if message == 2378:
                     return 8388607 if mode == ('timer-wrong-mask' if self.large else 'wrong-mask') else 3
                 if self.large:
+                    if message == 2008:
+                        if self.queued_key is not None and mode != 'timer-navigation-stalled':
+                            self.caret = 3 if self.queued_key == 'RIGHT' else 0
+                            self.queued_key = None
+                            if mode == 'timer-navigation-wrong-position': self.caret = 1
+                            if mode == 'timer-navigation-after-complete': self.timer_rounds = 2
+                        return self.caret
                     if message == 2006: return len(timer_data) - int(mode == 'timer-wrong-length')
                     if message == 2159: return int(mode == 'timer-dirty')
                     if message == 2028: return len(timer_data)
                     if message != 2010: raise AssertionError('No whole-document or line scans in timer stage')
-                    return next((probe['style'] if mode != 'timer-wrong-' + label else 0
+                    return next((probe['style'] if mode != 'timer-wrong-' + label and
+                                 not (label.startswith('tail') and self.timer_rounds < 2) else 0
                                  for label, probe in timer_probes.items()
                                  if probe['offset'] <= wparam < probe['offset'] + probe['length']), 0)
                 if message == 2154: return original.count(b'\n') + 1
@@ -938,7 +1014,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 return {'passed': False, 'error': str(exc)}
         ticks = [0.0]
         def monotonic():
-            ticks[0] += 1
+            ticks[0] += 0.1
             return ticks[0]
         def edit_stage(_, child, hwnd, source, record):
             self.assertIs(child, process)
@@ -960,10 +1036,13 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertTrue(all(result[key] for key in ci.GUI_RU_CHECKS))
         self.assertEqual(api.commands, [505, 704, 506, 505, 701, 704])
         self.assertEqual(set(result['fixture_binary_sha256']), set(ci.portable.RUNTIME_NAMES))
-        self.assertEqual(set(query[1] for query in api.queries), {0x1304, 2006, 2028, 2154, 2159, 2010, 2223, 2228, 2378})
+        self.assertEqual(set(query[1] for query in api.queries), {0x1304, 2006, 2008, 2028, 2154, 2159, 2010, 2223, 2228, 2378})
         self.assertTrue(all(query[3] == 0 for query in api.queries))
         self.assertEqual(api.drop_targets, [456])
         self.assertTrue(api.released)
+        self.assertEqual(api.navigation, ['RIGHT', 'LEFT'])
+        self.assertEqual(api.caret, 0)
+        self.assertEqual(api.invalidations, 1)
         self.assertEqual(result['timer_performance']['probes'], 2)
         ci.validate_gui_ru_timer(result['timer_performance'])
 
@@ -1006,6 +1085,60 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertTrue(last['style_matches']['head_keyword'])
         self.assertFalse(last['style_matches']['tail_number'])
         self.assertLessEqual(len(last['status']), 512)
+
+    def test_ru_timer_requires_real_queued_navigation_and_natural_paint_service_while_pending(self):
+        for mode in ('timer-navigation-post-failure', 'timer-navigation-stalled',
+                     'timer-navigation-wrong-position', 'timer-navigation-after-complete',
+                     'timer-paint-invalidate-failure', 'timer-paint-stalled'):
+            with self.subTest(mode=mode):
+                for name in ('bin', 'fixtures', 'evidence'):
+                    shutil.rmtree(self.root / name, ignore_errors=True)
+                result, api = self.gui_ru_syntax(mode)
+                self.assertFalse(result['passed'])
+                self.assertTrue(api.released)
+                self.assertIn('error', result)
+                self.assertGreater(result['timer_performance']['wall_ms'], 0)
+                self.assertLessEqual(api.invalidations, 1)
+
+    def test_ru_timer_accepts_already_serviced_paint_without_inventing_pending_observation(self):
+        result, api = self.gui_ru_syntax('timer-paint-already-serviced')
+        self.assertTrue(result['passed'], result.get('error'))
+        paint = result['timer_performance']['responsiveness']['paint']
+        self.assertFalse(paint['pending_observed'])
+        self.assertTrue(paint['already_serviced'])
+        self.assertTrue(paint['cleared'])
+        self.assertTrue(paint['while_styling'])
+        self.assertEqual(api.invalidations, 1)
+        ci.validate_gui_ru_timer(result['timer_performance'])
+
+    def test_ru_timer_responsiveness_schema_is_strict_finite_and_bounded(self):
+        import copy
+        good = next(case for case in self.acceptance()['tests']
+                    if case['name'] == 'main-gui-ru-syntax')['timer_performance']
+        mutations = [lambda value: value['responsiveness'].clear(),
+            lambda value: value['responsiveness']['navigation'].pop(),
+            lambda value: value['responsiveness'].update(unexpected=1)]
+        for field, bad in [('before', True), ('after', 1), ('while_styling', False),
+                           ('wall_ms', float('nan')), ('wall_ms', float('inf')),
+                           ('wall_ms', -1), ('wall_ms', 101), ('wall_ms', True)]:
+            mutations.append(lambda value, f=field, b=bad: value['responsiveness']['navigation'][0].update({f: b}))
+        for field, bad in [('invalidations', True), ('invalidations', 0), ('invalidations', 2),
+                           ('pending_observed', 1), ('already_serviced', True), ('cleared', False),
+                           ('while_styling', False), ('wall_ms', float('nan')), ('wall_ms', -1), ('wall_ms', 101)]:
+            mutations.append(lambda value, f=field, b=bad: value['responsiveness']['paint'].update({f: b}))
+        for index, mutate in enumerate(mutations):
+            record = copy.deepcopy(good)
+            mutate(record)
+            with self.subTest(index=index), self.assertRaises(RuntimeError):
+                ci.validate_gui_ru_timer(record)
+        for field in ('navigation', 'paint'):
+            record = copy.deepcopy(good)
+            record['wall_ms'] = 10000
+            target = record['responsiveness'][field]
+            if field == 'navigation': target = target[0]
+            target['wall_ms'] = ci.GUI_RU_RESPONSE_TIMEOUT_MS + 1
+            with self.subTest(over_5_seconds=field), self.assertRaises(RuntimeError):
+                ci.validate_gui_ru_timer(record)
 
     def test_ru_timer_final_diagnostic_snapshot_is_strictly_validated(self):
         import copy
@@ -1063,7 +1196,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         return ('RU_GUI_TIMER size=1000000 source_chars=636370 wall_ms=100 ticks=10 '
                 'work_ms=40 gap_ms=50 max_tick_ms=4 max_gap_ms=6 read_bytes=1000000 '
                 'max_read=1024 chunks=1000 feed=1000000 bytes=1000000 pending=0 '
-                'text_notifications=0 style_notifications=0 fold_notifications=0')
+                'text_notifications=0 style_notifications=0 fold_notifications=0 '
+                'posts=9 continuation_ticks=8 queue_yields=2 stale_messages=0')
 
     def ru_performance_text(self):
         return '\n'.join(f'PERF_RU size={size} initial_ms=100 edit_ms=2 '
@@ -1290,7 +1424,12 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                          ('pending=0', 'pending=1'), ('pending=0', 'pending=2'),
                          ('text_notifications=0', 'text_notifications=-1'),
                          ('style_notifications=0', 'style_notifications=1'),
-                         ('fold_notifications=0', 'fold_notifications=1')]:
+                         ('fold_notifications=0', 'fold_notifications=1'),
+                         ('posts=9', 'posts=0'), ('posts=9', 'posts=7'),
+                         ('continuation_ticks=8', 'continuation_ticks=0'),
+                         ('continuation_ticks=8', 'continuation_ticks=11'),
+                         ('queue_yields=2', 'queue_yields=-1'),
+                         ('stale_messages=0', 'stale_messages=-1')]:
             with self.subTest(old=old, new=new), self.assertRaises(RuntimeError):
                 ci.parse_ru_gui_measurement(valid.replace(old, new), marker)
         # A genuine text callback is legal; styling/folding callbacks are excluded.

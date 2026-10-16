@@ -32,6 +32,7 @@ TranslateMessage 取 用户 其 绑定 'TranslateMessage' (密 其 签名 I ([PT
 DispatchMessageW 取 用户 其 绑定 'DispatchMessageW' (密 其 签名 IP ([PTR]) 'win64').
 EnableWindow 取 用户 其 绑定 'EnableWindow' (密 其 签名 I ([PTR,I]) 'win64').
 PeekMessageW 取 用户 其 绑定 'PeekMessageW' (密 其 签名 I ([PTR,PTR,U,U,U]) 'win64').
+GetQueueStatus 取 用户 其 绑定 'GetQueueStatus' (密 其 签名 U ([U]) 'win64').
 PostQuitMessage 取 用户 其 绑定 'PostQuitMessage' (密 其 签名 V ([I]) 'win64').
 DestroyWindow 取 用户 其 绑定 'DestroyWindow' (密 其 签名 I ([PTR]) 'win64').
 SetWindowTextW 取 用户 其 绑定 'SetWindowTextW' (密 其 签名 I ([PTR,PTR]) 'win64').

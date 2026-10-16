@@ -8,6 +8,7 @@
 - Require pure-policy, native byte-style/fold, main-window and detached GUI regressions plus measured 100 KB / 1 MB initial/edit evidence. Actual 0.1.4 Windows acceptance remains pending.
 - First 0.1.4 CI exposed a rescue-scope fixture error and a 1 MB GUI styling completion timeout. Fix the related initialization/cleanup diagnostic scope paths and retain strict completion gates with bounded progress diagnostics; the GUI timeout is not yet claimed fixed.
 - The scope-repair run passed all 1,379 native assertions but still reached only 470,180 styled bytes within the GUI's 30-second deadline. Subscribe the main application only to text modification events, retain the full-notification core control, and add exact-same-corpus work/cadence diagnostics. Performance acceptance remains pending.
+- The notification-filter run confirmed zero unused style/fold callbacks, but still missed full GUI completion (947,418 bytes / 30 seconds). Exact-corpus synchronous scanning took 9.967 seconds; the main timer spent 17.844 seconds between callbacks. Add a coalesced, UI-yielding continuation path with the same work budget and strict completion deadline; real Windows acceptance remains required.
 
 ## 0.1.3-preview — 2026-10-16
 

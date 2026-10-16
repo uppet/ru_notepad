@@ -32,7 +32,7 @@ Ru keeps keyword tables and structural-folding rules in application Ru modules.
 C/C++ and JSON still use their actual native Lexilla implementations.
 
 Ru jobs are owned by a specific editor/document generation. Notifications only
-invalidate or request work; the main timer budgets background slices. Checkpoints
+invalidate or request work; the main scheduler budgets background slices. Checkpoints
 bound restart distance, and equivalent same-length edits reuse a converged suffix.
 Incomplete edits may require scanning farther. No styling operation edits text,
 resets the savepoint, or clears undo. The existing 32 MB plain-text mode disables
@@ -142,8 +142,20 @@ enables `SC_IDLESTYLING_TOVISIBLE`. It does not immediately force
 `SCI_COLOURISE(0, -1)`. Scintilla requests native styling for the visible range
 and invalidates the necessary ranges after text edits.
 
-For Ru, a separate timer advances bounded UTF-8 slices outside notification
-callbacks. Checkpoints retain lexical and structural context, including incomplete
+For Ru, bounded UTF-8 slices run outside notification callbacks. At most one
+coalesced continuation message is queued; it carries a burst token rather than
+a document pointer. The existing 10 ms timer provides a fallback when input,
+paint, sent messages, hotkeys or other queued work needs control. A continuation
+checks the current high word of
+[GetQueueStatus](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getqueuestatus)
+before starting or posting more work. Each slice keeps the existing 8 ms
+admission budget; a single batch is not preemptible, so measured maximum slice
+and response times are recorded rather than claiming a hard real-time limit.
+Obsolete messages cannot advance a completed or replaced burst. This scheduling
+change is subject to the complete 30-second Windows gate and actual queued
+navigation/paint coverage.
+
+Checkpoints retain lexical and structural context, including incomplete
 strings/comments. Same-length, same-line-count edits may reuse an unchanged suffix
 when the full state converges; edits that change later parsing can require a
 longer suffix rescan. Jobs are tied to the actual document pointer and generation.
@@ -218,19 +230,24 @@ Three further **8-assertion** runs independently omit the helper, provide a DLL
 without its exports, or provide an incompatible ABI version. Each requires a
 clear ordinary warning and continued plain-text editing, without unsafe binding.
 
-The main-window integration suite has **47 assertions**. It exercises real timer
+The main-window integration suite has **66 assertions**. It exercises real timer
 dispatch, Unicode `.ru` CLI input, Language/View menu commands, Scintilla margin
 hit-testing and the owning callback, independent tabs, dirty/undo preservation,
 automatic selection after successful Save As, and closing a pending styling job.
 It also compares a deliberately full-notification small control with the actual
 text-only application subscription, including insertion, undo, redo, line
-counts and savepoint transitions. A separate **8-assertion** mode uses the
-production main timer on the exact 1 MB GUI corpus, records cumulative work and
-idle gaps, and requires completion within 30 seconds. Both fixture corpus
+counts and savepoint transitions. Actual message-queue cases cover single-slot
+coalescing, stale burst tokens, busy/input/paint deferral, timer resumption and
+close while work is queued. A separate **8-assertion** mode uses the
+production scheduler on the exact 1 MB GUI corpus, records cumulative work,
+callback gaps, successful posts, continuation ticks and yield/stale counts,
+and requires completion within 30 seconds. Both fixture corpus
 builders are executed in both portable backends and compared against every
 byte of the existing GUI fixture before native CI runs.
 The separate detached GUI gate checks actual style/fold values, hidden-line
-visibility, unchanged source, responsiveness and normal close. It also measures
+visibility, unchanged source, responsiveness and normal close. During pending
+styling, posted navigation must move/restore the caret and a real invalidation
+must drain naturally, without forcing a paint or modifying the corpus. It also measures
 1 MB timer completion and representative 100 KB real insertion/Backspace at
 the beginning, middle and end. These are required
 Windows gates for 0.1.4; a local compile is not evidence that they passed.

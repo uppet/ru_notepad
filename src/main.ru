@@ -11,7 +11,7 @@
 关联 取 外言 'associations.ru'.
 拖放 取 外言 'file_drop.ru'.
 修改头 取 密 其 结构 [['header',窗 其 NMHDR],['position',窗 其 IP],['ch',窗 其 I],['modifiers',窗 其 I],['modificationType',窗 其 I],['text',窗 其 PTR],['length',窗 其 IP],['linesAdded',窗 其 IP],['message',窗 其 I],['wParam',窗 其 UP],['lParam',窗 其 IP],['line',窗 其 IP],['foldLevelNow',窗 其 I],['foldLevelPrev',窗 其 I],['margin',窗 其 I]].
-A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0}.
+A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0}.
 
 # Syntax work is deferred out of Scintilla callbacks, with one shared UI budget.
 算 所属文档 柄:
@@ -23,24 +23,73 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     环
     得 空.
 法
+# WM_APP+902 carries only a bounded burst token, never a document or pointer.
+# Keep the physical queued token until that exact message is consumed, including
+# across invalidation. A new burst cannot pile up messages behind an old one.
+算 下一语法代:
+    代 取 ((A 其 查 'syntaxGeneration')%2147483647)+1.
+    若 代 == (A 其 查 'syntaxQueued') 则 代 取 (代%2147483647)+1. 然
+    A 其 增 'syntaxGeneration' 代.
+    得 空.
+法
+算 停止语法:
+    下一语法代.
+    若 A 其 查 'syntaxTimer' 则
+        窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),902]).
+        A 其 增 'syntaxTimer' 假.
+    然
+    得 空.
+法
+算 界面待办:
+    # QS_INPUT includes raw/touch/pointer; also yield to paint, sent messages,
+    # hotkeys, all posted messages (including WM_CHAR/commands), and timers.
+    # The HIGH word is current queue state; the low word is only new arrivals.
+    得 ((窗 其 结果 ((窗 其 GetQueueStatus) 其 调用 [7679])) 其 位段 16 16) != 0.
+法
+算 续投语法:
+    若 非 (A 其 查 'ready') 或 非 (A 其 查 'syntaxTimer') 或 (A 其 查 'busy') 或 (A 其 查 'syntaxTick') 或 (A 其 查 'syntaxQueued') != 0 则 得 空. 然
+    若 界面待办 则 A 其 增 'syntaxYields' ((A 其 查 'syntaxYields')+1). 得 空. 然
+    代 取 A 其 查 'syntaxGeneration'.
+    # Posting failure is recoverable: the existing 10ms timer remains armed.
+    若 非 ((窗 其 结果 ((窗 其 PostMessageW) 其 调用 [(A 其 查 'window'),33670,代,0])) 其 为空) 则
+        A 其 增 'syntaxQueued' 代.
+        A 其 增 'syntaxPosts' ((A 其 查 'syntaxPosts')+1).
+    然
+    得 空.
+法
 算 安排语法:
-    若 非 (A 其 查 'ready') 或 (A 其 查 'syntaxTimer') 则 得 空. 然
+    若 非 (A 其 查 'ready') 则 得 空. 然
+    若 A 其 查 'syntaxTimer' 则 续投语法. 得 空. 然
     文们 取 A 其 查 'docs'.
     位 取 0.
     循 文们 其 量 次
         若 语 其 待办 (文们[位] 其 查 'editor') 则
             窗 其 成功 ((窗 其 SetTimer) 其 调用 [(A 其 查 'window'),902,10,空]) 'SetTimer(Ru syntax)'.
+            下一语法代.
             A 其 增 'syntaxTimer' 真.
             # Do not count time between separate styling bursts as callback gaps.
             A 其 增 'syntaxLastEndMs' 0.
+            续投语法.
             得 空.
         然
         位 取 位+1.
     环
     得 空.
 法
+算 语法消息 柄, 代 为 数:
+    若 代 <= 0 或 代 > 2147483647 则 得 空. 然
+    若 (柄 其 句) != ((A 其 查 'window') 其 句) 则 得 空. 然
+    # An obsolete message may clear only its own physical queue occupancy.
+    若 代 != (A 其 查 'syntaxQueued') 则 A 其 增 'syntaxStale' ((A 其 查 'syntaxStale')+1). 得 空. 然
+    A 其 增 'syntaxQueued' 0.
+    若 非 (A 其 查 'ready') 或 非 (A 其 查 'syntaxTimer') 则 得 空. 然
+    若 代 != (A 其 查 'syntaxGeneration') 则 A 其 增 'syntaxStale' ((A 其 查 'syntaxStale')+1). 续投语法. 得 空. 然
+    若 语法时钟 则 A 其 增 'syntaxContinuations' ((A 其 查 'syntaxContinuations')+1). 然
+    得 空.
+法
 算 语法时钟:
-    若 非 (A 其 查 'ready') 或 (A 其 查 'busy') 或 (A 其 查 'syntaxTick') 则 得 空. 然
+    若 非 (A 其 查 'ready') 或 非 (A 其 查 'syntaxTimer') 或 (A 其 查 'busy') 或 (A 其 查 'syntaxTick') 则 得 假. 然
+    若 界面待办 则 A 其 增 'syntaxYields' ((A 其 查 'syntaxYields')+1). 得 假. 然
     A 其 增 'syntaxTick' 真.
     试
         文们 取 A 其 查 'docs'.
@@ -74,10 +123,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
             若 语 其 待办 (文们[位] 其 查 'editor') 则 待续 取 真. 然
             位 取 位+1.
         环
-        若 非 待续 则
-            窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),902]).
-            A 其 增 'syntaxTimer' 假.
-        然
+        若 非 待续 则 停止语法. 然
         若 已有 且 活动 >= 0 且 非 (语 其 待办 (文们[活动] 其 查 'editor')) 则 刷新. 然
         # Scalar-only diagnostic totals: one extra QPC read per accepted tick.
         # Work includes the existing callback scheduling/refresh work; gaps are
@@ -96,12 +142,12 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         A 其 增 'syntaxLastEndMs' 终时.
     救 原因
         A 其 增 'syntaxTick' 假.
-        窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),902]).
-        A 其 增 'syntaxTimer' 假.
+        停止语法.
         卒 原因.
     终
     A 其 增 'syntaxTick' 假.
-    得 空.
+    续投语法.
+    得 真.
 法
 算 当前:
     得 (A 其 查 'docs')[A 其 查 'active'].
@@ -606,6 +652,8 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     得 窗 其 弹窗 (A 其 查 'window') ('Save changes to '+(文档 其 查 'name')+'?') 'ru_notepad · unsaved changes' 35.
 法
 算 删除当前页:
+    # Invalidate before forgetting or destroying a document with queued work.
+    停止语法.
     文们 取 A 其 查 'docs'.
     位 取 A 其 查 'active'.
     柄 取 编辑柄.
@@ -620,6 +668,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         若 位 >= (文们 其 量) 则 位 取 (文们 其 量)-1. 然
         切页 位.
     然
+    安排语法.
     得 真.
 法
 算 关页:
@@ -652,8 +701,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     环
     A 其 增 'closeIndex' (-1).
     A 其 增 'ready' 假.
-    窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),902]).
-    A 其 增 'syntaxTimer' 假.
+    停止语法.
     位 取 0.
     循 文们 其 量 次
         语 其 遗忘 (文们[位] 其 查 'editor').
@@ -809,6 +857,11 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     号 取 号值 其 数.
     若 号 == 129 则 A 其 增 'window' 柄. 然
     若 号 == 2 则
+        A 其 增 'ready' 假.
+        停止语法.
+        # This single main window is being destroyed; no queued slot may carry
+        # over to another HWND, even if an embedding later initializes again.
+        A 其 增 'syntaxQueued' 0.
         窗 其 结果 ((窗 其 PostQuitMessage) 其 调用 [0]).
         得 0.
     然
@@ -817,6 +870,13 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
             若 号 == 17 则 得 关机会话. 然
             若 号 == 275 且 (宽参 其 数) == 901 则 工作时钟. 得 0. 然
             若 号 == 275 且 (宽参 其 数) == 902 则 语法时钟. 得 0. 然
+            若 号 == 33670 则
+                # Do not convert an arbitrary external uintptr to a Ru number.
+                若 (宽参 其 位段 32 32) == 0 且 (长参 其 位段 0 32) == 0 且 (长参 其 位段 32 32) == 0 则
+                    语法消息 柄 (宽参 其 位段 0 32).
+                然
+                得 0.
+            然
             若 号 == 563 则
                 路们 取 拖放 其 接收 ((窗 其 PTR) 其 重释 宽参).
                 入队 路们 0.
