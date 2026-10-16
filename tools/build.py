@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCINTILLA_SHA256 = DEPENDENCIES['Scintilla.dll']['sha256']
 LEXILLA_SHA256 = DEPENDENCIES['Lexilla.dll']['sha256']
-BASELINE_TREE = '346d9f3f19c64f50f25b9f47ce92df1ea804bdb8'
+BASELINE_TREE = '7b4331d51bc6ab2ec95fec1f8368465343fcd5af'
 
 def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def run(args, **kw):

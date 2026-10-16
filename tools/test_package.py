@@ -36,6 +36,9 @@ def observer_evidence():
         'captures': [{'phase': phase, 'wall_ms': 0.2, 'log_reads': 1} for phase in ('baseline', 'final')],
         'log_read_wall_ms': 0.2, 'max_log_read_ms': 0.1}
     return {'observer': observer, 'diagnostics': diagnostics,
+            'clock': {'clock_name': 'perf_counter', 'implementation': 'QueryPerformanceCounter()',
+                      'resolution': 1e-7, 'monotonic': True, 'adjustable': False},
+            'clock_measurement': ci.PERFORMANCE_CLOCK_MEASUREMENT,
             'head_style_measurement': ci.GUI_RU_HEAD_MEASUREMENT}
 
 
@@ -434,6 +437,8 @@ class PackageTests(unittest.TestCase):
                          'navigation-timeout', 'paint-not-cleared', 'paint-inconsistent-observation',
                          'missing-edit', 'wrong-edit-source', 'missing-edit-operation', 'edit-timeout',
                          'missing-observer', 'fast-observer', 'uncounted-observer', 'oversize-snapshot',
+                         'missing-clock', 'wrong-clock', 'coarse-clock', 'nonfinite-clock', 'adjustable-clock',
+                         'missing-clock-disclosure',
                          'missing-diagnostics', 'wrong-snapshot-generation', 'incomplete-final-snapshot',
                          'missing-snapshot-receipt', 'extended-diagnostic-capture'):
             with self.subTest(mutation=mutation):
@@ -448,6 +453,12 @@ class PackageTests(unittest.TestCase):
                 if mutation == 'wrong-timer-source': gui['timer_performance']['source_sha256'] = 'different'
                 if mutation == 'wrong-timer-probes': gui['timer_performance']['style_probes']['tail_keyword']['style'] = 0
                 if mutation == 'timer-timeout': gui['timer_performance']['wall_ms'] = 30001
+                if mutation == 'missing-clock': gui['timer_performance'].pop('clock')
+                if mutation == 'wrong-clock': gui['timer_performance']['clock']['clock_name'] = 'monotonic'
+                if mutation == 'coarse-clock': gui['timer_performance']['clock']['implementation'] = 'GetTickCount64()'
+                if mutation == 'nonfinite-clock': gui['timer_performance']['clock']['resolution'] = float('inf')
+                if mutation == 'adjustable-clock': gui['timer_performance']['clock']['adjustable'] = True
+                if mutation == 'missing-clock-disclosure': gui['timer_performance'].pop('clock_measurement')
                 if mutation == 'missing-observer': gui['timer_performance'].pop('observer')
                 if mutation == 'fast-observer': gui['timer_performance']['observer']['response_interval_ms'] = 1
                 if mutation == 'uncounted-observer': gui['timer_performance']['observer']['scalar_calls'] = 0

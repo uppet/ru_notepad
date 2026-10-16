@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: uppet/ru-language
-          ref: dd6cb81b52a426408f7076d82a84c2fdfb644263
+          ref: a2f6faa0f914781dea74cb6f0a7574f1dd6808ce
           path: .ci/ru-language
           persist-credentials: false
       - name: Set up build-time Python
@@ -61,6 +61,11 @@ jobs:
           python -I tools/test_syntax_diagnostics.py --ru-root .ci/ru-language
           > build/logs/014/ru-scan/diagnostic-control.stdout.log
           2> build/logs/014/ru-scan/diagnostic-control.stderr.log
+      - name: Verify production bulk-event decoding in both ordinary Ru backends
+        run: >-
+          python -I tests/ru_event_bulk_portable.py --ru-root .ci/ru-language
+          > build/logs/014/ru-scan/event-bulk.stdout.log
+          2> build/logs/014/ru-scan/event-bulk.stderr.log
       - name: Run full pure-Ru oracle and bounded scanner sanitizer cases
         run: >-
           python -I tools/test_ru_scan.py --ru-root .ci/ru-language --sanitize --fuzz 100
@@ -103,7 +108,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: uppet/ru-language
-          ref: dd6cb81b52a426408f7076d82a84c2fdfb644263
+          ref: a2f6faa0f914781dea74cb6f0a7574f1dd6808ce
           path: .ci/ru-language
           persist-credentials: false
       - name: Set up build-time Python

@@ -1,10 +1,10 @@
 # Ru highlighting and structural folding
 
-`ru_notepad` 0.1.4 includes a source-derived Ru lexical and folding policy in `src/ru_lexical.ru`, with a bounded application-internal C scanning hot path in `native/ru_scan.c` (`RuSyntax.dll`). The independent pure-Ru scanner remains the test oracle. Scintilla owns document/style storage; Ru supplies the exact keyword/style table and owns all structural pairing and fold decisions. This is not a renamed C, Python, or generic Chinese-keyword lexer. Ru highlighting does not depend on the optional Lexilla DLL used for C/C++ and JSON.
+`ru_notepad` 0.1.5 preserves a source-derived Ru lexical and folding policy in `src/ru_lexical.ru`, with a bounded application-internal C scanning hot path in `native/ru_scan.c` (`RuSyntax.dll`). The independent pure-Ru scanner remains the test oracle. Scintilla owns document/style storage; Ru supplies the exact keyword/style table and owns all structural pairing and fold decisions. This is not a renamed C, Python, or generic Chinese-keyword lexer. Ru highlighting does not depend on the optional Lexilla DLL used for C/C++ and JSON.
 
 ## Language baseline
 
-The policy follows the pinned Ru 0.21.3 language source (public baseline `dd6cb81b`):
+The unchanged lexical/folding policy was derived from the Ru 0.21.3 language source (public baseline `dd6cb81b`). The build now pins Ru 0.21.6 for the generic owned-memory bulk-read transport; this dependency update does not change the policy rules below:
 
 - `rulang/frontend.py`: `KEYWORDS`, `NUMBER`, `comment_marker`, `block_comment_end`, `lex`, and the `Parser` declaration, literal, reference, statement and expression rules
 - `rulang/language-spec.md`: sections 2–4, including contextual scope/recovery delimiters
@@ -58,6 +58,8 @@ For a multiline callable, `段`, or `典` header, the fold body starts on the li
 `native/ru_scan.h` defines ABI version `0x00010000`. All buffers belong to the caller. Configuration initialization validates and copies the Ru-provided vocabulary into a fixed-size configuration buffer. No native function retains an input pointer, document handle, callback, or Scintilla pointer. Checkpoints copy independent native lexical state and Ru structural state; temporary input/output buffers are not checkpointed.
 
 One feed accepts at most 65,536 input bytes and returns at most 64 packed lexical events (two `uint64_t` words each), plus a raw per-byte style buffer. The bridge uses a smaller retained input window and an explicit input offset, so a capacity-limited batch does not reread the document. Result fields distinguish newly accepted input bytes from styled absolute bytes. Lookahead and partial UTF-8 carry total at most 16 bytes; names retain at most 16 scalars/64 bytes, never their whole text. `OUTPUT_FULL` preserves unaccepted input and always makes observable progress. Empty non-EOF input may wait for more text. EOF can be resumed after `OUTPUT_FULL` and repeated safely after completion.
+
+The adapter takes one `读U32LE阵` snapshot of at most 256 words from its existing 1,024-byte event buffer per batch. The words retain the same ABI layout: low header, high header, length and line. It rejects a high header word of 131,072 or greater before combining an exact header below 2^49, then preserves all lexical bounds and ordering checks before policy dispatch. The API returns detached ordinary numeric arrays from live owned memory; it does not expose or dereference raw pointers. Native Windows application validation and same-corpus timing remain separate release gates.
 
 Native events describe completed names, number/string starts, punctuation, block-comment boundaries and physical line ends. `批处理` consumes them through the very same `_记词` and `_行折` functions used by the pure-Ru oracle. Exact names are classified using `词表配置`; ordinary long names never generate a document-length correction. Styles are published in one `SCI_SETSTYLINGEX` batch, followed by bounded keyword corrections and Ru fold updates. Tentative-header cancellation explicitly repairs earlier header flags, preserving other constructs sharing the same line.
 

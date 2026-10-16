@@ -128,6 +128,34 @@ _路径存 其 关闭.
     若 (头 其 位段 49 15) != 0 则 卒 'Ru scanner returned oversized event head bits.'. 然
     得 头 其 位段 0 49.
 法
+算 _解事件 存 项数 为 数 始 为 数 字节 为 数 行 为 数:
+    # One detached little-endian snapshot of the existing 1024-byte event ABI.
+    # Reject bits49..63 before combining two exact u32 words into a <2^49 head.
+    若 项数 < 0 或 项数 > 64 或 项数 % 1 != 0 则 卒 'Ru scanner returned an invalid batch size.'. 然
+    事件们 取 [].
+    字们 取 存 其 读U32LE阵 0 (项数*4).
+    项位 取 0.
+    字位 取 0.
+    循 项数 次
+        高 取 字们[字位+1].
+        若 高 >= 131072 则 卒 'Ru scanner returned oversized event head bits.'. 然
+        头数 取 字们[字位]+高*4294967296.
+        元码 取 头数 % 16777216.
+        项始 取 (头数-元码)/16777216.
+        种 取 元码 % 256.
+        码色 取 (元码-种)/256.
+        码 取 码色 % 256.
+        色 取 (码色-码)/256.
+        项长 取 字们[字位+2].
+        项行 取 字们[字位+3].
+        若 种 < 1 或 种 > 7 或 色 > 9 或 项长 == 0 或 项始+项长 > 字节 或 项行 > 行 或 (种 != 1 且 项始 < 始) 或 (种 == 1 且 色 != 8 且 项长 > 64) 则 卒 'Ru scanner returned an invalid lexical event.'. 然
+        若 项位 > 0 且 项始 < 事件们[项位-1][3] 则 卒 'Ru scanner returned unordered lexical events.'. 然
+        事件们 其 增 [种,码,色,项始,项长,项行].
+        项位 取 项位+1.
+        字位 取 字位+4.
+    环
+    得 事件们.
+法
 算 扫描 态 文 为 句 结束 为 事实 上限 为 数:
     若 态['references'] <= 0 则 卒 'Cannot resume a released Ru scanner checkpoint.'. 然
     若 态['input'] == 空 或 态['offset'] >= 态['inputLength'] 则
@@ -170,26 +198,7 @@ _路径存 其 关闭.
     收到 取 态['received']+已取.
     若 始 != 态['processed'] 或 始+已色 != 字节 或 字节 > 收到 或 收到-字节 > 16 或 收到 > 32000000 或 行 < 态['line'] 或 行 > 字节 或 (已毕 == 1 且 (末标 != 1 或 位+已取 != 长 或 字节 != 收到)) 则 卒 'Ru scanner returned inconsistent byte or line coordinates.'. 然
     态 其 增 'offset' (位+已取).
-    事件们 取 [].
-    项位 取 0.
-    循 项数 次
-        项 取 (态['events']) 其 读 _事件名[项位].
-        头 取 项 其 读 'head'.
-        尾 取 项 其 读 'tail'.
-        头数 取 _头数 头.
-        元码 取 头数 % 16777216.
-        项始 取 (头数-元码)/16777216.
-        种 取 元码 % 256.
-        码色 取 (元码-种)/256.
-        码 取 码色 % 256.
-        色 取 (码色-码)/256.
-        项长 取 尾 其 位段 0 32.
-        项行 取 尾 其 位段 32 32.
-        若 种 < 1 或 种 > 7 或 色 > 9 或 项长 == 0 或 项始+项长 > 字节 或 项行 > 行 或 (种 != 1 且 项始 < 始) 或 (种 == 1 且 色 != 8 且 项长 > 64) 则 卒 'Ru scanner returned an invalid lexical event.'. 然
-        若 项位 > 0 且 项始 < 事件们[项位-1][3] 则 卒 'Ru scanner returned unordered lexical events.'. 然
-        事件们 其 增 [种,码,色,项始,项长,项行].
-        项位 取 项位+1.
-    环
+    事件们 取 _解事件 态['events'] 项数 始 字节 行.
     态 其 增 'processed' 字节.
     态 其 增 'received' 收到.
     态 其 增 'line' 行.

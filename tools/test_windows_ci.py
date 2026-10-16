@@ -44,6 +44,9 @@ def observer_evidence():
         'captures': [{'phase': phase, 'wall_ms': 0.2, 'log_reads': 1} for phase in ('baseline', 'final')],
         'log_read_wall_ms': 0.2, 'max_log_read_ms': 0.1}
     return {'observer': observer, 'diagnostics': diagnostics,
+            'clock': {'clock_name': 'perf_counter', 'implementation': 'QueryPerformanceCounter()',
+                      'resolution': 1e-7, 'monotonic': True, 'adjustable': False},
+            'clock_measurement': ci.PERFORMANCE_CLOCK_MEASUREMENT,
             'head_style_measurement': ci.GUI_RU_HEAD_MEASUREMENT}
 
 
@@ -139,7 +142,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'app_ru_native': r'^TOTAL PASS: 73\s*$',
             'app_ru_timer_native': r'^TOTAL PASS: 8\s*$',
             'ru_lexical_policy': r'^TOTAL PASS: 338\s*$',
-            'ru_syntax_native': r'^TOTAL PASS: 125\s*$',
+            'ru_syntax_native': r'^TOTAL PASS: 149\s*$',
             'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=73\s*$',
             'file_streaming_native': r'^FILE_STREAMING_TESTS_PASS=99\s*$',
             'editor_streaming_native': r'^EDITOR_STREAMING_TESTS_PASS=21\s*$',
@@ -230,14 +233,16 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     self.assertIn(resolved.relative_to(ci.ROOT).as_posix(), snapshot)
 
     def test_reviewed_compiler_pin_is_consistent_across_all_build_entrypoints(self):
-        commit = 'dd6cb81b52a426408f7076d82a84c2fdfb644263'
-        tree = '346d9f3f19c64f50f25b9f47ce92df1ea804bdb8'
+        commit = 'a2f6faa0f914781dea74cb6f0a7574f1dd6808ce'
+        tree = '7b4331d51bc6ab2ec95fec1f8368465343fcd5af'
         self.assertEqual(builder.BASELINE_TREE, tree)
+        self.assertEqual(ci.HELPER_POLICY_COMMIT, commit)
+        self.assertEqual(ci.HELPER_POLICY_TREE, tree)
         script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
         workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
         self.assertIn(f"-ne '{commit}'", script)
         self.assertIn(f"-ne '{tree}'", script)
-        self.assertIn(f'ref: {commit}', workflow)
+        self.assertEqual(workflow.count(f'ref: {commit}'), 2)
 
     def test_new_feature_documentation_links_resolve(self):
         readme = (ci.ROOT / 'README.md').read_text(encoding='utf-8')
@@ -419,7 +424,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         (self.root / 'tools/test_ru_scan.py').write_text(code)
         with patch.object(ci, 'ROOT', self.root), patch.object(ci, 'cleanup_process', side_effect=kill_synthetic):
             if mode == 'timeout':
-                with patch.object(ci.time, 'monotonic', side_effect=iter((0, 181, 182))):
+                with patch.object(ci.time, 'perf_counter', side_effect=iter((0, 181, 182))):
                     result = ci.run_scanner_preflight(NoDialogs(), binary, evidence)
             else:
                 result = ci.run_scanner_preflight(NoDialogs(), binary, evidence)
@@ -479,6 +484,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             ' '.join(f'{key}={value}' for key, value in record.items()) + '\n' for record in records) + 'TOTAL PASS: 10\n'
         (directory / 'diagnostic-control.stdout.log').write_text('BACKEND: python\n' + body +
             'BACKEND: c\n' + body + 'RU_DIAGNOSTIC_PORTABLE_PASS: 2\n')
+        bulk_body = ''.join(f'PASS: {label}\n' for label in ci.BULK_EVENT_CASES) + 'TOTAL PASS: 23\n'
+        (directory / 'event-bulk.stdout.log').write_text('BACKEND: python\n' + bulk_body +
+            'BACKEND: c\n' + bulk_body + 'RU_EVENT_BULK_PORTABLE_PASS: 2 backends, 23 assertions each\n')
         (directory / 'bridge-failure.stdout.log').write_text('RU_SYNTAX_FAILURE_PORTABLE_PASS: 6\n')
         (directory / 'bridge-failure.stderr.log').write_text('Ran 6 tests in 1.000s\n\nOK\n')
         return directory, inputs
@@ -497,6 +505,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     self.assertIn('.github/workflows/windows.yml', result['source_sha256'])
                     self.assertIn('tools/test_ru_timer_corpus.py', result['source_sha256'])
                     self.assertIn('tests/app_ru_native.ru', result['source_sha256'])
+                    self.assertIn('tests/ru_event_bulk_portable.py', result['source_sha256'])
+                    self.assertIn('src/ru_native_syntax.ru', result['source_sha256'])
                 else:
                     with self.assertRaisesRegex(RuntimeError, 'clean reviewed'):
                         ci.helper_policy_inputs(ci.ROOT)
@@ -569,6 +579,28 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     ci.helper_policy_action('verify', self.root)
                 self.assertFalse((directory / 'helper-policy-acceptance.json').exists())
 
+    def test_linux_bulk_event_gate_rejects_missing_partial_duplicate_or_changed_evidence(self):
+        for mutation in ('missing', 'stderr', 'partial', 'duplicate', 'backend', 'case', 'count', 'skip', 'extra'):
+            with self.subTest(mutation=mutation):
+                shutil.rmtree(self.root / 'build', ignore_errors=True)
+                directory, inputs = self.helper_policy_fixture()
+                path = directory / 'event-bulk.stdout.log'
+                text = path.read_text()
+                if mutation == 'missing': path.unlink()
+                elif mutation == 'stderr': (directory / 'event-bulk.stderr.log').write_text('warning')
+                elif mutation == 'partial': path.write_text(text.split('BACKEND: c')[0])
+                elif mutation == 'duplicate': path.write_text(text + text)
+                elif mutation == 'extra': path.write_text(text + 'unexpected\n')
+                else:
+                    replacements = {'backend': ('BACKEND: c', 'BACKEND: python'),
+                        'case': ('PASS: high word 131072', 'PASS: high word 131071'),
+                        'count': ('TOTAL PASS: 23', 'TOTAL PASS: 22'),
+                        'skip': ('PASS: zero event batch', 'SKIP: zero event batch')}
+                    path.write_text(text.replace(*replacements[mutation]))
+                with patch.object(ci, 'helper_policy_inputs', return_value=inputs), self.assertRaises(RuntimeError):
+                    ci.helper_policy_action('verify', self.root)
+                self.assertFalse((directory / 'helper-policy-acceptance.json').exists())
+
     def test_workflow_requires_linux_oracle_sanitizer_before_windows_or_package_artifacts(self):
         workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text()
         helper = workflow.split('  helper-policy:\n', 1)[1].split('  windows-native:\n', 1)[0]
@@ -577,6 +609,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertNotIn('continue-on-error', workflow)
         self.assertIn('python -I tools/test_ru_scan.py --ru-root .ci/ru-language --sanitize --fuzz 100', helper)
         self.assertIn('python -I tools/test_ru_timer_corpus.py --ru-root .ci/ru-language', helper)
+        self.assertIn('python -I tests/ru_event_bulk_portable.py --ru-root .ci/ru-language', helper)
+        self.assertIn('event-bulk.stdout.log', helper)
+        self.assertIn('event-bulk.stderr.log', helper)
         for action in ('prepare', 'verify', 'collect'):
             self.assertIn('--helper-policy-action ' + action, helper)
         self.assertIn('ASAN_OPTIONS:', helper)
@@ -598,9 +633,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         summary = self.acceptance()
         ci.validate_acceptance(summary)
         self.assertEqual(len(summary['tests']), 32)
-        # Repair 3 preserves all 1401 prior assertions and adds nineteen actual
-        # native scheduler/lifecycle assertions in the same app executable.
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1408 + 19)
+        # The bulk candidate retains all 1427 prior required assertions and adds
+        # 24 production decoder assertions. Native execution remains a separate gate.
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1451)
 
     def test_acceptance_rejects_missing_or_duplicated_syntax_branch(self):
         summary = self.acceptance()
@@ -884,12 +919,12 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             except RuntimeError as exc:
                 return {'passed': False, 'error': str(exc)}
         ticks = [0.0]
-        def monotonic():
+        def perf_counter():
             ticks[0] += 0.1
             return ticks[0]
         with patch.object(ci, 'run_gui', side_effect=launch), \
              patch.object(ci, 'write_gui_cancel_fixture', side_effect=lambda path: path.write_bytes(b'small unit fixture')), \
-             patch.object(ci.time, 'monotonic', side_effect=monotonic), patch.object(ci.time, 'sleep'):
+             patch.object(ci.time, 'perf_counter', side_effect=perf_counter), patch.object(ci.time, 'sleep'):
             result = ci.run_gui_file_entry(api, binary, fixtures, evidence)
         self.assertTrue(api.released)
         return result, api
@@ -1103,7 +1138,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             except RuntimeError as exc:
                 return {'passed': False, 'error': str(exc)}
         ticks = [0.0]
-        def monotonic():
+        def perf_counter():
             ticks[0] += 0.0001
             return ticks[0]
         def sleep(seconds):
@@ -1118,7 +1153,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             return {name: True for name in ci.GUI_RU_EDIT_CHECKS}
         with patch.object(ci, 'run_gui', side_effect=launch), \
              patch.object(ci, 'run_gui_ru_edits', side_effect=edit_stage), \
-             patch.object(ci.time, 'monotonic', side_effect=monotonic), patch.object(ci.time, 'sleep', side_effect=sleep):
+             patch.object(ci.time, 'perf_counter', side_effect=perf_counter), patch.object(ci.time, 'sleep', side_effect=sleep):
             result = ci.run_gui_ru_syntax(api, binary, fixtures, evidence)
         return result, api
 
@@ -1246,6 +1281,128 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
                 ci.validate_gui_ru_timer(record)
 
+    def test_performance_clock_records_actual_bounded_metadata(self):
+        info = ci.time.get_clock_info('perf_counter')
+        record = ci.performance_clock_record()
+        self.assertEqual(record, {'clock_name': 'perf_counter', 'implementation': info.implementation,
+                                 'resolution': info.resolution, 'monotonic': info.monotonic,
+                                 'adjustable': info.adjustable})
+        self.assertEqual(set(record), ci.PERFORMANCE_CLOCK_FIELDS)
+        self.assertLess(len(json.dumps(record)), 300)
+        ci.validate_performance_clock(record)
+        self.assertIn('not physical input or paint accuracy', ci.PERFORMANCE_CLOCK_MEASUREMENT)
+
+    def test_performance_clock_metadata_rejects_malformed_nonfinite_or_coarse_windows_receipts(self):
+        good = observer_evidence()['clock']
+        ci.validate_performance_clock(good, require_windows=True)
+        mutations = [('clock_name', 'monotonic'), ('implementation', ''),
+                     ('implementation', 'x' * 129), ('implementation', 'bad\nclock'),
+                     ('implementation', None), ('resolution', 0), ('resolution', -1),
+                     ('resolution', True), ('resolution', '0.0000001'),
+                     ('resolution', float('nan')), ('resolution', float('inf')),
+                     ('resolution', float('-inf')), ('monotonic', False), ('monotonic', 1),
+                     ('adjustable', True), ('adjustable', 0)]
+        for field, value in mutations:
+            with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
+                ci.validate_performance_clock(dict(good, **{field: value}))
+        for record in (None, [], {}, dict(good, extra=1),
+                       {key: value for key, value in good.items() if key != 'resolution'}):
+            with self.subTest(record=record), self.assertRaises(RuntimeError):
+                ci.validate_performance_clock(record)
+        for implementation in ('GetTickCount64()', 'clock_gettime(CLOCK_MONOTONIC)',
+                               'QueryPerformanceCounter', 'QueryPerformanceCounter() forged'):
+            with self.subTest(implementation=implementation), self.assertRaisesRegex(RuntimeError, 'QueryPerformanceCounter'):
+                ci.validate_performance_clock(dict(good, implementation=implementation), require_windows=True)
+        info = type('ClockInfo', (), dict(good, resolution=float('nan')))()
+        with patch.object(ci.time, 'get_clock_info', return_value=info) as get_info:
+            with self.assertRaises(RuntimeError): ci.performance_clock_record()
+            get_info.assert_called_once_with('perf_counter')
+
+    def test_performance_clock_is_local_and_rejects_nonfinite_or_backwards_samples(self):
+        for bad in (float('nan'), float('inf'), float('-inf'), True, None, '1'):
+            with self.subTest(value=bad), patch.object(ci.time, 'perf_counter', return_value=bad):
+                with self.assertRaisesRegex(RuntimeError, 'nonfinite or moved backwards'):
+                    ci.PerformanceClock()()
+        with patch.object(ci.time, 'perf_counter', side_effect=[1.0, 1.0, 1.0002, 1.0001]):
+            clock = ci.PerformanceClock()
+            self.assertEqual(clock(), 1.0)
+            self.assertEqual(clock(), 1.0)  # Identical ticks remain valid, not invented elapsed time.
+            self.assertEqual(clock(), 1.0002)
+            with self.assertRaisesRegex(RuntimeError, 'moved backwards'): clock()
+        original = ci.time.perf_counter
+        with patch.object(ci.time, 'perf_counter', return_value=1e15):
+            self.assertEqual(ci.PerformanceClock()(), 1e15)
+        self.assertIs(ci.time.perf_counter, original)
+        restored = ci.PerformanceClock()
+        first, second = restored(), restored()
+        self.assertGreaterEqual(second, first)
+        with patch.object(ci.time, 'perf_counter', return_value=1.0):
+            for previous in (2.0, float('nan'), True):
+                with self.subTest(previous=previous), self.assertRaises(RuntimeError):
+                    ci.PerformanceClock(previous)()
+
+    def test_ru_observer_uses_precise_costs_when_monotonic_is_coarse(self):
+        class Fake:
+            def scalar(self, *args): return 1
+            def responsive(self, *args): return None
+        api = Fake()
+        scalar, responsive = api.scalar, api.responsive
+        record = ci.gui_ru_observer_record()
+        with patch.object(ci.time, 'monotonic', return_value=0.0) as coarse, \
+             patch.object(ci.time, 'perf_counter', side_effect=[.001, .002, .0024, .003, .1, .1003]):
+            with ci.GuiRuObserver(api, record, 0.0) as observer:
+                self.assertTrue(observer.snapshot(lambda: api.scalar(123, 2006)))
+                api.responsive(123)
+            coarse.assert_not_called()
+        self.assertEqual(record['query_wall_ms'], .7)
+        self.assertEqual(record['max_query_ms'], .4)
+        self.assertEqual(record['snapshot_wall_ms'], 2.0)
+        self.assertEqual(record['snapshots'][0]['wall_ms'], 2.0)
+        self.assertEqual(record['sendmessage_calls'], 2)
+        self.assertEqual(record['response_starts_ms'], [100.0])
+        self.assertEqual(api.scalar, scalar)
+        self.assertEqual(api.responsive, responsive)
+        ci.validate_gui_ru_observer(record, 101.0, 1)
+
+    def test_ru_diagnostic_post_and_log_costs_use_same_precise_clock(self):
+        class Fake:
+            def post_ru_snapshot(self, hwnd): pass
+        (self.root / 'ru_notepad-unit.log').write_text('RU_GUI_SNAPSHOT seq=1 ok=0\n')
+        record = {}
+        diagnostics = ci.GuiRuDiagnostics(Fake(), 123, self.root, record)
+        with patch.object(ci.time, 'monotonic', return_value=0.0) as coarse, \
+             patch.object(ci.time, 'perf_counter', side_effect=[1, 1.0004, 2, 2.0001, 2.0008, 2.0009, 2.001]):
+            diagnostics.request('baseline')
+            diagnostics.capture(1)
+            coarse.assert_not_called()
+        self.assertEqual(record['post_wall_ms'], .4)
+        self.assertEqual(record['log_read_wall_ms'], .7)
+        self.assertEqual(record['max_log_read_ms'], .7)
+        self.assertEqual(record['captures'], [{'phase': 'baseline', 'wall_ms': 1.0, 'log_reads': 1}])
+        self.assertEqual(record['receipts'], [{'seq': 1, 'ok': 0}])
+
+    def test_ru_observer_clock_failure_keeps_partial_counts_and_restores_wrappers(self):
+        class Fake:
+            def scalar(self, *args): return 1
+            def responsive(self, *args): return None
+        for bad, final in ((.19, .3), (.19, .19), (float('nan'), .3),
+                           (float('nan'), float('nan')), (float('inf'), .3), (float('inf'), float('inf'))):
+            api = Fake()
+            record = ci.gui_ru_observer_record()
+            with self.subTest(value=bad), \
+                 patch.object(ci.time, 'perf_counter', side_effect=[.1, .2, bad, final]):
+                with self.assertRaisesRegex(RuntimeError, 'nonfinite or moved backwards'):
+                    with ci.GuiRuObserver(api, record, 0.0) as observer:
+                        observer.snapshot(lambda: api.scalar(123, 2006))
+            self.assertEqual(record['scalar_calls'], 1)
+            self.assertEqual(record['sendmessage_calls'], 1)
+            self.assertEqual(record['snapshot_count'], 1)
+            self.assertEqual(record['snapshots'][0]['messages'], 1)
+            self.assertFalse(record['snapshots'][0]['final'])
+            self.assertNotIn('scalar', api.__dict__)
+            self.assertNotIn('responsive', api.__dict__)
+            self.assertIsNone(observer.current)
+
     def test_ru_observer_measures_nested_text_calls_and_restores_wrappers_after_failure(self):
         class Fake:
             def scalar(self, *args): return 1
@@ -1258,7 +1415,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         record = ci.gui_ru_observer_record()
         original = api.scalar
         with self.assertRaisesRegex(RuntimeError, 'synthetic failure'):
-            with ci.GuiRuObserver(api, record, ci.time.monotonic()) as observer:
+            with ci.GuiRuObserver(api, record, ci.time.perf_counter()) as observer:
                 observer.snapshot(lambda: api.text(123) == 'bounded')
                 api.responsive(123)
                 raise RuntimeError('synthetic failure')
@@ -1277,7 +1434,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             def responsive(self, *args): return None
         api = Fake()
         record = ci.gui_ru_observer_record()
-        with ci.GuiRuObserver(api, record, ci.time.monotonic()) as observer:
+        with ci.GuiRuObserver(api, record, ci.time.perf_counter()) as observer:
             with self.assertRaisesRegex(RuntimeError, '32 synchronous'):
                 observer.snapshot(lambda: [api.scalar(123, 2006) for _ in range(33)])
         self.assertEqual(record['scalar_calls'], 32)
@@ -1560,10 +1717,10 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 else: raise AssertionError('Unexpected edit menu command')
         api = EditWindows()
         ticks = [0.0]
-        def monotonic():
+        def perf_counter():
             ticks[0] += 0.1
             return ticks[0]
-        with patch.object(ci.time, 'monotonic', side_effect=monotonic), patch.object(ci.time, 'sleep'):
+        with patch.object(ci.time, 'perf_counter', side_effect=perf_counter), patch.object(ci.time, 'sleep'):
             try:
                 checks = ci.run_gui_ru_edits(api, process, 123, source, record)
                 result = {'passed': True, **checks}
@@ -2029,7 +2186,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertFalse(result['passed'])
         self.assertLessEqual((self.root / 'fixture.stdout.log').stat().st_size, ci.MAX_LOG_BYTES)
 
-    def gui(self, mode='normal'):
+    def gui(self, mode='normal', bad_clock=None):
         binary = self.root / 'bin'
         evidence = self.root / 'evidence'
         binary.mkdir()
@@ -2037,8 +2194,10 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         process = type('SyntheticProcess', (), {'pid': 12345, 'finished': mode == 'early',
             'returncode': 0, 'poll': lambda self: self.returncode if self.finished else None})()
         clock = [0.0]
-        def monotonic():
+        def perf_counter():
             clock[0] += 0.2
+            if bad_clock is not None and clock[0] > 0.8:
+                return bad_clock
             return clock[0]
         def launch(*_, **__):
             if mode != 'missing-log':
@@ -2065,10 +2224,62 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             return killed
         with patch.object(ci.subprocess, 'Popen', side_effect=launch) as start, \
              patch.object(ci, 'cleanup_process', side_effect=cleanup), \
-             patch.object(ci.time, 'monotonic', side_effect=monotonic), \
+             patch.object(ci.time, 'perf_counter', side_effect=perf_counter), \
              patch.object(ci.time, 'sleep'):
             result = ci.run_gui(FakeWindows(), binary, evidence)
         return result, start
+
+    def test_gui_persistent_bad_clock_preserves_failure_and_process_cleanup_evidence(self):
+        for bad in (float('nan'), 0.0):
+            for name in ('bin', 'evidence'): shutil.rmtree(self.root / name, ignore_errors=True)
+            result, launch = self.gui(bad_clock=bad)
+            with self.subTest(value=bad):
+                self.assertFalse(result['passed'])
+                self.assertTrue(result['executed'])
+                self.assertTrue(result['cleanup_killed'])
+                self.assertIn('performance clock', result['error'])
+                self.assertIn('performance clock', result['clock_error'])
+                self.assertIsNone(result['seconds'])
+                self.assertGreaterEqual(result['last_good_seconds'], 0)
+                self.assertEqual(launch.call_count, 1)
+                self.assertTrue((self.root / 'evidence/main-launcher-0.log').is_file())
+
+    def test_console_persistent_bad_final_clock_keeps_original_error_and_cleanup(self):
+        failed = [False]
+        class FailingApi:
+            def no_dialog(self, pid):
+                failed[0] = True
+                raise RuntimeError('original synthetic dialog failure')
+        def counter(): return float('nan') if failed[0] else 1.0
+        with patch.object(ci, 'cleanup_process', side_effect=kill_synthetic), \
+             patch.object(ci.time, 'perf_counter', side_effect=counter):
+            result = ci.run_console(FailingApi(), 'bad-clock',
+                [sys.executable, '-c', 'import time; time.sleep(5)'], self.root,
+                r'^TOTAL PASS: 1\s*$', timeout=3, expected_assertions=1)
+        self.assertFalse(result['passed'])
+        self.assertTrue(result['executed'])
+        self.assertTrue(result['cleanup_killed'])
+        self.assertEqual(result['error'], 'original synthetic dialog failure')
+        self.assertIn('performance clock', result['clock_error'])
+        self.assertIsNone(result['seconds'])
+        self.assertEqual(result['last_good_seconds'], 0.0)
+        self.assertTrue((self.root / 'bad-clock.stdout.log').is_file())
+        self.assertTrue((self.root / 'bad-clock.stderr.log').is_file())
+
+    def test_final_clock_failure_never_keeps_success_or_loses_partial_fields(self):
+        record = {'passed': True, 'executed': True, 'cleanup_killed': False, 'partial_bytes': 123}
+        with patch.object(ci.time, 'perf_counter', side_effect=[2.0, float('nan')]):
+            clock = ci.PerformanceClock()
+            started = clock()
+            ci.finish_result_clock(record, clock, started)
+        self.assertFalse(record['passed'])
+        self.assertEqual(record['partial_bytes'], 123)
+        self.assertTrue(record['executed'])
+        self.assertFalse(record['cleanup_killed'])
+        self.assertIsNone(record['seconds'])
+        self.assertFalse(record['seconds_valid'])
+        self.assertEqual(record['last_good_seconds'], 0.0)
+        self.assertEqual(record['error'], record['clock_error'])
 
     def test_gui_requires_detached_visible_responsive_normal_close(self):
         result, start = self.gui()

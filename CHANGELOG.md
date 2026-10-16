@@ -1,16 +1,25 @@
 # Changelog
 
+## 0.1.5-preview — 2026-10-16
+
+- Prepare an independent bulk-transport optimization candidate using the reviewed Ru 0.21.6 owned-memory `读U32LE阵` API. Keep the scanner DLL ABI and lexical/folding policy unchanged; validate high header bits before exact reconstruction and retain every event bound/order check.
+- Add 24 native production-decoder assertions, raising the syntax suite to 149 and the required total to 1,451 assertions / 32 results. Require 23 production-decoder arithmetic/control-flow cases in each portable backend, with exact input and output evidence.
+- Retain the same Chinese corpus, 30-second GUI completion deadline and all six edit measurements. Native application acceptance and an actual performance gain remain pending; language API acceptance and local cross-compilation do not establish either result.
+- External-file-change notification and reload remain a separate proposal, outside this version's changes.
+
 ## 0.1.4-preview — 2026-10-16
 
 - Add a real Ru 0.21.3 lexical policy and structural folding, with Ru keyword/structural policy, a bounded application-owned C scanning helper and Scintilla container styling. Recognize Unicode names, exact comments, strings/escapes, numbers, keywords and contextual block delimiters.
 - Add `.ru` automatic selection, a Ru language menu, fold margin, collapse/expand commands and Ctrl+Shift+[ / ]. Preserve bytes, dirty/undo state and per-tab fold state.
 - Process bounded background styling slices and lexical checkpoints; coalesce edits and reuse a converged unchanged suffix. Keep the existing 32 MB plain-text mode.
-- Require pure-policy, native byte-style/fold, main-window and detached GUI regressions plus measured 100 KB / 1 MB initial/edit evidence. Actual 0.1.4 Windows acceptance remains pending.
-- First 0.1.4 CI exposed a rescue-scope fixture error and a 1 MB GUI styling completion timeout. Fix the related initialization/cleanup diagnostic scope paths and retain strict completion gates with bounded progress diagnostics; the GUI timeout is not yet claimed fixed.
-- The scope-repair run passed all 1,379 native assertions but still reached only 470,180 styled bytes within the GUI's 30-second deadline. Subscribe the main application only to text modification events, retain the full-notification core control, and add exact-same-corpus work/cadence diagnostics. Performance acceptance remains pending.
+- Require pure-policy, native byte-style/fold, main-window and detached GUI regressions plus measured 100 KB / 1 MB initial/edit evidence. Windows acceptance was still pending at this stage.
+- First 0.1.4 CI exposed a rescue-scope fixture error and a 1 MB GUI styling completion timeout. Fix the related initialization/cleanup diagnostic scope paths and retain strict completion gates with bounded progress diagnostics; the GUI timeout was not resolved at this stage.
+- The scope-repair run passed all 1,379 native assertions but still reached only 470,180 styled bytes within the GUI's 30-second deadline. Subscribe the main application only to text modification events, retain the full-notification core control, and add exact-same-corpus work/cadence diagnostics. Performance acceptance was still pending at this stage.
 - The notification-filter run confirmed zero unused style/fold callbacks, but still missed full GUI completion (947,418 bytes / 30 seconds). Exact-corpus synchronous scanning took 9.967 seconds; the main timer spent 17.844 seconds between callbacks. Add a coalesced, UI-yielding continuation path with the same work budget and strict completion deadline; real Windows acceptance remains required.
 
-- The cooperative scheduler completed the native 1 MB case in 19.754 seconds, but the detached GUI still timed out at 646,656 bytes. Bound and measure the GUI observer's own message traffic, add capped numeric progress projections, and repair the closing fixture's queue-hint setup race. These diagnostic/test changes do not yet establish a performance fix; full Windows acceptance remains pending.
+- The cooperative scheduler completed the native 1 MB case in 19.754 seconds, but the detached GUI still timed out at 646,656 bytes. Bound and measure the GUI observer's own message traffic, add capped numeric progress projections, and repair the closing fixture's queue-hint setup race. Those diagnostic/test changes required a new exact-build Windows run before acceptance.
+
+- The subsequent [repair4 run 38952771302](https://github.com/uppet/ru_notepad/actions/runs/38952771302) passed Linux and Windows gates: the original evidence confirms 1,427 native assertions / 32 results and complete 1 MB GUI styling in 16.000 seconds, followed by all six edit measurements. See the [historical baseline and clock limitations](docs/preview-validation.md#014-ru-syntax-history-and-ci-status). Both original ZIPs subsequently passed independent verification and were delivered.
 
 ## 0.1.3-preview — 2026-10-16
 

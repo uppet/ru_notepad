@@ -47,10 +47,10 @@ function Git-Value([string[]]$Arguments) {
 
 Push-Location $Root
 try {
-    if ((Git-Value @('rev-parse','HEAD')) -ne 'dd6cb81b52a426408f7076d82a84c2fdfb644263') {
+    if ((Git-Value @('rev-parse','HEAD')) -ne 'a2f6faa0f914781dea74cb6f0a7574f1dd6808ce') {
         throw 'Ru public commit does not match the reviewed pin.'
     }
-    if ((Git-Value @('rev-parse','HEAD^{tree}')) -ne '346d9f3f19c64f50f25b9f47ce92df1ea804bdb8') {
+    if ((Git-Value @('rev-parse','HEAD^{tree}')) -ne '7b4331d51bc6ab2ec95fec1f8368465343fcd5af') {
         throw 'Ru compiler tree does not match the reviewed pin.'
     }
     if (Git-Value @('status','--porcelain')) { throw 'Ru checkout must be unmodified.' }

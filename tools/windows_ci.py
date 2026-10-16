@@ -53,7 +53,7 @@ NATIVE_CONSOLE_TESTS = (
     ('app_ru_native', r'^TOTAL PASS: 73\s*$'),
     ('app_ru_timer_native', r'^TOTAL PASS: 8\s*$'),
     ('ru_lexical_policy', r'^TOTAL PASS: 338\s*$'),
-    ('ru_syntax_native', r'^TOTAL PASS: 125\s*$'),
+    ('ru_syntax_native', r'^TOTAL PASS: 149\s*$'),
 )
 SYNTAX_FALLBACK_TESTS = (
     ('syntax_missing_lexilla', '--expect-missing', False),
@@ -125,7 +125,7 @@ GUI_RU_EDIT_MEASUREMENT = ('Real child WM_CHAR/Backspace length-changing input; 
     'production Reset Zoom 504 status refresh and WM_NULL polling; bounded style/fold/context probes.')
 GUI_RU_TIMER_FIELDS = {'size', 'wall_ms', 'first_head_style_ms', 'max_response_ms', 'probes',
                        'source_sha256', 'style_probes', 'last_probe', 'responsiveness',
-                       'observer', 'diagnostics', 'head_style_measurement'}
+                       'observer', 'diagnostics', 'head_style_measurement', 'clock', 'clock_measurement'}
 GUI_RU_RESPONSE_TIMEOUT_MS = 5000
 GUI_RU_RESPONSE_MEASUREMENT = ('Synthetic queued RIGHT/LEFT navigation and natural invalidated-region '
     'service while Ru styling remains pending; no text edits, forced paint or pixel-render claim. '
@@ -142,14 +142,96 @@ HELPER_POLICY_EVIDENCE_FILES = ('helper-policy.stdout.log', 'helper-policy.stder
     'bridge-failure.stdout.log', 'bridge-failure.stderr.log',
     'timer-corpus.stdout.log', 'timer-corpus.stderr.log',
     'diagnostic-control.stdout.log', 'diagnostic-control.stderr.log',
+    'event-bulk.stdout.log', 'event-bulk.stderr.log',
     'scanner-build.log', 'differential-python.log', 'differential-build.log',
     'differential-c.log', 'sanitize-build.log', 'sanitize.log', 'report.json')
-HELPER_POLICY_COMMIT = 'dd6cb81b52a426408f7076d82a84c2fdfb644263'
-HELPER_POLICY_TREE = '346d9f3f19c64f50f25b9f47ce92df1ea804bdb8'
+HELPER_POLICY_COMMIT = 'a2f6faa0f914781dea74cb6f0a7574f1dd6808ce'
+HELPER_POLICY_TREE = '7b4331d51bc6ab2ec95fec1f8368465343fcd5af'
+BULK_EVENT_CASES = (
+    'all 384 fields of the full batch',
+    'near-32-MB exact metadata',
+    'zero event batch',
+    'delayed long identifier',
+    'delayed 64-byte keyword',
+    'equal event positions',
+    'high word 131072',
+    'high word 2147483648',
+    'high word 4294967295',
+    'last event high bits',
+    'invalid count -1',
+    'invalid count 0.5',
+    'invalid count 65',
+    'kind zero',
+    'kind eight',
+    'style ten',
+    'zero length',
+    'full unsigned length',
+    'full unsigned line',
+    'end beyond bytes',
+    'non-token before start',
+    'keyword length 65',
+    'decreasing positions',
+)
 GUI_CANCEL_FIXTURE_BYTES = 128 * 1024 * 1024
 MAX_GUI_DROP_BATCHES = 4
 MAX_GUI_DROP_PAYLOAD_BYTES = 65536
 SYSTEM_DLLS = portable.SYSTEM_DLLS
+PERFORMANCE_CLOCK_FIELDS = {'clock_name', 'implementation', 'resolution', 'monotonic', 'adjustable'}
+PERFORMANCE_CLOCK_MEASUREMENT = ('Python perf_counter elapsed time; reported clock resolution is not '
+    'physical input or paint accuracy. Application tick quantization, polling cadence and measured '
+    'observer costs still limit interpretation; milliseconds are rounded to three decimals.')
+
+
+def validate_performance_clock(record, *, require_windows=False):
+    if (not isinstance(record, dict) or set(record) != PERFORMANCE_CLOCK_FIELDS or
+            record['clock_name'] != 'perf_counter' or
+            not isinstance(record['implementation'], str) or
+            not 1 <= len(record['implementation']) <= 128 or
+            not record['implementation'].isprintable() or
+            type(record['resolution']) not in (int, float) or
+            not math.isfinite(record['resolution']) or record['resolution'] <= 0 or
+            record['monotonic'] is not True or record['adjustable'] is not False):
+        raise RuntimeError('CI performance clock metadata is missing or malformed')
+    if require_windows and record['implementation'] != 'QueryPerformanceCounter()':
+        raise RuntimeError('Native Windows CI performance clock must use QueryPerformanceCounter')
+
+
+def performance_clock_record():
+    info = time.get_clock_info('perf_counter')
+    record = dict(clock_name='perf_counter', implementation=info.implementation,
+                  resolution=info.resolution, monotonic=info.monotonic, adjustable=info.adjustable)
+    validate_performance_clock(record, require_windows=sys.platform == 'win32')
+    return record
+
+
+class PerformanceClock:
+    """One local elapsed-time domain; no global state survives mocked-clock restoration."""
+    def __init__(self, previous=None):
+        self.previous = previous
+
+    def __call__(self):
+        value = time.perf_counter()
+        if (type(value) not in (int, float) or not math.isfinite(value) or
+                (self.previous is not None and
+                 (type(self.previous) not in (int, float) or not math.isfinite(self.previous) or
+                  value < self.previous or not math.isfinite(value - self.previous)))):
+            raise RuntimeError('CI performance clock is nonfinite or moved backwards')
+        self.previous = value
+        return value
+
+
+def finish_result_clock(result, clock, started):
+    """A failed final timestamp must not discard executed/cleanup/partial evidence."""
+    if started is None:
+        result['seconds'] = None
+        return
+    try:
+        result['seconds'] = round(clock() - started, 3)
+    except RuntimeError as exc:
+        result.update(passed=False, seconds=None, seconds_valid=False, clock_error=str(exc))
+        result.setdefault('error', str(exc))
+        if clock.previous is not None:
+            result['last_good_seconds'] = round(clock.previous - started, 3)
 
 
 def sha(path):
@@ -492,18 +574,20 @@ def collect_ru_gui_measurement(result, stdout):
 
 
 def run_console(api, name, command, evidence, marker, timeout=120, expected_assertions=None, cwd=None):
+    clock = PerformanceClock()
     out, err = evidence / f'{name}.stdout.log', evidence / f'{name}.stderr.log'
     result = {'name': name, 'passed': False, 'executed': False, 'cleanup_killed': False}
-    started = time.monotonic()
+    started = None
     process = None
     try:
+        started = clock()
         with out.open('xb') as stdout, err.open('xb') as stderr:
             process = subprocess.Popen(command, cwd=cwd or ROOT, stdout=stdout, stderr=stderr)
             result['executed'] = True
-            deadline = time.monotonic() + timeout
+            deadline = clock() + timeout
             while process.poll() is None:
                 api.no_dialog(process.pid)
-                if time.monotonic() >= deadline:
+                if clock() >= deadline:
                     raise RuntimeError(f'{name}: exceeded {timeout}-second execution deadline')
                 if out.stat().st_size > MAX_LOG_BYTES or err.stat().st_size > MAX_LOG_BYTES:
                     raise RuntimeError(f'{name}: exceeded synthetic log size limit')
@@ -539,7 +623,7 @@ def run_console(api, name, command, evidence, marker, timeout=120, expected_asse
             cap_log(path)
         if name in RU_GUI_CONSOLE_MEASUREMENTS and out.is_file():
             collect_ru_gui_measurement(result, bounded_text(out))
-        result['seconds'] = round(time.monotonic() - started, 3)
+        finish_result_clock(result, clock, started)
     return result
 
 
@@ -561,7 +645,8 @@ def helper_policy_inputs(root):
                      'tools/test_cleanup_paths.py', 'tests/ru_syntax_failure_portable.py',
                      'src/main.ru', 'src/ru_syntax.ru', 'tests/ru_syntax_native.ru',
                      'tests/app_ru_native.ru', 'tools/test_ru_timer_corpus.py',
-                     'tools/test_syntax_diagnostics.py')}}
+                     'tools/test_syntax_diagnostics.py', 'src/ru_native_syntax.ru',
+                     'tests/ru_event_bulk_portable.py')}}
 
 
 def helper_policy_action(action, root):
@@ -640,6 +725,11 @@ def helper_policy_action(action, root):
             diagnostic_control.validate(body)
         except ValueError as exc:
             raise RuntimeError('Linux diagnostic control lacks exact safe production projections') from exc
+    bulk_body = ''.join(f'PASS: {label}\n' for label in BULK_EVENT_CASES) + 'TOTAL PASS: 23\n'
+    bulk_expected = ('BACKEND: python\n' + bulk_body + 'BACKEND: c\n' + bulk_body +
+                     'RU_EVENT_BULK_PORTABLE_PASS: 2 backends, 23 assertions each\n')
+    if texts['event-bulk.stdout.log'] != bulk_expected or texts['event-bulk.stderr.log']:
+        raise RuntimeError('Linux bulk-event control requires all 23 exact cases in both real backends with empty stderr')
     failure_text = texts['bridge-failure.stderr.log']
     if (texts['bridge-failure.stdout.log'].strip() != 'RU_SYNTAX_FAILURE_PORTABLE_PASS: 6' or
             not re.search(r'^Ran 6 tests in [0-9.]+s$', failure_text, re.M) or
@@ -672,6 +762,7 @@ def validate_scanner_preflight(record, binary_hashes, root):
 
 
 def run_scanner_preflight(api, binary_dir, evidence):
+    clock = PerformanceClock()
     name = portable.SCANNER_PREFLIGHT_NAME
     out, err = evidence / (name + '.stdout.log'), evidence / (name + '.stderr.log')
     result = {'name': name, 'passed': False, 'executed': False, 'cleanup_killed': False,
@@ -683,14 +774,15 @@ def run_scanner_preflight(api, binary_dir, evidence):
     command = [sys.executable, '-I', str(ROOT / 'tools/test_ru_scan.py'),
                '--library', str(library), '--fuzz', '100']
     process = None
-    started = time.monotonic()
+    started = None
     try:
+        started = clock()
         with out.open('xb') as stdout, err.open('xb') as stderr:
             process = subprocess.Popen(command, cwd=ROOT, stdout=stdout, stderr=stderr)
             result['executed'] = True
             while process.poll() is None:
                 api.no_dialog(process.pid)
-                if time.monotonic() - started >= 180:
+                if clock() - started >= 180:
                     raise RuntimeError('Exact-DLL scanner preflight exceeded 180 seconds')
                 if out.stat().st_size > MAX_LOG_BYTES or err.stat().st_size > MAX_LOG_BYTES:
                     raise RuntimeError('Exact-DLL scanner preflight exceeded synthetic log size limit')
@@ -714,26 +806,28 @@ def run_scanner_preflight(api, binary_dir, evidence):
                 result['passed'] = False
         for path in (out, err):
             cap_log(path)
-        result['seconds'] = round(time.monotonic() - started, 3)
+        finish_result_clock(result, clock, started)
     return result
 
 
 def run_gui(api, binary_dir, evidence, *, name='main-gui-smoke', arguments=(),
             exercise=None, log_prefix='main-launcher'):
+    clock = PerformanceClock()
     result = {'name': name, 'passed': False, 'executed': False,
               'main_hwnd_seen': False, 'close_posted': False, 'cleanup_killed': False,
               'detached_from_console': True}
-    started = time.monotonic()
+    started = None
     process = None
     # The dedicated bin dir was just built by this CI run; reject stale logs.
     if list(binary_dir.glob('ru_notepad-*.log')):
         result['error'] = 'Refusing stale launcher logs in fresh test binary directory'
         return result
     try:
+        started = clock()
         process = subprocess.Popen([str(binary_dir / 'ru_notepad.exe'), *map(str, arguments)], cwd=binary_dir,
                                    creationflags=0x00000008)  # DETACHED_PROCESS
         result['executed'] = True
-        deadline = time.monotonic() + 30
+        deadline = clock() + 30
         hwnd = None
         while hwnd is None:
             windows = api.no_dialog(process.pid)
@@ -745,14 +839,14 @@ def run_gui(api, binary_dir, evidence, *, name='main-gui-smoke', arguments=(),
                 hwnd = visible_main[0]
             elif len(visible_main) > 1:
                 raise RuntimeError('More than one main HWND belongs to the application')
-            if time.monotonic() >= deadline:
+            if clock() >= deadline:
                 raise RuntimeError('No visible main HWND within 30 seconds')
             time.sleep(0.1)
         result['main_hwnd_seen'] = True
         result['window_class'] = MAIN_CLASS
         # Let queued startup work run, then prove that the actual event loop responds.
-        settle_until = time.monotonic() + 1
-        while time.monotonic() < settle_until:
+        settle_until = clock() + 1
+        while clock() < settle_until:
             api.no_dialog(process.pid)
             if process.poll() is not None:
                 raise RuntimeError('GUI terminated while checking startup stability')
@@ -763,10 +857,10 @@ def run_gui(api, binary_dir, evidence, *, name='main-gui-smoke', arguments=(),
             result.update(exercise(process, hwnd))
         api.close(hwnd)
         result['close_posted'] = True
-        deadline = time.monotonic() + 15
+        deadline = clock() + 15
         while process.poll() is None:
             api.no_dialog(process.pid)
-            if time.monotonic() >= deadline:
+            if clock() >= deadline:
                 raise RuntimeError('GUI did not exit normally within 15 seconds after WM_CLOSE')
             time.sleep(0.1)
         result['exit_code'] = process.returncode
@@ -801,19 +895,20 @@ def run_gui(api, binary_dir, evidence, *, name='main-gui-smoke', arguments=(),
         for index, path in enumerate(logs[:4]):
             cap_log(path)
             shutil.copyfile(path, evidence / f'{log_prefix}-{index}.log')
-        result['seconds'] = round(time.monotonic() - started, 3)
+        finish_result_clock(result, clock, started)
     return result
 
 
 def wait_gui(api, process, predicate, failure, timeout=30):
-    deadline = time.monotonic() + timeout
+    clock = PerformanceClock()
+    deadline = clock() + timeout
     while True:
         api.no_dialog(process.pid)
         if process.poll() is not None:
             raise RuntimeError('GUI exited while checking synthetic file operations')
         if predicate():
             return
-        if time.monotonic() >= deadline:
+        if clock() >= deadline:
             raise RuntimeError(failure)
         time.sleep(0.01)
 
@@ -849,6 +944,7 @@ def write_gui_cancel_fixture(path):
 
 
 def run_gui_file_entry(api, binary_dir, fixtures, evidence):
+    clock = PerformanceClock()
     isolated = Path(fixtures) / 'gui-file-entry'
     isolated.mkdir()
     fixture_hashes = {}
@@ -901,8 +997,8 @@ def run_gui_file_entry(api, binary_dir, fixtures, evidence):
         wait_gui(api, process, lambda: not busy(), 'GUI cancel operation did not complete')
         # Give an incorrectly retained queued path enough event-loop turns to
         # expose itself before checking exact final tabs and original contents.
-        until = time.monotonic() + 0.5
-        while time.monotonic() < until:
+        until = clock() + 0.5
+        while clock() < until:
             api.no_dialog(process.pid)
             api.responsive(hwnd)
             time.sleep(0.01)
@@ -994,8 +1090,9 @@ def gui_ru_observer_record():
 
 class GuiRuObserver:
     """Count actual synchronous calls, including text()'s two scalar calls."""
-    def __init__(self, api, record, started):
+    def __init__(self, api, record, started, clock=None):
         self.api, self.record, self.started = api, record, started
+        self.clock = PerformanceClock(started) if clock is None else clock
         self.current = None
         self.originals = {}
         self.shadows = {}
@@ -1011,7 +1108,7 @@ class GuiRuObserver:
         def measured(*args, **kwargs):
             if self.current is not None and self.current['messages'] >= GUI_RU_SNAPSHOT_MESSAGE_LIMIT:
                 raise RuntimeError('GUI Ru snapshot exceeded its 32 synchronous message limit')
-            begin = time.monotonic()
+            begin = self.clock()
             if begin - self.started > GUI_RU_TIMER_TIMEOUT_SECONDS:
                 raise RuntimeError('GUI 1 MB open and Ru timer styling exceeded 30 seconds')
             if name == 'responsive':
@@ -1028,13 +1125,13 @@ class GuiRuObserver:
             try:
                 return self.originals[name](*args, **kwargs)
             finally:
-                elapsed = (time.monotonic() - begin) * 1000
+                elapsed = (self.clock() - begin) * 1000
                 self.record['query_wall_ms'] += elapsed
                 self.record['max_query_ms'] = max(self.record['max_query_ms'], elapsed)
         return measured
 
     def snapshot(self, callback):
-        begin = time.monotonic()
+        begin = self.clock()
         current = {'start_ms': round((begin - self.started) * 1000, 3),
                    'wall_ms': 0.0, 'messages': 0, 'final': False}
         previous = self.record['snapshots']
@@ -1048,12 +1145,12 @@ class GuiRuObserver:
             current['final'] = bool(callback())
             return current['final']
         finally:
-            current['wall_ms'] = round((time.monotonic() - begin) * 1000, 3)
+            self.current = None
             self.record['snapshot_count'] += 1
+            self.record['max_snapshot_messages'] = max(self.record['max_snapshot_messages'], current['messages'])
+            current['wall_ms'] = round((self.clock() - begin) * 1000, 3)
             self.record['snapshot_wall_ms'] += current['wall_ms']
             self.record['max_snapshot_ms'] = max(self.record['max_snapshot_ms'], current['wall_ms'])
-            self.record['max_snapshot_messages'] = max(self.record['max_snapshot_messages'], current['messages'])
-            self.current = None
 
     def __exit__(self, *unused):
         for name in self.originals:
@@ -1104,8 +1201,9 @@ def parse_gui_ru_snapshots(text):
 
 
 class GuiRuDiagnostics:
-    def __init__(self, api, hwnd, binary_dir, record):
+    def __init__(self, api, hwnd, binary_dir, record, clock=None):
         self.api, self.hwnd, self.binary_dir, self.record = api, hwnd, binary_dir, record
+        self.clock = PerformanceClock() if clock is None else clock
         record.update(message=GUI_RU_DIAGNOSTIC_MESSAGE, capture_limit_ms=1000,
                       requests=[], receipts=[], captures=[], post_wall_ms=0.0, log_reads=0,
                       log_read_wall_ms=0.0, max_log_read_ms=0.0)
@@ -1114,18 +1212,18 @@ class GuiRuDiagnostics:
     def request(self, phase):
         if phase not in ('baseline', 'pending', 'final') or len(self.record['requests']) >= 3:
             raise RuntimeError('GUI Ru diagnostic request is outside its bounded phases')
-        begin = time.monotonic()
+        begin = self.clock()
         entry = {'phase': phase, 'post_wall_ms': 0.0, 'accepted': False}
         self.record['requests'].append(entry)
         try:
             self.api.post_ru_snapshot(self.hwnd)
             entry['accepted'] = True
         finally:
-            entry['post_wall_ms'] = round((time.monotonic() - begin) * 1000, 3)
+            entry['post_wall_ms'] = round((self.clock() - begin) * 1000, 3)
             self.record['post_wall_ms'] = round(sum(item['post_wall_ms'] for item in self.record['requests']), 3)
 
     def read(self):
-        begin = time.monotonic()
+        begin = self.clock()
         if self.record['log_reads'] >= 44:
             raise RuntimeError('GUI Ru diagnostic log reads exceeded their fixed bound')
         self.record['log_reads'] += 1
@@ -1143,27 +1241,27 @@ class GuiRuDiagnostics:
             self.record['receipts'] = records
             return len(records)
         finally:
-            elapsed = (time.monotonic() - begin) * 1000
+            elapsed = (self.clock() - begin) * 1000
             self.record['log_read_wall_ms'] = round(self.record['log_read_wall_ms'] + elapsed, 3)
             self.record['max_log_read_ms'] = round(max(self.record['max_log_read_ms'], elapsed), 3)
 
     def capture(self, expected):
-        begin = time.monotonic()
+        begin = self.clock()
         first_read = self.record['log_reads']
         entry = {'phase': self.record['requests'][-1]['phase'], 'wall_ms': 0.0, 'log_reads': 0}
         self.record['captures'].append(entry)
         try:
             while True:
                 count = self.read()
-                elapsed = time.monotonic() - begin
+                elapsed = self.clock() - begin
                 if elapsed > GUI_RU_DIAGNOSTIC_TIMEOUT_SECONDS:
                     raise RuntimeError('GUI Ru diagnostic receipt did not arrive within its separate 1-second limit')
                 if count == expected:
                     return
                 time.sleep(GUI_RU_RESPONSE_INTERVAL_MS / 1000)
         finally:
-            entry['wall_ms'] = round((time.monotonic() - begin) * 1000, 3)
             entry['log_reads'] = self.record['log_reads'] - first_read
+            entry['wall_ms'] = round((self.clock() - begin) * 1000, 3)
 
 
 def validate_gui_ru_observer(record, wall_ms, probes):
@@ -1257,10 +1355,13 @@ def validate_gui_ru_diagnostics(record):
         raise RuntimeError('GUI Ru same-generation diagnostic counters moved backwards')
 
 
-def validate_gui_ru_timer(record):
+def validate_gui_ru_timer(record, *, require_windows_clock=False):
     data, probes = gui_ru_timer_fixture()
     if not isinstance(record, dict) or set(record) != GUI_RU_TIMER_FIELDS:
         raise RuntimeError('GUI Ru timer performance record is missing or malformed')
+    validate_performance_clock(record['clock'], require_windows=require_windows_clock)
+    if record['clock_measurement'] != PERFORMANCE_CLOCK_MEASUREMENT:
+        raise RuntimeError('GUI Ru timing must disclose clock and observation limits')
     if (type(record['size']) is not int or record['size'] != len(data) or
             record['source_sha256'] != hashlib.sha256(data).hexdigest() or
             record['style_probes'] != probes or
@@ -1321,15 +1422,16 @@ def validate_gui_ru_responsiveness(record, wall_ms):
         raise RuntimeError('GUI Ru invalidated region was not naturally serviced within its styling window')
 
 
-def run_gui_ru_responsiveness(api, process, hwnd, editor, record, timer_started, still_styling):
+def run_gui_ru_responsiveness(api, process, hwnd, editor, record, timer_started, still_styling, clock=None):
     # A single bounded interaction on the untouched 1 MB corpus. All waits use
     # the original timer-stage deadline; no new completion window is created.
+    clock = PerformanceClock(timer_started) if clock is None else clock
     record.update(measurement=GUI_RU_RESPONSE_MEASUREMENT, navigation=[], paint={})
     if api.scalar(editor, 2008) != 0 or not still_styling():  # SCI_GETCURRENTPOS
         raise RuntimeError('GUI Ru responsiveness probe did not begin at BOF while styling was pending')
-    input_started = time.monotonic()
+    input_started = clock()
     api.post_navigation(editor, 'RIGHT')
-    paint_started = time.monotonic()
+    paint_started = clock()
     initial_pending = api.invalidate_for_paint(editor)
     paint = record['paint']
     paint.update(invalidations=1, pending_observed=initial_pending,
@@ -1338,13 +1440,13 @@ def run_gui_ru_responsiveness(api, process, hwnd, editor, record, timer_started,
         api.no_dialog(process.pid)
         if process.poll() is not None:
             raise RuntimeError('GUI exited during pending-style input/paint probes')
-        now = time.monotonic()
+        now = clock()
         if now - timer_started > GUI_RU_TIMER_TIMEOUT_SECONDS:
             raise RuntimeError('GUI 1 MB open and Ru timer styling exceeded 30 seconds')
         if len(record['navigation']) < 2:
             expected = GUI_RU_NAVIGATION[len(record['navigation'])]
             position = api.scalar(editor, 2008)
-            input_ms = (time.monotonic() - input_started) * 1000
+            input_ms = (clock() - input_started) * 1000
             if input_ms > GUI_RU_RESPONSE_TIMEOUT_MS:
                 raise RuntimeError('GUI Ru queued navigation exceeded the existing 5-second response limit')
             if position == expected['after']:
@@ -1353,13 +1455,13 @@ def run_gui_ru_responsiveness(api, process, hwnd, editor, record, timer_started,
                 if not pending:
                     raise RuntimeError('GUI Ru queued navigation was only observed after styling completed')
                 if len(record['navigation']) == 1:
-                    input_started = time.monotonic()
+                    input_started = clock()
                     api.post_navigation(editor, 'LEFT')
             elif position != expected['before']:
                 raise RuntimeError('GUI Ru queued navigation reached an unexpected UTF-8 caret position')
         if not paint['cleared']:
             pending_region = api.paint_pending(editor)
-            paint_ms = (time.monotonic() - paint_started) * 1000
+            paint_ms = (clock() - paint_started) * 1000
             paint['wall_ms'] = round(paint_ms, 3)
             if paint_ms > GUI_RU_RESPONSE_TIMEOUT_MS:
                 raise RuntimeError('GUI Ru paint-region service exceeded the existing 5-second response limit')
@@ -1437,6 +1539,7 @@ def validate_gui_ru_edits(record):
 
 
 def run_gui_ru_edits(api, process, hwnd, source, record):
+    clock = PerformanceClock()
     original, probes, folds, _ = gui_ru_edit_fixture()
     source_sha = hashlib.sha256(original).hexdigest()
     def status_done():
@@ -1491,7 +1594,7 @@ def run_gui_ru_edits(api, process, hwnd, source, record):
             raise RuntimeError('Ru GUI edit caret did not reach the requested byte position')
         metrics = dict(operation, wall_ms=0.0, max_response_ms=0.0, probes=0)
         record['operations'].append(metrics)
-        started = time.monotonic()
+        started = clock()
         finished = None
         try:
             if operation['operation'] == 'insert':
@@ -1504,12 +1607,12 @@ def run_gui_ru_edits(api, process, hwnd, source, record):
                 api.no_dialog(process.pid)
                 if process.poll() is not None:
                     raise RuntimeError('GUI exited during a real length-changing Ru edit')
-                response = time.monotonic()
+                response = clock()
                 api.responsive(hwnd)
-                metrics['max_response_ms'] = max(metrics['max_response_ms'], (time.monotonic() - response) * 1000)
+                metrics['max_response_ms'] = max(metrics['max_response_ms'], (clock() - response) * 1000)
                 metrics['probes'] += 1
                 complete = state_matches(data, shifted, True, position)
-                elapsed = time.monotonic() - started
+                elapsed = clock() - started
                 if elapsed > 30:
                     raise RuntimeError('Real length-changing Ru edit exceeded 30 seconds')
                 if complete:
@@ -1517,7 +1620,7 @@ def run_gui_ru_edits(api, process, hwnd, source, record):
                     break
                 time.sleep(0.01)
         finally:
-            metrics['wall_ms'] = round((finished if finished is not None else time.monotonic() - started) * 1000, 3)
+            metrics['wall_ms'] = round((finished if finished is not None else clock() - started) * 1000, 3)
             metrics['max_response_ms'] = round(metrics['max_response_ms'], 3)
         if sha(source) != source_sha:
             raise RuntimeError('Real Ru GUI editing changed the source file without a save')
@@ -1540,6 +1643,7 @@ def run_gui_ru_edits(api, process, hwnd, source, record):
 
 
 def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
+    clock = PerformanceClock()
     isolated = Path(fixtures) / 'gui-ru-syntax'
     isolated.mkdir()
     fixture_hashes = {}
@@ -1561,7 +1665,8 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
     timer_record = {'size': len(timer_data), 'wall_ms': 0.0, 'first_head_style_ms': None, 'max_response_ms': 0.0,
                     'probes': 0, 'source_sha256': timer_sha, 'style_probes': timer_probes,
                     'last_probe': None, 'responsiveness': {}, 'observer': gui_ru_observer_record(),
-                    'diagnostics': {}, 'head_style_measurement': GUI_RU_HEAD_MEASUREMENT}
+                    'diagnostics': {}, 'head_style_measurement': GUI_RU_HEAD_MEASUREMENT,
+                    'clock': {}, 'clock_measurement': PERFORMANCE_CLOCK_MEASUREMENT}
     edit_source = inputs / '真实编辑 十万字节 😀.ru'
     edit_data, edit_probes, edit_folds, _ = gui_ru_edit_fixture()
     edit_source.write_bytes(edit_data)
@@ -1571,6 +1676,7 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
                    'fold_probes': edit_folds, 'operations': [], 'undo_commands': 0}
 
     def exercise(process, hwnd):
+        timer_record['clock'] = performance_clock_record()
         checks = {}
         tab_count = lambda: api.scalar(api.control(hwnd, 10), 0x1304)
         wait_gui(api, process, lambda: tab_count() == 2 and
@@ -1644,10 +1750,10 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
         # This is the production timer path, in the same detached process.
         # Inspect only 16 token bytes, never fetch or scan the 1 MB document
         # cross-process. The native suite independently checks complete bytes.
-        diagnostics = GuiRuDiagnostics(api, hwnd, isolated, timer_record['diagnostics'])
+        diagnostics = GuiRuDiagnostics(api, hwnd, isolated, timer_record['diagnostics'], clock)
         diagnostics.request('baseline')
         diagnostics.capture(1)
-        started = time.monotonic()
+        started = clock()
         finished_elapsed = None
         active = status_handle = None
         matched_head = {}
@@ -1690,7 +1796,7 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
                         matched[label] = all(values)
                 matched_head = {label: value for label, value in matched.items() if label.startswith('head')}
                 if all(matched_head.values()) and timer_record['first_head_style_ms'] is None:
-                    timer_record['first_head_style_ms'] = round((time.monotonic() - started) * 1000, 3)
+                    timer_record['first_head_style_ms'] = round((clock() - started) * 1000, 3)
             last.update(status=status[:512], style_matches=matched)
             needs_responsiveness = (not timer_record['responsiveness'] and length == len(timer_data) and
                 'Styling Ru' in status and not all(matched[name] for name in matched if name.startswith('tail')))
@@ -1707,29 +1813,29 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
                     'Styling Ru' not in status and not status.lstrip().startswith('Opening:'))
 
         try:
-            with GuiRuObserver(api, timer_record['observer'], started) as observer:
+            with GuiRuObserver(api, timer_record['observer'], started, clock) as observer:
                 api.drop(editor, [timer_source])
                 checks['timer_child_drop_routed'] = True
                 while True:
                     api.no_dialog(process.pid)
                     if process.poll() is not None:
                         raise RuntimeError('GUI exited during the 1 MB Ru timer stage')
-                    now = time.monotonic()
+                    now = clock()
                     if now - started > GUI_RU_TIMER_TIMEOUT_SECONDS:
                         raise RuntimeError('GUI 1 MB open and Ru timer styling exceeded 30 seconds')
                     if now >= next_response:
-                        response_started = time.monotonic()
+                        response_started = clock()
                         try:
                             api.responsive(hwnd)
                         finally:
                             timer_record['probes'] = timer_record['observer']['wm_null_calls']
                             timer_record['max_response_ms'] = max(timer_record['max_response_ms'],
-                                (time.monotonic() - response_started) * 1000)
-                        next_response = time.monotonic() + GUI_RU_RESPONSE_INTERVAL_MS / 1000
+                                (clock() - response_started) * 1000)
+                        next_response = clock() + GUI_RU_RESPONSE_INTERVAL_MS / 1000
                     complete = False
-                    if time.monotonic() >= next_snapshot:
+                    if clock() >= next_snapshot:
                         complete = observer.snapshot(snapshot)
-                        next_snapshot = time.monotonic() + GUI_RU_SNAPSHOT_INTERVAL_MS / 1000
+                        next_snapshot = clock() + GUI_RU_SNAPSHOT_INTERVAL_MS / 1000
                     if needs_responsiveness:
                         needs_responsiveness = False
                         diagnostics.request('pending')
@@ -1739,9 +1845,9 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
                                     for label, probe in timer_probes.items() if label.startswith('tail')
                                     for position in range(probe['offset'], probe['offset'] + probe['length'])))
                         run_gui_ru_responsiveness(api, process, hwnd, active,
-                            timer_record['responsiveness'], started, still_styling)
+                            timer_record['responsiveness'], started, still_styling, clock)
                         checks.update(timer_queued_navigation=True, timer_paint_region_serviced=True)
-                    elapsed = time.monotonic() - started
+                    elapsed = clock() - started
                     if elapsed > GUI_RU_TIMER_TIMEOUT_SECONDS:
                         raise RuntimeError('GUI 1 MB open and Ru timer styling exceeded 30 seconds')
                     if complete:
@@ -1751,23 +1857,30 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
                         break
                     # No busy spin or catch-up burst: the next send is due at
                     # least 50 ms after the last completed WM_NULL query.
-                    delay = min(next_response, next_snapshot, started + GUI_RU_TIMER_TIMEOUT_SECONDS) - time.monotonic()
+                    delay = min(next_response, next_snapshot, started + GUI_RU_TIMER_TIMEOUT_SECONDS) - clock()
                     time.sleep(max(0.001, delay))
             if sha(timer_source) != timer_sha:
                 raise RuntimeError('GUI timer styling modified the 1 MB source file')
             checks['timer_source_bytes_preserved'] = True
         finally:
-            timer_record['wall_ms'] = round((finished_elapsed if finished_elapsed is not None
-                                            else time.monotonic() - started) * 1000, 3)
-            timer_record['max_response_ms'] = round(timer_record['max_response_ms'], 3)
             failing = sys.exc_info()[0] is not None
+            clock_error = None
+            try:
+                timer_record['wall_ms'] = round((finished_elapsed if finished_elapsed is not None
+                                                else clock() - started) * 1000, 3)
+            except RuntimeError as exc:
+                timer_record.update(wall_ms=None, clock_error=str(exc))
+                clock_error = exc
+            timer_record['max_response_ms'] = round(timer_record['max_response_ms'], 3)
             try:
                 diagnostics.request('final')
                 diagnostics.capture(len(timer_record['diagnostics']['requests']))
             except Exception as exc:
                 timer_record['diagnostics']['error'] = str(exc)
-                if not failing:
+                if not failing and clock_error is None:
                     raise
+            if clock_error is not None and not failing:
+                raise clock_error
         validate_gui_ru_timer(timer_record)
         checks.update(run_gui_ru_edits(api, process, hwnd, edit_source, edit_record))
         return checks
@@ -1915,7 +2028,7 @@ def validate_acceptance(summary, root=None):
         if test['name'] == 'main-gui-ru-syntax':
             if not all(test.get(key) for key in GUI_RU_CHECKS):
                 raise RuntimeError('GUI Ru acceptance lacks a required style/fold/visibility/clean-state check')
-            validate_gui_ru_timer(test.get('timer_performance'))
+            validate_gui_ru_timer(test.get('timer_performance'), require_windows_clock=True)
             validate_gui_ru_edits(test.get('edit_performance'))
         if test['name'] == 'main-gui-file-entry':
             if not all(test.get(key) for key in GUI_FILE_CHECKS):

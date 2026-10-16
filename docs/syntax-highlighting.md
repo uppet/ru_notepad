@@ -1,4 +1,4 @@
-# Syntax highlighting in 0.1.4 preview
+# Syntax highlighting in 0.1.5 preview
 
 ## Supported languages
 
@@ -219,10 +219,13 @@ passed; see that run's exact-commit results and distribution validation receipt.
 ## Ru-owned native acceptance
 
 The production lexical policy has **338 portable assertions**, replaying small
-fixtures at different scalar boundaries. The real Scintilla bridge adds **125
+fixtures at different scalar boundaries. The real Scintilla bridge requires **149
 assertions** for byte styles, fold levels, incomplete multiline edits, bounded
 reads, checkpoint convergence, stale document generations, fallback visibility,
-and text/savepoint/undo preservation. Length-changing insertion/deletion at the
+and text/savepoint/undo preservation. This includes 24 new bulk-decoder cases
+covering old/new event equality, malformed bounds/high bits/order and detached
+results; 23 arithmetic/control-flow cases per portable backend supplement them.
+Length-changing insertion/deletion at the
 beginning, middle and end is compared byte-for-byte and fold-for-fold with a fresh
 scan; further edits while work is pending must converge to the latest document. An isolated **8-assertion** run omits
 Lexilla.dll and proves that Ru styling and folding still work with RuSyntax.dll.
@@ -257,7 +260,9 @@ they do not scan or read document text. Diagnostic collection cannot turn a
 post-deadline completion into a pass. The gate also measures representative
 100 KB real insertion/Backspace at
 the beginning, middle and end. These are required
-Windows gates for 0.1.4; a local compile is not evidence that they passed.
+Windows gates for the 0.1.5 candidate, with 1,451 required assertions across
+32 results. Native acceptance and performance gain remain pending; a local
+compile or a green language API run is not evidence that they passed.
 
 Physical mouse interaction, non-US keyboard layouts and IME composition still
 need manual acceptance. Keyboard shortcuts use Windows virtual-key positions;

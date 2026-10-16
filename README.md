@@ -2,7 +2,7 @@
 
 A small Windows text editor written mostly in **Ru**. Open a file, edit it in a native Scintilla control, and keep several documents in tabs. Ru handles the menus, document state, encoding choices, save policy, and search commands.
 
-**Status: 0.1.4 preview development for Windows x64.** The released 0.1.3 build passed [835 native Windows assertions and two GUI gates](https://github.com/uppet/ru_notepad/actions/runs/38887294845), including a full 500,039,680-byte editor roundtrip. New 0.1.4 Ru syntax features require their own exact-build CI receipt. Use samples or copies while testing; full Notepad++ parity remains a longer-term goal.
+**Status: 0.1.5 preview candidate for Windows x64.** This candidate uses Ru 0.21.6 owned-memory bulk reads for event transport, with unchanged lexical/folding policy. Its native acceptance and performance gain remain unverified. The separate [0.1.4 repair4 run](https://github.com/uppet/ru_notepad/actions/runs/38952771302) has green Linux and Windows jobs, with 1,427 native assertions / 32 results verified from the original evidence; its two original ZIPs have also passed independent verification. Use samples or copies while testing; full Notepad++ parity remains a longer-term goal.
 
 ## What is included
 
