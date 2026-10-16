@@ -11,13 +11,25 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($env:OS -ne 'Windows_NT') { throw 'This acceptance run requires real Windows.' }
 if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'PowerShell 7 or newer is required.' }
+# Get-Command can return every matching PATH application, even without -All.
+# Resolve one executable object before reading Source; never flatten path arrays.
+function Resolve-Application([string]$Name) {
+    $Command = Get-Command -Name $Name -CommandType Application -ErrorAction Stop |
+        Select-Object -First 1
+    if ($null -eq $Command -or [string]::IsNullOrWhiteSpace($Command.Source) -or
+        -not (Test-Path -LiteralPath $Command.Source -PathType Leaf)) {
+        throw "No usable application path for: $Name"
+    }
+    return [string]$Command.Source
+}
+
 $Root = Split-Path -Parent $PSScriptRoot
 $RuRoot = (Resolve-Path -LiteralPath $RuRoot).Path
 $MsysRoot = (Resolve-Path -LiteralPath $MsysRoot).Path
 $MinGW = Join-Path $MsysRoot 'mingw64'
 $Bin = Join-Path $MinGW 'bin'
-$Python = (Get-Command python -CommandType Application).Source
-$Git = (Get-Command git -CommandType Application).Source
+$Python = Resolve-Application 'python'
+$Git = Resolve-Application 'git'
 $env:PATH = "$Bin;$env:PATH"
 $env:PYTHONUTF8 = '1'
 $env:PYTHONDONTWRITEBYTECODE = '1'
@@ -43,7 +55,7 @@ try {
     }
     if (Git-Value @('status','--porcelain')) { throw 'Ru checkout must be unmodified.' }
     foreach ($name in @('gcc.exe','g++.exe','windres.exe','ar.exe','ranlib.exe','objdump.exe','mingw32-make.exe')) {
-        if (-not (Test-Path -LiteralPath (Join-Path $Bin $name))) { throw "Missing official MinGW tool: $name" }
+        if (-not (Test-Path -LiteralPath (Join-Path $Bin $name) -PathType Leaf)) { throw "Missing official MinGW tool: $name" }
     }
     $Ci = Join-Path $Root 'build/windows-ci'
     if (Test-Path -LiteralPath $Ci) { throw 'Use a fresh checkout: build/windows-ci already exists.' }

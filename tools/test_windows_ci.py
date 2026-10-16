@@ -5,6 +5,9 @@ These verify orchestration/fail-closed policy only. They are NOT native editor,
 GUI, DLL, file-codec, ACL, or Windows runtime acceptance evidence.
 """
 from pathlib import Path
+import re
+import shutil
+import subprocess
 import struct
 import sys
 import tempfile
@@ -37,6 +40,58 @@ class HarnessTests(unittest.TestCase):
         with patch.object(ci, 'cleanup_process', side_effect=kill_synthetic):
             return ci.run_console(NoDialogs(), 'fixture', [sys.executable, '-c', code],
                                   self.root, r'^TOTAL PASS: 1\s*$', timeout=timeout)
+
+    def powershell_resolver(self):
+        source = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        match = re.search(r'(?ms)^function Resolve-Application\b.*?^}', source)
+        self.assertIsNotNone(match, 'Application resolution must use the shared helper')
+        return source, match.group(0)
+
+    def test_powershell_resolves_one_verified_application_object(self):
+        source, resolver = self.powershell_resolver()
+        self.assertEqual(source.count('Get-Command -'), 1)
+        self.assertRegex(resolver, r'Get-Command -Name \$Name -CommandType Application -ErrorAction Stop\s*\|\s*Select-Object -First 1')
+        self.assertIn('Test-Path -LiteralPath $Command.Source -PathType Leaf', resolver)
+        self.assertIn('return [string]$Command.Source', resolver)
+
+    def test_powershell_git_and_python_share_single_path_resolution(self):
+        source, _ = self.powershell_resolver()
+        self.assertIn("$Python = Resolve-Application 'python'", source)
+        self.assertIn("$Git = Resolve-Application 'git'", source)
+        self.assertNotRegex(source, r'\(Get-Command[^\n]+\)\.Source')
+        self.assertIn('Test-Path -LiteralPath (Join-Path $Bin $name) -PathType Leaf', source)
+
+    @unittest.skipUnless(sys.platform == 'win32',
+                         'PowerShell duplicate-PATH execution requires the Windows CI host')
+    def test_powershell_duplicate_path_executes_only_first_application(self):
+        powershell = shutil.which('pwsh')
+        self.assertIsNotNone(powershell, 'Windows CI must execute the PowerShell regression')
+        _, resolver = self.powershell_resolver()
+        first, second = self.root / 'first path', self.root / 'second path'
+        first.mkdir()
+        second.mkdir()
+        name = 'ru-ci-resolve-probe.cmd'
+        for folder, label in ((first, 'first'), (second, 'second')):
+            (folder / name).write_text(f'@echo off\necho {label}\nexit /b 0\n', encoding='ascii')
+        quote = lambda value: "'" + str(value).replace("'", "''") + "'"
+        script = resolver + "\n" + f"""
+$ErrorActionPreference = 'Stop'
+$env:PATH = {quote(str(first) + ';' + str(second) + ';' + str(first) + ';')} + $env:PATH
+$candidates = @(Get-Command -Name {quote(name)} -CommandType Application -All)
+if ($candidates.Count -lt 2) {{ throw 'Duplicate PATH fixture did not create multiple candidates' }}
+$selected = Resolve-Application {quote(name)}
+if ($selected -isnot [string] -or $selected -ne {quote(first / name)}) {{
+    throw 'Resolver did not select exactly the first executable path'
+}}
+if ((& $selected) -cne 'first' -or $LASTEXITCODE -ne 0) {{
+    throw 'Selected executable did not run with its space-containing path intact'
+}}
+Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
+"""
+        completed = subprocess.run([powershell, '-NoProfile', '-NonInteractive',
+                                    '-Command', script], capture_output=True, text=True, timeout=30)
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertIn('DUPLICATE_PATH_RESOLUTION_PASS', completed.stdout)
 
     def test_console_requires_execution_exit_zero_and_marker(self):
         result = self.console("print('PASS: synthetic'); print('TOTAL PASS: 1')")
