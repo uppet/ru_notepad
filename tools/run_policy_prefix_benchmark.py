@@ -52,7 +52,7 @@ REVIEWED_CHANGED_SHA256 = {
     "CHANGELOG.md": "e6be7327cc6cba80fdd3ae20ca503a4902ea92b35884df82b14207864983fc4d",
     "README.md": "cf5cb27568d8b393e030cd13313605dec31fbeb913cd5b2ce5ddce2bd679469c",
     "VERSION": "cf2dab38106cba47d35071879d2d9063a7c27391879cf15f4f2062e0761a3347",
-    "docs/build-provenance.md": "bfca3379d9a734258ea30edce191aff8a71c95396ddd331ed568d3f5b17acbca",
+    "docs/build-provenance.md": "3840c5e27494de97d80c3bf595677afb32c8ff821c8aa4980069ec5cb36dbb8d",
     "docs/direct-style-publication.md": "55f2c27ed9c85ecadd171519e4a7704f24703d0d8295b40d8a8a79a727797dc8",
     "docs/preview-validation.md": "96a1dacec6be26e7536ea96c8a01f061e0f2451bc32c29955299c549d05b4e27",
     "docs/ru-language-syntax.md": "ddffdc487c2f95b94ce8756949afaf5e2f0c81bc284f497966f789f86eed5820",
@@ -66,9 +66,11 @@ REVIEWED_CHANGED_SHA256 = {
     "src/ru_lexical.ru": "deb5629333f2e76125b396bfe640b327ea6f1fd42f95f24277c86c5209fb12ec",
     "tests/fixtures/ru_policy_fast_plan.json": "a712c3b5c70e5bfe4ae09900d928f594c2c88bb49448d40ca15422b09a015e90",
     "tools/benchmark_ru_policy_fast.py": "08f1f86e0dec120dd0e6f7a10dccdacfcfa0483bda03d3a54882b87677612b59",
+    "tools/test_ru_syntax_profile.py": "621083502c156d3f00ddbf8c9c311367387546c9068dcf3a12e91ef1d5cef161",
     "tools/test_ru_policy_fast.py": "2d2af5d851cfa5086e678b3150f4c20f7440f4a57eca78d4439d1b29f59fd1ef",
-    "tools/test_windows_ci.py": "ab536002e1867e58f3d4932bb9a39caa09d590bcec0f745f81d5fbca5435e485",
+    "tools/test_windows_ci.py": "05814ef837b96c7114a242236191db5fdae76249b6651cabd281b4fab5b54228",
     "tools/verify_ru_policy_fast_outputs.py": "fb8401c520ed4f44c572c1638731d364c1c7e53bc4a708f1e5955847fb818de4",
+    "tools/windows_ci.ps1": "e2b7c4678ea530d121b984e2230e89670526bce69c573635725663947386ea48",
     "tools/windows_ci.py": "e6d697e776a659b9c78bb5032d298b9caeea807e63a48dbbe053570495e1bc0c"
 }
 GRAPH_NOTES = ('Both policies use the same current candidate, direct route, compiler, roots, '

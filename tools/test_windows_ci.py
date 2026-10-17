@@ -17,6 +17,7 @@ import sys
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
+import zipfile
 from unittest.mock import Mock, call, patch
 
 import windows_ci as ci
@@ -94,6 +95,131 @@ class HarnessTests(unittest.TestCase):
         self.assertIn("$Git = Resolve-Application 'git'", source)
         self.assertNotRegex(source, r'\(Get-Command[^\n]+\)\.Source')
         self.assertIn('Test-Path -LiteralPath (Join-Path $Bin $name) -PathType Leaf', source)
+
+    def powershell_archive_helper(self):
+        source = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        match = re.search(r'(?ms)^function Expand-VerifiedArchive\b.*?^}', source)
+        self.assertIsNotNone(match, 'Official archive extraction must use the shared helper')
+        return source, match.group(0)
+
+    def archive_test_powershell(self):
+        powershell = shutil.which('pwsh')
+        if powershell is None:
+            if sys.platform == 'win32':
+                self.fail('Windows CI must execute the real PowerShell archive regression')
+            self.skipTest('PowerShell archive execution unavailable: pwsh is absent on this non-Windows host')
+        return powershell
+
+    def test_official_archives_use_only_exact_pinned_sourceforge_requests(self):
+        source, helper = self.powershell_archive_helper()
+        pins = (
+            ('scintilla', '5.6.7', 'scintilla567.zip', '$Archive', 1904249,
+             '2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c'),
+            ('lexilla', '5.5.4', 'lexilla554.zip', '$LexillaArchive', 1598324,
+             '5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0'),
+        )
+        requests = []
+        for name, version, filename, variable, size, digest in pins:
+            request = (f"Invoke-WebRequest -Uri 'https://sourceforge.net/projects/scintilla/files/"
+                       f"{name}/{version}/{filename}/download' -OutFile {variable} -TimeoutSec 120")
+            requests.append(request)
+            guarded_expand = (f"Expand-VerifiedArchive -Archive {variable} "
+                              "-DestinationPath (Join-Path $Root 'vendor') `\n"
+                              f"        -ExpectedSize {size} -ExpectedSha256 '{digest}'")
+            self.assertIn(guarded_expand, source)
+            self.assertLess(source.index(request), source.index(guarded_expand))
+            self.assertIn(f"$Root 'vendor/{name}'", source)
+        self.assertEqual(re.findall(r'(?m)^\s*(Invoke-WebRequest[^\n]+)$', source), requests)
+        self.assertEqual(source.count('Expand-VerifiedArchive -Archive '), 2)
+        self.assertEqual(source.count('Expand-Archive -'), 1)
+        self.assertIn('Expand-Archive -LiteralPath $Archive -DestinationPath $DestinationPath', helper)
+
+    def test_archive_powershell_host_controls_fail_windows_and_skip_only_when_absent(self):
+        for platform in ('win32', 'linux'):
+            with self.subTest(platform=platform, available=True), \
+                    patch.object(sys, 'platform', platform), \
+                    patch.object(shutil, 'which', return_value='synthetic-pwsh'):
+                self.assertEqual(self.archive_test_powershell(), 'synthetic-pwsh')
+        with patch.object(sys, 'platform', 'win32'), patch.object(shutil, 'which', return_value=None):
+            with self.assertRaisesRegex(self.failureException, 'Windows CI must execute'):
+                self.archive_test_powershell()
+        with patch.object(sys, 'platform', 'linux'), patch.object(shutil, 'which', return_value=None):
+            with self.assertRaisesRegex(unittest.SkipTest, 'pwsh is absent on this non-Windows host'):
+                self.archive_test_powershell()
+
+    def test_powershell_archive_guards_execute_before_extraction(self):
+        powershell = self.archive_test_powershell()
+        _, helper = self.powershell_archive_helper()
+        contents = {'scintilla/include/Scintilla.h': b'synthetic header\n',
+                    'scintilla/win32/makefile': b'synthetic makefile\n'}
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+            for name, data in contents.items():
+                archive.writestr(name, data)
+        valid = buffer.getvalue()
+        cases = []
+        for name, data, error in (
+                ('valid', valid, ''),
+                ('html', b'<!doctype html><html>browser challenge</html>', 'ZIP magic mismatch'),
+                ('size', valid, 'size mismatch'),
+                ('digest', valid, 'SHA256 mismatch'),
+                ('magic', b'HTML' + valid[4:], 'ZIP magic mismatch'),
+                ('malformed', b'PK\x03\x04broken central directory', 'malformed ZIP')):
+            archive_path = self.root / (name + '.zip')
+            archive_path.write_bytes(data)
+            cases.append({'name': name, 'archive': str(archive_path),
+                          'destination': str(self.root / (name + ' extracted')),
+                          'size': len(data) + int(name == 'size'),
+                          'sha256': '0' * 64 if name == 'digest' else hashlib.sha256(data).hexdigest(),
+                          'error': error})
+        case_file = self.root / 'archive cases.json'
+        case_file.write_text(json.dumps(cases), encoding='utf-8')
+        quote = lambda value: "'" + str(value).replace("'", "''") + "'"
+        # Exercise the actual production helper. The spy delegates to real
+        # extraction on success and proves invalid bytes never reach it.
+        script = self.root / 'archive probe.ps1'
+        script.write_text("Set-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n" + helper + f"""
+$script:ExtractionCalls = 0
+function Expand-Archive([string]$LiteralPath, [string]$DestinationPath) {{
+    $script:ExtractionCalls++
+    Microsoft.PowerShell.Archive\\Expand-Archive -LiteralPath $LiteralPath -DestinationPath $DestinationPath
+}}
+$Cases = Get-Content -LiteralPath {quote(case_file)} -Raw | ConvertFrom-Json
+foreach ($Case in $Cases) {{
+    $Before = $script:ExtractionCalls
+    $Failure = ''
+    try {{
+        Expand-VerifiedArchive -Archive $Case.archive -DestinationPath $Case.destination `
+            -ExpectedSize $Case.size -ExpectedSha256 $Case.sha256
+    }} catch {{
+        $Failure = $_.Exception.Message
+    }}
+    if ($Case.error -eq '') {{
+        if ($Failure -ne '' -or $script:ExtractionCalls -ne ($Before + 1)) {{
+            throw "Valid ZIP was not extracted exactly once: $Failure"
+        }}
+    }} else {{
+        if ($Failure -notlike ('*' + $Case.error + '*')) {{
+            throw "Archive case $($Case.name) failed for the wrong reason: $Failure"
+        }}
+        if ($script:ExtractionCalls -ne $Before -or (Test-Path -LiteralPath $Case.destination)) {{
+            throw "Rejected archive case $($Case.name) reached extraction"
+        }}
+    }}
+    Write-Output ('ARCHIVE_GUARD_PASS ' + $Case.name)
+}}
+""", encoding='utf-8')
+        result = subprocess.run([powershell, '-NoProfile', '-NonInteractive', '-File', str(script)],
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ['ARCHIVE_GUARD_PASS ' + case['name'] for case in cases])
+        extracted = self.root / 'valid extracted'
+        self.assertEqual({path.relative_to(extracted).as_posix() for path in extracted.rglob('*')},
+                         set(contents) | {'scintilla', 'scintilla/include', 'scintilla/win32'})
+        self.assertEqual({path.relative_to(extracted).as_posix(): path.read_bytes()
+                          for path in extracted.rglob('*') if path.is_file()}, contents)
+        for case in cases[1:]:
+            self.assertFalse(Path(case['destination']).exists(), case['name'])
 
     @unittest.skipUnless(sys.platform == 'win32',
                          'PowerShell duplicate-PATH execution requires the Windows CI host')

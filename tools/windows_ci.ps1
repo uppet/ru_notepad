@@ -23,6 +23,43 @@ function Resolve-Application([string]$Name) {
     return [string]$Command.Source
 }
 
+# Validate ordinary download bytes before any archive extraction or build.
+function Expand-VerifiedArchive(
+    [string]$Archive, [string]$DestinationPath,
+    [long]$ExpectedSize, [string]$ExpectedSha256
+) {
+    if (-not (Test-Path -LiteralPath $Archive -PathType Leaf)) {
+        throw 'Official archive is missing; refusing extraction or execution.'
+    }
+    if ((Get-Item -LiteralPath $Archive).Length -ne $ExpectedSize) {
+        throw 'Official archive size mismatch; refusing extraction or execution.'
+    }
+    $Stream = [System.IO.File]::OpenRead($Archive)
+    try {
+        $Magic = [byte[]]::new(4)
+        if ($Stream.Read($Magic, 0, 4) -ne 4 -or
+            $Magic[0] -ne 0x50 -or $Magic[1] -ne 0x4b -or
+            $Magic[2] -ne 0x03 -or $Magic[3] -ne 0x04) {
+            throw 'Official archive ZIP magic mismatch; refusing extraction or execution.'
+        }
+    } finally {
+        $Stream.Dispose()
+    }
+    if ((Get-FileHash -LiteralPath $Archive -Algorithm SHA256).Hash.ToLowerInvariant() -cne $ExpectedSha256) {
+        throw 'Official archive SHA256 mismatch; refusing extraction or execution.'
+    }
+    $Zip = $null
+    try {
+        $Zip = [System.IO.Compression.ZipFile]::OpenRead($Archive)
+        if ($Zip.Entries.Count -eq 0) { throw 'Empty archive' }
+    } catch {
+        throw 'Official archive is a malformed ZIP; refusing extraction or execution.'
+    } finally {
+        if ($null -ne $Zip) { $Zip.Dispose() }
+    }
+    Expand-Archive -LiteralPath $Archive -DestinationPath $DestinationPath
+}
+
 $Root = Split-Path -Parent $PSScriptRoot
 $RuRoot = (Resolve-Path -LiteralPath $RuRoot).Path
 $MsysRoot = (Resolve-Path -LiteralPath $MsysRoot).Path
@@ -74,23 +111,19 @@ try {
     $Downloads = Join-Path $Root 'vendor/downloads'
     New-Item -ItemType Directory -Path $Downloads -Force | Out-Null
     $Archive = Join-Path $Downloads 'scintilla567.zip'
-    Invoke-WebRequest -Uri 'https://www.scintilla.org/scintilla567.zip' -OutFile $Archive -TimeoutSec 120
-    if ((Get-FileHash -LiteralPath $Archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c') {
-        throw 'Official Scintilla archive hash mismatch; refusing extraction or execution.'
-    }
+    Invoke-WebRequest -Uri 'https://sourceforge.net/projects/scintilla/files/scintilla/5.6.7/scintilla567.zip/download' -OutFile $Archive -TimeoutSec 120
     if (Test-Path -LiteralPath (Join-Path $Root 'vendor/scintilla')) {
         throw 'Use a fresh checkout: vendor/scintilla already exists.'
     }
-    Expand-Archive -LiteralPath $Archive -DestinationPath (Join-Path $Root 'vendor')
+    Expand-VerifiedArchive -Archive $Archive -DestinationPath (Join-Path $Root 'vendor') `
+        -ExpectedSize 1904249 -ExpectedSha256 '2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c'
     $LexillaArchive = Join-Path $Downloads 'lexilla554.zip'
-    Invoke-WebRequest -Uri 'https://www.scintilla.org/lexilla554.zip' -OutFile $LexillaArchive -TimeoutSec 120
-    if ((Get-FileHash -LiteralPath $LexillaArchive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0') {
-        throw 'Official Lexilla archive hash mismatch; refusing extraction or execution.'
-    }
+    Invoke-WebRequest -Uri 'https://sourceforge.net/projects/scintilla/files/lexilla/5.5.4/lexilla554.zip/download' -OutFile $LexillaArchive -TimeoutSec 120
     if (Test-Path -LiteralPath (Join-Path $Root 'vendor/lexilla')) {
         throw 'Use a fresh checkout: vendor/lexilla already exists.'
     }
-    Expand-Archive -LiteralPath $LexillaArchive -DestinationPath (Join-Path $Root 'vendor')
+    Expand-VerifiedArchive -Archive $LexillaArchive -DestinationPath (Join-Path $Root 'vendor') `
+        -ExpectedSize 1598324 -ExpectedSha256 '5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0'
     # Native MinGW make uses the official Windows makefile and static C++ runtime.
     Invoke-Checked (Join-Path $Bin 'mingw32-make.exe') @(
         '-j2','-C',(Join-Path $Root 'vendor/scintilla/win32'),'../bin/Scintilla.dll',

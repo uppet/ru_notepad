@@ -5,12 +5,18 @@ This repository contains the editor’s source and build/test tools. The applica
 ## Pinned inputs
 
 - **Ru 0.21.6:** public commit [`a2f6faa0f914781dea74cb6f0a7574f1dd6808ce`](https://github.com/uppet/ru-language/commit/a2f6faa0f914781dea74cb6f0a7574f1dd6808ce), tree `7b4331d51bc6ab2ec95fec1f8368465343fcd5af`. Use a clean checkout of that exact commit. Its [language CI](https://github.com/uppet/ru-language/actions/runs/38951630488) passed all 13 jobs, including the new owned-memory U32LE API on all three Windows/Python combinations. This compiler pin supplies the bounded `读U32LE阵` transport; that language result does not validate this application or establish a performance gain.
-- **Scintilla 5.6.7:** official source archive at <https://www.scintilla.org/scintilla567.zip>, SHA-256 `2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c`. Verify the archive before extracting or building it. This is a reproducibility pin, not a claim that upstream signed the hash independently.
-- **Lexilla 5.5.4:** official archive <https://www.scintilla.org/lexilla554.zip>, SHA-256 `5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0`. Build it beside the pinned Scintilla source and retain its own `License.txt`.
+- **Scintilla 5.6.7:** official [SourceForge source archive](https://sourceforge.net/projects/scintilla/files/scintilla/5.6.7/scintilla567.zip/download), exactly 1,904,249 bytes, SHA-256 `2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c`. These are the same pinned bytes previously obtained from <https://www.scintilla.org/scintilla567.zip>. Verify the archive before extracting or building it. This is a reproducibility pin, not a claim that upstream signed the hash independently.
+- **Lexilla 5.5.4:** official [SourceForge source archive](https://sourceforge.net/projects/scintilla/files/lexilla/5.5.4/lexilla554.zip/download), exactly 1,598,324 bytes, SHA-256 `5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0`. These are the same pinned bytes previously obtained from <https://www.scintilla.org/lexilla554.zip>. Build it beside the pinned Scintilla source and retain its own `License.txt`.
 - **Unicode classification data:** Python 3.12 / Unicode 15.0.0 identifier predicates are retained as compact generated tables; the exact official Unicode notice ships in both ZIPs. Regeneration is documented in [Ru syntax scope](ru-language-syntax.md).
 - **Application artwork:** original generated artwork and icon export details are documented in [assets/README.md](../assets/README.md).
 
 Dependency archives and extracted source belong under the ignored `vendor/` directories. The application-owned `RuSyntax.dll` is built from reviewed `native/` C inputs; its source/header/table, compiler and binary hashes are validated with every executable receipt. It does not add a third-party source dependency. Each packaged Scintilla/Lexilla DLL must be built from the pinned source and accompanied by its upstream license. The application’s own license is still pending the owner’s choice.
+
+## Official archive acquisition
+
+The [Scintilla homepage](https://www.scintilla.org/) links the upstream [SourceForge project and downloads](https://sourceforge.net/projects/scintilla/files/), which contain both exact-version archives above. Product CI uses those canonical `/download` URLs with ordinary PowerShell requests and normal redirects. It keeps the existing SHA-256 pins, checks exact sizes and ZIP structure before extraction, and rejects HTML or unexpected bytes. It does not execute browser challenges, customize headers to evade them, or try a list of mirrors.
+
+The [0.1.7 acquisition-failure run](https://github.com/uppet/ru_notepad/actions/runs/38996733336) passed 134 orchestration and 42 package checks, then received a browser-challenge response from the former Scintilla download URL. Native application acceptance and packaging had not started. The SourceForge change still needs a complete fresh Windows run; source availability alone is not application acceptance. The independent policy experiment retains its existing acquisition path and identical archive hashes.
 
 ## Build tools
 

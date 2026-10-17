@@ -813,7 +813,11 @@ class OfficialDependencyAcquisitionTests(unittest.TestCase):
         workflow = (ROOT / '.github/workflows/ru-syntax-profile.yml').read_text(encoding='utf-8')
         product = (ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
         for item in runner.portable.DEPENDENCIES.values():
-            self.assertIn("Invoke-WebRequest -Uri 'https://www.scintilla.org/" + item['archive'] + "'", product)
+            # Product uses the same ordinary client and exact archive pins,
+            # now via upstream's canonical SourceForge distribution URLs.
+            product_url = ("https://sourceforge.net/projects/scintilla/files/" + item['folder'] +
+                           "/" + item['version'] + "/" + item['archive'] + "/download")
+            self.assertIn("Invoke-WebRequest -Uri '" + product_url + "'", product)
             self.assertIn("('" + item['archive'] + "', '" + item['sha256'] + "')", workflow)
         self.assertIn("$env:PROFILE_PWSH = Join-Path $PSHOME 'pwsh.exe'", workflow)
         self.assertIn("Invoke-WebRequest -Uri 'https://www.scintilla.org/", workflow)
