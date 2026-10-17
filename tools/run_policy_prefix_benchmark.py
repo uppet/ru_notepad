@@ -67,7 +67,7 @@ REVIEWED_CHANGED_SHA256 = {
     "tests/fixtures/ru_policy_fast_plan.json": "a712c3b5c70e5bfe4ae09900d928f594c2c88bb49448d40ca15422b09a015e90",
     "tools/benchmark_ru_policy_fast.py": "08f1f86e0dec120dd0e6f7a10dccdacfcfa0483bda03d3a54882b87677612b59",
     "tools/test_ru_policy_fast.py": "2d2af5d851cfa5086e678b3150f4c20f7440f4a57eca78d4439d1b29f59fd1ef",
-    "tools/test_windows_ci.py": "62201e79b9aceb393d67779a4d62ca65ab97fe2a65bf6785cf4af68e8bbeef92",
+    "tools/test_windows_ci.py": "ab536002e1867e58f3d4932bb9a39caa09d590bcec0f745f81d5fbca5435e485",
     "tools/verify_ru_policy_fast_outputs.py": "fb8401c520ed4f44c572c1638731d364c1c7e53bc4a708f1e5955847fb818de4",
     "tools/windows_ci.py": "e6d697e776a659b9c78bb5032d298b9caeea807e63a48dbbe053570495e1bc0c"
 }

@@ -636,8 +636,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         bulk_body = ''.join(f'PASS: {label}\n' for label in ci.BULK_EVENT_CASES) + 'TOTAL PASS: 23\n'
         (directory / 'event-bulk.stdout.log').write_text('BACKEND: python\n' + bulk_body +
             'BACKEND: c\n' + bulk_body + 'RU_EVENT_BULK_PORTABLE_PASS: 2 backends, 23 assertions each\n')
-        (directory / 'policy-prefix.stdout.log').write_text(ci.POLICY_PREFIX_EXECUTION_SUCCESS, encoding='utf-8')
-        (directory / 'policy-prefix-order.stdout.log').write_text(ci.POLICY_PREFIX_ORDER_SUCCESS, encoding='utf-8')
+        (directory / 'policy-prefix.stdout.log').write_text(ci.POLICY_PREFIX_EXECUTION_SUCCESS, encoding='utf-8', newline='\n')
+        (directory / 'policy-prefix-order.stdout.log').write_text(ci.POLICY_PREFIX_ORDER_SUCCESS, encoding='utf-8', newline='\n')
         (directory / 'bridge-failure.stdout.log').write_text('RU_SYNTAX_FAILURE_PORTABLE_PASS: 6\n')
         (directory / 'bridge-failure.stderr.log').write_text('Ran 6 tests in 1.000s\n\nOK\n')
         return directory, inputs
@@ -680,6 +680,38 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     'policy-prefix-collection.json'}
         self.assertEqual({path.name for path in destination.iterdir()}, expected)
         for path in destination.iterdir(): self.assertLessEqual(path.stat().st_size, ci.MAX_LOG_BYTES)
+
+    def test_policy_prefix_fixture_preserves_linux_wrapper_bytes_under_windows_default_newlines(self):
+        original_write_text = Path.write_text
+        def windows_default_write(path, text, encoding=None, errors=None, newline=None):
+            return original_write_text(path, text, encoding=encoding, errors=errors,
+                                       newline='\r\n' if newline is None else newline)
+        with patch.object(Path, 'write_text', windows_default_write):
+            directory, _ = self.helper_policy_fixture()
+        expected = {'policy-prefix.stdout.log': ci.POLICY_PREFIX_EXECUTION_SUCCESS,
+                    'policy-prefix-order.stdout.log': ci.POLICY_PREFIX_ORDER_SUCCESS}
+        for name, marker in expected.items():
+            self.assertEqual((directory / name).read_bytes(), marker.encode('utf-8'))
+        ci.helper_policy_action('collect', self.root)
+        destination = self.root / 'build/helper-policy-evidence'
+        record = json.loads((destination / 'policy-prefix-collection.json').read_text(encoding='utf-8'))
+        self.assertTrue(record['complete_proof_verified'])
+        for name in ci.POLICY_PREFIX_EVIDENCE_LIMITS:
+            self.assertEqual((destination / ('policy-prefix-' + name)).read_bytes(),
+                             (self.root / 'build/policy-fast' / name).read_bytes())
+        # The original implicit Windows newline mutation remains rejected. The
+        # collector must not normalize a noncanonical public wrapper to success.
+        shutil.rmtree(destination)
+        for name, marker in expected.items():
+            (directory / name).write_bytes(marker.replace('\n', '\r\n').encode('utf-8'))
+        ci.helper_policy_action('collect', self.root)
+        record = json.loads((destination / 'policy-prefix-collection.json').read_text(encoding='utf-8'))
+        self.assertFalse(record['complete_proof_verified'])
+        for name in expected:
+            self.assertEqual(record['wrappers'][name]['status'], 'withheld_invalid_output')
+            self.assertFalse((destination / name).exists())
+        for name in ci.POLICY_PREFIX_EVIDENCE_LIMITS:
+            self.assertFalse((destination / ('policy-prefix-' + name)).exists())
 
     def test_policy_prefix_requires_exact_clean_public_baseline_and_source(self):
         baseline = self.root / '.ci/policy-baseline'
