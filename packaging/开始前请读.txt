@@ -1,4 +1,4 @@
-ru_notepad 0.1.6-preview · Windows x64 便携预览
+ru_notepad 0.1.7-preview · Windows x64 便携预览
 
 重要：这是实验性便携预览。请以 BUILD.json 查看这个包的实际验证结果。
 交叉编译不等于 Windows 实跑；Windows CI 包仅在列明的原生测试和

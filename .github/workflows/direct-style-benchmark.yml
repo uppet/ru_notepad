@@ -1,19 +1,6 @@
-name: Ru direct style paired benchmark
+name: Historical Ru direct style replay
 
 on:
-  push:
-    branches: [wip]
-    paths:
-      - src/main.ru
-      - src/syntax.ru
-      - src/ru_syntax.ru
-      - tests/ru_direct_styling_native.ru
-      - tests/ru_direct_fixture_portable.py
-      - tools/run_direct_style_benchmark.py
-      - tools/test_direct_style_benchmark.py
-      - tools/run_ru_syntax_profile.py
-      - tools/test_ru_syntax_profile.py
-      - .github/workflows/direct-style-benchmark.yml
   workflow_dispatch:
 
 permissions:
@@ -26,7 +13,6 @@ concurrency:
 jobs:
   paired-direct-style:
     name: Pair direct and original publication on real Windows x64
-    if: github.ref == 'refs/heads/wip'
     runs-on: windows-2022
     # Build and setup bounds are independent of every unchanged 30-second
     # styling deadline. This job never packages or grants product acceptance.
@@ -41,11 +27,13 @@ jobs:
     steps:
       - name: Preserve source bytes
         run: git config --global core.autocrlf false
-      - name: Check out exact paired candidate
+      # The triggering workflow SHA is not the source that is built.
+      - name: Check out fixed accepted 0.1.6 source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
           fetch-depth: 0
+          ref: a5f5fd825767cd5af662cba792f5ce352991c21e
       - name: Check out reviewed Ru compiler
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -145,7 +133,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: direct-style-evidence-${{ github.sha }}
+          name: historical-direct-a5f5fd825767cd5af662cba792f5ce352991c21e-run-${{ github.run_id }}
           path: |
             build/direct-style-evidence/*.json
             build/direct-style-evidence/*.log

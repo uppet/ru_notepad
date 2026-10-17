@@ -1,4 +1,4 @@
-# Status and keyboard scope in 0.1.6
+# Status and keyboard scope in 0.1.7
 
 ## Status
 

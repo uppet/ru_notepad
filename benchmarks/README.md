@@ -76,11 +76,17 @@ paired trials and dependency-version differences. Notepad++ plain text is not an
 equivalent task to Ru structural highlighting and folding. No same-runner
 Notepad++ performance result is claimed yet.
 
-## Direct-style paired candidate experiment
+## Completed direct-style paired experiment
 
-The new `direct-style-benchmark.yml` is a separate, wip-only experiment. It
-builds the current candidate, including its current initialization, DLL roots,
-resources and Ru lexical/fold policy. It does not modify the old profiler's
+The completed eight-row direct/message comparison is recorded in
+[Windows run 38984124849](https://github.com/uppet/ru_notepad/actions/runs/38984124849).
+`direct-style-benchmark.yml` is now a manual-only historical replay, with no
+arbitrary ref input. It always checks out public 0.1.6 commit
+`a5f5fd825767cd5af662cba792f5ce352991c21e`, tree
+`e8a402fb3eb551bfe416b8aee0aaaf942d2d4f4a`, and runs that checkout's original
+closed 120-source inventory and tools. Its artifact name identifies the built
+commit separately from the triggering workflow run. The comparison retains
+that candidate's initialization, DLL roots, resources and Ru lexical/fold policy. It does not modify the old profiler's
 accepted source locks or substitute its historical 109-file proof for this
 candidate. A closed candidate manifest records every accepted source identity,
 every independently reviewed change, the current commit/tree, compiler identity,
@@ -132,5 +138,59 @@ This also works when the workflow is launched from current wip; it does not
 attempt to run the old locked experiment against direct-style product sources.
 Its artifact name identifies the built historical SHA separately from the
 workflow run ID, and its source receipts use the actual checkout. Historical
-whole-process elapsed omissions remain historical. The new paired experiment
-executes the current reporting fixes and their fail-closed host controls.
+whole-process elapsed omissions remain historical. The completed direct-style paired experiment
+executed the reporting fixes and their fail-closed host controls.
+
+
+## Same-run policy-prefix candidate comparison
+
+`policy-prefix-benchmark.yml` is a separate wip-only experiment for 0.1.7. It
+compares the current candidate with itself, replacing only the privately copied
+`src/ru_lexical.ru` with one of two reviewed blobs:
+
+- Baseline policy from the accepted 0.1.6 tree: SHA-256
+  `f78589e247186890855526f7bb3624d34e4004bb8fbc69587c96d38c826a602c`
+- Conservative empty-stack/pending prefix policy: SHA-256
+  `deb5629333f2e76125b396bfe640b327ea6f1fd42f95f24277c86c5209fb12ec`
+
+Both sides retain direct styling enabled, the same current initialization and
+roots, pinned compiler, dependencies, resources and common byte/style checker.
+Neither side selects the old message route. Both endpoint proofs require actual
+direct eligibility, registration, owner/parent, document/generation, revision,
+notification mask and native pointer validity. There is no product route or
+policy setting. Structural decisions and the fallback event loop remain Ru.
+
+The four GUI/cooperative-console × baseline/prefix binaries run in eight fresh,
+interleaved AB/BA processes on the same real Windows x64 runner. They retain the
+same 1 MB corpus and unchanged 30-second full-style limit. Every run requires
+full byte text/style equality. GUI runs retain all six unequal 100 KB
+start/middle/end edit probes, fold and dirty/undo checks, genuine queued
+navigation, natural paint, ordinary close and exit zero. Before any matrix row,
+the fixed native controls must pass: route 36 assertions; scanner 157 cases and
+942 chunk checks; boundary first/second longjmp and trap-OOM counts 2/1/1.
+Skipped, timed-out or cleanup-killed runs cannot count as success.
+
+A separate closed candidate manifest verifies the accepted 120-file source
+base, exact reviewed additions and changes, current commit/tree and compiler.
+Every source map is compared with a canonical current graph, rather than merely
+with its partner. The full loaded module closure is reconstructed, and each
+pair must differ in exactly the reviewed lexical module. Identical unauthorized
+changes in both graphs fail. Generation uses explicit UTF-8/LF, rejects linked
+or hostile paths, and checks source drift before/after build and execution.
+
+Evidence retains per-variant source, generated-C, binary/dependency and command
+hashes, QPC observer details and full measured process seconds. Command digests
+identify the fixed declared launch/build argv; successful command stage receipts
+identify what ran. Public artifacts contain only schema-validated bounded JSON
+and sanitized synthetic numeric logs, including early failure receipts. Raw
+private build logs, generated C, executables and machine paths are not uploaded.
+No profiling hot counters are introduced.
+
+Reports show each prefix-minus-baseline duration and ratio, with process time
+separate from styling time. Two pairs per path do not establish statistical
+significance or a broad speedup. A correct result showing no gain remains valid
+evidence. Linux policy microbenchmarks are not Windows end-to-end measurements;
+no Windows performance result is claimed until the exact frozen candidate runs.
+The separate full product CI and its 1,487 native assertions / 33 result groups
+remain mandatory. This benchmark never grants product acceptance or upgrades
+the delivered main/Library preview.

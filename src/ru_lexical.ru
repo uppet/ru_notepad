@@ -183,7 +183,8 @@ _语码 取 {'且':1, '为':2, '作':3, '假':4, '其':5, '典':6, '则':7, '卒
 算 _记词 态 类 词 行 为 数 折们:
     待 取 态[14].
     # In empty structural context these frequent lexical tokens cannot open or
-    # close anything. Keep this shortcut inside the sole shared grammar policy.
+    # close anything. The batch prefix duplicates only this exact transition;
+    # tools/test_ru_policy_fast.py guards both copies and the original fallback.
     若 待 其 量 == 0 且 态[12] 其 量 == 0 则
         若 词 == 0 或 词 == 9 或 词 == 100 或 词 == 117 则
             态[13] 取 词 == 100.
@@ -647,7 +648,39 @@ _语码 取 {'且':1, '为':2, '作':3, '假':4, '其':5, '典':6, '则':7, '卒
         得 {'spans':色们,'folds':折们,'bytes':态[0],'line':态[1]}.
     然
     位 取 0.
-    循 事件 其 量 次
+    # Only this empty-context prefix skips _记词. Its accepted transitions
+    # cannot create a frame/header. At the first other event, stop until the
+    # next batch and let the unchanged regular loop own every structural rule.
+    若 态[14] 其 量 == 0 且 态[12] 其 量 == 0 则
+        循 事件 其 量 次
+            项 取 事件[位].
+            种 取 项[0].
+            态[0] 取 项[3].
+            态[1] 取 项[5].
+            若 种 == 1 或 种 == 2 或 种 == 3 或 种 == 4 则
+                词 取 0.
+                若 种 == 1 或 种 == 4 则 词 取 项[1]. 然
+                若 非 (词 == 0 或 词 == 9 或 词 == 100 或 词 == 117) 则 破. 然
+                态[13] 取 词 == 100.
+                态[15] 取 词.
+                若 种 == 1 则
+                    若 项[2] != 8 则
+                        若 项[4] > 64 则 卒 'Ru native keyword correction exceeds 64 bytes.'. 然
+                        _加色 色们 项[3] 项[4] 项[2].
+                    然
+                然
+            另
+                若 种 == 7 则
+                    _行折 态 折们.
+                    态[1] 取 项[5]+1. 态[16] 取 态[24].
+                另 破. 然
+            然
+            位 取 位+1.
+        环
+    然
+    # A stopped event is still unconsumed; only its same byte/line metadata
+    # may be written twice. No token transition, correction or fold is replayed.
+    循 ((事件 其 量)-位) 次
         项 取 事件[位].
         种 取 项[0].
         态[0] 取 项[3].

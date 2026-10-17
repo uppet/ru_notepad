@@ -6,6 +6,7 @@ GUI, DLL, file-codec, ACL, or Windows runtime acceptance evidence.
 """
 from pathlib import Path
 import hashlib
+import io
 import json
 import os
 import re
@@ -587,7 +588,21 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
     def helper_policy_fixture(self):
         directory = self.root / 'build/logs/014/ru-scan'
         inputs = {'ru_commit': ci.HELPER_POLICY_COMMIT, 'ru_tree': ci.HELPER_POLICY_TREE,
-                  'source_sha256': {'native/ru_scan.c': 'c' * 64, 'tools/test_ru_scan.py': 'd' * 64}}
+                  'baseline_commit': ci.POLICY_PREFIX_BASELINE_COMMIT,
+                  'baseline_tree': ci.POLICY_PREFIX_BASELINE_TREE,
+                  'baseline_source_sha256': ci.POLICY_PREFIX_BASELINE_SHA256,
+                  'source_sha256': {'native/ru_scan.c': 'c' * 64, 'tools/test_ru_scan.py': 'd' * 64,
+                      'src/ru_lexical.ru': 'e' * 64,
+                      **{name: 'f' * 64 for name in ci.POLICY_PREFIX_SOURCES}}}
+        proof_dir = self.root / 'build/policy-fast'
+        proof_dir.mkdir(parents=True)
+        for name in ci.POLICY_PREFIX_EVIDENCE_LIMITS:
+            (proof_dir / name).write_text('{}\n', encoding='utf-8', newline='\n')
+        # This suite tests the outer orchestration contract. The proof verifier
+        # has its own real ordered-transcript/manifest negative controls.
+        import verify_ru_policy_fast_outputs as policy_proof
+        self.prefix_validator = self.enterContext(patch.object(
+            policy_proof, 'validate_public_evidence', return_value={'status': 'passed'}, create=True))
         with patch.object(ci, 'helper_policy_inputs', return_value=inputs):
             ci.helper_policy_action('prepare', self.root)
         (directory / 'libRuSyntax.so').write_bytes(b'synthetic host library')
@@ -621,6 +636,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         bulk_body = ''.join(f'PASS: {label}\n' for label in ci.BULK_EVENT_CASES) + 'TOTAL PASS: 23\n'
         (directory / 'event-bulk.stdout.log').write_text('BACKEND: python\n' + bulk_body +
             'BACKEND: c\n' + bulk_body + 'RU_EVENT_BULK_PORTABLE_PASS: 2 backends, 23 assertions each\n')
+        (directory / 'policy-prefix.stdout.log').write_text(ci.POLICY_PREFIX_EXECUTION_SUCCESS, encoding='utf-8')
+        (directory / 'policy-prefix-order.stdout.log').write_text(ci.POLICY_PREFIX_ORDER_SUCCESS, encoding='utf-8')
         (directory / 'bridge-failure.stdout.log').write_text('RU_SYNTAX_FAILURE_PORTABLE_PASS: 6\n')
         (directory / 'bridge-failure.stderr.log').write_text('Ran 6 tests in 1.000s\n\nOK\n')
         return directory, inputs
@@ -632,7 +649,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                        (ci.HELPER_POLICY_COMMIT, ci.HELPER_POLICY_TREE, ' M compiler.py')):
             with self.subTest(values=values), \
                  patch.object(ci.subprocess, 'check_output', side_effect=values), \
-                 patch.object(ci, 'scanner_preflight_sources', return_value={}):
+                 patch.object(ci, 'scanner_preflight_sources', return_value={}), \
+                 patch.object(ci, 'helper_policy_baseline', return_value={}):
                 if values == (ci.HELPER_POLICY_COMMIT, ci.HELPER_POLICY_TREE, ''):
                     result = ci.helper_policy_inputs(ci.ROOT)
                     self.assertEqual(result['ru_commit'], ci.HELPER_POLICY_COMMIT)
@@ -657,9 +675,146 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         (directory / 'helper-policy.stderr.log').write_bytes(b'x' * (ci.MAX_LOG_BYTES + 1))
         ci.helper_policy_action('collect', self.root)
         destination = self.root / 'build/helper-policy-evidence'
-        expected = {*ci.HELPER_POLICY_EVIDENCE_FILES, 'helper-policy-inputs.json', 'helper-policy-acceptance.json'}
+        expected = {*ci.HELPER_POLICY_EVIDENCE_FILES, 'helper-policy-inputs.json', 'helper-policy-acceptance.json',
+                    *('policy-prefix-' + name for name in ci.POLICY_PREFIX_EVIDENCE_LIMITS),
+                    'policy-prefix-collection.json'}
         self.assertEqual({path.name for path in destination.iterdir()}, expected)
         for path in destination.iterdir(): self.assertLessEqual(path.stat().st_size, ci.MAX_LOG_BYTES)
+
+    def test_policy_prefix_requires_exact_clean_public_baseline_and_source(self):
+        baseline = self.root / '.ci/policy-baseline'
+        (baseline / 'src').mkdir(parents=True)
+        (baseline / 'src/ru_lexical.ru').write_text('synthetic policy', encoding='utf-8')
+        good = (ci.POLICY_PREFIX_BASELINE_COMMIT, ci.POLICY_PREFIX_BASELINE_TREE, '')
+        for values, digest in ((good, ci.POLICY_PREFIX_BASELINE_SHA256),
+                               (('wrong', good[1], ''), ci.POLICY_PREFIX_BASELINE_SHA256),
+                               ((good[0], 'wrong', ''), ci.POLICY_PREFIX_BASELINE_SHA256),
+                               ((good[0], good[1], ' M src/ru_lexical.ru'), ci.POLICY_PREFIX_BASELINE_SHA256),
+                               (good, '0' * 64)):
+            with self.subTest(values=values, digest=digest), \
+                 patch.object(ci.subprocess, 'check_output', side_effect=values), \
+                 patch.object(ci, 'sha', return_value=digest):
+                if values == good and digest == ci.POLICY_PREFIX_BASELINE_SHA256:
+                    self.assertEqual(ci.helper_policy_baseline(self.root), {
+                        'baseline_commit': good[0], 'baseline_tree': good[1],
+                        'baseline_source_sha256': digest})
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'clean reviewed public baseline'):
+                        ci.helper_policy_baseline(self.root)
+
+    def test_policy_prefix_orchestration_binds_exact_sources_and_all_eight_files(self):
+        directory, inputs = self.helper_policy_fixture()
+        with patch.object(ci, 'helper_policy_inputs', return_value=inputs):
+            result = ci.helper_policy_action('verify', self.root)
+        self.assertEqual(result['policy_prefix'], {'status': 'passed'})
+        self.prefix_validator.assert_called_once_with(
+            self.root / 'build/policy-fast', ci.policy_prefix_expected_inputs(inputs))
+        self.assertEqual(set(ci.policy_prefix_expected_inputs(inputs)), {
+            'baseline_commit', 'baseline_tree', 'baseline_source_sha256',
+            'toolchain_commit', 'toolchain_tree', 'candidate_sha256',
+            'test_script_sha256', 'verifier_source_sha256', 'canonical_plan_sha256'})
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        for required in ('ref: ' + ci.POLICY_PREFIX_BASELINE_COMMIT,
+                         'path: .ci/policy-baseline',
+                         'python -I tools/test_ru_policy_fast.py --baseline .ci/policy-baseline --ru-root .ci/ru-language',
+                         'python -I tools/verify_ru_policy_fast_outputs.py'):
+            self.assertIn(required, workflow)
+
+    def test_policy_prefix_orchestration_rejects_missing_oversized_stderr_and_verifier_failure(self):
+        for mutation in (*ci.POLICY_PREFIX_EVIDENCE_LIMITS, 'oversized', 'wrapper-oversized',
+                         'stderr', 'order-stderr', 'verification-failed'):
+            with self.subTest(mutation=mutation):
+                shutil.rmtree(self.root / 'build', ignore_errors=True)
+                directory, inputs = self.helper_policy_fixture()
+                if mutation in ci.POLICY_PREFIX_EVIDENCE_LIMITS:
+                    (self.root / 'build/policy-fast' / mutation).unlink()
+                elif mutation == 'oversized':
+                    (self.root / 'build/policy-fast/report.json').write_bytes(b'x' * (64 * 1024 + 1))
+                elif mutation == 'wrapper-oversized':
+                    (directory / 'policy-prefix.stdout.log').write_bytes(b'x' * (64 * 1024 + 1))
+                elif mutation == 'stderr':
+                    (directory / 'policy-prefix.stderr.log').write_text('unexpected', encoding='utf-8')
+                elif mutation == 'order-stderr':
+                    (directory / 'policy-prefix-order.stderr.log').write_text('unexpected', encoding='utf-8')
+                else:
+                    self.prefix_validator.side_effect = ValueError('synthetic rejected transcript')
+                with patch.object(ci, 'helper_policy_inputs', return_value=inputs), \
+                     self.assertRaises((RuntimeError, ValueError, OSError)):
+                    ci.helper_policy_action('verify', self.root)
+                self.assertFalse((directory / 'helper-policy-acceptance.json').exists())
+
+    def test_policy_prefix_collector_refuses_linked_or_oversized_proof_and_excludes_private_outputs(self):
+        directory, inputs = self.helper_policy_fixture()
+        proof = self.root / 'build/policy-fast'
+        for name in ('differential-0', 'differential-0.c', 'private-source.ru'):
+            (proof / name).write_text('DO NOT PUBLISH', encoding='utf-8')
+        ci.helper_policy_action('collect', self.root)
+        files = {p.name for p in (self.root / 'build/helper-policy-evidence').iterdir()}
+        self.assertTrue(all('policy-prefix-' + name in files for name in ci.POLICY_PREFIX_EVIDENCE_LIMITS))
+        self.assertFalse(any('differential' in name and name.startswith('policy-prefix-') for name in files))
+        shutil.rmtree(self.root / 'build/helper-policy-evidence')
+        (proof / 'report.json').write_bytes(b'x' * (64 * 1024 + 1))
+        ci.helper_policy_action('collect', self.root)
+        collection = json.loads((self.root / 'build/helper-policy-evidence/policy-prefix-collection.json').read_text(encoding='utf-8'))
+        self.assertFalse(collection['complete_proof_verified'])
+        self.assertEqual(collection['files']['report.json']['status'], 'invalid_or_over_budget')
+        self.assertFalse((self.root / 'build/helper-policy-evidence/policy-prefix-report.json').exists())
+        with self.assertRaisesRegex(RuntimeError, 'Unexpected'):
+            ci.policy_prefix_evidence_file(self.root, '../private-source.ru')
+        if os.name != 'nt':
+            shutil.rmtree(proof)
+            outside = self.root / 'outside-proof'
+            outside.mkdir()
+            (outside / 'report.json').write_text('{}', encoding='utf-8')
+            proof.symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(RuntimeError, 'linked'):
+                ci.policy_prefix_evidence_file(self.root, 'report.json')
+
+    def test_policy_prefix_failed_compiler_text_is_withheld_from_public_artifact(self):
+        directory, inputs = self.helper_policy_fixture()
+        private = 'PRIVATE_COMPILER_SOURCE /workspace/private/source.ru:12 secret_fragment'
+        (directory / 'policy-prefix.stderr.log').write_text(private, encoding='utf-8')
+        (self.root / 'build/policy-fast/interpreter.log').write_text(private, encoding='utf-8')
+        self.prefix_validator.side_effect = ValueError(private)
+        ci.helper_policy_action('collect', self.root)
+        destination = self.root / 'build/helper-policy-evidence'
+        self.assertFalse((destination / 'policy-prefix.stderr.log').exists())
+        self.assertFalse((destination / 'policy-prefix-interpreter.log').exists())
+        for path in destination.iterdir():
+            self.assertNotIn('PRIVATE_COMPILER_SOURCE', path.read_text(encoding='utf-8'))
+            self.assertNotIn('/workspace/private', path.read_text(encoding='utf-8'))
+        record = json.loads((destination / 'policy-prefix-collection.json').read_text(encoding='utf-8'))
+        self.assertFalse(record['complete_proof_verified'])
+        self.assertEqual(record['wrappers']['policy-prefix.stderr.log']['status'], 'withheld_invalid_output')
+        self.assertEqual(record['files']['interpreter.log']['sha256'], hashlib.sha256(private.encode()).hexdigest())
+
+    def test_policy_prefix_collection_bounds_reads_and_withholds_changed_snapshot(self):
+        directory, inputs = self.helper_policy_fixture()
+        with patch.object(Path, 'open', return_value=io.BytesIO(b'x' * (64 * 1024 + 1))):
+            with self.assertRaisesRegex(RuntimeError, 'grew beyond'):
+                ci.policy_prefix_evidence_bytes(self.root, 'report.json')
+        def changed_after_validation(*args):
+            (self.root / 'build/policy-fast/interpreter.log').write_text('changed', encoding='utf-8')
+            return {'status': 'passed'}
+        self.prefix_validator.side_effect = changed_after_validation
+        ci.helper_policy_action('collect', self.root)
+        destination = self.root / 'build/helper-policy-evidence'
+        record = json.loads((destination / 'policy-prefix-collection.json').read_text(encoding='utf-8'))
+        self.assertFalse(record['complete_proof_verified'])
+        self.assertFalse((destination / 'policy-prefix-interpreter.log').exists())
+
+    def test_policy_prefix_wrapper_failure_grammar_preserves_only_fixed_diagnostics(self):
+        for name in ci.POLICY_PREFIX_WRAPPER_LOGS:
+            success = ci.POLICY_PREFIX_ORDER_SUCCESS if '-order.' in name else ci.POLICY_PREFIX_EXECUTION_SUCCESS
+            self.assertTrue(ci.policy_prefix_wrapper_valid(name, '' if 'stderr' in name else success, True))
+            self.assertFalse(ci.policy_prefix_wrapper_valid(name, 'unexpected source text', False))
+        error = 'POLICY_FAST_FAIL stage=host-c-0 code=command detail_sha256=' + 'a' * 64 + '\n'
+        self.assertTrue(ci.policy_prefix_wrapper_valid('policy-prefix.stderr.log', error, False))
+        self.assertFalse(ci.policy_prefix_wrapper_valid('policy-prefix.stderr.log', error, True))
+        self.assertFalse(ci.policy_prefix_wrapper_valid('policy-prefix.stderr.log', error + error, False))
+        self.assertFalse(ci.policy_prefix_wrapper_valid('policy-prefix.stdout.log', '', True))
+        self.assertFalse(ci.policy_prefix_wrapper_valid('policy-prefix.stderr.log', error.replace('host-c-0', 'private-source-name'), False))
+        self.assertFalse(ci.policy_prefix_wrapper_valid('policy-prefix-order.stderr.log', error.replace('POLICY_FAST_FAIL', 'POLICY_FAST_VERIFY_FAIL'), False))
 
     def test_linux_helper_policy_rejects_missing_or_partial_differential_sanitizer_and_source_results(self):
         for mutation in ('missing', 'wrong-count', 'wrong-library', 'wrong-source', 'changed-inputs',

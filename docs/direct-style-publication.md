@@ -1,13 +1,18 @@
 # Guarded style publication in 0.1.6
 
-This is an unaccepted performance candidate. A local build or a successful
-language-toolchain test does not establish Windows behavior or a speedup.
+The 0.1.6 [product acceptance](https://github.com/uppet/ru_notepad/actions/runs/38984124830)
+and [same-run comparison](https://github.com/uppet/ru_notepad/actions/runs/38984124849)
+passed, and both original packages passed independent verification. Two GUI
+pairs observed 10.248–11.456 seconds with direct publication versus
+15.126–15.128 seconds through messages. This is a bounded same-run observation,
+not a general performance guarantee. Later candidates retain this ownership
+contract and need their own complete acceptance.
 
 ## Scope
 
 Ru still decides every keyword, byte style, structural pairing and fold level.
 The existing bounded scanner, event decoder, checkpoints, scheduling budget and
-32,000,000-byte plain-text fallback remain in place. The only proposed production
+32,000,000-byte plain-text fallback remain in place. The 0.1.6 production
 optimization is how an eligible editor receives three style operations:
 
 - `SCI_STARTSTYLING` (2032)

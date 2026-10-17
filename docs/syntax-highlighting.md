@@ -1,4 +1,4 @@
-# Syntax highlighting in 0.1.6 preview
+# Syntax highlighting in 0.1.7 preview
 
 ## Supported languages
 
@@ -261,9 +261,10 @@ post-deadline completion into a pass. The gate also measures representative
 100 KB real insertion/Backspace at
 the beginning, middle and end. These are required
 Windows gates. The 0.1.5 baseline passed 1,451 assertions across 32 results;
-the 0.1.6 direct-publication candidate requires its own complete run and added
-route/lifecycle coverage. Native acceptance and performance gain for this
-candidate remain pending. See [the direct-publication contract](direct-style-publication.md).
+the corrected 0.1.6 direct-publication run passed 1,487 assertions / 33 results
+and its same-run route comparison. The 0.1.7 Ru policy-prefix candidate retains
+those gates and requires its own exact-build acceptance and same-direct-route
+comparison; those results remain pending. See [the direct-publication contract](direct-style-publication.md).
 
 Physical mouse interaction, non-US keyboard layouts and IME composition still
 need manual acceptance. Keyboard shortcuts use Windows virtual-key positions;

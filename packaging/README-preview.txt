@@ -1,4 +1,4 @@
-ru_notepad 0.1.6-preview · Windows x64
+ru_notepad 0.1.7-preview · Windows x64
 
 IMPORTANT: EXPERIMENTAL PORTABLE PREVIEW
 Read BUILD.json for this exact package's verification results. A local cross-build

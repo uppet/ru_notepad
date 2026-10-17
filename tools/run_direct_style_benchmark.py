@@ -464,6 +464,37 @@ def dependencies():
             'Lexilla.dll': relative_file(ROOT, 'vendor/lexilla/bin/lexilla.dll')}
 
 
+def build_variants(root, generated, manifest, compiler, objdump, dlls, resource, bridge, private, deadline):
+    """Build already-validated graphs; source identity remains the caller's guard."""
+    for unit in manifest['units'] + manifest['preflights']:
+        identifier = unit['id']
+        destination = root / 'bin' / identifier
+        destination.mkdir(parents=True)
+        gui = unit.get('path') == 'gui'
+        exe_name = 'ru_notepad.exe' if gui else 'app_ru_native.exe' if unit.get('path') == 'cooperative_console' else \
+                   'ru_direct_styling_native.exe' if identifier == 'direct_native' else 'profile_boundary.exe'
+        translation = generated / identifier / 'checked.c'
+        if gui:
+            gui_translation = root / (identifier + '-gui.c')
+            gui_translation.write_text('#define main ru_program_main\n' + translation.read_text(encoding='utf-8') +
+                '\n#undef main\n' + (ROOT / 'packaging/diagnostic_launcher.c').read_text(encoding='utf-8'), encoding='utf-8', newline='\n')
+            translation = gui_translation
+        output = destination / exe_name
+        command = [compiler, *FLAGS, '-I', ROOT / 'native', translation, '-o', output, '-lm', resource]
+        if gui:
+            command += ['-mwindows', '-lshell32', '-luser32']
+        compilation = build_command(command, private, identifier, deadline)
+        for name, source in (dict(dlls, **{'profile_bridge.dll': bridge}) if identifier == 'boundary' else dlls).items():
+            shutil.copyfile(source, destination / name)
+        pe = portable.inspect_pe(output, objdump)
+        require(pe_subsystem(output) == (2 if gui else 3), 'variant_subsystem_mismatch')
+        yield {'id': identifier, 'exe_name': exe_name, 'exe_sha256': sha(output),
+            'generated_c_sha256': unit['generated_c_sha256'], 'linked_c_sha256': sha(translation),
+            'resource_sha256': sha(resource), 'subsystem': 2 if gui else 3,
+            'seconds': compilation['elapsed_seconds'], 'pe': pe,
+            'files': {p.name: sha(p) for p in sorted(destination.iterdir())}}
+
+
 def prepare(ru_root, mingw_root):
     shared.native_windows()
     root = unlinked(ROOT / 'build/direct-style', must_exist=False)
@@ -507,33 +538,8 @@ def prepare(ru_root, mingw_root):
         bridge = root / 'profile_bridge.dll'
         build_command([compiler, '-std=c99', '-O2', '-shared', '-static-libgcc',
                        generated / 'boundary/profile_bridge.c', '-o', bridge], private, 'boundary-bridge', deadline)
-        for unit in manifest['units'] + manifest['preflights']:
-            identifier = unit['id']
-            destination = root / 'bin' / identifier
-            destination.mkdir(parents=True)
-            gui = unit.get('path') == 'gui'
-            exe_name = 'ru_notepad.exe' if gui else 'app_ru_native.exe' if unit.get('path') == 'cooperative_console' else \
-                       'ru_direct_styling_native.exe' if identifier == 'direct_native' else 'profile_boundary.exe'
-            translation = generated / identifier / 'checked.c'
-            if gui:
-                gui_translation = root / (identifier + '-gui.c')
-                gui_translation.write_text('#define main ru_program_main\n' + translation.read_text(encoding='utf-8') +
-                    '\n#undef main\n' + (ROOT / 'packaging/diagnostic_launcher.c').read_text(encoding='utf-8'), encoding='utf-8', newline='\n')
-                translation = gui_translation
-            output = destination / exe_name
-            command = [compiler, *FLAGS, '-I', ROOT / 'native', translation, '-o', output, '-lm', resource]
-            if gui:
-                command += ['-mwindows', '-lshell32', '-luser32']
-            compilation = build_command(command, private, identifier, deadline)
-            for name, source in (dict(dlls, **{'profile_bridge.dll': bridge}) if identifier == 'boundary' else dlls).items():
-                shutil.copyfile(source, destination / name)
-            pe = portable.inspect_pe(output, objdump)
-            require(pe_subsystem(output) == (2 if gui else 3), 'variant_subsystem_mismatch')
-            receipt['builds'].append({'id': identifier, 'exe_name': exe_name, 'exe_sha256': sha(output),
-                'generated_c_sha256': unit['generated_c_sha256'], 'linked_c_sha256': sha(translation),
-                'resource_sha256': sha(resource), 'subsystem': 2 if gui else 3,
-                'seconds': compilation['elapsed_seconds'], 'pe': pe,
-                'files': {p.name: sha(p) for p in sorted(destination.iterdir())}})
+        for build in build_variants(root, generated, manifest, compiler, objdump, dlls, resource, bridge, private, deadline):
+            receipt['builds'].append(build)
             save_json(root / 'prepare.json', receipt)
         require(receipt['identity'] == source_identity(ROOT, ru_root), 'sources_changed_during_build')
         validate_generated(manifest, generated)
@@ -627,6 +633,46 @@ def empty_results():
             'corpus': CORPUS, 'product_acceptance': PRODUCT_STATUS}
 
 
+def run_native_preflights(api, root, builds):
+    """Execute the fixed scanner, boundary and actual-route controls, in order."""
+    for name in PREFLIGHTS:
+        record = {'id': name, 'passed': False, 'error_code': None, 'outcome': None, 'check': None}
+        logs = root / 'runs' / ('preflight-' + name)
+        try:
+            logs.mkdir()
+            build = builds['direct_native' if name == 'scanner' else name]
+            source = shared.stage_run_binaries(build, root / 'bin' / build['id'], logs / 'bin')
+            if name == 'scanner':
+                result = acceptance.run_scanner_preflight(api, source, logs)
+                record['outcome'] = outcome(result, 'preflight')
+                acceptance.validate_scanner_preflight(result, build['files'], ROOT)
+                record['check'] = {'report': result['report'], 'source_sha256': result['source_sha256']}
+            elif name == 'boundary':
+                result = acceptance.run_console(api, 'profile_boundary', shared.preflight_command(source), logs,
+                    r'^RU_SYNTAX_PROFILE_PREFLIGHT_TESTS_PASS=1\s*$', timeout=30, expected_assertions=1, cwd=source)
+                record['outcome'] = outcome(result, 'preflight')
+                record['check'] = shared.preflight_check_from_logs(sorted(logs.glob('*.log')), 'off')
+                shared.validate_preflight_check(record['check'], 'off')
+            else:
+                result = acceptance.run_console(api, 'ru_direct_styling_native',
+                    [str(source / 'ru_direct_styling_native.exe')], logs,
+                    rf'^TOTAL PASS: {DIRECT_ASSERTIONS}\s*$', timeout=120, expected_assertions=DIRECT_ASSERTIONS, cwd=source)
+                record['outcome'] = outcome(result, 'preflight')
+                # Exact route positive/negative controls are part of the
+                # fixture's executed PASS inventory, not a variant label.
+                stdout = shared.relative_file(logs, 'ru_direct_styling_native.stdout.log').read_text(encoding='utf-8')
+                record['check'] = {'assertions': result.get('assertions_passed'),
+                    'three_message_positive_control': stdout.count('PASS: original-route positive control observes all three2032/2033/2073 child subclass messages\n') == 1,
+                    'three_message_direct_proof': stdout.count('PASS: direct-route proof bypasses all three2032/2033/2073 child subclass messages while folds retain messages and all bytes match\n') == 1}
+                require(record['check']['three_message_positive_control'] and record['check']['three_message_direct_proof'],
+                        'native_route_proof_missing')
+            validate_outcome(record['outcome'], 'preflight', complete=True)
+            record['passed'] = True
+        except Exception as exc:
+            record['error_code'] = code(exc, 'preflight_failed')
+        yield record
+
+
 def run_matrix():
     api = shared.native_windows()
     root = unlinked(ROOT / 'build/direct-style')
@@ -638,44 +684,9 @@ def run_matrix():
         require(candidate_sources(ROOT) == prepared['identity']['candidate'], 'candidate_changed_after_build')
         validate_generated(prepared['generated'], root / 'generated')
         builds = {item['id']: item for item in prepared['builds']}
-        for name in PREFLIGHTS:
-            record = {'id': name, 'passed': False, 'error_code': None, 'outcome': None, 'check': None}
+        for record in run_native_preflights(api, root, builds):
             summary['preflight'].append(record)
-            logs = root / 'runs' / ('preflight-' + name)
-            logs.mkdir()
-            try:
-                build = builds['direct_native' if name == 'scanner' else name]
-                source = shared.stage_run_binaries(build, root / 'bin' / build['id'], logs / 'bin')
-                if name == 'scanner':
-                    result = acceptance.run_scanner_preflight(api, source, logs)
-                    record['outcome'] = outcome(result, 'preflight')
-                    acceptance.validate_scanner_preflight(result, build['files'], ROOT)
-                    record['check'] = {'report': result['report'], 'source_sha256': result['source_sha256']}
-                elif name == 'boundary':
-                    result = acceptance.run_console(api, 'profile_boundary', shared.preflight_command(source), logs,
-                        r'^RU_SYNTAX_PROFILE_PREFLIGHT_TESTS_PASS=1\s*$', timeout=30, expected_assertions=1, cwd=source)
-                    record['outcome'] = outcome(result, 'preflight')
-                    record['check'] = shared.preflight_check_from_logs(sorted(logs.glob('*.log')), 'off')
-                    shared.validate_preflight_check(record['check'], 'off')
-                else:
-                    result = acceptance.run_console(api, 'ru_direct_styling_native',
-                        [str(source / 'ru_direct_styling_native.exe')], logs,
-                        rf'^TOTAL PASS: {DIRECT_ASSERTIONS}\s*$', timeout=120, expected_assertions=DIRECT_ASSERTIONS, cwd=source)
-                    record['outcome'] = outcome(result, 'preflight')
-                    # Exact route positive/negative controls are part of the
-                    # fixture's executed PASS inventory, not a variant label.
-                    stdout = shared.relative_file(logs, 'ru_direct_styling_native.stdout.log').read_text(encoding='utf-8')
-                    record['check'] = {'assertions': result.get('assertions_passed'),
-                        'three_message_positive_control': stdout.count('PASS: original-route positive control observes all three2032/2033/2073 child subclass messages\n') == 1,
-                        'three_message_direct_proof': stdout.count('PASS: direct-route proof bypasses all three2032/2033/2073 child subclass messages while folds retain messages and all bytes match\n') == 1}
-                    require(record['check']['three_message_positive_control'] and record['check']['three_message_direct_proof'],
-                            'native_route_proof_missing')
-                validate_outcome(record['outcome'], 'preflight', complete=True)
-                record['passed'] = True
-            except Exception as exc:
-                record['error_code'] = code(exc, 'preflight_failed')
-            finally:
-                save_json(root / 'results.json', summary)
+            save_json(root / 'results.json', summary)
         summary['preflight_passed'] = len(summary['preflight']) == len(PREFLIGHTS) and all(row['passed'] for row in summary['preflight'])
         require(summary['preflight_passed'], 'native_preflight_failed')
         for row in matrix():
@@ -926,6 +937,55 @@ def validate_hash_map(value, *, names=None):
                 and not name.startswith('/') and all(part not in ('', '.', '..') for part in name.split('/')), 'hash_map_path_invalid')
 
 
+def validate_prepare_execution(record, expected_ids, *, require_complete=False):
+    """Only execution receipts; callers retain their own closed source/graph guards."""
+    if record['environment'] is not None:
+        exact(record['environment'], ('platform', 'os_version', 'architecture', 'logical_cpus', 'python_version', 'cpu', 'cold_warm'),
+              'environment_shape')
+        require(record['environment']['platform'] == 'native-windows-x64'
+                and record['environment']['cold_warm'] == 'fresh_process_os_cache_uncontrolled', 'environment_invalid')
+    if record['toolchain'] is not None:
+        exact(record['toolchain'], ('gcc_sha256', 'windres_sha256', 'objdump_sha256', 'flags', 'version_log_sha256'), 'toolchain_shape')
+        require(record['toolchain']['flags'] == list(FLAGS)
+                and all(hex_digest(record['toolchain'][key]) for key in ('gcc_sha256', 'windres_sha256', 'objdump_sha256'))
+                and (record['toolchain']['version_log_sha256'] is None or hex_digest(record['toolchain']['version_log_sha256'])),
+                'toolchain_invalid')
+    if record['dependencies'] is not None:
+        validate_hash_map(record['dependencies'], names=('Scintilla.dll', 'Lexilla.dll', 'RuSyntax.dll'))
+    require(record['resource_sha256'] is None or hex_digest(record['resource_sha256']), 'resource_hash_invalid')
+    require(type(record['commands']) is list and len(record['commands']) <= 20, 'command_inventory_invalid')
+    stages = set()
+    for command in record['commands']:
+        exact(command, ('stage', 'elapsed_seconds', 'exit_code', 'error_code', 'cleanup_killed', 'cleanup_failed'), 'command_shape')
+        require(type(command['stage']) is str and re.fullmatch('[a-z_-]{1,80}', command['stage']) and command['stage'] not in stages
+                and number(command['elapsed_seconds']) and (command['exit_code'] is None or type(command['exit_code']) is int)
+                and (command['error_code'] is None or re.fullmatch('[a-z_]{1,80}', command['error_code']))
+                and type(command['cleanup_killed']) is bool and type(command['cleanup_failed']) is bool, 'command_invalid')
+        stages.add(command['stage'])
+        if require_complete:
+            require(command['exit_code'] == 0 and command['error_code'] is None and not command['cleanup_killed']
+                    and not command['cleanup_failed'] and command['elapsed_seconds'] <= COMPILE_TIMEOUT_SECONDS, 'command_failed')
+    require(type(record['builds']) is list and len(record['builds']) <= 6, 'build_inventory_invalid')
+    for identifier, build in zip(expected_ids, record['builds']):
+        exact(build, ('id', 'exe_name', 'exe_sha256', 'generated_c_sha256', 'linked_c_sha256', 'resource_sha256',
+                      'subsystem', 'seconds', 'pe', 'files'), 'build_shape')
+        expected_exe = 'ru_notepad.exe' if identifier.startswith('gui-') else 'app_ru_native.exe' if identifier.startswith('cooperative_console-') else \
+                       'ru_direct_styling_native.exe' if identifier == 'direct_native' else 'profile_boundary.exe'
+        require(build['id'] == identifier and build['exe_name'] == expected_exe and build['subsystem'] == (2 if identifier.startswith('gui-') else 3)
+                and number(build['seconds']) and build['seconds'] <= COMPILE_TIMEOUT_SECONDS
+                and all(hex_digest(build[key]) for key in ('exe_sha256', 'generated_c_sha256', 'linked_c_sha256', 'resource_sha256'))
+                and build['resource_sha256'] == record['resource_sha256'], 'build_identity_invalid')
+        names = {expected_exe, 'Scintilla.dll', 'Lexilla.dll', 'RuSyntax.dll'} | ({'profile_bridge.dll'} if identifier == 'boundary' else set())
+        validate_hash_map(build['files'], names=names)
+        require(build['files'][expected_exe] == build['exe_sha256']
+                and all(build['files'][name] == checksum for name, checksum in record['dependencies'].items()), 'build_dependency_mismatch')
+        exact(build['pe'], ('sha256', 'bytes', 'machine', 'imports'), 'pe_shape')
+        require(build['pe']['sha256'] == build['exe_sha256'] and uint(build['pe']['bytes']) and build['pe']['bytes'] > 0
+                and build['pe']['machine'] == 'AMD64' and type(build['pe']['imports']) is list
+                and all(type(name) is str and re.fullmatch('[A-Za-z0-9_.-]+', name) for name in build['pe']['imports']), 'pe_identity_invalid')
+    return stages
+
+
 def validate_prepare(record, *, require_complete=False):
     fields = ('schema', 'prepared', 'error_code', 'identity', 'environment', 'corpus', 'matrix',
               'build_budget_seconds', 'compile_timeout_seconds', 'elapsed_seconds', 'builds', 'commands',
@@ -959,51 +1019,8 @@ def validate_prepare(record, *, require_complete=False):
         for name, checksum in candidate['accepted_source_sha256'].items():
             require(checksum == digest(subprocess.check_output(['git', '-C', str(ROOT), 'show', BASELINE_TREE + ':' + name], timeout=30)),
                     'accepted_identity_substituted')
-    if record['environment'] is not None:
-        exact(record['environment'], ('platform', 'os_version', 'architecture', 'logical_cpus', 'python_version', 'cpu', 'cold_warm'),
-              'environment_shape')
-        require(record['environment']['platform'] == 'native-windows-x64'
-                and record['environment']['cold_warm'] == 'fresh_process_os_cache_uncontrolled', 'environment_invalid')
-    if record['toolchain'] is not None:
-        exact(record['toolchain'], ('gcc_sha256', 'windres_sha256', 'objdump_sha256', 'flags', 'version_log_sha256'), 'toolchain_shape')
-        require(record['toolchain']['flags'] == list(FLAGS)
-                and all(hex_digest(record['toolchain'][key]) for key in ('gcc_sha256', 'windres_sha256', 'objdump_sha256'))
-                and (record['toolchain']['version_log_sha256'] is None or hex_digest(record['toolchain']['version_log_sha256'])),
-                'toolchain_invalid')
-    if record['dependencies'] is not None:
-        validate_hash_map(record['dependencies'], names=('Scintilla.dll', 'Lexilla.dll', 'RuSyntax.dll'))
-    require(record['resource_sha256'] is None or hex_digest(record['resource_sha256']), 'resource_hash_invalid')
-    require(type(record['commands']) is list and len(record['commands']) <= 20, 'command_inventory_invalid')
-    stages = set()
-    for command in record['commands']:
-        exact(command, ('stage', 'elapsed_seconds', 'exit_code', 'error_code', 'cleanup_killed', 'cleanup_failed'), 'command_shape')
-        require(type(command['stage']) is str and re.fullmatch('[a-z_-]{1,80}', command['stage']) and command['stage'] not in stages
-                and number(command['elapsed_seconds']) and (command['exit_code'] is None or type(command['exit_code']) is int)
-                and (command['error_code'] is None or re.fullmatch('[a-z_]{1,80}', command['error_code']))
-                and type(command['cleanup_killed']) is bool and type(command['cleanup_failed']) is bool, 'command_invalid')
-        stages.add(command['stage'])
-        if require_complete:
-            require(command['exit_code'] == 0 and command['error_code'] is None and not command['cleanup_killed']
-                    and not command['cleanup_failed'] and command['elapsed_seconds'] <= COMPILE_TIMEOUT_SECONDS, 'command_failed')
-    require(type(record['builds']) is list and len(record['builds']) <= 6, 'build_inventory_invalid')
     expected_ids = variants() + ['direct_native', 'boundary']
-    for identifier, build in zip(expected_ids, record['builds']):
-        exact(build, ('id', 'exe_name', 'exe_sha256', 'generated_c_sha256', 'linked_c_sha256', 'resource_sha256',
-                      'subsystem', 'seconds', 'pe', 'files'), 'build_shape')
-        expected_exe = 'ru_notepad.exe' if identifier.startswith('gui-') else 'app_ru_native.exe' if identifier.startswith('cooperative_console-') else \
-                       'ru_direct_styling_native.exe' if identifier == 'direct_native' else 'profile_boundary.exe'
-        require(build['id'] == identifier and build['exe_name'] == expected_exe and build['subsystem'] == (2 if identifier.startswith('gui-') else 3)
-                and number(build['seconds']) and build['seconds'] <= COMPILE_TIMEOUT_SECONDS
-                and all(hex_digest(build[key]) for key in ('exe_sha256', 'generated_c_sha256', 'linked_c_sha256', 'resource_sha256'))
-                and build['resource_sha256'] == record['resource_sha256'], 'build_identity_invalid')
-        names = {expected_exe, 'Scintilla.dll', 'Lexilla.dll', 'RuSyntax.dll'} | ({'profile_bridge.dll'} if identifier == 'boundary' else set())
-        validate_hash_map(build['files'], names=names)
-        require(build['files'][expected_exe] == build['exe_sha256']
-                and all(build['files'][name] == checksum for name, checksum in record['dependencies'].items()), 'build_dependency_mismatch')
-        exact(build['pe'], ('sha256', 'bytes', 'machine', 'imports'), 'pe_shape')
-        require(build['pe']['sha256'] == build['exe_sha256'] and uint(build['pe']['bytes']) and build['pe']['bytes'] > 0
-                and build['pe']['machine'] == 'AMD64' and type(build['pe']['imports']) is list
-                and all(type(name) is str and re.fullmatch('[A-Za-z0-9_.-]+', name) for name in build['pe']['imports']), 'pe_identity_invalid')
+    stages = validate_prepare_execution(record, expected_ids, require_complete=require_complete)
     if record['generated'] is not None:
         validate_generated(record['generated'], ROOT / 'build/direct-style/generated')
         units = {unit['id']: unit for unit in record['generated']['units'] + record['generated']['preflights']}

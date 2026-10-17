@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import struct
 import subprocess
 import sys
@@ -146,10 +147,35 @@ HELPER_POLICY_EVIDENCE_FILES = ('helper-policy.stdout.log', 'helper-policy.stder
     'timer-corpus.stdout.log', 'timer-corpus.stderr.log',
     'diagnostic-control.stdout.log', 'diagnostic-control.stderr.log',
     'event-bulk.stdout.log', 'event-bulk.stderr.log',
+    'policy-prefix.stdout.log', 'policy-prefix.stderr.log',
+    'policy-prefix-order.stdout.log', 'policy-prefix-order.stderr.log',
     'scanner-build.log', 'differential-python.log', 'differential-build.log',
     'differential-c.log', 'sanitize-build.log', 'sanitize.log', 'report.json')
 HELPER_POLICY_COMMIT = 'a2f6faa0f914781dea74cb6f0a7574f1dd6808ce'
 HELPER_POLICY_TREE = '7b4331d51bc6ab2ec95fec1f8368465343fcd5af'
+POLICY_PREFIX_BASELINE_COMMIT = 'a5f5fd825767cd5af662cba792f5ce352991c21e'
+POLICY_PREFIX_BASELINE_TREE = 'e8a402fb3eb551bfe416b8aee0aaaf942d2d4f4a'
+POLICY_PREFIX_BASELINE_SHA256 = 'f78589e247186890855526f7bb3624d34e4004bb8fbc69587c96d38c826a602c'
+POLICY_PREFIX_SOURCES = ('tools/test_ru_policy_fast.py', 'tools/verify_ru_policy_fast_outputs.py',
+                         'tests/fixtures/ru_policy_fast_plan.json')
+# Only these bounded synthetic proof files are published. Generated Ru/C,
+# compiler output, executable files and local work directories are excluded.
+POLICY_PREFIX_EVIDENCE_LIMITS = {
+    'report.json': 64 * 1024, 'fixture-manifest.json': 256 * 1024,
+    'ordered-output-validation.json': 16 * 1024,
+    'interpreter.log': 64 * 1024,
+    **{f'host-c-{shard}.log': 64 * 1024 for shard in range(4)},
+}
+POLICY_PREFIX_WRAPPER_LOGS = ('policy-prefix.stdout.log', 'policy-prefix.stderr.log',
+                            'policy-prefix-order.stdout.log', 'policy-prefix-order.stderr.log')
+POLICY_PREFIX_EXECUTION_SUCCESS = ('POLICY_FAST_EXECUTION_PASS cases=196 batches=19627 events=2554 '
+                                   'transitions=21504 shards=4 edits=4 boundaries=13 mutations=12\n')
+POLICY_PREFIX_ORDER_SUCCESS = 'POLICY_FAST_ORDER_PASS\n'
+POLICY_PREFIX_EXECUTION_STAGES = frozenset((
+    'startup', 'fresh-output', 'source-guards', 'scanner-build', 'fixture-generation',
+    'interpreter', 'final-source-check',
+    *(f'build-{shard}' for shard in range(4)), *(f'host-c-{shard}' for shard in range(4))))
+POLICY_PREFIX_ORDER_STAGES = frozenset(('startup', 'local-artifacts', 'validator-controls', 'public-evidence'))
 BULK_EVENT_CASES = (
     'all 384 fields of the full batch',
     'near-32-MB exact metadata',
@@ -650,6 +676,19 @@ def scanner_preflight_sources(root):
         name: sha(portable.source_file(root, name)) for name in SCANNER_PREFLIGHT_SOURCES}
 
 
+def helper_policy_baseline(root):
+    baseline = root / '.ci/policy-baseline'
+    def git(*args):
+        return subprocess.check_output(['git', '-C', str(baseline), *args], text=True, timeout=30).strip()
+    commit, tree = git('rev-parse', 'HEAD'), git('rev-parse', 'HEAD^{tree}')
+    if (commit != POLICY_PREFIX_BASELINE_COMMIT or tree != POLICY_PREFIX_BASELINE_TREE or
+            git('status', '--porcelain') or
+            sha(portable.source_file(baseline, 'src/ru_lexical.ru')) != POLICY_PREFIX_BASELINE_SHA256):
+        raise RuntimeError('Policy-prefix gate requires the clean reviewed public baseline commit/tree/policy')
+    return {'baseline_commit': commit, 'baseline_tree': tree,
+            'baseline_source_sha256': POLICY_PREFIX_BASELINE_SHA256}
+
+
 def helper_policy_inputs(root):
     compiler = root / '.ci/ru-language'
     def git(*args):
@@ -657,14 +696,135 @@ def helper_policy_inputs(root):
     commit, tree = git('rev-parse', 'HEAD'), git('rev-parse', 'HEAD^{tree}')
     if commit != HELPER_POLICY_COMMIT or tree != HELPER_POLICY_TREE or git('status', '--porcelain'):
         raise RuntimeError('Helper-policy gate requires the clean reviewed Ru compiler commit/tree')
-    return {'ru_commit': commit, 'ru_tree': tree, 'source_sha256': scanner_preflight_sources(root) | {
+    return {'ru_commit': commit, 'ru_tree': tree, **helper_policy_baseline(root),
+            'source_sha256': scanner_preflight_sources(root) | {
         name: sha(portable.source_file(root, name))
         for name in ('tools/windows_ci.py', '.github/workflows/windows.yml',
                      'tools/test_cleanup_paths.py', 'tests/ru_syntax_failure_portable.py',
                      'src/main.ru', 'src/ru_syntax.ru', 'tests/ru_syntax_native.ru',
                      'tests/app_ru_native.ru', 'tools/test_ru_timer_corpus.py',
                      'tools/test_syntax_diagnostics.py', 'src/ru_native_syntax.ru',
-                     'tests/ru_event_bulk_portable.py')}}
+                     'tests/ru_event_bulk_portable.py', *POLICY_PREFIX_SOURCES)}}
+
+
+def policy_prefix_expected_inputs(inputs):
+    sources = inputs['source_sha256']
+    return {key: inputs[key] for key in ('baseline_commit', 'baseline_tree', 'baseline_source_sha256')} | {
+        'toolchain_commit': inputs['ru_commit'], 'toolchain_tree': inputs['ru_tree'],
+        'candidate_sha256': sources['src/ru_lexical.ru'],
+        'test_script_sha256': sources['tools/test_ru_policy_fast.py'],
+        'verifier_source_sha256': sources['tools/verify_ru_policy_fast_outputs.py'],
+        'canonical_plan_sha256': sources['tests/fixtures/ru_policy_fast_plan.json'],
+    }
+
+
+def policy_prefix_evidence_file(root, name):
+    if name not in POLICY_PREFIX_EVIDENCE_LIMITS:
+        raise RuntimeError('Unexpected policy-prefix evidence name')
+    paths = (root / 'build', root / 'build/policy-fast', root / 'build/policy-fast' / name)
+    for index, path in enumerate(paths):
+        info = path.lstat()
+        if (stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400 or
+                not (stat.S_ISDIR(info.st_mode) if index < 2 else stat.S_ISREG(info.st_mode))):
+            raise RuntimeError('Missing or linked policy-prefix evidence path')
+    if info.st_size > POLICY_PREFIX_EVIDENCE_LIMITS[name]:
+        raise RuntimeError('Policy-prefix evidence exceeds its fixed byte budget')
+    return paths[-1]
+
+
+def policy_prefix_evidence_bytes(root, name):
+    path = policy_prefix_evidence_file(root, name)
+    with path.open('rb') as stream:
+        data = stream.read(POLICY_PREFIX_EVIDENCE_LIMITS[name] + 1)
+    if len(data) > POLICY_PREFIX_EVIDENCE_LIMITS[name]:
+        raise RuntimeError('Policy-prefix evidence grew beyond its fixed byte budget')
+    return data
+
+
+def policy_prefix_wrapper_valid(name, text, complete):
+    if len(text.encode('utf-8')) > 64 * 1024:
+        return False
+    if name.endswith('stdout.log'):
+        expected = POLICY_PREFIX_ORDER_SUCCESS if '-order.' in name else POLICY_PREFIX_EXECUTION_SUCCESS
+        return text == expected or (not complete and text == '')
+    if complete:
+        return text == ''
+    if text == '':
+        return True
+    ordered = '-order.' in name
+    marker = 'POLICY_FAST_VERIFY_FAIL' if ordered else 'POLICY_FAST_FAIL'
+    match = re.fullmatch(marker + r' stage=([a-z0-9-]+) code=(validation|command|timeout|usage) detail_sha256=[0-9a-f]{64}\n', text)
+    stages = POLICY_PREFIX_ORDER_STAGES if ordered else POLICY_PREFIX_EXECUTION_STAGES
+    return match is not None and match[1] in stages and (not ordered or match[2] == 'validation')
+
+
+def verify_policy_prefix_evidence(root, inputs, texts):
+    import verify_ru_policy_fast_outputs as policy_proof
+    for name in POLICY_PREFIX_EVIDENCE_LIMITS:
+        policy_prefix_evidence_file(root, name)
+    if any(not policy_prefix_wrapper_valid(name, texts[name], True) for name in POLICY_PREFIX_WRAPPER_LOGS):
+        raise RuntimeError('Policy-prefix proof requires both exact success markers and empty stderr')
+    result = policy_proof.validate_public_evidence(
+        root / 'build/policy-fast', policy_prefix_expected_inputs(inputs))
+    if not isinstance(result, dict) or result.get('status') != 'passed':
+        raise RuntimeError('Policy-prefix ordered proof did not pass')
+    return result
+
+
+def collect_policy_prefix_evidence(root, directory, destination):
+    """Publish complete validated proof, or fixed failure metadata only.
+
+    Failed compiler/runtime text is never a public diagnostic. Each raw proof
+    file is hashed only after its normal-file and fixed-size checks pass.
+    """
+    files, wrappers, texts, proof_bytes = {}, {}, {}, {}
+    for name in POLICY_PREFIX_EVIDENCE_LIMITS:
+        try:
+            data = policy_prefix_evidence_bytes(root, name)
+            proof_bytes[name] = data
+            files[name] = {'status': 'available', 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
+        except FileNotFoundError:
+            files[name] = {'status': 'missing'}
+        except (OSError, RuntimeError):
+            files[name] = {'status': 'invalid_or_over_budget'}
+    for name in POLICY_PREFIX_WRAPPER_LOGS:
+        path = directory / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400 or
+                    info.st_size > 64 * 1024):
+                raise ValueError('Unsafe wrapper')
+            with path.open('rb') as stream:
+                data = stream.read(64 * 1024 + 1)
+            text = data.decode('utf-8')
+            if not policy_prefix_wrapper_valid(name, text, False):
+                raise ValueError('Unexpected wrapper')
+            texts[name] = text
+            (destination / name).write_bytes(data)
+            wrappers[name] = {'status': 'verified', 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
+        except FileNotFoundError:
+            wrappers[name] = {'status': 'missing'}
+        except (OSError, UnicodeError, ValueError):
+            wrappers[name] = {'status': 'withheld_invalid_output'}
+    verified = False
+    if (all(item['status'] == 'available' for item in files.values()) and
+            all(item['status'] == 'verified' for item in wrappers.values())):
+        try:
+            inputs = json.loads(bounded_text(portable.checked_file(directory / 'helper-policy-inputs.json')))
+            verify_policy_prefix_evidence(root, inputs, texts)
+            verified = all(policy_prefix_evidence_bytes(root, name) == proof_bytes[name]
+                           for name in POLICY_PREFIX_EVIDENCE_LIMITS)
+        except Exception:
+            # Fixed failure status only: a validation exception may quote the
+            # original compiler/source text and must not enter this artifact.
+            verified = False
+    if verified:
+        for name in POLICY_PREFIX_EVIDENCE_LIMITS:
+            (destination / ('policy-prefix-' + name)).write_bytes(proof_bytes[name])
+    record = {'schema': 1, 'complete_proof_verified': verified,
+              'files': files, 'wrappers': wrappers}
+    save_json(destination / 'policy-prefix-collection.json', record)
+    return record
 
 
 def helper_policy_action(action, root):
@@ -679,11 +839,14 @@ def helper_policy_action(action, root):
         destination.mkdir(parents=True, exist_ok=False)
         names = (*HELPER_POLICY_EVIDENCE_FILES, 'helper-policy-inputs.json', 'helper-policy-acceptance.json')
         for name in names:
+            if name in POLICY_PREFIX_WRAPPER_LOGS:
+                continue  # fixed public grammar is checked separately below
             path = directory / name
             if path.exists() or path.is_symlink():
                 portable.checked_file(path)
                 cap_log(path)
                 shutil.copyfile(path, destination / name)
+        collect_policy_prefix_evidence(root, directory, destination)
         return {'collected': sorted(path.name for path in destination.iterdir())}
     inputs = helper_policy_inputs(root)
     recorded = json.loads(bounded_text(portable.checked_file(directory / 'helper-policy-inputs.json')))
@@ -754,7 +917,9 @@ def helper_policy_action(action, root):
             not re.search(r'^OK$', failure_text, re.M) or
             re.search(r'^(FAILED|ERROR:|FAIL:|OK \(skipped=)', failure_text, re.M)):
         raise RuntimeError('Linux bridge failure controls require all six ordinary Ru tests without skips')
-    result = {'passed': True, 'executed': True, 'report': report, **inputs}
+    prefix_proof = verify_policy_prefix_evidence(root, inputs, texts)
+    result = {'passed': True, 'executed': True, 'report': report,
+              'policy_prefix': prefix_proof, **inputs}
     save_json(directory / 'helper-policy-acceptance.json', result)
     return result
 

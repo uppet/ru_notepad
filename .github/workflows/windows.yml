@@ -35,6 +35,13 @@ jobs:
           ref: a2f6faa0f914781dea74cb6f0a7574f1dd6808ce
           path: .ci/ru-language
           persist-credentials: false
+      - name: Check out the exact accepted public policy baseline
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: uppet/ru_notepad
+          ref: a5f5fd825767cd5af662cba792f5ce352991c21e
+          path: .ci/policy-baseline
+          persist-credentials: false
       - name: Set up build-time Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
@@ -66,6 +73,16 @@ jobs:
           python -I tests/ru_event_bulk_portable.py --ru-root .ci/ru-language
           > build/logs/014/ru-scan/event-bulk.stdout.log
           2> build/logs/014/ru-scan/event-bulk.stderr.log
+      - name: Compare complete policy state and outputs in both real Ru backends
+        run: >-
+          python -I tools/test_ru_policy_fast.py --baseline .ci/policy-baseline --ru-root .ci/ru-language
+          > build/logs/014/ru-scan/policy-prefix.stdout.log
+          2> build/logs/014/ru-scan/policy-prefix.stderr.log
+      - name: Require exact ordered cases from every compiled policy shard
+        run: >-
+          python -I tools/verify_ru_policy_fast_outputs.py
+          > build/logs/014/ru-scan/policy-prefix-order.stdout.log
+          2> build/logs/014/ru-scan/policy-prefix-order.stderr.log
       - name: Run full pure-Ru oracle and bounded scanner sanitizer cases
         run: >-
           python -I tools/test_ru_scan.py --ru-root .ci/ru-language --sanitize --fuzz 100

@@ -1,12 +1,20 @@
 # Changelog
 
+## 0.1.7-preview — 2026-10-17
+
+- Evaluate a conservative common-token prefix in the Ru batch policy. Only an initially empty frame/pending-header context can use it; the first unsupported event and all remaining events use the original regular loop. No lexical or folding decision, native scanner ABI, scheduling budget or direct-publication route changes.
+- Require full nested-state, ordered-output, byte-style and fold equivalence against the accepted policy, including incomplete syntax, cross-chunk states, checkpoint edits and failure states in both real Ru backends.
+- Retain all 1,487 native assertions / 33 results and require a separate interleaved Windows comparison with direct publication enabled on both sides. The only compared source difference is the reviewed Ru policy. Windows acceptance and end-to-end benefit remain pending; Linux microbenchmarks do not establish either.
+- Keep external-file-change/reload work separate from this candidate.
+
 ## 0.1.6-preview — 2026-10-16
 
-- Add 36 required native route, output and lifetime assertions, retaining all 1,451 prior assertions for a pending total of 1,487 / 33 results.
+- Add 36 required native route, output and lifetime assertions, retaining all 1,451 prior assertions for a total of 1,487 / 33 results.
 - Evaluate the documented Scintilla direct export for three style-publication messages, only for explicitly registered, same-thread, exclusive-document editors with validated ownership and text-only notification masks. Fold publication and all editing, saving and Win32 routing retain their existing paths.
 - Keep the borrowed direct pointer within one validated non-pumping batch; unregistered or ineligible editors retain message-based publication. No change to Ru lexical/folding decisions or the scanner DLL ABI.
-- Require complete native equivalence/lifecycle tests and an interleaved, same-run direct-versus-message comparison with the unchanged corpus, 30-second styling gate and six edit probes. This candidate has not yet passed those Windows gates; no speedup is claimed.
+- Require complete native equivalence/lifecycle tests and an interleaved, same-run direct-versus-message comparison with the unchanged corpus, 30-second styling gate and six edit probes. The [corrected product run](https://github.com/uppet/ru_notepad/actions/runs/38984124830) passed all 1,487 assertions / 33 results, including the complete 500,039,680-byte roundtrip; both original packages passed independent verification. The [paired run](https://github.com/uppet/ru_notepad/actions/runs/38984124849) passed all three preflights and eight interleaved runs. Its two GUI pairs observed 10.248–11.456 seconds with direct publication versus 15.126–15.128 seconds with messages. This is a limited same-run observation, not a general speed or parity guarantee.
 - Correct whole-process elapsed reporting in benchmark receipts, separately from styling wall/work/gap. Historical evidence is preserved without invented timing fields.
+- Repair two native-test issues exposed by the first run: explicitly group array-valued mutation arguments, and use a loadable, verified missing-export DLL for the wrong-Lexilla test. The strict original 36 and 8 assertions remain, with independent loader preflight and portable parser regressions.
 
 ## 0.1.5-preview — 2026-10-16
 
