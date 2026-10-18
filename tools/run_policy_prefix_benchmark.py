@@ -99,7 +99,7 @@ REVIEWED_CHANGED_SHA256 = {
     "tools/prepare_source_archives.py": "319a931294c9969f77fa32735c406ce0a3b1589230a676caebfc152af3d8de97",
     "tools/test_ru_policy_fast.py": "2d2af5d851cfa5086e678b3150f4c20f7440f4a57eca78d4439d1b29f59fd1ef",
     "tools/test_ru_syntax_profile.py": "301a55c4180d79d4d44556e5d1c6a85a5e868aeaf3c5cf7c9a9bccae835b88cb",
-    "tools/test_source_archives.py": "b290d522def148510fe116bf1b0e31a162a815549d603979f4c365a7f663141b",
+    "tools/test_source_archives.py": "e1f0001c6d20d6c34fa2f09700f149eabcd62b18e7a2863cf9a4c50be7b34db4",
     "tools/test_windows_ci.py": "ca791e49dfde3684f7927597468aac533a4e7abfe3d597853e3df8ef1fae694f",
     "tools/verify_ru_policy_fast_outputs.py": "fb8401c520ed4f44c572c1638731d364c1c7e53bc4a708f1e5955847fb818de4",
     "tools/windows_ci.ps1": "4b7986ca5706d9817558f22a10e2d8cdd68b52971e8658f960f917728a9de652",

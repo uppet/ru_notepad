@@ -10,11 +10,12 @@ from __future__ import annotations
 import argparse
 from contextlib import ExitStack
 from dataclasses import replace
+import errno
 import hashlib
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import stat
 import struct
 import subprocess
@@ -40,6 +41,13 @@ def synthetic(entries=None, *, compression=zipfile.ZIP_STORED):
         warnings.simplefilter('ignore', UserWarning)
         with zipfile.ZipFile(stream, 'w', compression=compression) as archive:
             for name, data in entries:
+                if isinstance(name, str):
+                    member = zipfile.ZipInfo(name)
+                    # Preserve hostile names in the ZIP bytes: ZipInfo otherwise
+                    # rewrites backslashes to slashes on Windows before writing.
+                    member.filename = name
+                    member.compress_type = compression
+                    name = member
                 archive.writestr(name, data)
     data = stream.getvalue()
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
@@ -138,6 +146,16 @@ class ArchiveTest(unittest.TestCase):
             with self.subTest(name=name):
                 data, spec = synthetic([(name, b'x')])
                 self.reject('zip_member_path', data, spec)
+
+    def test_backslash_zip_fixture_survives_windows_normalization(self):
+        for separator in ('/', '\\'):
+            with self.subTest(separator=separator), mock.patch.object(zipfile.os, 'sep', separator):
+                data, spec = synthetic([('fixture\\file', b'x')])
+                # Both the local header and central directory must stay hostile.
+                self.assertEqual(data.count(b'fixture\\file'), 2)
+                self.assertNotIn(b'fixture/file', data)
+                self.reject('zip_member_path', data, spec)
+                self.verify(*synthetic([('fixture/file', b'x')]))
 
     def test_embedded_nul_filename(self):
         data, spec = synthetic([('fixture/fileXtxt', b'x')])
@@ -523,10 +541,35 @@ class PrepareTest(unittest.TestCase):
         for name in ('receipt:stream', 'CON', 'nul.txt', 'COM1.json', 'LPT¹.txt',
                      'con .txt', 'receipt.', 'receipt ', 'bad?name', 'bad\\name'):
             with self.subTest(name=name):
+                # Test the raw component before Path can split Windows separators.
+                with helper.SafeDir(self.base) as directory:
+                    with self.assertRaises(helper.Rejected) as caught:
+                        directory.open(name, create=True)
+                self.assertEqual(caught.exception.code, 'unsafe_path')
                 report = self.prepare(self.base / name)
                 self.assert_failed(report, 'receipt_error')
-                self.assertEqual(report['receipt_error_code'], 'unsafe_path')
+                # On Windows, bad\name is two legal components; its parent is absent.
+                expected = 'path_missing' if os.name == 'nt' and name == 'bad\\name' else 'unsafe_path'
+                self.assertEqual(report['receipt_error_code'], expected)
                 self.assertFalse(self.target.exists())
+
+    def test_windows_path_separator_is_not_a_literal_component(self):
+        with mock.patch.object(helper, 'Path', PureWindowsPath), mock.patch.object(helper.os, 'name', 'nt'):
+            path = helper._absolute('C:\\safe\\bad\\name')
+            self.assertEqual(path.parts, ('C:\\', 'safe', 'bad', 'name'))
+            for raw in ('C:\\safe\\..\\name', 'C:\\safe\\bad?name', 'C:\\safe\\CON'):
+                with self.subTest(raw=raw), self.assertRaises(helper.Rejected) as caught:
+                    helper._absolute(raw)
+                self.assertEqual(caught.exception.code, 'unsafe_path')
+        self.assertFalse(helper._portable_component('bad\\name'))
+
+    def test_nested_receipt_path_accepted(self):
+        parent = self.base / 'bad'
+        parent.mkdir()
+        receipt = parent / 'name'
+        report = self.prepare(receipt)
+        self.assertTrue(report['passed'], report)
+        self.assertEqual(json.loads(receipt.read_text(encoding='ascii')), report)
 
     def test_non_ascii_and_interior_spaces_accepted(self):
         new_root = self.base / '中文 repo'
@@ -733,13 +776,39 @@ class PrepareTest(unittest.TestCase):
                 with self.assertRaises(OSError) as caught:
                     with path.open('r+b'):
                         self.fail('Read source unexpectedly allowed a writer')
-                self.assertIn(caught.exception.winerror, (5, 32))
-                with self.assertRaises(OSError):
+                self.assert_windows_write_denied(caught.exception)
+                with self.assertRaises(OSError) as caught:
                     path.rename(path.with_suffix('.moved'))
+                self.assertIn(caught.exception.winerror, (5, 32))
             finally:
                 os.close(fd)
         with path.open('r+b'):
             pass
+        moved = path.with_suffix('.moved')
+        path.rename(moved)
+        moved.rename(path)
+
+    def assert_windows_write_denied(self, error):
+        winerror = getattr(error, 'winerror', None)
+        if winerror is not None:
+            self.assertIn(winerror, (5, 32))
+        else:
+            # Python FileIO uses the CRT _wopen errno, not always a Win32 error.
+            self.assertIsInstance(error, PermissionError)
+            self.assertEqual(error.errno, errno.EACCES)
+
+    def test_windows_write_denial_requires_precise_error(self):
+        for winerror in (None, 5, 32):
+            error = PermissionError(errno.EACCES, 'denied')
+            error.winerror = winerror
+            with self.subTest(winerror=winerror):
+                self.assert_windows_write_denied(error)
+        for code, winerror in ((errno.EIO, None), (errno.ENOENT, None),
+                               (errno.EPERM, None), (errno.EACCES, 2), (errno.EACCES, 0)):
+            error = OSError(code, 'unrelated failure')
+            error.winerror = winerror
+            with self.subTest(errno=code, winerror=winerror), self.assertRaises(AssertionError):
+                self.assert_windows_write_denied(error)
 
     def junction(self, link, destination):
         # Directory junction creation needs no symlink privilege. This is a
