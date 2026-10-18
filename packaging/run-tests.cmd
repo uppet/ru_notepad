@@ -45,6 +45,18 @@ if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo app_ru_native.exe --measure-ru-timer: exact 1 MB Unicode source on production cooperative scheduler with timer fallback, bounded reads and filtered notification diagnostics.
 app_ru_native.exe "%TESTDIR%" --measure-ru-timer >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo markdown_policy.exe: bounded heading and fence parsing, UTF-8 splits, limits and reset policy.
+markdown_policy.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo markdown_selection_policy.exe: Markdown suffix and explicit language selection policy.
+markdown_selection_policy.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo markdown_native.exe: real Markdown bounded folding, edits, stale lifetime and document ownership controls.
+markdown_native.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo app_markdown_native.exe: production Markdown menu routing, folding option, tab isolation and document state.
+app_markdown_native.exe "%TESTDIR%" >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo shortcuts.exe: keyboard shortcut routing and modifier combinations.
 shortcuts.exe >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"

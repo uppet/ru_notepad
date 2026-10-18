@@ -155,11 +155,17 @@ The candidate changes only the eligible three-message style-publication route. S
 
 The [paired run](https://github.com/uppet/ru_notepad/actions/runs/38984124849) completed three preflights and all eight rows. Its two detached-GUI pairs measured 10.248–11.456 seconds for direct publication and 15.126–15.128 seconds for messages. The separate product runner completed the same 1 MB file in 14.859 seconds; these are different machines/runs and must not be combined into a paired effect estimate.
 
-## 0.1.7 conservative Ru policy prefix (pending)
+## 0.1.7 conservative Ru policy prefix (product pending)
 
 Only the common-token batch-policy path changes. An initially empty structural context can use a conservative fast prefix; the first unsupported event and the rest of that batch use the original loop. Full nested-state/output/style/fold comparisons in the interpreter and host C cover the unchanged 196 input plans, 19,627 batches, 2,554 events and 21,504 context transitions, plus four checkpoint edits and 13 additional boundary/error scenarios. Twelve source mutations check that the duplicated shortcut and original fallback cannot silently diverge.
 
 The candidate must still pass all **1,487 native assertions / 33 results**, original scanner oracle/sanitizer gates and the full-file safety tests. Its new Windows paired experiment keeps direct publication enabled on both sides, changes only the exact policy source, and retains the same corpus, complete-output validation, 30-second deadline, six edits, input/paint responsiveness and orderly closure. Linux policy-only observations justify this experiment but are not Windows or GUI acceptance. See [the policy contract and measurement limits](ru-policy-fastpath-experiment.md).
+
+The historical [same-route run38998372873](https://github.com/uppet/ru_notepad/actions/runs/38998372873) completed its three preflights and eight rows. That comparison does not substitute for complete product acceptance or for the reconstructed Markdown candidate.
+
+## 0.1.8 Markdown Stage A (pending)
+
+The new candidate retains the prior complete product gates and adds real portable policy/extension tests, native heading/lifecycle and main-window integration fixtures, and a separately measured GUI group. Exact counts are enforced by `tools/windows_ci.py`, not inferred from this document. Three GUI input shapes target long-line coloring, an unclosed fence and many-line expansion. Native tests compare complete small-fixture text and fold levels; GUI style probes are bounded samples. New Windows execution is required before any package is accepted. No Enter continuation or renderer is included.
 
 ## Packaging
 

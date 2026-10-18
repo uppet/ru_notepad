@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.8-preview — candidate
+
+- Add `.md` / `.markdown` recognition, Language > Markdown and Lexilla colors.
+- Add independently bounded Ru heading-section folds, per-document fold toggle and existing margin/collapse/expand commands. Document the conservative ATX/setext, fence, HTML and container subset separately from Lexilla's coloring dialect.
+- Retain encoding, undo/savepoint, document-owner guards and the >=32MB Plain/no-wrap path. Add fresh portable, native and GUI gates; full Windows acceptance is pending.
+- Keep Enter continuation and rendered preview outside this stage. This is a new reconstruction after lost local snapshots; previous Markdown test reports are not reused as acceptance.
+- Organize five unchanged streaming-fixture helpers into a small shared module. Preserve the original native declarations, same-process test history and all original assertions.
+
 ## 0.1.7-preview — 2026-10-17
 
 - Evaluate a conservative common-token prefix in the Ru batch policy. Only an initially empty frame/pending-header context can use it; the first unsupported event and all remaining events use the original regular loop. No lexical or folding decision, native scanner ABI, scheduling budget or direct-publication route changes.

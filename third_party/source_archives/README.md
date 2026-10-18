@@ -1,6 +1,6 @@
 # Pinned upstream source archives
 
-These are unchanged source ZIPs previously obtained from the official Scintilla distribution. They are committed as reproducible build inputs, not as application executables. Current product and policy-pair CI copy and verify these exact bytes without downloading a replacement or trying a network fallback. Updating a dependency requires an explicit source/pin/notice change and a new review.
+These are unchanged source ZIPs previously obtained from the official Scintilla distribution. They are committed as reproducible build inputs, not as application executables. Current product CI copy and verify these exact bytes without downloading a replacement or trying a network fallback. Updating a dependency requires an explicit source/pin/notice change and a new review.
 
 | Archive | Bytes | SHA-256 |
 | --- | ---: | --- |
@@ -33,3 +33,5 @@ The original archive bytes, including per-file attributions and notices, remain 
 - `Unicode-2016.txt`: only the opening Unicode copyright/permission section of [Unicode's ICU 58.2 license file](https://github.com/unicode-org/icu/blob/release-58-2/icu4c/LICENSE), for the explicitly copied Unicode 9 `PropList` values. The [official Unicode 9 data header](https://github.com/unicode-org/unicodetools/blob/main/unicodetools/data/ucd/9.0.0-Update/PropList.txt) supplies the corresponding 2016 attribution. Unrelated ICU third-party notices were not copied. The Unicode inventory also includes the Unicode 5.1 `BidiMirroring` reference in `lexilla/lexers/LexRaku.cxx` lines 239–274; its [official data header](https://github.com/unicode-org/unicodetools/blob/main/unicodetools/data/ucd/5.1.0-Update/BidiMirroring.txt) attributes Copyright (c) 1991–2008 Unicode, Inc. The adjacent current Unicode data/software notice is retained with these upstream data sources.
 
 This is a scoped notice inventory, not an exhaustive provenance certification. Some examples also cite R manuals, Microsoft F#/PowerShell documentation, Zsh, and small Pascal/Verilog tutorials; complete historical source-page provenance is not established for every excerpt. Their original source comments are retained; this inventory records the limited uncertainty rather than inventing new permissions or a blanket legal-clearance claim. The application's project license remains undecided. The existing application `packaging/licenses/Unicode.txt` is unchanged.
+
+The manual historical policy comparison checks out its fixed public source and keeps that historical acquisition contract. It is not the current product workflow.

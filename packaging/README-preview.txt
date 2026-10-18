@@ -1,4 +1,4 @@
-ru_notepad 0.1.7-preview · Windows x64
+ru_notepad 0.1.8-preview · Windows x64
 
 IMPORTANT: EXPERIMENTAL PORTABLE PREVIEW
 Read BUILD.json for this exact package's verification results. A local cross-build
@@ -51,7 +51,7 @@ IMPLEMENTED, WITH ACCEPTANCE SCOPE RECORDED IN BUILD.json
 Independent document tabs; open/save/save-as; UTF-8/BOM and UTF-16 LE/BE;
 Windows-1252 and GBK; undo/redo; literal find/replace; case matching;
 replace-all as one undo group; word wrap; zoom/reset; line numbers; native C/C++
-and JSON highlighting, extension detection and a Language menu. Ru source files
+JSON and Markdown highlighting, extension detection and a Language menu. Ru source files
 use a dedicated Ru 0.21.3 container policy with structural folding. Keyword tables
 and fold decisions stay in Ru; the application-owned RuSyntax.dll handles bounded
 UTF-8 scanning and style-byte generation. This is tolerant
@@ -64,7 +64,7 @@ Line EOL describes the caret line (CRLF/LF/CR/None at EOF); Enter describes the
 new-line insertion mode. Mixed files are not claimed to have one uniform EOL.
 Ctrl+Tab / Ctrl+Shift+Tab and Ctrl+PageDown / Ctrl+PageUp switch tabs.
 Ctrl++ / Ctrl+- zoom; Ctrl+0 resets zoom. Ctrl+Alt/AltGr is left to input methods.
-For Ru, click the fold margin or use Ctrl+Shift+[ to collapse all and Ctrl+Shift+]
+For Ru or Markdown, click the fold margin or use Ctrl+Shift+[ to collapse all and Ctrl+Shift+]
 to expand all. The View menu has the same commands. Tabs retain fold state.
 Language > Ru / 如言 selects it manually; open/save-as .ru paths select it
 automatically. Styling runs in bounded background slices; wait for completion
@@ -134,8 +134,17 @@ private document contents, or originals just to report a bug.
 COMPONENTS
 Application logic: Ru compiled to native C/Windows PE.
 Editor core: Scintilla 5.6.7, built from official source; license in licenses/.
-C/C++ and JSON syntax: Lexilla 5.5.4. Ru syntax: Ru policy plus the application-owned
+C/C++, JSON and Markdown syntax: Lexilla 5.5.4. Ru syntax: Ru policy plus the application-owned
 RuSyntax.dll C scanning/style-buffer helper; structural folding decisions remain Ru.
 Unicode classification data notice is included in licenses/Unicode.txt.
 Icon: original GPT-generated artwork. No Notepad++ branding or source included.
 The application has no selected public project license.
+
+MARKDOWN STAGE A
+.md and .markdown select Markdown; Language > Markdown is also available.
+View > Toggle Markdown heading folds disables folding per tab, retaining colors.
+Heading folds use a conservative Ru policy, distinct from Lexilla coloring.
+See docs/markdown-editing.md and docs/markdown-policy-subset.md for the subset.
+Enter list/quote continuation and a rendered preview are not included.
+Native long-line coloring and expansion cannot be preempted by the Ru8ms budget.
+Actual acceptance and measured responsiveness belong to this exact BUILD.json.

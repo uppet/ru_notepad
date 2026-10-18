@@ -1,16 +1,17 @@
-# Syntax highlighting in 0.1.7 preview
+# Syntax highlighting in 0.1.8 preview
 
 ## Supported languages
 
 The application owns colours and native integration in `src/syntax.ru`; its
 `识别` / `名称` wrappers delegate to the exact pure production policy in
 `src/syntax_policy.ru`. Scintilla
-owns text, rendering, selection and undo. C/C++ and JSON use native Lexilla lexers; Ru uses its own container policy:
+owns text, rendering, selection and undo. C/C++, JSON and Markdown use native Lexilla lexers; Ru uses its own container policy:
 
 | File suffix, case-insensitive | Display | Implementation |
 | --- | --- | --- |
 | `.c`, `.h`, `.cc`, `.hh`, `.cpp`, `.hpp`, `.cxx`, `.hxx`, `.c++`, `.h++`, `.inl` | C / C++ | `cpp` (`SCLEX_CPP=3`) |
 | `.json` | JSON | `json` (`SCLEX_JSON=120`) |
+| `.md`, `.markdown` | Markdown | `markdown` (`SCLEX_MARKDOWN=98`), independent Ru heading folds |
 | `.ru` | Ru / 如言 | Ru-owned Scintilla container policy (`SCLEX_CONTAINER=0`) |
 | Other suffixes, no suffix, new unsaved documents | Plain text | No lexer |
 
@@ -119,7 +120,7 @@ not make those runtime failures recoverable; the compiler is unchanged.
 Public module operations:
 
 - `初始化`: cached warning string, empty on success; no retry or late module loading.
-- `识别 路`: extension mapping to `ru`, `cpp`, `json` or `plain`.
+- `识别 路`: extension mapping to `ru`, `cpp`, `json`, `markdown` or `plain`.
 - `名称 语言`: truthful status-bar label.
 - `选择 柄 语言`: applies the requested supported language, returning the actual
   language; unavailable or unknown languages return `plain`.
@@ -270,3 +271,7 @@ Physical mouse interaction, non-US keyboard layouts and IME composition still
 need manual acceptance. Keyboard shortcuts use Windows virtual-key positions;
 the View menu and fold margin provide alternatives on layouts where brackets
 require different modifier combinations.
+
+## Markdown Stage A
+
+Markdown uses Lexilla only for style bytes. `markdown_policy.ru` and `markdown_syntax.ru` implement a separate conservative heading folder. See [editing scope](markdown-editing.md) and the [exact policy subset](markdown-policy-subset.md). Selection uses a token and live-thread/document checks before and after each setup message. Owners must invalidate before changing documents or destroying windows; arbitrary subclasses swapping a document while forwarding the same mutation are outside this contract.

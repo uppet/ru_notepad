@@ -1,22 +1,6 @@
-name: Ru policy prefix paired benchmark
+name: Historical Ru policy prefix replay
 
 on:
-  push:
-    branches: [wip]
-    paths:
-      - src/**
-      - tests/ru_direct_styling_native.ru
-      - tests/ru_direct_fixture_portable.py
-      - tools/run_direct_style_benchmark.py
-      - tools/test_direct_style_benchmark.py
-      - tools/run_policy_prefix_benchmark.py
-      - tools/test_policy_prefix_benchmark.py
-      - tools/prepare_source_archives.py
-      - tools/test_source_archives.py
-      - third_party/source_archives/**
-      - tools/run_ru_syntax_profile.py
-      - tools/test_ru_syntax_profile.py
-      - .github/workflows/policy-prefix-benchmark.yml
   workflow_dispatch:
 
 permissions:
@@ -29,7 +13,6 @@ concurrency:
 jobs:
   paired-policy-prefix:
     name: Pair baseline and prefix Ru policy on real Windows x64
-    if: github.ref == 'refs/heads/wip'
     runs-on: windows-2022
     # Build and setup bounds are independent of every unchanged 30-second
     # styling deadline. This job never packages or grants product acceptance.
@@ -44,12 +27,12 @@ jobs:
     steps:
       - name: Preserve source bytes
         run: git config --global core.autocrlf false
-      - name: Check out exact paired candidate
+      - name: Check out fixed accepted policy8 source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
           fetch-depth: 0
-          ref: ${{ github.sha }}
+          ref: f91d9e8d008c48b00f98b5a19000639c18a61518
       - name: Check out reviewed Ru compiler
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -73,58 +56,6 @@ jobs:
             mingw-w64-x86_64-make
       - name: Execute strict policy pair and reused reporting controls
         run: python -I tools/test_policy_prefix_benchmark.py
-      - name: Prepare exact official Scintilla and Lexilla inputs
-        timeout-minutes: 12
-        env:
-          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $env:PATH = "$env:MSYS2_ROOT/mingw64/bin;$env:PATH"
-          @'
-          import hashlib, io, pathlib, sys, time, zipfile
-          root = pathlib.Path.cwd()
-          sys.path.insert(0, str(root / 'tools'))
-          import run_policy_prefix_benchmark as runner
-          started = time.monotonic()
-          output = root / 'build/dependency-policy-prefix-setup.json'
-          output.parent.mkdir(exist_ok=True)
-          receipt = {'schema': 1, 'passed': False, 'error_code': 'dependency_setup_failed', 'commands': [], 'elapsed_seconds': 0}
-          source_receipt = root / 'build/dependency-policy-prefix-source-archives.json'
-          private = root / 'build/dependency-policy-prefix-private'
-          private.mkdir()
-          try:
-              runner.execution.build_command([sys.executable, root / 'tools/test_source_archives.py'],
-                  private, 'source-archive-tests', started + 600)
-              runner.execution.build_command([sys.executable, root / 'tools/prepare_source_archives.py',
-                  '--root', root, '--receipt', source_receipt], private, 'source-archives', started + 600)
-              runner.validate_source_archive_receipt(runner.read_source_archive_receipt(source_receipt), require_passed=True)
-              for name, size, checksum in (
-                  ('scintilla567.zip', 1904249, '2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c'),
-                  ('lexilla554.zip', 1598324, '5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0')):
-                  archive = runner.relative_file(root, 'vendor/downloads/' + name)
-                  # Same official pins as product acceptance, after offline preparation.
-                  runner.require(archive.stat().st_size == size, 'dependency_archive_size_mismatch')
-                  with archive.open('rb') as stream:
-                      content = stream.read(size + 1)
-                  runner.require(len(content) == size, 'dependency_archive_size_mismatch')
-                  runner.require(hashlib.sha256(content).hexdigest() == checksum, 'dependency_archive_hash_mismatch')
-                  with zipfile.ZipFile(io.BytesIO(content)) as source:
-                      for item in source.infolist():
-                          runner.require(not pathlib.PurePosixPath(item.filename).is_absolute() and '..' not in pathlib.PurePosixPath(item.filename).parts,
-                              'dependency_archive_path_invalid')
-                      source.extractall(root / 'vendor')
-              commands = [
-                  ['mingw32-make.exe', '-j2', '-C', 'vendor/scintilla/win32', '../bin/Scintilla.dll', 'CXX=g++.exe', 'WINDRES=windres.exe', 'AR=ar.exe', 'RANLIB=ranlib.exe'],
-                  ['mingw32-make.exe', '-j2', '-C', 'vendor/lexilla/src', '../bin/lexilla.dll', 'windir=C:/Windows', 'CXX=g++.exe', 'WINDRES=windres.exe', 'AR=ar.exe', 'RANLIB=ranlib.exe', 'LDFLAGS=-shared -static -mwindows -Wl,--kill-at -s']]
-              for name, command in zip(('scintilla', 'lexilla'), commands):
-                  runner.execution.build_command(command, private, 'dependency-' + name, started + 600)
-              receipt.update(passed=True, error_code=None)
-          finally:
-              receipt['commands'] = [runner.read_json(path) for path in sorted(private.glob('*.json'))]
-              receipt['elapsed_seconds'] = round(time.monotonic() - started, 6)
-              runner.save_json(output, receipt)
-          '@ | python -I -
-          if ($LASTEXITCODE -ne 0) { throw 'Pinned dependency preparation failed.' }
       - name: Verify exact direct-fixture call boundaries in both ordinary Ru backends
         env:
           MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
@@ -132,6 +63,56 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $env:PATH = "$env:MSYS2_ROOT/mingw64/bin;$env:PATH"
           python -I tests/ru_direct_fixture_portable.py --ru-root .ci/ru-language --cc gcc
+      - name: Prepare exact official Scintilla and Lexilla inputs
+        timeout-minutes: 12
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PATH = "$env:MSYS2_ROOT/mingw64/bin;$env:PATH"
+          $env:PROFILE_PWSH = Join-Path $PSHOME 'pwsh.exe'
+          @'
+          import hashlib, json, os, pathlib, sys, time, zipfile
+          root = pathlib.Path.cwd()
+          sys.path.insert(0, str(root / 'tools'))
+          import run_direct_style_benchmark as runner
+          started = time.monotonic()
+          output = root / 'build/dependency-policy-prefix-setup.json'
+          output.parent.mkdir(exist_ok=True)
+          receipt = {'schema': 1, 'passed': False, 'commands': [], 'elapsed_seconds': 0}
+          private = root / 'build/dependency-policy-prefix-private'
+          private.mkdir()
+          try:
+              for name, checksum in (
+                  ('scintilla567.zip', '2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c'),
+                  ('lexilla554.zip', '5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0')):
+                  archive = root / 'vendor/downloads' / name
+                  archive.parent.mkdir(parents=True, exist_ok=True)
+                  # Use the same ordinary official client as windows_ci.ps1.
+                  download = ("$ErrorActionPreference = 'Stop'; Invoke-WebRequest -Uri 'https://www.scintilla.org/"
+                              + name + "' -OutFile '" + str(archive).replace("'", "''") + "' -TimeoutSec 120")
+                  runner.build_command([os.environ['PROFILE_PWSH'], '-NoLogo', '-NoProfile', '-NonInteractive',
+                                        '-Command', download], private, 'dependency-download-' + name.split('.')[0], started + 600)
+                  # Archive-acceptance cap, before reading or extraction; this is not a transfer-byte cap.
+                  assert archive.stat().st_size <= 32 * 1024 * 1024
+                  content = archive.read_bytes()
+                  assert hashlib.sha256(content).hexdigest() == checksum
+                  with zipfile.ZipFile(archive) as source:
+                      for item in source.infolist():
+                          assert not pathlib.PurePosixPath(item.filename).is_absolute() and '..' not in pathlib.PurePosixPath(item.filename).parts
+                      source.extractall(root / 'vendor')
+              commands = [
+                  ['mingw32-make.exe', '-j2', '-C', 'vendor/scintilla/win32', '../bin/Scintilla.dll', 'CXX=g++.exe', 'WINDRES=windres.exe', 'AR=ar.exe', 'RANLIB=ranlib.exe'],
+                  ['mingw32-make.exe', '-j2', '-C', 'vendor/lexilla/src', '../bin/lexilla.dll', 'windir=C:/Windows', 'CXX=g++.exe', 'WINDRES=windres.exe', 'AR=ar.exe', 'RANLIB=ranlib.exe', 'LDFLAGS=-shared -static -mwindows -Wl,--kill-at -s']]
+              for name, command in zip(('scintilla', 'lexilla'), commands):
+                  runner.build_command(command, private, 'dependency-' + name, started + 600)
+              receipt['passed'] = True
+          finally:
+              receipt['commands'] = [runner.read_json(path) for path in sorted(private.glob('*.json'))]
+              receipt['elapsed_seconds'] = round(time.monotonic() - started, 6)
+              output.write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
+          '@ | python -I -
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned dependency preparation failed.' }
       - name: Generate and build four private paired variants and native controls
         timeout-minutes: 16
         env:
@@ -151,7 +132,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: policy-prefix-evidence-${{ github.sha }}
+          name: historical-policy8-f91d9e8d008c48b00f98b5a19000639c18a61518-run-${{ github.run_id }}
           path: |
             build/policy-prefix-evidence/*.json
             build/policy-prefix-evidence/*.log

@@ -81,18 +81,38 @@ class PolicyTests(unittest.TestCase):
         with patch.object(runner, 'git', side_effect=clean), patch.object(runner, 'tracked', return_value=list(accepted) + ['unreviewed.ru']):
             with self.assertRaises(runner.Error): runner.candidate_sources(ROOT)
 
-    def test_reviewed_closed_delta_matches_checkout_exactly(self):
+    def test_reviewed_closed_delta_accepts_fixed_synthetic_receipt_and_rejects_markdown_checkout(self):
         accepted = runner.baseline_sources(ROOT)
         names = set(accepted) | set(runner.OWNED) | set(runner.NEW_INPUTS)
         actual = set(runner.tracked(ROOT)) | set(subprocess.check_output(
             ['git', '-C', str(ROOT), 'ls-files', '--others', '--exclude-standard', '-z'], timeout=30).decode().rstrip('\0').split('\0'))
         actual.discard('')
-        self.assertEqual(actual, names)
+        self.assertNotEqual(actual, names)
+        self.assertIn('src/markdown_policy.ru', actual - names)
+        # Synthetic positive control uses the existing frozen map, not hashes
+        # learned from this new product. It never claims current acceptance.
+        reviewed = dict(accepted)
+        reviewed.update({name: runner.sha(runner.relative_file(ROOT, name)) for name in runner.OWNED})
+        reviewed.update(runner.REVIEWED_CHANGED_SHA256)
+        self.assertEqual(set(reviewed), names)
         candidate = dict(accepted_commit=runner.BASELINE_PUBLIC_COMMIT, accepted_tree=runner.BASELINE_TREE,
             candidate_commit=runner.git('rev-parse', 'HEAD', root=ROOT), candidate_tree=runner.git('rev-parse', 'HEAD^{tree}', root=ROOT),
-            accepted_source_sha256=accepted, source_sha256={name: runner.sha(runner.relative_file(ROOT, name)) for name in names},
+            accepted_source_sha256=accepted, source_sha256=reviewed,
             reviewed_changes=sorted(runner.REVIEWED_CHANGED_SHA256), harness_inputs=list(runner.OWNED))
         runner.validate_candidate_identity(candidate, ROOT)
+        current = dict(candidate, source_sha256={name: runner.sha(runner.relative_file(ROOT, name)) for name in actual})
+        with self.assertRaises(runner.Error):
+            runner.validate_candidate_identity(current, ROOT)
+        # A clean-status facade must still reject the real extra inventory.
+        real_git = runner.git
+        def clean(*args, root=ROOT):
+            return '' if args[0] == 'status' else real_git(*args, root=root)
+        real_tracked = runner.tracked
+        def current_inventory(root, tree=None):
+            return sorted(actual) if tree is None else real_tracked(root, tree)
+        with patch.object(runner, 'git', side_effect=clean), patch.object(runner, 'tracked', side_effect=current_inventory):
+            with self.assertRaisesRegex(runner.Error, 'candidate_source_inventory_mismatch'):
+                runner.candidate_sources(ROOT)
         for changed in ('hash', 'extra', 'missing', 'baseline'):
             bad = copy.deepcopy(candidate)
             if changed == 'hash': bad['source_sha256'][runner.LEXICAL] = '0' * 64
@@ -375,16 +395,15 @@ class OfflineDependencyTests(unittest.TestCase):
             dependency = next(item for item in runner.portable.DEPENDENCIES.values() if item['archive'] == filename)
             self.assertEqual(dependency['sha256'], checksum)
             self.assertIn(f"-ExpectedSize {size} -ExpectedSha256 '{checksum}'", product)
-            self.assertIn(f"('{filename}', {size}, '{checksum}')", workflow)
-        for source in (product, workflow):
-            self.assertNotRegex(source, r'(?i)Invoke-WebRequest|Start-BitsTransfer|urllib|curl|wget|https?://')
-        self.assertLess(workflow.index('source-archive-tests'), workflow.index("private, 'source-archives'"))
-        self.assertLess(workflow.index('require_passed=True'), workflow.index('source.extractall'))
-        self.assertLess(workflow.index('source.extractall'), workflow.index("['mingw32-make.exe'"))
-        self.assertLess(workflow.index('source-archive-tests'), workflow.index('python -I tests/ru_direct_fixture_portable.py'))
-        self.assertIn('content = stream.read(size + 1)', workflow)
-        self.assertIn('zipfile.ZipFile(io.BytesIO(content))', workflow)
-        self.assertNotIn('zipfile.ZipFile(archive)', workflow)
+            self.assertIn(f"('{filename}', '{checksum}')", workflow)
+        self.assertNotRegex(product, r'(?i)Invoke-WebRequest|Start-BitsTransfer|urllib|curl|wget|https?://')
+        self.assertLess(product.index("'tools/test_source_archives.py'"), product.index("'tools/prepare_source_archives.py'"))
+        self.assertLess(product.index("'tools/prepare_source_archives.py'"), product.index('Expand-VerifiedArchive -Archive'))
+        # The literal historical checkout keeps its own historical acquisition
+        # contract. Current offline helper paths do not exist in public f91.
+        self.assertIn('Invoke-WebRequest', workflow)
+        self.assertNotIn('prepare_source_archives.py', workflow)
+        self.assertNotIn('validate_source_archive_receipt', workflow)
         windows = (ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
         self.assertIn('run: python -I tools/test_source_archives.py', windows.split('  windows-native:', 1)[0])
 
@@ -431,84 +450,18 @@ class OfflineDependencyTests(unittest.TestCase):
         # Historical replay accepts its own exact schema, never the new one.
         with self.assertRaises(runner.Error): runner.execution.validate_dependency_setup(value)
 
-    def test_workflow_runs_real_helper_and_never_extracts_or_builds_after_failed_admission(self):
-        import shutil
-        import socket
-        import zipfile
-        _, script = self.workflow()
-        for failure in ('tests', 'helper', 'nonzero_after_pass', 'missing_receipt', 'false_claim',
-                        'target_size', 'target_hash', None):
-            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
-                root = Path(directory) / "owner's workspace"; root.mkdir()
-                (root / 'tools').mkdir()
-                for name in ('prepare_source_archives.py', 'test_source_archives.py'):
-                    shutil.copyfile(ROOT / 'tools' / name, root / 'tools' / name)
-                archives = root / 'third_party/source_archives'; archives.mkdir(parents=True)
-                for _, name, _, _ in runner.SOURCE_ARCHIVES:
-                    shutil.copyfile(ROOT / 'third_party/source_archives' / name, archives / name)
-                if failure == 'helper':
-                    (archives / 'scintilla567.zip').write_bytes(b'bad source')
-                calls = []
-                def execute(command, private, stage, deadline):
-                    calls.append(stage)
-                    rc = 0
-                    if stage == 'source-archive-tests':
-                        if failure == 'tests': rc = 9
-                        elif failure is None:
-                            completed = subprocess.run(list(map(str, command)), capture_output=True, text=True, timeout=120)
-                            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
-                    elif stage == 'source-archives':
-                        if failure == 'missing_receipt': pass
-                        elif failure == 'false_claim':
-                            fake = source_archive_receipt()
-                            fake['dependencies'][0]['target'].update(verified=False, error_code='not_checked')
-                            runner.save_json(Path(command[-1]), fake)
-                        else:
-                            completed = subprocess.run(list(map(str, command)), capture_output=True, text=True, timeout=30)
-                            rc = completed.returncode
-                            self.assertEqual(completed.stderr, '')
-                            if failure == 'nonzero_after_pass':
-                                self.assertEqual(rc, 0)
-                                rc = 17
-                            if failure in ('target_size', 'target_hash'):
-                                self.assertEqual(rc, 0)
-                                target = root / 'vendor/downloads/scintilla567.zip'
-                                raw = target.read_bytes()
-                                target.write_bytes(raw + b'x' if failure == 'target_size' else b'X' + raw[1:])
-                    else:
-                        self.assertIsNone(failure, 'Build started after failed admission')
-                        self.assertTrue((root / 'vendor/scintilla/include/Scintilla.h').is_file())
-                        self.assertTrue((root / 'vendor/lexilla/src/Lexilla.cxx').is_file())
-                    record = {'stage': stage, 'elapsed_seconds': 0.25, 'exit_code': rc,
-                        'error_code': 'build_command_failed' if rc else None, 'cleanup_killed': False, 'cleanup_failed': False}
-                    runner.save_json(private / (stage + '.json'), record)
-                    runner.require(rc == 0, 'build_command_failed')
-                    return record
-                with patch.object(Path, 'cwd', return_value=root), patch.object(sys, 'path', sys.path.copy()), \
-                     patch.object(runner.execution, 'build_command', side_effect=execute), \
-                     patch.object(socket, 'create_connection', side_effect=AssertionError('Network forbidden')):
-                    if failure:
-                        with patch.object(zipfile.ZipFile, 'extractall', side_effect=AssertionError('Extraction forbidden')) as extract:
-                            with self.assertRaises((runner.Error, FileNotFoundError)):
-                                exec(compile(script, 'offline_dependency_workflow', 'exec'), {})
-                            extract.assert_not_called()
-                    else:
-                        exec(compile(script, 'offline_dependency_workflow', 'exec'), {})
-                setup = runner.validate_dependency_setup(runner.read_json(root / 'build/dependency-policy-prefix-setup.json'))
-                self.assertEqual(setup['passed'], failure is None)
-                self.assertEqual(calls[:1], ['source-archive-tests'])
-                self.assertEqual(calls, ['source-archive-tests'] if failure == 'tests' else
-                    ['source-archive-tests', 'source-archives'] if failure else
-                    ['source-archive-tests', 'source-archives', 'dependency-scintilla', 'dependency-lexilla'])
-                if failure:
-                    self.assertFalse((root / 'vendor/scintilla').exists())
-                    self.assertFalse((root / 'vendor/lexilla').exists())
-                else:
-                    verified = runner.validate_source_archive_receipt(runner.read_source_archive_receipt(
-                        root / 'build/dependency-policy-prefix-source-archives.json'), require_passed=True)
-                    self.assertTrue(verified['passed'])
-                    for _, name, _, checksum in runner.SOURCE_ARCHIVES:
-                        self.assertEqual(runner.sha(root / 'vendor/downloads' / name), checksum)
+    def test_historical_workflow_is_exact_public_body_with_only_replay_metadata_changes(self):
+        workflow, script = self.workflow()
+        # Derived from public f91d9e8d008c48b00f98b5a19000639c18a61518.
+        # Only name, manual trigger, literal checkout and fixed artifact name
+        # differ. Never run current offline runner APIs after historical checkout.
+        self.assertEqual(runner.digest(workflow.encode('utf-8')), 'f4876695a22da78b05f79282ff509f6a03bf9cc101f535fab90707846c006954')
+        self.assertIn('import run_direct_style_benchmark as runner', script)
+        self.assertNotIn('source-archive-tests', script)
+        self.assertNotIn('source-archives', script)
+        self.assertIn("assert archive.stat().st_size <= 32 * 1024 * 1024", script)
+        self.assertLess(script.index('hashlib.sha256(content)'), script.index('source.extractall'))
+        self.assertLess(script.index('source.extractall'), script.index("['mingw32-make.exe'"))
 
     def test_policy_prepare_blocks_every_build_until_both_receipts_pass(self):
         for failure in ('source_missing', 'source_failed', 'setup_missing', 'setup_failed'):
@@ -617,12 +570,18 @@ class OfflineDependencyTests(unittest.TestCase):
 
 
 class WorkflowTests(unittest.TestCase):
-    def test_current_comparison_and_fixed_historical_replay_are_distinct(self):
+    def test_policy8_and_direct_replays_are_manual_and_fixed_to_their_own_public_sources(self):
         current = (ROOT / '.github/workflows/policy-prefix-benchmark.yml').read_text(encoding='utf-8')
         old = (ROOT / '.github/workflows/direct-style-benchmark.yml').read_text(encoding='utf-8')
-        self.assertIn('branches: [wip]', current)
-        self.assertIn("if: github.ref == 'refs/heads/wip'", current)
-        self.assertIn('ref: ${{ github.sha }}', current)
+        fixed = 'f91d9e8d008c48b00f98b5a19000639c18a61518'
+        self.assertNotIn('  push:', current)
+        self.assertNotIn('  pull_request:', current)
+        self.assertNotIn('inputs:', current)
+        self.assertNotIn("if: github.ref ==", current)
+        self.assertNotIn('ref: ${{ github.sha }}', current)
+        self.assertIn('workflow_dispatch:', current)
+        self.assertIn('ref: ' + fixed, current)
+        self.assertIn('historical-policy8-' + fixed + '-run-${{ github.run_id }}', current)
         self.assertIn('python -I tools/test_policy_prefix_benchmark.py', current)
         self.assertIn('python -I tests/ru_direct_fixture_portable.py', current)
         for action in ('prepare', 'run', 'verify', 'collect'): self.assertIn('tools/run_policy_prefix_benchmark.py --action ' + action, current)

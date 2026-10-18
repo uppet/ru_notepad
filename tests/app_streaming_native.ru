@@ -3,7 +3,7 @@
 窗 取 外言 '../src/win32.ru'.
 编 取 外言 '../src/editor.ru'.
 件库 取 外言 '../src/file_codec.ru'.
-辅 取 外言 './file_streaming_native.ru'.
+辅 取 外言 './streaming_fixture.ru'.
 拖例 取 外言 './drop_fixture.ru'.
 密 取 外言 '如:密'.
 Sleep 取 (窗 其 内核) 其 绑定 'Sleep' (密 其 签名 (窗 其 V) ([(窗 其 U)]) 'win64').

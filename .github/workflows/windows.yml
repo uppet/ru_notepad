@@ -50,6 +50,8 @@ jobs:
         run: python -I tools/windows_ci.py --helper-policy-action prepare
       - name: Execute offline archive controls on the POSIX host
         run: python -I tools/test_source_archives.py
+      - name: Require pure Markdown policy and selection in interpreter and generated C
+        run: python -I tools/test_markdown_portable.py --ru-root .ci/ru-language
       - name: Verify actual cleanup rescue bodies and original scalar negative controls
         run: >-
           python -I tools/test_cleanup_paths.py --ru-root .ci/ru-language
@@ -101,6 +103,16 @@ jobs:
         with:
           name: helper-policy-evidence-${{ github.sha }}
           path: build/helper-policy-evidence/*
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload bounded pure Markdown proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: markdown-policy-evidence-${{ github.sha }}
+          path: |
+            build/markdown-policy-evidence/report.json
+            build/markdown-policy-evidence/*.log
           if-no-files-found: warn
           retention-days: 14
   windows-native:

@@ -107,6 +107,8 @@ try {
     # Orchestration tests are separate from the native application acceptance.
     Invoke-Checked $Python @('tools/test_windows_ci.py')
     Invoke-Checked $Python @('tools/test_package.py')
+    Invoke-Checked $Python @('tools/test_markdown_portable.py','--ru-root',$RuRoot,
+        '--cc',(Join-Path $Bin 'gcc.exe'))
 
     # Run the complete helper suite on this host before admitting source bytes.
     # The helper copies only reviewed in-repository ZIPs and never extracts.
@@ -142,7 +144,7 @@ try {
         '--windres',(Join-Path $Bin 'windres.exe'),'--ar',(Join-Path $Bin 'ar.exe'),
         '--ranlib',(Join-Path $Bin 'ranlib.exe'),'--skip-scintilla','--skip-lexilla')
     Invoke-Checked $Python ($BuildArgs + @('--source','src/main.ru','--output',(Join-Path $Output 'ru_notepad.exe')))
-    foreach ($test in @('document_policy','ui_arguments','file_codec_flags','editor_native','app_native','app_features_native','file_codec_tests','file_codec_security_probe','syntax_native','syntax_policy','shortcuts','status_native','file_streaming_native','editor_streaming_native','associations_policy','associations_native','file_drop_native','app_streaming_native','ru_lexical_policy','ru_syntax_native','app_ru_native','ru_direct_styling_native')) {
+    foreach ($test in @('document_policy','ui_arguments','file_codec_flags','editor_native','app_native','app_features_native','file_codec_tests','file_codec_security_probe','syntax_native','syntax_policy','shortcuts','status_native','file_streaming_native','editor_streaming_native','associations_policy','associations_native','file_drop_native','app_streaming_native','ru_lexical_policy','ru_syntax_native','app_ru_native','ru_direct_styling_native','markdown_policy','markdown_selection_policy','markdown_native','app_markdown_native')) {
         Invoke-Checked $Python ($BuildArgs + @('--console','--source',"tests/$test.ru",'--output',(Join-Path $Output "$test.exe")))
     }
     $AcceptArgs = @('tools/windows_ci.py','--bin-dir',$Output,'--evidence-dir',$Evidence,

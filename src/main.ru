@@ -1,4 +1,4 @@
-# ru_notepad 0.1.7 preview. Application behavior is compiled from Ru.
+# ru_notepad 0.1.8 preview. Application behavior is compiled from Ru.
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
 编 取 外言 'editor.ru'.
@@ -257,7 +257,11 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     若 语态 != 空 则
         若 非 语态['enabled'] 则 语言名 取 语 其 名称 'plain'. 然
         若 语态['warning'] != '' 则 模式文 取 模式文+'    '+语态['warning']. 然
-        若 语态['pending'] 则 模式文 取 模式文+'    Styling Ru...'. 然
+        若 语态['pending'] 则
+            若 (文档 其 查 'language') == 'markdown' 则 模式文 取 模式文+'    Folding Markdown...'.
+            另 模式文 取 模式文+'    Styling Ru...'. 然
+        然
+        若 (文档 其 查 'language') == 'markdown' 且 非 (文档 其 查 'markdownFolds') 则 模式文 取 模式文+'    Heading folds off'. 然
     然
     窗 其 标题 (A 其 查 'status') ('  '+(态 其 文本 (文档 其 查 'editor'))+'    '+编文+'    '+语言名+模式文).
     得 空.
@@ -351,7 +355,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     若 路 == '' 则 名 取 'Untitled '+(序 为 句). 然
     语言 取 'plain'.
     若 非 大型 则 语言 取 选择语法 柄 (语 其 识别 路). 然
-    文档 取 {'editor':柄,'path':路,'name':名,'encoding':编码,'bom':BOM,'stamp':戳,'fileIdentity':身份,'encodingDirty':假,'label':'','wrap':假,'language':语言,'large':大型,'revision':0}.
+    文档 取 {'editor':柄,'path':路,'name':名,'encoding':编码,'bom':BOM,'stamp':戳,'fileIdentity':身份,'encodingDirty':假,'label':'','wrap':假,'language':语言,'markdownFolds':真,'large':大型,'revision':0}.
     项 取 (窗 其 TCITEM) 其 新建.
     存 取 空.
     试
@@ -641,6 +645,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     结束工作.
     若 原路 != 写态['path'] 且 非 (文档 其 查 'large') 则
         文档 其 增 'language' (选择语法 (文档 其 查 'editor') (语 其 识别 写态['path'])).
+        若 (文档 其 查 'language') == 'markdown' 则 语 其 设置折叠 (文档 其 查 'editor') (文档 其 查 'markdownFolds'). 然
         安排语法.
     然
     刷新.
@@ -806,28 +811,35 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     若 号 == 406 则
         模 其 改编码 当前 936 假.
     然
-    若 (号 == 501 或 (号 >= 702 且 号 <= 704)) 且 (当前 其 查 'large') 则 提示 'Large-file mode keeps wrapping and syntax colouring disabled to bound memory and layout cost.'. 得 空. 然
-    若 号 >= 701 且 号 <= 704 则
+    若 (号 == 501 或 (号 >= 702 且 号 <= 705)) 且 (当前 其 查 'large') 则 提示 'Large-file mode keeps wrapping and syntax colouring disabled to bound memory and layout cost.'. 得 空. 然
+    若 号 >= 701 且 号 <= 705 则
         语言 取 'plain'.
         若 号 == 702 则 语言 取 'cpp'. 然
         若 号 == 703 则 语言 取 'json'. 然
         若 号 == 704 则 语言 取 'ru'. 然
+        若 号 == 705 则 语言 取 'markdown'. 然
         若 语言 == (当前 其 查 'language') 则
             若 语言 != 'ru' 则 得 空. 然
             语态 取 语 其 状态 编辑柄.
             若 语态 != 空 且 语态['enabled'] 则 得 空. 然
         然
         当前 其 增 'language' (选择语法 编辑柄 语言).
+        若 语言 == 'markdown' 则 语 其 设置折叠 编辑柄 (当前 其 查 'markdownFolds'). 然
         安排语法.
         报语法警告.
     然
     若 号 == 505 或 号 == 506 则
-        若 (当前 其 查 'language') == 'ru' 且 非 (当前 其 查 'large') 则
-            若 语 其 待办 编辑柄 则 提示 'Ru syntax is still being updated. Folding will be available when styling finishes.'. 得 空. 然
+        若 ((当前 其 查 'language') == 'ru' 或 (当前 其 查 'language') == 'markdown') 且 非 (当前 其 查 'large') 则
+            若 语 其 待办 编辑柄 则 提示 'Syntax folds are still being updated. Wait for the current scan to finish.'. 得 空. 然
             动作 取 0.
             若 号 == 506 则 动作 取 1. 然
             语 其 全折 编辑柄 动作.
         然
+    然
+    若 号 == 507 且 (当前 其 查 'language') == 'markdown' 且 非 (当前 其 查 'large') 则
+        当前 其 增 'markdownFolds' (非 (当前 其 查 'markdownFolds')).
+        语 其 设置折叠 编辑柄 (当前 其 查 'markdownFolds').
+        安排语法.
     然
     若 号 == 501 则
         当前 其 增 'wrap' (非 (当前 其 查 'wrap')).
@@ -849,7 +861,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         若 (窗 其 弹窗 (A 其 查 'window') 'Remove this copy from Open With / Default Apps candidates? Your Windows default choices will not be overwritten.' 'ru_notepad · unregister candidate' 292) == 6 则 关联 其 注销. 提示 'Candidate entries owned by this copy were removed.'. 然
     然
     若 号 == 804 则 提示 ('Registration status: '+(关联 其 查询状态)+'\nregistered = this copy; none = not registered; partial = incomplete; otherowner = another portable location. Unregister at the old location before moving, then register the new copy.'). 然
-    若 号 == 601 则 提示 'ru_notepad 0.1.7 preview\n\nWindows x64 · application logic compiled from Ru\nScintilla + Lexilla native editor components\n\nTabs, safe text saves, undo/redo, literal find/replace.\nBounded streaming, 64 tabs; over 500 MB asks first. Not full Notepad++ parity yet.\nNo Python runtime. No telemetry. No network features.'. 然
+    若 号 == 601 则 提示 'ru_notepad 0.1.8 preview\n\nWindows x64 · application logic compiled from Ru\nScintilla + Lexilla native editor components\n\nTabs, safe text saves, undo/redo, literal find/replace.\nBounded streaming, 64 tabs; over 500 MB asks first. Not full Notepad++ parity yet.\nNo Python runtime. No telemetry. No network features.'. 然
     刷新.
     得 空.
 法
@@ -860,8 +872,8 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         ['&Edit',[[201,'&Undo\tCtrl+Z'],[202,'&Redo\tCtrl+Y'],[203,'Cu&t\tCtrl+X'],[204,'&Copy\tCtrl+C'],[205,'&Paste\tCtrl+V'],[206,'Select &All\tCtrl+A']]],
         ['&Search',[[301,'&Find...\tCtrl+F'],[302,'&Replace...\tCtrl+H'],[303,'Find &Next\tF3']]],
         ['E&ncoding',[[401,'Save as UTF-8'],[402,'Save as UTF-8 with BOM'],[403,'Save as UTF-16 LE'],[404,'Save as UTF-16 BE'],[405,'Save as Windows-1252'],[406,'Save as GBK (CP936)']]],
-        ['&Language',[[701,'Plain text'],[702,'C / C++'],[703,'JSON'],[704,'Ru / 如言']]],
-        ['&View',[[501,'Toggle word &wrap'],[502,'Zoom &in\tCtrl++'],[503,'Zoom &out\tCtrl+-'],[504,'Reset zoom\tCtrl+0'],[505,'Collapse all Ru folds\tCtrl+Shift+['],[506,'Expand all Ru folds\tCtrl+Shift+]']]],
+        ['&Language',[[701,'Plain text'],[702,'C / C++'],[703,'JSON'],[704,'Ru / 如言'],[705,'Markdown']]],
+        ['&View',[[501,'Toggle word &wrap'],[502,'Zoom &in\tCtrl++'],[503,'Zoom &out\tCtrl+-'],[504,'Reset zoom\tCtrl+0'],[505,'Collapse all folds\tCtrl+Shift+['],[506,'Expand all folds\tCtrl+Shift+]'],[507,'Toggle Markdown heading folds']]],
         ['&Settings',[[801,'Register Open With candidate...'],[802,'Choose defaults in Windows Settings...'],[803,'Unregister this copy...'],[804,'Registration status']]],
         ['&Help',[[601,'&About ru_notepad']]]
     ].

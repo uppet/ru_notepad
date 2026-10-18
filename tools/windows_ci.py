@@ -56,6 +56,10 @@ NATIVE_CONSOLE_TESTS = (
     ('ru_lexical_policy', r'^TOTAL PASS: 338\s*$'),
     ('ru_syntax_native', r'^TOTAL PASS: 149\s*$'),
     ('ru_direct_styling_native', r'^TOTAL PASS: 36\s*$'),
+    ('markdown_policy', r'^TOTAL PASS: 181\s*$'),
+    ('markdown_selection_policy', r'^TOTAL PASS: 31\s*$'),
+    ('markdown_native', r'^TOTAL PASS: 44\s*$'),
+    ('app_markdown_native', r'^TOTAL PASS: 53\s*$'),
 )
 SYNTAX_FALLBACK_TESTS = (
     ('syntax_missing_lexilla', '--expect-missing', False),
@@ -78,11 +82,11 @@ CONSOLE_EXECUTABLES = {'editor_largefile_native': 'editor_streaming_native',
                        'app_ru_timer_native': 'app_ru_native'}
 FIXTURE_ARGUMENT_TESTS = {'file_codec_tests', 'file_streaming_native', 'app_streaming_native',
                         'editor_streaming_native', 'editor_largefile_native', 'app_ru_native',
-                        'app_ru_timer_native'}
+                        'app_ru_timer_native', 'app_markdown_native'}
 CONSOLE_TIMEOUT_SECONDS = {'file_streaming_native': 300, 'app_streaming_native': 180,
                            'editor_streaming_native': 300,
                            'editor_largefile_native': 900, 'app_ru_native': 180,
-                           'app_ru_timer_native': 60, 'ru_direct_styling_native': 120}
+                           'app_ru_timer_native': 60, 'ru_direct_styling_native': 120, 'app_markdown_native': 240}
 LARGE_FILE_MIN_FREE_BYTES = 2 * 1024 * 1024 * 1024
 GUI_FILE_CHECKS = ('cli_unicode_paths', 'cli_exact_text', 'drop_unicode_paths',
                    'drop_exact_text', 'child_drop_routed', 'busy_observed', 'busy_responsive',
@@ -100,7 +104,7 @@ GUI_RU_CHECKS = ('initial_mod_event_mask', 'timer_mod_event_mask', 'cli_unicode_
                  'edit_fixture_loaded', 'edit_all_operations',
                  'edit_style_fold_probes', 'edit_dirty_transitions', 'edit_source_bytes_preserved',
                  'edit_undo_clean')
-GUI_NAMES = {'main-gui-smoke', 'main-gui-file-entry', 'main-gui-ru-syntax'}
+GUI_NAMES = {'main-gui-smoke', 'main-gui-file-entry', 'main-gui-ru-syntax', 'main-gui-markdown'}
 # Byte/work bounds are deterministic acceptance limits. Elapsed time is
 # measured and reported, not compared with an invented hardware-independent SLA.
 RU_PERFORMANCE_SIZES = (100000, 1000000)
@@ -1056,7 +1060,7 @@ def run_gui(api, binary_dir, evidence, *, name='main-gui-smoke', arguments=(),
         required = ('[launcher] Starting Ru program.', '[startup] menu installed',
                     '[startup] initial document ready', '[startup] main window shown',
                     '[launcher] Ru program returned with status 0.')
-        if name in {'main-gui-file-entry', 'main-gui-ru-syntax'}:
+        if name in {'main-gui-file-entry', 'main-gui-ru-syntax', 'main-gui-markdown'}:
             required += ('[operation] open started', '[operation] open completed')
         if name == 'main-gui-file-entry':
             required += ('[operation] cancelled',)
@@ -2088,6 +2092,367 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
     return result
 
 
+# Markdown Stage A is deliberately separate from the unchanged Ru observer gate.
+GUI_MARKDOWN_BYTES = 1000000
+GUI_MARKDOWN_TIMEOUT_SECONDS = 30
+GUI_MARKDOWN_PENDING = 'Folding Markdown'
+GUI_MARKDOWN_CHECKS = ('menu_selection', 'fold_headers', 'collapse_expand', 'fold_option',
+    'plain_restores_visibility', 'clean_small_bytes', 'source_bytes_preserved',
+    'bounded_large_probes', 'real_edit_input_paint', 'undo_clean')
+GUI_MARKDOWN_MEASUREMENT = ('Detached production GUI; a 100 KB/5000-newline collapsed-heading input plus 1 MB single-line and unclosed-fence inputs, real WM_CHAR and '
+    'Backspace, queued RIGHT/LEFT input and natural invalidated-region service requested after '
+    'observing pending Markdown folds. Completion may follow pending work. Fixed 16-byte '
+    'head/tail style samples, fold/status/length/dirty checks are not whole-content style proof. '
+    'EOF caret/scroll requests ordinary native styling; no forced paint or full-document colourise.')
+GUI_MARKDOWN_STAGE_FIELDS = {'operation', 'length', 'dirty', 'source_sha256', 'wall_ms',
+    'probes', 'observer', 'responsiveness', 'last_probe', 'undo_commands', 'collapsed_before_edit'}
+
+
+def gui_markdown_fixture(kind):
+    if kind == 'singleline':
+        data = b'a' * GUI_MARKDOWN_BYTES
+        probes = [{'offset': 0, 'length': 8, 'style': 0},
+                  {'offset': len(data) - 8, 'length': 8, 'style': 0}]
+        folds = [{'line': 0, 'header': False}]
+    elif kind in ('many-lines', 'unclosed-fence'):
+        head = b'# Heading\n' if kind == 'many-lines' else b'# Heading\n\n~~~\n'
+        tail = b'abcdefgh' if kind == 'many-lines' else b'codebody'
+        fill = b'plain text\n' if kind == 'many-lines' else b'code text\n'
+        count = GUI_MARKDOWN_BYTES - len(head) - len(tail)
+        data = head + (fill * (count // len(fill) + 1))[:count] + tail
+        if kind == 'many-lines':
+            data = head + (b'p' * 18 + b'\r\n') * 4998 + b'x' * 21 + b'\nabcdefgh'
+        # Pinned Lexilla 5.5.4 defaults header.eolfill=0: only # is style6.
+        probes = [{'offset': 0, 'length': 1, 'style': 6},
+                  {'offset': 2, 'length': 7, 'style': 0},
+                  {'offset': len(data) - 8, 'length': 8,
+                   'style': 0 if kind == 'many-lines' else 21}]
+        folds = [{'line': 0, 'header': True}, {'line': 2, 'header': False}]
+    else:
+        raise RuntimeError('Unknown bounded Markdown GUI corpus')
+    return data, probes, folds
+
+
+def markdown_expected(kind, operation):
+    data, probes, folds = gui_markdown_fixture(kind)
+    inserted = operation == 'insert'
+    if inserted:
+        data = data[:8] + b'x' + data[8:]
+    return data, [dict(p, offset=p['offset'] + int(inserted and p['offset'] >= 8)) for p in probes], folds
+
+
+def markdown_status_complete(status):
+    # The production failure status still contains the language name and may
+    # coexist with already-published headers and completed native colours.
+    # It must never be accepted as a completed heading-fold scan.
+    if 'Markdown folding was disabled:' in status:
+        raise RuntimeError('Markdown GUI reported a production folding failure')
+    return ('Markdown' in status and GUI_MARKDOWN_PENDING not in status and
+            'Heading folds off' not in status and not status.lstrip().startswith('Opening:'))
+
+
+def validate_gui_markdown_responsiveness(record, wall_ms):
+    if not isinstance(record, dict) or set(record) != {'navigation', 'paint'}:
+        raise RuntimeError('Markdown GUI input/paint evidence is missing')
+    navigation = record['navigation']
+    if not isinstance(navigation, list) or len(navigation) != 2:
+        raise RuntimeError('Markdown GUI queued navigation evidence is incomplete')
+    if any(not isinstance(item, dict) for item in navigation):
+        raise RuntimeError('Markdown GUI navigation entries must be records')
+    before = navigation[0].get('before') if navigation else None
+    if type(before) is not int or before not in (8, 9):
+        raise RuntimeError('Markdown GUI input did not start at the real edit caret')
+    for actual, key, start, end in zip(navigation, ('RIGHT', 'LEFT'), (before, before + 1), (before + 1, before)):
+        if (set(actual) != {'key', 'before', 'after', 'wall_ms', 'request_pending'} or
+                actual['key'] != key or type(actual['before']) is not int or actual['before'] != start or
+                type(actual['after']) is not int or actual['after'] != end or
+                type(actual['request_pending']) is not bool or (key == 'RIGHT' and actual['request_pending'] is not True) or not finite_nonnegative(actual['wall_ms']) or
+                actual['wall_ms'] > min(wall_ms, GUI_RU_RESPONSE_TIMEOUT_MS)):
+            raise RuntimeError('Markdown GUI queued input request/completion is invalid')
+    paint = record['paint']
+    if (not isinstance(paint, dict) or set(paint) != {'invalidations', 'pending_observed',
+            'already_serviced', 'cleared', 'wall_ms', 'request_pending'} or
+            type(paint['invalidations']) is not int or paint['invalidations'] != 1 or
+            type(paint['pending_observed']) is not bool or type(paint['already_serviced']) is not bool or
+            paint['pending_observed'] == paint['already_serviced'] or paint['cleared'] is not True or
+            paint['request_pending'] is not True or not finite_nonnegative(paint['wall_ms']) or
+            paint['wall_ms'] > min(wall_ms, GUI_RU_RESPONSE_TIMEOUT_MS)):
+        raise RuntimeError('Markdown GUI natural paint request/completion is invalid')
+
+
+def validate_gui_markdown(record, *, require_windows_clock=False):
+    if (not isinstance(record, dict) or set(record) != {'measurement', 'clock', 'cases'} or
+            record['measurement'] != GUI_MARKDOWN_MEASUREMENT or
+            not isinstance(record['cases'], list) or len(record['cases']) != 3):
+        raise RuntimeError('Markdown GUI bounded evidence is missing or malformed')
+    validate_performance_clock(record['clock'], require_windows=require_windows_clock)
+    for case, kind in zip(record['cases'], ('many-lines', 'singleline', 'unclosed-fence')):
+        data, probes, folds = gui_markdown_fixture(kind)
+        if (not isinstance(case, dict) or set(case) != {'kind', 'size', 'source_sha256', 'style_probes', 'fold_probes', 'stages'} or
+                case['kind'] != kind or type(case['size']) is not int or case['size'] != len(data) or
+                case['source_sha256'] != hashlib.sha256(data).hexdigest() or case['style_probes'] != probes or
+                case['fold_probes'] != folds or
+                any(type(probe[key]) is not int for probe in case['style_probes'] for key in ('offset', 'length', 'style')) or
+                any(type(probe['line']) is not int or type(probe['header']) is not bool for probe in case['fold_probes']) or
+                not isinstance(case['stages'], list) or len(case['stages']) != 4):
+            raise RuntimeError('Markdown GUI corpus, fixed probes or stage inventory changed')
+        for stage, operation in zip(case['stages'], ('open', 'insert', 'backspace', 'undo')):
+            expected, styles, _ = markdown_expected(kind, operation)
+            dirty = operation in ('insert', 'backspace')
+            if (not isinstance(stage, dict) or set(stage) != GUI_MARKDOWN_STAGE_FIELDS or
+                    stage['operation'] != operation or type(stage['length']) is not int or stage['length'] != len(expected) or
+                    stage['dirty'] is not dirty or stage['collapsed_before_edit'] is not (kind == 'many-lines' and dirty) or stage['source_sha256'] != case['source_sha256'] or
+                    not finite_nonnegative(stage['wall_ms']) or stage['wall_ms'] > 30000 or
+                    type(stage['probes']) is not int or stage['probes'] < 1 or
+                    type(stage['undo_commands']) is not int or
+                    (not 1 <= stage['undo_commands'] <= 2 if operation == 'undo' else stage['undo_commands'] != 0)):
+                raise RuntimeError('Markdown GUI bounded stage metadata is invalid')
+            last = stage['last_probe']
+            if (not isinstance(last, dict) or set(last) != {'length', 'dirty', 'end_styled', 'status_done',
+                    'styles_match', 'folds_match', 'context_match', 'lexer', 'tail_requested', 'children_visible'} or
+                    type(last['length']) is not int or last['length'] != len(expected) or last['dirty'] is not dirty or
+                    type(last['end_styled']) is not int or last['end_styled'] != len(expected) or type(last['lexer']) is not int or last['lexer'] != 98 or
+                    any(last[key] is not True for key in ('status_done', 'styles_match', 'folds_match', 'context_match', 'tail_requested', 'children_visible'))):
+                raise RuntimeError('Markdown GUI final fixed style/fold/text probe failed')
+            validate_gui_ru_observer(stage['observer'], stage['wall_ms'], stage['probes'])
+            if dirty:
+                validate_gui_markdown_responsiveness(stage['responsiveness'], stage['wall_ms'])
+            elif stage['responsiveness'] != {}:
+                raise RuntimeError('Unexpected Markdown GUI input/paint stage')
+
+
+def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, action):
+    clock = PerformanceClock()
+    original, _, _ = gui_markdown_fixture(kind)
+    expected, styles, folds = markdown_expected(kind, operation)
+    started = clock()  # Includes the opening drop or actual input and all observers.
+    stage.update(operation=operation, length=len(expected), dirty=operation in ('insert', 'backspace'),
+        source_sha256=hashlib.sha256(original).hexdigest(), wall_ms=0.0, probes=0,
+        observer=gui_ru_observer_record(), responsiveness={}, last_probe={}, undo_commands=0, collapsed_before_edit=False)
+    editor = status_handle = None
+    tail_requested = False
+    opened = False
+    next_response = next_snapshot = 0.0
+    response = stage['responsiveness']
+    input_started = paint_started = None
+    navigation_before = None
+    navigation_pending = []
+    try:
+        with GuiRuObserver(api, stage['observer'], started, clock) as observer:
+            if kind == 'many-lines' and stage['dirty']:
+                stage['collapsed_before_edit'] = not bool(api.scalar(api.editor(hwnd), 2228, 1))
+                if not stage['collapsed_before_edit']:
+                    raise RuntimeError('Many-line heading must be collapsed at the real edit boundary')
+            action()
+            if operation == 'undo':
+                stage['undo_commands'] = 1
+            def snapshot():
+                nonlocal editor, status_handle, tail_requested, input_started, paint_started, navigation_before, opened
+                if not opened:
+                    if api.text(hwnd).removeprefix('* ') != source.name + ' · ru_notepad':
+                        return False
+                    opened = True
+                editor, status_handle = api.editor(hwnd), api.control(hwnd, 11)
+                length = api.scalar(editor, 2006)
+                dirty = bool(api.scalar(editor, 2159))
+                status = api.text(status_handle)
+                pending = GUI_MARKDOWN_PENDING in status
+                done = markdown_status_complete(status)
+                if stage['dirty'] and not response and pending and length == len(expected):
+                    # Capture pending before each request. Do not require it to
+                    # remain pending when queued work completes on a fast host.
+                    navigation_before = api.scalar(editor, 2008)
+                    if navigation_before != (9 if operation == 'insert' else 8):
+                        raise RuntimeError('Markdown real edit caret differs from the expected input')
+                    input_started = clock()
+                    api.post_navigation(editor, 'RIGHT')
+                    navigation_pending.append({'key': 'RIGHT', 'before': navigation_before,
+                        'after': navigation_before + 1, 'request_pending': True})
+                    paint_started = clock()
+                    initial = api.invalidate_for_paint(editor)
+                    response.update(navigation=[], paint={'invalidations': 1, 'pending_observed': initial,
+                        'already_serviced': not initial, 'cleared': False, 'wall_ms': 0.0, 'request_pending': True})
+                input_done = not stage['dirty'] or (response and len(response['navigation']) == 2 and response['paint']['cleared'])
+                if length != len(expected) or dirty != stage['dirty'] or not input_done:
+                    # Backspace followed by Undo may need the second undo group.
+                    if operation == 'undo' and done and dirty and stage['undo_commands'] < 2:
+                        if not api.scalar(editor, 2174):
+                            raise RuntimeError('Markdown edit lost its undo history')
+                        api.command(hwnd, 201)
+                        stage['undo_commands'] += 1
+                        tail_requested = False
+                    return False
+                if not tail_requested:
+                    # Real caret/scroll requests native offscreen styling. The
+                    # same original 30-second wall deadline includes this work.
+                    api.scalar(editor, 2025, len(expected))
+                    api.scalar(editor, 2169)
+                    tail_requested = True
+                    return False
+                if not done:
+                    return False
+                style_match = all([api.scalar(editor, 2010, position) == probe['style']
+                    for probe in styles for position in range(probe['offset'], probe['offset'] + probe['length'])])
+                fold_match = all([bool(api.scalar(editor, 2223, probe['line']) & 0x2000) == probe['header'] for probe in folds])
+                # Four actual bytes around each real edit, separate from the
+                # sixteen fixed head/tail style bytes. Never read whole content.
+                context = bytes(api.scalar(editor, 2007, position) & 255 for position in range(6, 10))
+                children_visible = bool(api.scalar(editor, 2228, 1)) if kind == 'many-lines' else True
+                end_styled = api.scalar(editor, 2028)
+                lexer = api.scalar(editor, 4002)
+                # Final independent length/dirty recheck is in the same bounded snapshot.
+                length, dirty = api.scalar(editor, 2006), bool(api.scalar(editor, 2159))
+                stage['last_probe'] = {'length': length, 'dirty': dirty, 'end_styled': end_styled,
+                    'status_done': done, 'styles_match': style_match, 'folds_match': fold_match,
+                    'context_match': context == expected[6:10], 'lexer': lexer, 'tail_requested': tail_requested,
+                    'children_visible': children_visible}
+                api.verify_owned_handles(process.pid, editor, status_handle)
+                return (length == len(expected) and dirty == stage['dirty'] and end_styled == len(expected) and
+                        lexer == 98 and style_match and fold_match and children_visible and context == expected[6:10])
+            while True:
+                api.no_dialog(process.pid)
+                if process.poll() is not None:
+                    raise RuntimeError('GUI exited during a bounded Markdown stage')
+                now = clock()
+                if now - started > GUI_MARKDOWN_TIMEOUT_SECONDS:
+                    raise RuntimeError('Markdown GUI open/edit exceeded its original 30-second deadline')
+                if now >= next_response:
+                    api.responsive(hwnd)
+                    stage['probes'] += 1
+                    next_response = clock() + 0.05
+                if response and len(response['navigation']) < 2:
+                    step = navigation_pending[-1]
+                    caret = api.scalar(editor, 2008)
+                    if caret == step['after']:
+                        elapsed = (clock() - input_started) * 1000
+                        response['navigation'].append(dict(step, wall_ms=round(elapsed, 3)))
+                        if len(response['navigation']) == 1:
+                            # The return key records its own observed state;
+                            # completion of RIGHT need not remain pending.
+                            left_pending = GUI_MARKDOWN_PENDING in api.text(status_handle)
+                            input_started = clock()
+                            api.post_navigation(editor, 'LEFT')
+                            navigation_pending.append({'key': 'LEFT', 'before': navigation_before + 1,
+                                'after': navigation_before, 'request_pending': left_pending})
+                    if (clock() - input_started) * 1000 > GUI_RU_RESPONSE_TIMEOUT_MS:
+                        raise RuntimeError('Markdown queued navigation exceeded five seconds')
+                if response and not response['paint']['cleared']:
+                    if not api.paint_pending(editor):
+                        response['paint'].update(cleared=True, wall_ms=round((clock() - paint_started) * 1000, 3))
+                    if (clock() - paint_started) * 1000 > GUI_RU_RESPONSE_TIMEOUT_MS:
+                        raise RuntimeError('Markdown invalidated region was not naturally serviced within five seconds')
+                if now >= next_snapshot:
+                    complete = observer.snapshot(snapshot)
+                    elapsed = clock() - started
+                    if elapsed > GUI_MARKDOWN_TIMEOUT_SECONDS:
+                        raise RuntimeError('Markdown GUI final proof exceeded its original 30-second deadline')
+                    next_snapshot = clock() + 0.25
+                    if complete:
+                        break
+                time.sleep(0.01)
+    finally:
+        stage['wall_ms'] = round((clock() - started) * 1000, 3)
+    if sha(source) != stage['source_sha256']:
+        raise RuntimeError('Markdown GUI input changed source bytes without a save')
+
+
+def run_gui_markdown(api, binary_dir, fixtures, evidence):
+    isolated = Path(fixtures) / 'gui-markdown'
+    isolated.mkdir()
+    hashes = {}
+    for name in portable.RUNTIME_NAMES:
+        shutil.copyfile(binary_dir / name, isolated / name)
+        hashes[name] = sha(isolated / name)
+        if hashes[name] != sha(binary_dir / name):
+            raise RuntimeError('Markdown GUI runtime differs from the packaged snapshot')
+    record = {'measurement': GUI_MARKDOWN_MEASUREMENT, 'clock': performance_clock_record(), 'cases': []}
+    small = isolated / '标题 折叠 😀.markdown'
+    original = b'# Heading\nbody\n## Child\ninside\n# Next\nlast\n'
+    small.write_bytes(original)
+    sources = {}
+    for kind in ('many-lines', 'singleline', 'unclosed-fence'):
+        source = isolated / (kind + '.md')
+        source.write_bytes(gui_markdown_fixture(kind)[0])
+        sources[kind] = source
+    def exercise(process, hwnd):
+        checks = {}
+        api.drop(api.editor(hwnd), [small])
+        def ready():
+            editor = api.editor(hwnd)
+            return (api.text(hwnd) == small.name + ' · ru_notepad' and api.scalar(editor, 4002) == 98 and
+                    markdown_status_complete(api.text(api.control(hwnd, 11))) and
+                    all(api.scalar(editor, 2223, line) & 0x2000 for line in (0, 2, 4)))
+        wait_gui(api, process, ready, 'Small Markdown fixture did not open with headings')
+        checks['menu_selection'] = checks['fold_headers'] = True
+        editor = api.editor(hwnd)
+        api.command(hwnd, 505)
+        wait_gui(api, process, lambda: not api.scalar(editor, 2228, 1), 'Markdown collapse did not hide a child')
+        api.command(hwnd, 506)
+        wait_gui(api, process, lambda: api.scalar(editor, 2228, 1), 'Markdown expand did not restore a child')
+        checks['collapse_expand'] = True
+        api.command(hwnd, 505)
+        api.command(hwnd, 507)
+        wait_gui(api, process, lambda: api.scalar(editor, 2228, 1) and 'Heading folds off' in api.text(api.control(hwnd, 11)),
+                 'Markdown fold option did not expand and disable')
+        api.command(hwnd, 507)
+        wait_gui(api, process, ready, 'Markdown fold option did not restore headings')
+        checks['fold_option'] = True
+        api.command(hwnd, 505)
+        api.command(hwnd, 701)
+        wait_gui(api, process, lambda: api.scalar(editor, 2228, 1) and not api.scalar(editor, 2223, 0) & 0x2000,
+                 'Plain-text selection left Markdown child lines hidden')
+        checks['plain_restores_visibility'] = True
+        api.command(hwnd, 705)
+        wait_gui(api, process, ready, 'Markdown menu did not restore headings')
+        if api.editor_bytes(hwnd) != original or api.scalar(editor, 2159) or small.read_bytes() != original:
+            raise RuntimeError('Markdown menus changed small-document bytes or clean state')
+        checks['clean_small_bytes'] = True
+        for kind, source in sources.items():
+            data, styles, folds = gui_markdown_fixture(kind)
+            case = {'kind': kind, 'size': len(data), 'source_sha256': sha(source),
+                'style_probes': styles, 'fold_probes': folds, 'stages': []}
+            record['cases'].append(case)
+            for operation in ('open', 'insert', 'backspace', 'undo'):
+                stage = {}
+                case['stages'].append(stage)
+                if operation != 'open':
+                    editor = api.editor(hwnd)
+                    api.scalar(editor, 2025, 9 if operation == 'backspace' else 8)
+                    if kind == 'many-lines' and operation in ('insert', 'backspace'):
+                        api.command(hwnd, 505)
+                        if api.scalar(editor, 2228, 1):
+                            raise RuntimeError('Many-line Markdown heading was not collapsed before editing')
+                def action():
+                    if operation == 'open':
+                        api.drop(api.editor(hwnd), [source])
+                    elif operation == 'insert':
+                        api.scalar(editor, 0x0102, ord('x'), 1)
+                        api.command(hwnd, 504)
+                    elif operation == 'backspace':
+                        api.scalar(editor, 0x0100, 8, 1)
+                        api.scalar(editor, 0x0101, 8, 0xc0000001)
+                        api.command(hwnd, 504)
+                    else:
+                        api.command(hwnd, 201)
+                run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, action)
+        if sha(small) != hashlib.sha256(original).hexdigest():
+            raise RuntimeError('Markdown GUI small source changed')
+        validate_gui_markdown(record)
+        checks.update(source_bytes_preserved=True, bounded_large_probes=True, real_edit_input_paint=True, undo_clean=True)
+        return checks
+    try:
+        result = run_gui(api, isolated, evidence, name='main-gui-markdown', exercise=exercise,
+                         log_prefix='main-markdown-launcher')
+    finally:
+        api.release_drops()
+    result.update(fixture_binary_sha256=hashes, markdown_performance=record)
+    if (sha(small) != hashlib.sha256(original).hexdigest() or any(
+            sha(source) != hashlib.sha256(gui_markdown_fixture(kind)[0]).hexdigest() for kind, source in sources.items())):
+        result.update(passed=False, source_bytes_preserved=False,
+                      error='Markdown normal-close flow changed synthetic source bytes')
+    return result
+
+
 def inspect_pe(path, objdump):
     return portable.inspect_pe(path, objdump)
 
@@ -2259,10 +2624,14 @@ def validate_acceptance(summary, root=None):
                 raise RuntimeError('GUI Ru acceptance lacks a required style/fold/visibility/clean-state check')
             validate_gui_ru_timer(test.get('timer_performance'), require_windows_clock=True)
             validate_gui_ru_edits(test.get('edit_performance'))
+        if test['name'] == 'main-gui-markdown':
+            if not all(test.get(key) is True for key in GUI_MARKDOWN_CHECKS):
+                raise RuntimeError('Markdown GUI acceptance lacks a required check')
+            validate_gui_markdown(test.get('markdown_performance'), require_windows_clock=True)
         if test['name'] == 'main-gui-file-entry':
             if not all(test.get(key) for key in GUI_FILE_CHECKS):
                 raise RuntimeError('GUI file-entry acceptance lacks a required Unicode/drop/cancel check')
-        if test['name'] in {'main-gui-file-entry', 'main-gui-ru-syntax'}:
+        if test['name'] in {'main-gui-file-entry', 'main-gui-ru-syntax', 'main-gui-markdown'}:
             hashes = {name: summary['tested_binary_sha256'][name] for name in portable.RUNTIME_NAMES}
             if test.get('fixture_binary_sha256') != hashes:
                 raise RuntimeError('GUI fixture does not match the packaged runtime binaries')
@@ -2340,6 +2709,9 @@ def main():
             summary['tests'].append(result)
             print(json.dumps(result), flush=True)
             result = run_gui_ru_syntax(api, binary_dir, fixtures, evidence)
+            summary['tests'].append(result)
+            print(json.dumps(result), flush=True)
+            result = run_gui_markdown(api, binary_dir, fixtures, evidence)
             summary['tests'].append(result)
             print(json.dumps(result), flush=True)
         validate_acceptance(summary)

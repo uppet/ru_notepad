@@ -16,6 +16,7 @@ import struct
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 import xml.etree.ElementTree as ET
 import zipfile
 from unittest.mock import Mock, call, patch
@@ -50,6 +51,41 @@ def observer_evidence():
                       'resolution': 1e-7, 'monotonic': True, 'adjustable': False},
             'clock_measurement': ci.PERFORMANCE_CLOCK_MEASUREMENT,
             'head_style_measurement': ci.GUI_RU_HEAD_MEASUREMENT}
+
+
+def markdown_evidence():
+    """Synthetic schema fixture only; never evidence of running the GUI."""
+    record = {'measurement': ci.GUI_MARKDOWN_MEASUREMENT, 'clock': {
+        'clock_name': 'perf_counter', 'implementation': 'QueryPerformanceCounter()',
+        'resolution': 1e-7, 'monotonic': True, 'adjustable': False}, 'cases': []}
+    for kind in ('many-lines', 'singleline', 'unclosed-fence'):
+        data, probes, folds = ci.gui_markdown_fixture(kind)
+        case = {'kind': kind, 'size': len(data), 'source_sha256': hashlib.sha256(data).hexdigest(),
+                'style_probes': probes, 'fold_probes': folds, 'stages': []}
+        record['cases'].append(case)
+        for operation in ('open', 'insert', 'backspace', 'undo'):
+            expected, _, _ = ci.markdown_expected(kind, operation)
+            dirty = operation in ('insert', 'backspace')
+            observer = ci.gui_ru_observer_record()
+            observer.update(scalar_calls=30, wm_null_calls=1, sendmessage_calls=31,
+                query_wall_ms=10.0, max_query_ms=1.0, snapshot_count=1, snapshot_wall_ms=20.0,
+                max_snapshot_ms=20.0, max_snapshot_messages=30,
+                snapshots=[{'start_ms': 10.0, 'wall_ms': 20.0, 'messages': 30, 'final': True}],
+                response_starts_ms=[0.0])
+            before = 9 if operation == 'insert' else 8
+            response = {'navigation': [
+                {'key': 'RIGHT', 'before': before, 'after': before + 1, 'wall_ms': 1.0, 'request_pending': True},
+                {'key': 'LEFT', 'before': before + 1, 'after': before, 'wall_ms': 1.0, 'request_pending': False}],
+                'paint': {'invalidations': 1, 'pending_observed': False, 'already_serviced': True,
+                          'cleared': True, 'wall_ms': 1.0, 'request_pending': True}} if dirty else {}
+            case['stages'].append({'operation': operation, 'length': len(expected), 'dirty': dirty,
+                'source_sha256': case['source_sha256'], 'wall_ms': 100.0, 'probes': 1, 'observer': observer,
+                'responsiveness': response, 'undo_commands': 2 if operation == 'undo' else 0,
+                'collapsed_before_edit': kind == 'many-lines' and dirty,
+                'last_probe': {'length': len(expected), 'dirty': dirty, 'end_styled': len(expected),
+                    'status_done': True, 'styles_match': True, 'folds_match': True, 'context_match': True,
+                    'lexer': 98, 'tail_requested': True, 'children_visible': True}})
+    return record
 
 
 class NoDialogs:
@@ -321,6 +357,10 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'ru_lexical_policy': r'^TOTAL PASS: 338\s*$',
             'ru_syntax_native': r'^TOTAL PASS: 149\s*$',
             'ru_direct_styling_native': r'^TOTAL PASS: 36\s*$',
+            'markdown_policy': r'^TOTAL PASS: 181\s*$',
+            'markdown_selection_policy': r'^TOTAL PASS: 31\s*$',
+            'markdown_native': r'^TOTAL PASS: 44\s*$',
+            'app_markdown_native': r'^TOTAL PASS: 53\s*$',
             'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=73\s*$',
             'file_streaming_native': r'^FILE_STREAMING_TESTS_PASS=99\s*$',
             'editor_streaming_native': r'^EDITOR_STREAMING_TESTS_PASS=21\s*$',
@@ -330,9 +370,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'file_drop_native': r'^TOTAL PASS: 38\s*$',
         }
         self.assertEqual(dict(ci.NATIVE_CONSOLE_TESTS), expected)
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 23)
-        # Twenty-three console gates, six actual fallbacks, three real GUIs and ACL.
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 33)
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 27)
+        # The original 33 gates remain, with four Markdown consoles and one GUI.
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 38)
 
     def test_console_and_gui_receipts_share_all_manifest_resource_inputs(self):
         common = {'packaging/app.rc', 'packaging/app.manifest', 'assets/app-icon.ico', 'VERSION'}
@@ -651,6 +691,11 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 result['fixture_preflight'] = dict(loadable=True, createlexer_missing=True, released=True,
                     library_sha256=summary['tested_binary_sha256'][ci.portable.NATIVE_HELPER_NAME])
                 result['native_fixture_preflight'] = True
+            if name == 'main-gui-markdown':
+                result.update({key: True for key in ci.GUI_MARKDOWN_CHECKS})
+                result['markdown_performance'] = markdown_evidence()
+                result['fixture_binary_sha256'] = {binary: summary['tested_binary_sha256'][binary]
+                    for binary in ci.portable.RUNTIME_NAMES}
             if name in {'main-gui-file-entry', 'main-gui-ru-syntax'}:
                 checks = ci.GUI_FILE_CHECKS if name == 'main-gui-file-entry' else ci.GUI_RU_CHECKS
                 result.update({key: True for key in checks})
@@ -1121,19 +1166,23 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         summary = self.acceptance()
         ci.validate_acceptance(summary)
         new = {'ru_lexical_policy', 'ru_syntax_native', 'app_ru_native', 'app_ru_timer_native',
-               'ru_direct_styling_native',
+               'ru_direct_styling_native', 'markdown_policy', 'markdown_selection_policy',
+               'markdown_native', 'app_markdown_native', 'main-gui-markdown',
                'ru_syntax_missing_lexilla', 'main-gui-ru-syntax', *ci.HELPER_FALLBACK_LAYOUTS}
         prior = [test for test in summary['tests'] if test['name'] not in new]
         self.assertEqual(len(prior), 23)
         self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 835 + 16)
 
-    def test_acceptance_requires_all_33_groups_and_exact_assertions(self):
+    def test_acceptance_preserves_original_33_groups_1487_assertions_and_adds_markdown(self):
         summary = self.acceptance()
         ci.validate_acceptance(summary)
-        self.assertEqual(len(summary['tests']), 33)
-        # All 1451 prior assertions remain; 36 additional native assertions cover
-        # guarded publication. Native execution remains a separate gate.
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1487)
+        self.assertEqual(len(summary['tests']), 38)
+        added = {'markdown_policy', 'markdown_selection_policy', 'markdown_native',
+                 'app_markdown_native', 'main-gui-markdown'}
+        prior = [test for test in summary['tests'] if test['name'] not in added]
+        self.assertEqual(len(prior), 33)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1796)
 
     def test_direct_style_fixture_is_built_packaged_and_required(self):
         name = 'ru_direct_styling_native'
@@ -2855,6 +2904,224 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         (license_dir / 'COPYING3').write_text('GNU GENERAL PUBLIC LICENSE', encoding='utf-8')
         with self.assertRaisesRegex(RuntimeError, 'Runtime Library Exception'):
             ci.copy_runtime_licenses(self.root / 'mingw', self.root / 'out')
+
+    def test_markdown_gate_preserves_old_counts_and_requires_exact_new_counts(self):
+        expected = {'markdown_policy': 181, 'markdown_selection_policy': 31,
+                    'markdown_native': 44, 'app_markdown_native': 53}
+        self.assertEqual({name: ci.expected_assertions(name) for name in expected}, expected)
+        self.assertEqual(ci.console_command('app_markdown_native', self.root, self.root),
+                         [str(self.root / 'app_markdown_native.exe'), str(self.root)])
+        for name in [*expected, 'main-gui-markdown']:
+            summary = self.acceptance()
+            summary['tests'] = [case for case in summary['tests'] if case['name'] != name]
+            with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, 'inventory'):
+                ci.validate_acceptance(summary)
+
+    def test_markdown_gui_corpora_are_fixed_separate_shapes_and_sixteen_style_bytes(self):
+        sizes = {'many-lines': 100000, 'singleline': 1000000, 'unclosed-fence': 1000000}
+        for kind, size in sizes.items():
+            data, probes, folds = ci.gui_markdown_fixture(kind)
+            self.assertEqual(len(data), size)
+            self.assertEqual(sum(probe['length'] for probe in probes), 16)
+            self.assertEqual(probes[-1]['offset'] + probes[-1]['length'], len(data))
+            self.assertLessEqual(len(folds), 2)
+        self.assertEqual(ci.gui_markdown_fixture('many-lines')[0].count(b'\n'), 5000)
+        self.assertNotIn(b'\n', ci.gui_markdown_fixture('singleline')[0])
+        self.assertEqual(ci.gui_markdown_fixture('unclosed-fence')[0].count(b'~~~'), 1)
+        self.assertEqual(ci.gui_markdown_fixture('unclosed-fence')[1][-1]['style'], 21)
+        with self.assertRaises(RuntimeError): ci.gui_markdown_fixture('unknown')
+
+    def test_markdown_gui_receipt_rejects_missing_malformed_unbounded_or_inferred_evidence(self):
+        ci.validate_gui_markdown(markdown_evidence(), require_windows_clock=True)
+        mutations = ['missing-case', 'duplicate-case', 'missing-stage', 'wrong-source', 'wrong-size', 'wrong-probe',
+                     'wrong-fold', 'late', 'nonfinite', 'wrong-length', 'wrong-dirty', 'not-collapsed',
+                     'not-expanded', 'style', 'fold', 'context', 'status', 'end-only', 'lexer', 'tail',
+                     'no-input', 'request-not-pending', 'paint-not-pending', 'not-cleared', 'slow-input',
+                     'oversized-snapshot', 'no-final-proof', 'undo-count', 'clock']
+        for mutation in mutations:
+            record = markdown_evidence()
+            case = record['cases'][0]
+            stage = case['stages'][1]
+            if mutation == 'missing-case': record['cases'].pop()
+            elif mutation == 'duplicate-case': record['cases'][1] = case
+            elif mutation == 'missing-stage': case['stages'].pop()
+            elif mutation == 'wrong-source': case['source_sha256'] = '0' * 64
+            elif mutation == 'wrong-size': case['size'] += 1
+            elif mutation == 'wrong-probe': case['style_probes'][0]['length'] += 1
+            elif mutation == 'wrong-fold': case['fold_probes'][0]['header'] = False
+            elif mutation == 'late': stage['wall_ms'] = 30000.001
+            elif mutation == 'nonfinite': stage['wall_ms'] = float('nan')
+            elif mutation == 'wrong-length': stage['length'] += 1
+            elif mutation == 'wrong-dirty': stage['dirty'] = False
+            elif mutation == 'not-collapsed': stage['collapsed_before_edit'] = False
+            elif mutation == 'not-expanded': stage['last_probe']['children_visible'] = False
+            elif mutation in ('style', 'fold', 'context'): stage['last_probe'][{'style': 'styles_match', 'fold': 'folds_match', 'context': 'context_match'}[mutation]] = False
+            elif mutation == 'status': stage['last_probe']['status_done'] = False
+            elif mutation == 'end-only': stage['last_probe']['styles_match'] = False
+            elif mutation == 'lexer': stage['last_probe']['lexer'] = 0
+            elif mutation == 'tail': stage['last_probe']['tail_requested'] = False
+            elif mutation == 'no-input': stage['responsiveness'] = {}
+            elif mutation == 'request-not-pending': stage['responsiveness']['navigation'][0]['request_pending'] = False
+            elif mutation == 'paint-not-pending': stage['responsiveness']['paint']['request_pending'] = False
+            elif mutation == 'not-cleared': stage['responsiveness']['paint']['cleared'] = False
+            elif mutation == 'slow-input': stage['responsiveness']['navigation'][0]['wall_ms'] = 5001
+            elif mutation == 'oversized-snapshot': stage['observer']['snapshots'][0]['messages'] = 33
+            elif mutation == 'no-final-proof': stage['observer']['snapshots'][0]['final'] = False
+            elif mutation == 'undo-count': case['stages'][-1]['undo_commands'] = 3
+            elif mutation == 'clock': record['clock']['implementation'] = 'monotonic()'
+            with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
+                ci.validate_gui_markdown(record, require_windows_clock=True)
+
+    def test_markdown_gui_requires_all_checks_and_exact_runtime(self):
+        for key in (*ci.GUI_MARKDOWN_CHECKS, 'fixture_binary_sha256'):
+            summary = self.acceptance()
+            case = next(case for case in summary['tests'] if case['name'] == 'main-gui-markdown')
+            case.pop(key)
+            with self.subTest(key=key), self.assertRaises(RuntimeError): ci.validate_acceptance(summary)
+
+    def test_markdown_real_stage_uses_bounded_observer_and_pending_requests(self):
+        self.run_markdown_stage_control()
+
+    def test_markdown_real_stage_rejects_production_failure_warning_despite_ready_native_styles(self):
+        self.run_markdown_stage_control(warning=True)
+
+    def run_markdown_stage_control(self, warning=False):
+        kind, operation = 'many-lines', 'insert'
+        original = ci.gui_markdown_fixture(kind)[0]
+        expected, probes, folds = ci.markdown_expected(kind, operation)
+        path = self.root / 'many-lines.md'
+        path.write_bytes(original)
+        class Process:
+            pid = 123
+            def poll(self): return None
+        class Api:
+            def __init__(self):
+                self.caret, self.visible, self.status_reads = 9, False, 0
+                self.messages, self.navigation = [], []
+            def editor(self, hwnd): return 2
+            def control(self, hwnd, identifier): return 3
+            def no_dialog(self, pid): return []
+            def responsive(self, hwnd): pass
+            def verify_owned_handles(self, pid, *handles): pass
+            def text(self, hwnd):
+                self.scalar(hwnd, 0x000E)
+                self.scalar(hwnd, 0x000D)
+                if hwnd == 1: return '* ' + path.name + ' · ru_notepad'
+                self.status_reads += 1
+                if self.status_reads <= 2: return 'Folding Markdown...'
+                if warning: return 'Ln 1 UTF-8 Markdown folding was disabled: synthetic publication failure'
+                return 'Ln 1 UTF-8 Markdown'
+            def scalar(self, hwnd, message, wparam=0, lparam=0):
+                self.messages.append((hwnd, message, wparam, lparam))
+                if message == 2006: return len(expected)
+                if message == 2159: return 1
+                if message == 2008: return self.caret
+                if message == 2025: self.caret = wparam
+                if message == 2228: return int(self.visible)
+                if message == 2223: return 0x2400 if wparam == 0 else 0x400
+                if message == 2010:
+                    return next((probe['style'] for probe in probes if probe['offset'] <= wparam < probe['offset'] + probe['length']), 0)
+                if message == 2007: return expected[wparam]
+                if message == 2028: return len(expected)
+                if message == 4002: return 98
+                if message == 0x0102: self.visible = True
+                return 0
+            def post_navigation(self, hwnd, key):
+                self.navigation.append(key)
+                self.caret += 1 if key == 'RIGHT' else -1
+            def invalidate_for_paint(self, hwnd): return False
+            def paint_pending(self, hwnd): return False
+        api, stage = Api(), {}
+        if warning:
+            # Exercise the real snapshot path with matching length, dirty flag,
+            # lexer, styles and old headers. Only the production warning blocks
+            # completion. Pending input/paint has already been requested.
+            with self.assertRaisesRegex(RuntimeError, 'production folding failure'):
+                ci.run_gui_markdown_stage(api, Process(), 1, path, kind, operation, stage,
+                                         lambda: api.scalar(2, 0x0102, ord('x'), 1))
+            self.assertEqual(api.scalar(2, 2028), len(expected))
+            self.assertEqual(api.scalar(2, 4002), 98)
+            self.assertTrue(api.scalar(2, 2223, 0) & 0x2000)
+            self.assertTrue(all(api.scalar(2, 2010, position) == probe['style']
+                for probe in probes for position in range(probe['offset'], probe['offset'] + probe['length'])))
+            self.assertTrue(stage['responsiveness']['navigation'][0]['request_pending'])
+            self.assertFalse(any(item['final'] for item in stage['observer']['snapshots']))
+            self.assertLessEqual(stage['observer']['max_snapshot_messages'], 32)
+            self.assertFalse(stage['last_probe'])
+            return
+        ci.run_gui_markdown_stage(api, Process(), 1, path, kind, operation, stage,
+                                 lambda: api.scalar(2, 0x0102, ord('x'), 1))
+        ci.validate_gui_ru_observer(stage['observer'], stage['wall_ms'], stage['probes'])
+        ci.validate_gui_markdown_responsiveness(stage['responsiveness'], stage['wall_ms'])
+        self.assertTrue(stage['collapsed_before_edit'])
+        self.assertTrue(stage['last_probe']['children_visible'])
+        self.assertEqual(api.navigation, ['RIGHT', 'LEFT'])
+        self.assertLessEqual(stage['observer']['max_snapshot_messages'], 32)
+        self.assertEqual(sum(msg[1] == 2010 for msg in api.messages), 16)
+        self.assertEqual(sum(msg[1] == 2007 for msg in api.messages), 4)
+        self.assertFalse(any(msg[1] in (2009, 2153, 2182, 4003) for msg in api.messages))
+        self.assertEqual(path.read_bytes(), original)
+
+    def test_markdown_pure_backend_gate_and_fixed_historical_workflow_are_mandatory(self):
+        import test_markdown_portable as portable_policy
+        portable_policy.controls()
+        self.assertEqual(portable_policy.CASES, {'markdown_policy': 181, 'markdown_selection_policy': 31})
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text()
+        self.assertIn('python -I tools/test_markdown_portable.py --ru-root .ci/ru-language', workflow)
+        self.assertIn('needs: helper-policy', workflow)
+        self.assertIn('build/markdown-policy-evidence/report.json', workflow)
+        script = (ci.ROOT / 'tools/windows_ci.ps1').read_text()
+        self.assertIn("'tools/test_markdown_portable.py','--ru-root',$RuRoot", script)
+        historical = (ci.ROOT / '.github/workflows/policy-prefix-benchmark.yml').read_text()
+        fixed = 'f91d9e8d008c48b00f98b5a19000639c18a61518'
+        self.assertIn('  workflow_dispatch:', historical)
+        self.assertNotIn('  push:', historical)
+        self.assertNotIn('  pull_request:', historical)
+        self.assertIn('ref: ' + fixed, historical)
+        self.assertIn('name: historical-policy8-' + fixed + '-run-${{ github.run_id }}', historical)
+        self.assertNotIn('ref: ${{ github.sha }}', historical)
+        self.assertNotIn("if: github.ref ==", historical)
+        self.assertNotIn('prepare_source_archives', historical)
+        self.assertNotIn('validate_source_archive_receipt', historical)
+        self.assertIn('Invoke-WebRequest', historical)
+        self.assertIn('import run_direct_style_benchmark as runner', historical)
+
+
+    def test_markdown_portable_timeout_cleans_owned_process_tree_before_returning(self):
+        import test_markdown_portable as gate
+        events = []
+        class Process:
+            pid = 98765
+            returncode = None
+            def poll(self): return self.returncode
+            def wait(self, timeout):
+                if timeout == 5:
+                    events.append('wait-cleanup')
+                    self.returncode = -9
+                    return self.returncode
+                raise subprocess.TimeoutExpired('synthetic', timeout)
+        process = Process()
+        with patch.object(gate.subprocess, 'Popen', return_value=process) as launch, \
+             patch.object(gate.time, 'monotonic', side_effect=[0.0, 2.0]), \
+             patch.object(gate.os, 'name', 'posix'), \
+             patch.object(gate.os, 'killpg', side_effect=lambda pid, sig: events.append((pid, sig))):
+            with self.assertRaisesRegex(RuntimeError, 'deadline'):
+                gate.checked_run(['synthetic'], self.root, 'deadline', 1)
+        self.assertTrue(launch.call_args.kwargs['start_new_session'])
+        self.assertEqual(events, [(98765, gate.signal.SIGKILL), 'wait-cleanup'])
+
+    def test_markdown_portable_windows_cleanup_targets_tree_and_fails_closed(self):
+        import test_markdown_portable as gate
+        process = SimpleNamespace(pid=98765, wait=unittest.mock.Mock(return_value=-9))
+        with patch.object(gate.os, 'name', 'nt'), patch.object(gate.subprocess, 'run',
+                return_value=SimpleNamespace(returncode=0)) as kill:
+            gate.stop_process_tree(process)
+        self.assertEqual(kill.call_args.args[0], ['taskkill', '/PID', '98765', '/T', '/F'])
+        process.wait.assert_called_once_with(timeout=5)
+        with patch.object(gate.os, 'name', 'nt'), patch.object(gate.subprocess, 'run',
+                return_value=SimpleNamespace(returncode=1)):
+            with self.assertRaisesRegex(RuntimeError, 'cleanup failed'): gate.stop_process_tree(process)
+
 
 
 if __name__ == '__main__':

@@ -42,6 +42,41 @@ def observer_evidence():
             'head_style_measurement': ci.GUI_RU_HEAD_MEASUREMENT}
 
 
+def markdown_evidence():
+    """Synthetic schema fixture only; never evidence of running the GUI."""
+    record = {'measurement': ci.GUI_MARKDOWN_MEASUREMENT, 'clock': {
+        'clock_name': 'perf_counter', 'implementation': 'QueryPerformanceCounter()',
+        'resolution': 1e-7, 'monotonic': True, 'adjustable': False}, 'cases': []}
+    for kind in ('many-lines', 'singleline', 'unclosed-fence'):
+        data, probes, folds = ci.gui_markdown_fixture(kind)
+        case = {'kind': kind, 'size': len(data), 'source_sha256': hashlib.sha256(data).hexdigest(),
+                'style_probes': probes, 'fold_probes': folds, 'stages': []}
+        record['cases'].append(case)
+        for operation in ('open', 'insert', 'backspace', 'undo'):
+            expected, _, _ = ci.markdown_expected(kind, operation)
+            dirty = operation in ('insert', 'backspace')
+            observer = ci.gui_ru_observer_record()
+            observer.update(scalar_calls=30, wm_null_calls=1, sendmessage_calls=31,
+                query_wall_ms=10.0, max_query_ms=1.0, snapshot_count=1, snapshot_wall_ms=20.0,
+                max_snapshot_ms=20.0, max_snapshot_messages=30,
+                snapshots=[{'start_ms': 10.0, 'wall_ms': 20.0, 'messages': 30, 'final': True}],
+                response_starts_ms=[0.0])
+            before = 9 if operation == 'insert' else 8
+            response = {'navigation': [
+                {'key': 'RIGHT', 'before': before, 'after': before + 1, 'wall_ms': 1.0, 'request_pending': True},
+                {'key': 'LEFT', 'before': before + 1, 'after': before, 'wall_ms': 1.0, 'request_pending': False}],
+                'paint': {'invalidations': 1, 'pending_observed': False, 'already_serviced': True,
+                          'cleared': True, 'wall_ms': 1.0, 'request_pending': True}} if dirty else {}
+            case['stages'].append({'operation': operation, 'length': len(expected), 'dirty': dirty,
+                'source_sha256': case['source_sha256'], 'wall_ms': 100.0, 'probes': 1, 'observer': observer,
+                'responsiveness': response, 'undo_commands': 2 if operation == 'undo' else 0,
+                'collapsed_before_edit': kind == 'many-lines' and dirty,
+                'last_probe': {'length': len(expected), 'dirty': dirty, 'end_styled': len(expected),
+                    'status_done': True, 'styles_match': True, 'folds_match': True, 'context_match': True,
+                    'lexer': 98, 'tail_requested': True, 'children_visible': True}})
+    return record
+
+
 class PackageTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='ru-package-unit-')
@@ -161,6 +196,11 @@ class PackageTests(unittest.TestCase):
                 result['fixture_preflight'] = dict(loadable=True, createlexer_missing=True, released=True,
                     library_sha256=self.summary['tested_binary_sha256'][ci.portable.NATIVE_HELPER_NAME])
                 result['native_fixture_preflight'] = True
+            if name == 'main-gui-markdown':
+                result.update({key: True for key in ci.GUI_MARKDOWN_CHECKS})
+                result['markdown_performance'] = markdown_evidence()
+                result['fixture_binary_sha256'] = {binary: self.summary['tested_binary_sha256'][binary]
+                    for binary in ci.portable.RUNTIME_NAMES}
             if name in {'main-gui-file-entry', 'main-gui-ru-syntax'}:
                 checks = ci.GUI_FILE_CHECKS if name == 'main-gui-file-entry' else ci.GUI_RU_CHECKS
                 result.update({key: True for key in checks})
@@ -679,6 +719,47 @@ class PackageTests(unittest.TestCase):
         (self.binary / 'Lexilla.dll').write_bytes(b'MZ')
         with self.assertRaisesRegex(RuntimeError, 'PE header'):
             package.inspect_pe(self.binary / 'Lexilla.dll', 'fake-objdump')
+
+    def test_markdown_runtime_docs_and_test_inventory_remain_separate(self):
+        result = self.create()
+        runtime, tests = (package.verify_archive(path) for path in self.archives(result))
+        for path in ('docs/markdown-editing.md', 'docs/markdown-policy-subset.md'):
+            self.assertIn(path, runtime)
+            self.assertEqual(runtime[path], tests[path])
+        for name in ('markdown_policy', 'markdown_selection_policy', 'markdown_native', 'app_markdown_native'):
+            self.assertNotIn(name + '.exe', runtime)
+            self.assertIn(name + '.exe', tests)
+        self.assertIn('native-test-evidence/main-markdown-launcher-0.log', tests)
+        self.assertFalse(any(name.startswith('native-test-evidence/') for name in runtime))
+
+    def test_markdown_gui_schema_is_rechecked_at_packaging_boundary(self):
+        for mutation in ('missing', 'late', 'pending', 'source', 'collapse', 'observer', 'clock'):
+            with self.subTest(mutation=mutation):
+                case = next(case for case in self.summary['tests'] if case['name'] == 'main-gui-markdown')
+                case['markdown_performance'] = markdown_evidence()
+                record = case['markdown_performance']
+                stage = record['cases'][0]['stages'][1]
+                if mutation == 'missing': case.pop('markdown_performance')
+                elif mutation == 'late': stage['wall_ms'] = 30001
+                elif mutation == 'pending': stage['responsiveness']['navigation'][0]['request_pending'] = False
+                elif mutation == 'source': record['cases'][0]['source_sha256'] = '0' * 64
+                elif mutation == 'collapse': stage['collapsed_before_edit'] = False
+                elif mutation == 'observer': stage['observer']['snapshots'][0]['messages'] = 33
+                elif mutation == 'clock': record['clock']['implementation'] = 'fake()'
+                with self.assertRaises(RuntimeError): self.create('bad-markdown-' + mutation)
+
+    def test_source_zip_cannot_enter_even_a_rehashed_portable_archive(self):
+        result = self.create()
+        for archive in self.archives(result):
+            def inject(entries):
+                prefix = archive.stem + '/'
+                payload = b'synthetic source archive must never ship'
+                relative = 'third_party/source_archives/scintilla567.zip'
+                entries[prefix + relative] = payload
+                entries[prefix + 'SHA256SUMS.txt'] += (hashlib.sha256(payload).hexdigest() + '  ' + relative + '\n').encode()
+            self.rewrite_zip(archive, inject)
+            with self.assertRaisesRegex(RuntimeError, 'source archive'):
+                package.verify_archive(archive)
 
 
 if __name__ == '__main__':
