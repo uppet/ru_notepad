@@ -813,12 +813,14 @@ class OfficialDependencyAcquisitionTests(unittest.TestCase):
         workflow = (ROOT / '.github/workflows/ru-syntax-profile.yml').read_text(encoding='utf-8')
         product = (ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
         for item in runner.portable.DEPENDENCIES.values():
-            # Product uses the same ordinary client and exact archive pins,
-            # now via upstream's canonical SourceForge distribution URLs.
-            product_url = ("https://sourceforge.net/projects/scintilla/files/" + item['folder'] +
-                           "/" + item['version'] + "/" + item['archive'] + "/download")
-            self.assertIn("Invoke-WebRequest -Uri '" + product_url + "'", product)
+            # Product now prepares the same pins offline. Historical workflow
+            # acquisition and its own URL/hash/size guards remain unchanged.
+            self.assertIn("$Downloads '" + item['archive'] + "'", product)
+            self.assertIn("-ExpectedSha256 '" + item['sha256'] + "'", product)
             self.assertIn("('" + item['archive'] + "', '" + item['sha256'] + "')", workflow)
+        self.assertIn("Invoke-Checked $Python @('tools/test_source_archives.py')", product)
+        self.assertIn("Invoke-Checked $Python @('tools/prepare_source_archives.py','--root',$Root,", product)
+        self.assertNotIn('Invoke-WebRequest', product)
         self.assertIn("$env:PROFILE_PWSH = Join-Path $PSHOME 'pwsh.exe'", workflow)
         self.assertIn("Invoke-WebRequest -Uri 'https://www.scintilla.org/", workflow)
         self.assertIn("'-Command', download", workflow)

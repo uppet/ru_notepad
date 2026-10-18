@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -42,17 +43,35 @@ POLICY_SHA256 = {'baseline': 'f78589e247186890855526f7bb3624d34e4004bb8fbc69587c
 OWNED = ('tools/run_policy_prefix_benchmark.py', 'tools/test_policy_prefix_benchmark.py',
          '.github/workflows/policy-prefix-benchmark.yml', 'tools/run_direct_style_benchmark.py',
          '.github/workflows/direct-style-benchmark.yml', 'benchmarks/README.md')
-NEW_INPUTS = ('docs/ru-policy-fastpath-experiment.md', 'tools/test_ru_policy_fast.py',
-              'tools/benchmark_ru_policy_fast.py', 'tools/verify_ru_policy_fast_outputs.py',
-              'tests/fixtures/ru_policy_fast_plan.json')
+NEW_INPUTS = (
+    'docs/ru-policy-fastpath-experiment.md',
+    'tools/test_ru_policy_fast.py',
+    'tools/benchmark_ru_policy_fast.py',
+    'tools/verify_ru_policy_fast_outputs.py',
+    'tests/fixtures/ru_policy_fast_plan.json',
+    'tools/prepare_source_archives.py',
+    'tools/test_source_archives.py',
+    'third_party/source_archives/README.md',
+    'third_party/source_archives/scintilla567.zip',
+    'third_party/source_archives/lexilla554.zip',
+    'third_party/source_archives/Scintilla-Lexilla-License.txt',
+    'third_party/source_archives/Boost-License.txt',
+    'third_party/source_archives/Mako-AUTHORS.txt',
+    'third_party/source_archives/Mako-LICENSE.txt',
+    'third_party/source_archives/NixOS-samples-MIT.txt',
+    'third_party/source_archives/Nixpkgs-COPYING.txt',
+    'third_party/source_archives/Unicode-2016.txt',
+    'third_party/source_archives/Unicode-V3.txt',
+)
 # Final independently reviewed non-harness hashes are filled only at source freeze.
 # An unfinished or extra delta fails closed; no inventory is learned at runtime.
 REVIEWED_CHANGED_SHA256 = {
-    ".github/workflows/windows.yml": "1aa3b191415d799c2c1482f81c9fbf03ce74f16d01678d7601967527515f33e5",
+    ".github/workflows/windows.yml": "9568cdf3d37a6f09a36a1146652d1ce3483c3c02c83a06c67ffad07f94c5c8cc",
     "CHANGELOG.md": "e6be7327cc6cba80fdd3ae20ca503a4902ea92b35884df82b14207864983fc4d",
     "README.md": "cf5cb27568d8b393e030cd13313605dec31fbeb913cd5b2ce5ddce2bd679469c",
+    "THIRD_PARTY_NOTICES.md": "1446314a3148870aa76cbcfd58cf04ecc83ce69a732b71c0b26d0b9a3a5225ec",
     "VERSION": "cf2dab38106cba47d35071879d2d9063a7c27391879cf15f4f2062e0761a3347",
-    "docs/build-provenance.md": "3840c5e27494de97d80c3bf595677afb32c8ff821c8aa4980069ec5cb36dbb8d",
+    "docs/build-provenance.md": "f3465536312f72b0b580e1a1839dac947afa04ff994b89b6520d7f2c4f38a674",
     "docs/direct-style-publication.md": "55f2c27ed9c85ecadd171519e4a7704f24703d0d8295b40d8a8a79a727797dc8",
     "docs/preview-validation.md": "96a1dacec6be26e7536ea96c8a01f061e0f2451bc32c29955299c549d05b4e27",
     "docs/ru-language-syntax.md": "ddffdc487c2f95b94ce8756949afaf5e2f0c81bc284f497966f789f86eed5820",
@@ -65,18 +84,149 @@ REVIEWED_CHANGED_SHA256 = {
     "src/main.ru": "aad60f9974b4450436e91557239e981946cb84fcf5b9fb5431e3414f7a161897",
     "src/ru_lexical.ru": "deb5629333f2e76125b396bfe640b327ea6f1fd42f95f24277c86c5209fb12ec",
     "tests/fixtures/ru_policy_fast_plan.json": "a712c3b5c70e5bfe4ae09900d928f594c2c88bb49448d40ca15422b09a015e90",
+    "third_party/source_archives/Boost-License.txt": "beb8e42e9d6b4284e03304d05a81a0755200a965fc8d0a5e0aea1e84cf805d6e",
+    "third_party/source_archives/Mako-AUTHORS.txt": "228d95c3bd268d84bbc85714b89c6120688c510b7c15626ec628b0c945b55918",
+    "third_party/source_archives/Mako-LICENSE.txt": "8c1d171bc5d341ad9cd33d5e2c39b96a82c7bd49b3ae89a470c37e5822232054",
+    "third_party/source_archives/NixOS-samples-MIT.txt": "88175d5fdd42c291bed5dbfe3fe0f7710d043b9c980b9669ac0012936a9172fe",
+    "third_party/source_archives/Nixpkgs-COPYING.txt": "c9cf0650a6820b589f96a92060e0eb937102b808f48cd5e3f35dcba449ea0a41",
+    "third_party/source_archives/README.md": "29f84d542121413977c3ec917d8000ceb11e6f99a3ea96d99309d9c13171f888",
+    "third_party/source_archives/Scintilla-Lexilla-License.txt": "185c5a37521316e940ead89cbf0b1ba5862d810c7c966e6c6a14a4a515b23625",
+    "third_party/source_archives/Unicode-2016.txt": "eeba269c94183d337cbbbf16b75ef2869feaf4b722b04586055c13171e68cfb9",
+    "third_party/source_archives/Unicode-V3.txt": "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96",
+    "third_party/source_archives/lexilla554.zip": "5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0",
+    "third_party/source_archives/scintilla567.zip": "2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c",
     "tools/benchmark_ru_policy_fast.py": "08f1f86e0dec120dd0e6f7a10dccdacfcfa0483bda03d3a54882b87677612b59",
-    "tools/test_ru_syntax_profile.py": "621083502c156d3f00ddbf8c9c311367387546c9068dcf3a12e91ef1d5cef161",
+    "tools/prepare_source_archives.py": "319a931294c9969f77fa32735c406ce0a3b1589230a676caebfc152af3d8de97",
     "tools/test_ru_policy_fast.py": "2d2af5d851cfa5086e678b3150f4c20f7440f4a57eca78d4439d1b29f59fd1ef",
-    "tools/test_windows_ci.py": "05814ef837b96c7114a242236191db5fdae76249b6651cabd281b4fab5b54228",
+    "tools/test_ru_syntax_profile.py": "301a55c4180d79d4d44556e5d1c6a85a5e868aeaf3c5cf7c9a9bccae835b88cb",
+    "tools/test_source_archives.py": "b290d522def148510fe116bf1b0e31a162a815549d603979f4c365a7f663141b",
+    "tools/test_windows_ci.py": "ca791e49dfde3684f7927597468aac533a4e7abfe3d597853e3df8ef1fae694f",
     "tools/verify_ru_policy_fast_outputs.py": "fb8401c520ed4f44c572c1638731d364c1c7e53bc4a708f1e5955847fb818de4",
-    "tools/windows_ci.ps1": "e2b7c4678ea530d121b984e2230e89670526bce69c573635725663947386ea48",
-    "tools/windows_ci.py": "e6d697e776a659b9c78bb5032d298b9caeea807e63a48dbbe053570495e1bc0c"
+    "tools/windows_ci.ps1": "4b7986ca5706d9817558f22a10e2d8cdd68b52971e8658f960f917728a9de652",
+    "tools/windows_ci.py": "e6d697e776a659b9c78bb5032d298b9caeea807e63a48dbbe053570495e1bc0c",
+    "vendor/README.md": "0dcc213708069b3e68bf0acd35fef7c37387e32b06404ff64d259822fb436ee5"
 }
 GRAPH_NOTES = ('Both policies use the same current candidate, direct route, compiler, roots, '
                'resources and untimed full-byte checker. Only src/ru_lexical.ru differs.')
 BRIDGE_SHA256 = '45689caba1b8552424a87dd6fd061818dbf1daab57d066461e7d91d93ea7e65f'
-MAX_PUBLIC_BYTES, MAX_PUBLIC_FILES = execution.MAX_PUBLIC_BYTES, execution.MAX_PUBLIC_FILES
+MAX_PUBLIC_BYTES = execution.MAX_PUBLIC_BYTES
+# One additional closed source receipt; historical replay limits stay unchanged.
+MAX_PUBLIC_FILES = execution.MAX_PUBLIC_FILES + 1
+SOURCE_ARCHIVES = (
+    ('scintilla567', 'scintilla567.zip', 1904249,
+     '2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c'),
+    ('lexilla554', 'lexilla554.zip', 1598324,
+     '5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0'),
+)
+SOURCE_ARCHIVE_ERRORS = frozenset({
+    'in_progress', 'not_checked', 'invalid_arguments', 'unsafe_path',
+    'path_missing', 'not_directory', 'link_rejected', 'not_regular',
+    'hardlink_rejected', 'path_changed', 'already_exists', 'size_mismatch',
+    'hash_mismatch', 'zip_invalid', 'zip_member_count', 'zip_member_path',
+    'zip_member_type', 'zip_member_duplicate', 'zip_member_size',
+    'zip_expanded_size', 'zip_compression', 'zip_encrypted', 'zip_payload_invalid',
+    'io_error', 'internal_error', 'receipt_error', 'source_failed', 'target_failed',
+})
+DEPENDENCY_STAGES = frozenset({'source-archive-tests', 'source-archives',
+                             'dependency-scintilla', 'dependency-lexilla'})
+DEPENDENCY_COMMAND_ERRORS = frozenset({'build_budget_exceeded', 'build_log_limit_exceeded',
+    'build_overrun', 'build_command_failed', 'build_process_failed', 'build_cleanup_failed',
+    'build_cleanup_invalid'})
+
+
+def read_source_archive_receipt(path):
+    """Read a bounded ordinary receipt, never helper stdout or private logs."""
+    import prepare_source_archives as offline
+    path = unlinked(path)
+    with offline.SafeDir(path.parent) as directory:
+        fd = directory.open(path.name)
+        try:
+            require(os.fstat(fd).st_size <= 8192, 'source_archive_receipt_oversize')
+            data = b''
+            while len(data) <= 8192:
+                chunk = os.read(fd, 8193 - len(data))
+                if not chunk: break
+                data += chunk
+            require(len(data) <= 8192, 'source_archive_receipt_oversize')
+            directory.validate(path.name, fd)
+        finally:
+            os.close(fd)
+    return shared.strict_json(data.decode('utf-8'))
+
+
+def validate_source_archive_receipt(value, *, require_passed=False):
+    """Independent closed schema: a helper's claimed pass is insufficient."""
+    exact(value, ('schema_version', 'implementation', 'passed', 'error_code',
+                  'receipt_error_code', 'dependencies'), 'source_archive_receipt_shape')
+    require(type(value['schema_version']) is int and value['schema_version'] == 1
+        and value['implementation'] == 'reconstructed-offline-v1' and type(value['passed']) is bool
+        and (value['error_code'] is None or type(value['error_code']) is str and value['error_code'] in SOURCE_ARCHIVE_ERRORS)
+        and (value['receipt_error_code'] is None or type(value['receipt_error_code']) is str and value['receipt_error_code'] in SOURCE_ARCHIVE_ERRORS)
+        and type(value['dependencies']) is list and len(value['dependencies']) == 2,
+        'source_archive_receipt_invalid')
+    require((value['passed'] and value['error_code'] is None and value['receipt_error_code'] is None)
+        or (not value['passed'] and value['error_code'] is not None), 'source_archive_receipt_status')
+    if value['receipt_error_code'] is not None:
+        require(value['error_code'] == 'receipt_error', 'source_archive_receipt_status')
+    for item, (identifier, filename, size, checksum) in zip(value['dependencies'], SOURCE_ARCHIVES):
+        exact(item, ('id', 'expected_bytes', 'expected_sha256', 'source', 'target', 'status'),
+              'source_archive_dependency_shape')
+        require(item['id'] == identifier and type(item['expected_bytes']) is int
+            and item['expected_bytes'] == size and item['expected_sha256'] == checksum
+            and item['status'] in ('pending', 'copied', 'reused', 'failed'), 'source_archive_identity_invalid')
+        for side in ('source', 'target'):
+            observation = item[side]
+            exact(observation, ('actual_bytes', 'actual_sha256', 'verified', 'error_code'),
+                  'source_archive_observation_shape')
+            require((observation['actual_bytes'] is None or shared.uint(observation['actual_bytes']))
+                and (observation['actual_sha256'] is None or hex_digest(observation['actual_sha256']))
+                and type(observation['verified']) is bool
+                and (observation['error_code'] is None or type(observation['error_code']) is str and observation['error_code'] in SOURCE_ARCHIVE_ERRORS),
+                'source_archive_observation_invalid')
+            if observation['verified']:
+                require(observation['actual_bytes'] == size and observation['actual_sha256'] == checksum
+                    and observation['error_code'] is None, 'source_archive_observation_unproven')
+            else:
+                require(observation['error_code'] is not None, 'source_archive_observation_unproven')
+        if value['passed']:
+            require(item['status'] in ('copied', 'reused') and item['source']['verified']
+                and item['target']['verified'], 'source_archive_receipt_unproven')
+    if require_passed:
+        require(value['passed'], 'source_archive_preparation_failed')
+    shared.check_public_tree(value)
+    return value
+
+
+def validate_dependency_setup(value, *, require_passed=False):
+    """Current offline workflow only; historical replay validators stay fixed."""
+    exact(value, ('schema', 'passed', 'error_code', 'commands', 'elapsed_seconds'), 'dependency_setup_shape')
+    require(type(value['schema']) is int and value['schema'] == 1 and type(value['passed']) is bool
+        and value['error_code'] in (None, 'dependency_setup_failed')
+        and number(value['elapsed_seconds']) and value['elapsed_seconds'] <= 86400
+        and type(value['commands']) is list and len(value['commands']) <= 4, 'dependency_setup_invalid')
+    require((value['passed'] and value['error_code'] is None)
+        or (not value['passed'] and value['error_code'] == 'dependency_setup_failed'), 'dependency_setup_status')
+    seen = set()
+    for command in value['commands']:
+        exact(command, ('stage', 'elapsed_seconds', 'exit_code', 'error_code', 'cleanup_killed', 'cleanup_failed'),
+              'dependency_command_shape')
+        require(type(command['stage']) is str and command['stage'] in DEPENDENCY_STAGES and command['stage'] not in seen
+            and number(command['elapsed_seconds']) and command['elapsed_seconds'] <= 86400
+            and (command['exit_code'] is None or type(command['exit_code']) is int and -(2**32) <= command['exit_code'] < 2**32)
+            and (command['error_code'] is None or type(command['error_code']) is str and command['error_code'] in DEPENDENCY_COMMAND_ERRORS)
+            and type(command['cleanup_killed']) is bool and type(command['cleanup_failed']) is bool,
+            'dependency_command_invalid')
+        seen.add(command['stage'])
+        if value['passed']:
+            require(command['exit_code'] == 0 and command['error_code'] is None and not command['cleanup_killed']
+                and not command['cleanup_failed'] and command['elapsed_seconds'] <= COMPILE_TIMEOUT_SECONDS,
+                'dependency_command_failed')
+    if value['passed']:
+        require(seen == DEPENDENCY_STAGES and value['elapsed_seconds'] <= 600, 'dependency_setup_incomplete')
+    if require_passed:
+        require(value['passed'], 'dependency_setup_failed')
+    shared.check_public_tree(value)
+    return value
 
 
 def work_root():
@@ -329,6 +479,9 @@ def prepare(ru_root, mingw_root):
         return execution.build_command(command, private, label, deadline)
     try:
         receipt['identity'] = source_identity(ROOT, ru_root)
+        validate_source_archive_receipt(read_source_archive_receipt(
+            ROOT / 'build/dependency-policy-prefix-source-archives.json'), require_passed=True)
+        validate_dependency_setup(read_json(ROOT / 'build/dependency-policy-prefix-setup.json'), require_passed=True)
         receipt['environment'] = shared.environment_record()
         compiler, windres, objdump = [relative_file(unlinked(mingw_root / 'bin'), name + '.exe')
                                      for name in ('gcc', 'windres', 'objdump')]
@@ -636,7 +789,14 @@ def collect():
         require(len(content) <= shared.MAX_JSON_BYTES, 'oversize_json')
         publish(name, content)
     try:
-        setup = execution.validate_dependency_setup(read_json(ROOT / 'build/dependency-policy-prefix-setup.json'))
+        source = validate_source_archive_receipt(read_source_archive_receipt(
+            ROOT / 'build/dependency-policy-prefix-source-archives.json'))
+        publish_json('source-archives.json', source)
+        if not source['passed']: errors.append('source_archive_preparation_failed')
+    except Exception as exc:
+        errors.append(code(exc, 'source_archive_receipt_missing_or_invalid'))
+    try:
+        setup = validate_dependency_setup(read_json(ROOT / 'build/dependency-policy-prefix-setup.json'))
         publish_json('dependency-setup.json', setup)
         if not setup['passed']: errors.append('dependency_setup_failed')
     except Exception as exc:

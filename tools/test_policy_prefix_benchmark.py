@@ -315,7 +315,7 @@ class EvidenceTests(unittest.TestCase):
             root = runner.work_root(); logs = root / 'runs' / runner.matrix()[0]['id'] / 'logs'; logs.mkdir(parents=True)
             (logs / 'main-ru-syntax-launcher-0.log').write_text('private /workspace/data.c\nTOTAL PASS: 8\n', encoding='utf-8')
             (root / 'raw.c').write_text('private C', encoding='utf-8'); (root / 'raw.exe').write_bytes(b'MZ private')
-            setup = dict(schema=1, passed=False, elapsed_seconds=0.25, commands=[dict(stage='dependency-download-scintilla567',
+            setup = dict(schema=1, passed=False, error_code='dependency_setup_failed', elapsed_seconds=0.25, commands=[dict(stage='source-archives',
                 elapsed_seconds=0.25, exit_code=1, error_code='build_command_failed', cleanup_killed=False, cleanup_failed=False)])
             runner.save_json(Path(directory) / 'build/dependency-policy-prefix-setup.json', setup)
             value = runner.collect(); self.assertFalse(value['verified'])
@@ -338,6 +338,282 @@ class EvidenceTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as directory, patch.object(runner, 'ROOT', Path(directory)):
                 root = Path(directory); (root / 'real').mkdir(); (root / 'build').symlink_to(root / 'real', target_is_directory=True)
                 with self.assertRaises(runner.Error): runner.collect()
+
+def source_archive_receipt(*, passed=True):
+    value = {'schema_version': 1, 'implementation': 'reconstructed-offline-v1', 'passed': passed,
+             'error_code': None if passed else 'source_failed', 'receipt_error_code': None, 'dependencies': []}
+    for identifier, filename, size, checksum in runner.SOURCE_ARCHIVES:
+        observation = {'actual_bytes': size if passed else None, 'actual_sha256': checksum if passed else None,
+                       'verified': passed, 'error_code': None if passed else 'not_checked'}
+        value['dependencies'].append({'id': identifier, 'expected_bytes': size, 'expected_sha256': checksum,
+            'source': dict(observation), 'target': dict(observation), 'status': 'copied' if passed else 'failed'})
+    return value
+
+
+def dependency_setup_receipt(*, passed=True):
+    return {'schema': 1, 'passed': passed, 'error_code': None if passed else 'dependency_setup_failed',
+        'commands': [{'stage': name, 'elapsed_seconds': 0.25, 'exit_code': 0 if passed else 1,
+            'error_code': None if passed else 'build_command_failed', 'cleanup_killed': False, 'cleanup_failed': False}
+            for name in sorted(runner.DEPENDENCY_STAGES)], 'elapsed_seconds': 1.0}
+
+
+class OfflineDependencyTests(unittest.TestCase):
+    def workflow(self):
+        import textwrap
+        source = (ROOT / '.github/workflows/policy-prefix-benchmark.yml').read_text(encoding='utf-8')
+        return source, textwrap.dedent(source.split("@'\n", 1)[1].split("          '@ |", 1)[0])
+
+    def test_same_source_pins_product_helper_policy_and_historical_contract(self):
+        import prepare_source_archives as offline
+        self.assertEqual(runner.SOURCE_ARCHIVE_ERRORS, offline.ERROR_CODES)
+        self.assertEqual(runner.SOURCE_ARCHIVES,
+            tuple((spec.id, spec.filename, spec.bytes, spec.sha256) for spec in offline.ARCHIVES))
+        product = (ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        workflow, _ = self.workflow()
+        for identifier, filename, size, checksum in runner.SOURCE_ARCHIVES:
+            self.assertEqual(runner.sha(ROOT / 'third_party/source_archives' / filename), checksum)
+            dependency = next(item for item in runner.portable.DEPENDENCIES.values() if item['archive'] == filename)
+            self.assertEqual(dependency['sha256'], checksum)
+            self.assertIn(f"-ExpectedSize {size} -ExpectedSha256 '{checksum}'", product)
+            self.assertIn(f"('{filename}', {size}, '{checksum}')", workflow)
+        for source in (product, workflow):
+            self.assertNotRegex(source, r'(?i)Invoke-WebRequest|Start-BitsTransfer|urllib|curl|wget|https?://')
+        self.assertLess(workflow.index('source-archive-tests'), workflow.index("private, 'source-archives'"))
+        self.assertLess(workflow.index('require_passed=True'), workflow.index('source.extractall'))
+        self.assertLess(workflow.index('source.extractall'), workflow.index("['mingw32-make.exe'"))
+        self.assertLess(workflow.index('source-archive-tests'), workflow.index('python -I tests/ru_direct_fixture_portable.py'))
+        self.assertIn('content = stream.read(size + 1)', workflow)
+        self.assertIn('zipfile.ZipFile(io.BytesIO(content))', workflow)
+        self.assertNotIn('zipfile.ZipFile(archive)', workflow)
+        windows = (ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        self.assertIn('run: python -I tools/test_source_archives.py', windows.split('  windows-native:', 1)[0])
+
+    def test_source_receipt_closed_fields_actual_hashes_and_failure_codes(self):
+        value = source_archive_receipt()
+        runner.validate_source_archive_receipt(value, require_passed=True)
+        failed = source_archive_receipt(passed=False)
+        runner.validate_source_archive_receipt(failed)
+        with self.assertRaises(runner.Error): runner.validate_source_archive_receipt(failed, require_passed=True)
+        for change in ('missing', 'extra', 'order', 'sha', 'size', 'source', 'target', 'status', 'error', 'private', 'bool_size'):
+            bad = copy.deepcopy(value)
+            if change == 'missing': bad['dependencies'].pop()
+            elif change == 'extra': bad['dependencies'].append(copy.deepcopy(bad['dependencies'][0]))
+            elif change == 'order': bad['dependencies'].reverse()
+            elif change == 'sha': bad['dependencies'][0]['source']['actual_sha256'] = '0' * 64
+            elif change == 'size': bad['dependencies'][0]['target']['actual_bytes'] += 1
+            elif change in ('source', 'target'):
+                bad['dependencies'][0][change].update(verified=False, error_code='not_checked')
+            elif change == 'status': bad['dependencies'][0]['status'] = 'pending'
+            elif change == 'error': bad['error_code'] = 'private_exception_text'
+            elif change == 'private': bad['private'] = '/workspace/private'
+            else: bad['dependencies'][0]['source']['actual_bytes'] = True
+            with self.subTest(change=change), self.assertRaises(runner.Error):
+                runner.validate_source_archive_receipt(bad, require_passed=True)
+        bad = source_archive_receipt(passed=False)
+        bad['dependencies'][0]['source']['error_code'] = 'some_private_text'
+        with self.assertRaises(runner.Error): runner.validate_source_archive_receipt(bad)
+
+    def test_dependency_receipt_requires_both_real_successful_helper_commands(self):
+        value = dependency_setup_receipt()
+        runner.validate_dependency_setup(value, require_passed=True)
+        for change in ('missing', 'old_download', 'exit', 'error', 'cleanup', 'duplicate', 'oversize_time', 'extra'):
+            bad = copy.deepcopy(value)
+            if change == 'missing': bad['commands'].pop()
+            elif change == 'old_download': bad['commands'][0]['stage'] = 'dependency-download-scintilla567'
+            elif change == 'exit': bad['commands'][0]['exit_code'] = 17
+            elif change == 'error': bad['commands'][0]['error_code'] = 'private_exception_text'
+            elif change == 'cleanup': bad['commands'][0]['cleanup_failed'] = True
+            elif change == 'duplicate': bad['commands'][0] = bad['commands'][1]
+            elif change == 'oversize_time': bad['elapsed_seconds'] = 601
+            else: bad['private'] = '/workspace/private'
+            with self.subTest(change=change), self.assertRaises(runner.Error): runner.validate_dependency_setup(bad, require_passed=True)
+        with self.assertRaises(runner.Error): runner.validate_dependency_setup(dependency_setup_receipt(passed=False), require_passed=True)
+        # Historical replay accepts its own exact schema, never the new one.
+        with self.assertRaises(runner.Error): runner.execution.validate_dependency_setup(value)
+
+    def test_workflow_runs_real_helper_and_never_extracts_or_builds_after_failed_admission(self):
+        import shutil
+        import socket
+        import zipfile
+        _, script = self.workflow()
+        for failure in ('tests', 'helper', 'nonzero_after_pass', 'missing_receipt', 'false_claim',
+                        'target_size', 'target_hash', None):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / "owner's workspace"; root.mkdir()
+                (root / 'tools').mkdir()
+                for name in ('prepare_source_archives.py', 'test_source_archives.py'):
+                    shutil.copyfile(ROOT / 'tools' / name, root / 'tools' / name)
+                archives = root / 'third_party/source_archives'; archives.mkdir(parents=True)
+                for _, name, _, _ in runner.SOURCE_ARCHIVES:
+                    shutil.copyfile(ROOT / 'third_party/source_archives' / name, archives / name)
+                if failure == 'helper':
+                    (archives / 'scintilla567.zip').write_bytes(b'bad source')
+                calls = []
+                def execute(command, private, stage, deadline):
+                    calls.append(stage)
+                    rc = 0
+                    if stage == 'source-archive-tests':
+                        if failure == 'tests': rc = 9
+                        elif failure is None:
+                            completed = subprocess.run(list(map(str, command)), capture_output=True, text=True, timeout=120)
+                            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+                    elif stage == 'source-archives':
+                        if failure == 'missing_receipt': pass
+                        elif failure == 'false_claim':
+                            fake = source_archive_receipt()
+                            fake['dependencies'][0]['target'].update(verified=False, error_code='not_checked')
+                            runner.save_json(Path(command[-1]), fake)
+                        else:
+                            completed = subprocess.run(list(map(str, command)), capture_output=True, text=True, timeout=30)
+                            rc = completed.returncode
+                            self.assertEqual(completed.stderr, '')
+                            if failure == 'nonzero_after_pass':
+                                self.assertEqual(rc, 0)
+                                rc = 17
+                            if failure in ('target_size', 'target_hash'):
+                                self.assertEqual(rc, 0)
+                                target = root / 'vendor/downloads/scintilla567.zip'
+                                raw = target.read_bytes()
+                                target.write_bytes(raw + b'x' if failure == 'target_size' else b'X' + raw[1:])
+                    else:
+                        self.assertIsNone(failure, 'Build started after failed admission')
+                        self.assertTrue((root / 'vendor/scintilla/include/Scintilla.h').is_file())
+                        self.assertTrue((root / 'vendor/lexilla/src/Lexilla.cxx').is_file())
+                    record = {'stage': stage, 'elapsed_seconds': 0.25, 'exit_code': rc,
+                        'error_code': 'build_command_failed' if rc else None, 'cleanup_killed': False, 'cleanup_failed': False}
+                    runner.save_json(private / (stage + '.json'), record)
+                    runner.require(rc == 0, 'build_command_failed')
+                    return record
+                with patch.object(Path, 'cwd', return_value=root), patch.object(sys, 'path', sys.path.copy()), \
+                     patch.object(runner.execution, 'build_command', side_effect=execute), \
+                     patch.object(socket, 'create_connection', side_effect=AssertionError('Network forbidden')):
+                    if failure:
+                        with patch.object(zipfile.ZipFile, 'extractall', side_effect=AssertionError('Extraction forbidden')) as extract:
+                            with self.assertRaises((runner.Error, FileNotFoundError)):
+                                exec(compile(script, 'offline_dependency_workflow', 'exec'), {})
+                            extract.assert_not_called()
+                    else:
+                        exec(compile(script, 'offline_dependency_workflow', 'exec'), {})
+                setup = runner.validate_dependency_setup(runner.read_json(root / 'build/dependency-policy-prefix-setup.json'))
+                self.assertEqual(setup['passed'], failure is None)
+                self.assertEqual(calls[:1], ['source-archive-tests'])
+                self.assertEqual(calls, ['source-archive-tests'] if failure == 'tests' else
+                    ['source-archive-tests', 'source-archives'] if failure else
+                    ['source-archive-tests', 'source-archives', 'dependency-scintilla', 'dependency-lexilla'])
+                if failure:
+                    self.assertFalse((root / 'vendor/scintilla').exists())
+                    self.assertFalse((root / 'vendor/lexilla').exists())
+                else:
+                    verified = runner.validate_source_archive_receipt(runner.read_source_archive_receipt(
+                        root / 'build/dependency-policy-prefix-source-archives.json'), require_passed=True)
+                    self.assertTrue(verified['passed'])
+                    for _, name, _, checksum in runner.SOURCE_ARCHIVES:
+                        self.assertEqual(runner.sha(root / 'vendor/downloads' / name), checksum)
+
+    def test_policy_prepare_blocks_every_build_until_both_receipts_pass(self):
+        for failure in ('source_missing', 'source_failed', 'setup_missing', 'setup_failed'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory, patch.object(runner, 'ROOT', Path(directory)):
+                root = Path(directory); (root / 'build').mkdir()
+                if failure != 'source_missing':
+                    runner.save_json(root / 'build/dependency-policy-prefix-source-archives.json',
+                        source_archive_receipt(passed=failure != 'source_failed'))
+                if failure != 'setup_missing':
+                    runner.save_json(root / 'build/dependency-policy-prefix-setup.json',
+                        dependency_setup_receipt(passed=failure != 'setup_failed'))
+                with patch.object(runner.shared, 'native_windows'), patch.object(runner, 'source_identity', return_value={}), \
+                     patch.object(runner.execution, 'build_command') as build:
+                    with self.assertRaises((runner.Error, FileNotFoundError)):
+                        runner.prepare(root / 'no-compiler', root / 'no-mingw')
+                    build.assert_not_called()
+                result = runner.read_json(runner.work_root() / 'prepare.json')
+                self.assertFalse(result['prepared'])
+                self.assertEqual(result['commands'], [])
+                self.assertEqual(result['builds'], [])
+
+    def test_collection_preserves_safe_source_and_setup_failure_without_success(self):
+        for passed in (False, True):
+            with self.subTest(passed=passed), tempfile.TemporaryDirectory() as directory, patch.object(runner, 'ROOT', Path(directory)):
+                root = Path(directory); (root / 'build').mkdir()
+                source = source_archive_receipt(passed=passed)
+                setup = dependency_setup_receipt(passed=False)
+                runner.save_json(root / 'build/dependency-policy-prefix-source-archives.json', source)
+                runner.save_json(root / 'build/dependency-policy-prefix-setup.json', setup)
+                result = runner.collect()
+                evidence = root / 'build/policy-prefix-evidence'
+                self.assertEqual(runner.read_json(evidence / 'source-archives.json'), source)
+                self.assertEqual(runner.read_json(evidence / 'dependency-setup.json'), setup)
+                self.assertFalse(result['verified'])
+                self.assertIn('dependency_setup_failed', result['errors'])
+                if not passed: self.assertIn('source_archive_preparation_failed', result['errors'])
+
+    def test_missing_hostile_oversize_or_linked_source_receipt_never_publishes(self):
+        for change in ('missing', 'private', 'oversize', 'hardlink', 'duplicate_key'):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as directory, patch.object(runner, 'ROOT', Path(directory)):
+                root = Path(directory); (root / 'build').mkdir()
+                path = root / 'build/dependency-policy-prefix-source-archives.json'
+                if change != 'missing':
+                    value = source_archive_receipt()
+                    if change == 'private': value['private_path'] = '/workspace/private-file'
+                    runner.save_json(path, value)
+                    if change == 'oversize': path.write_bytes(b' ' * 8193)
+                    if change == 'hardlink': os.link(path, root / 'alias.json')
+                    if change == 'duplicate_key': path.write_bytes(b'{"passed":true,"passed":false}')
+                runner.save_json(root / 'build/dependency-policy-prefix-setup.json', dependency_setup_receipt())
+                result = runner.collect()
+                self.assertFalse(result['verified'])
+                self.assertFalse((root / 'build/policy-prefix-evidence/source-archives.json').exists())
+                content = b''.join(item.read_bytes() for item in (root / 'build/policy-prefix-evidence').iterdir())
+                self.assertNotIn(b'/workspace/private-file', content)
+
+    def test_full_fixed_log_inventory_and_source_receipt_fit_exact_public_count(self):
+        self.assertEqual(runner.MAX_PUBLIC_FILES, 36)
+        self.assertEqual(runner.execution.MAX_PUBLIC_FILES, 35)
+        self.assertEqual(runner.MAX_PUBLIC_BYTES, runner.execution.MAX_PUBLIC_BYTES)
+        for limit in (35, 36):
+            with self.subTest(limit=limit), tempfile.TemporaryDirectory() as directory, \
+                 patch.object(runner, 'ROOT', Path(directory)), patch.object(runner, 'MAX_PUBLIC_FILES', limit):
+                root = runner.work_root(); root.mkdir(parents=True)
+                for row in runner.matrix():
+                    folder = root / 'runs' / row['id'] / 'logs'; folder.mkdir(parents=True)
+                    names = [f'main-ru-syntax-launcher-{index}.log' for index in range(4)] if row['path'] == 'gui' else \
+                        ['app_ru_timer_native.stdout.log', 'app_ru_timer_native.stderr.log']
+                    for name in names: (folder / name).write_bytes(b'TOTAL PASS: 1\n')
+                for name, program in (('scanner', runner.portable.SCANNER_PREFLIGHT_NAME),
+                                      ('boundary', 'profile_boundary'), ('direct_native', 'ru_direct_styling_native')):
+                    folder = root / 'runs' / ('preflight-' + name); folder.mkdir()
+                    for stream in ('stdout', 'stderr'): (folder / (program + '.' + stream + '.log')).write_bytes(b'TOTAL PASS: 1\n')
+                self.assertEqual(len(runner.runtime_logs(root)), 30)
+                runner.save_json(Path(directory) / 'build/dependency-policy-prefix-source-archives.json', source_archive_receipt())
+                runner.save_json(Path(directory) / 'build/dependency-policy-prefix-setup.json', dependency_setup_receipt())
+                for name in ('prepare', 'results'): runner.save_json(root / (name + '.json'), {'schema': 1})
+                # Synthetic validators isolate file-count accounting; no native pass is asserted.
+                with patch.object(runner, 'validate_prepare', side_effect=lambda value: value), \
+                     patch.object(runner, 'validate_results', side_effect=lambda value: value), \
+                     patch.object(runner, 'verify_results', return_value={'schema': 1, 'synthetic': True}):
+                    result = runner.collect()
+                self.assertEqual(result['verified'], limit == 36)
+                if limit == 35: self.assertIn('public_file_count_exceeded', result['errors'])
+                else: self.assertEqual(len(list((Path(directory) / 'build/policy-prefix-evidence').iterdir())), 36)
+
+    def test_source_inputs_and_helper_receipt_never_enter_either_product_zip(self):
+        import shutil
+        import test_package
+        fixture = test_package.PackageTests()
+        fixture.setUp()
+        try:
+            archives = fixture.root / 'third_party/source_archives'; archives.mkdir(parents=True)
+            for _, name, _, _ in runner.SOURCE_ARCHIVES:
+                shutil.copyfile(ROOT / 'third_party/source_archives' / name, archives / name)
+            (fixture.evidence / 'source-archives.json').write_text(json.dumps(source_archive_receipt()), encoding='utf-8')
+            result = fixture.create()
+            for archive in fixture.archives(result):
+                files = test_package.package.verify_archive(archive)
+                self.assertFalse(any(name.startswith('third_party/') or name.endswith('.zip') or
+                    name.endswith('source-archives.json') for name in files))
+                self.assertTrue({'Scintilla.dll', 'Lexilla.dll', 'RuSyntax.dll'} <= files.keys())
+        finally:
+            fixture.doCleanups()
+
 
 
 class WorkflowTests(unittest.TestCase):

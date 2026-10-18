@@ -20,6 +20,10 @@ The Ru scanner's generated identifier-classification intervals come from Python 
 
 RuSyntax.dll is built from this repository's `native/` C sources. It accelerates bounded UTF-8 scanning and style-byte generation, using keyword/tag configuration and folding policy owned by the Ru application. It is not an additional third-party lexer. Its source and binary hashes are part of the same package receipts; the application license remains pending.
 
+## Source-only build archives
+
+The unchanged pinned Scintilla/Lexilla source ZIPs are retained in `third_party/source_archives` for offline reproducible builds. The source repository’s `third_party/source_archives/README.md` preserves upstream notices and adds applicable Catch2/Boost, Mako, Nix example and Unicode data notices. These source archives are not included in the portable runtime/tests ZIPs; required binary notices remain. This inventory does not select an application license.
+
 ## Compiler and Windows runtime support
 
 Ru application source is compiled by the pinned Ru toolchain listed in `docs/build-provenance.md`. Python runs the build tools, not the distributed editor. Native executable/DLL builds use GCC/MinGW-w64; GCC runtime exception and MinGW-w64 notices must accompany statically linked support code. Package builders copy those notices from the actual toolchain distribution and retain their upstream terms unchanged.

@@ -48,6 +48,8 @@ jobs:
           python-version: '3.12'
       - name: Record fresh source and pinned compiler inputs
         run: python -I tools/windows_ci.py --helper-policy-action prepare
+      - name: Execute offline archive controls on the POSIX host
+        run: python -I tools/test_source_archives.py
       - name: Verify actual cleanup rescue bodies and original scalar negative controls
         run: >-
           python -I tools/test_cleanup_paths.py --ru-root .ci/ru-language

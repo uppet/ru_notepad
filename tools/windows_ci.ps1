@@ -108,17 +108,19 @@ try {
     Invoke-Checked $Python @('tools/test_windows_ci.py')
     Invoke-Checked $Python @('tools/test_package.py')
 
+    # Run the complete helper suite on this host before admitting source bytes.
+    # The helper copies only reviewed in-repository ZIPs and never extracts.
+    Invoke-Checked $Python @('tools/test_source_archives.py')
+    Invoke-Checked $Python @('tools/prepare_source_archives.py','--root',$Root,
+        '--receipt',(Join-Path $Evidence 'source-archives.json'))
     $Downloads = Join-Path $Root 'vendor/downloads'
-    New-Item -ItemType Directory -Path $Downloads -Force | Out-Null
     $Archive = Join-Path $Downloads 'scintilla567.zip'
-    Invoke-WebRequest -Uri 'https://sourceforge.net/projects/scintilla/files/scintilla/5.6.7/scintilla567.zip/download' -OutFile $Archive -TimeoutSec 120
     if (Test-Path -LiteralPath (Join-Path $Root 'vendor/scintilla')) {
         throw 'Use a fresh checkout: vendor/scintilla already exists.'
     }
     Expand-VerifiedArchive -Archive $Archive -DestinationPath (Join-Path $Root 'vendor') `
         -ExpectedSize 1904249 -ExpectedSha256 '2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c'
     $LexillaArchive = Join-Path $Downloads 'lexilla554.zip'
-    Invoke-WebRequest -Uri 'https://sourceforge.net/projects/scintilla/files/lexilla/5.5.4/lexilla554.zip/download' -OutFile $LexillaArchive -TimeoutSec 120
     if (Test-Path -LiteralPath (Join-Path $Root 'vendor/lexilla')) {
         throw 'Use a fresh checkout: vendor/lexilla already exists.'
     }

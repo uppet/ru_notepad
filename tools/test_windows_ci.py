@@ -110,29 +110,79 @@ class HarnessTests(unittest.TestCase):
             self.skipTest('PowerShell archive execution unavailable: pwsh is absent on this non-Windows host')
         return powershell
 
-    def test_official_archives_use_only_exact_pinned_sourceforge_requests(self):
+    def test_official_archives_use_only_tested_offline_preparation(self):
         source, helper = self.powershell_archive_helper()
+        tested = "Invoke-Checked $Python @('tools/test_source_archives.py')"
+        prepared = "Invoke-Checked $Python @('tools/prepare_source_archives.py','--root',$Root,"
+        self.assertLess(source.index(tested), source.index(prepared))
+        self.assertIn("'--receipt',(Join-Path $Evidence 'source-archives.json'))", source)
         pins = (
-            ('scintilla', '5.6.7', 'scintilla567.zip', '$Archive', 1904249,
+            ('scintilla', 'scintilla567.zip', '$Archive', 1904249,
              '2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c'),
-            ('lexilla', '5.5.4', 'lexilla554.zip', '$LexillaArchive', 1598324,
+            ('lexilla', 'lexilla554.zip', '$LexillaArchive', 1598324,
              '5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0'),
         )
-        requests = []
-        for name, version, filename, variable, size, digest in pins:
-            request = (f"Invoke-WebRequest -Uri 'https://sourceforge.net/projects/scintilla/files/"
-                       f"{name}/{version}/{filename}/download' -OutFile {variable} -TimeoutSec 120")
-            requests.append(request)
+        for name, filename, variable, size, digest in pins:
             guarded_expand = (f"Expand-VerifiedArchive -Archive {variable} "
                               "-DestinationPath (Join-Path $Root 'vendor') `\n"
                               f"        -ExpectedSize {size} -ExpectedSha256 '{digest}'")
             self.assertIn(guarded_expand, source)
-            self.assertLess(source.index(request), source.index(guarded_expand))
+            self.assertLess(source.index(prepared), source.index(guarded_expand))
             self.assertIn(f"$Root 'vendor/{name}'", source)
-        self.assertEqual(re.findall(r'(?m)^\s*(Invoke-WebRequest[^\n]+)$', source), requests)
+            self.assertIn(f"$Downloads '{filename}'", source)
+        self.assertNotIn('Invoke-WebRequest', source)
+        self.assertNotRegex(source, r'(?i)https?://|curl|wget|Start-BitsTransfer')
         self.assertEqual(source.count('Expand-VerifiedArchive -Archive '), 2)
         self.assertEqual(source.count('Expand-Archive -'), 1)
         self.assertIn('Expand-Archive -LiteralPath $Archive -DestinationPath $DestinationPath', helper)
+        self.assertLess(source.index(prepared), source.index("Invoke-Checked (Join-Path $Bin 'mingw32-make.exe')"))
+
+    def test_powershell_offline_test_or_helper_failure_blocks_extraction_and_build(self):
+        powershell = self.archive_test_powershell()
+        source, _ = self.powershell_archive_helper()
+        checked = re.search(r'(?ms)^function Invoke-Checked\b.*?^}', source).group(0)
+        # Execute the actual admission block and real checked subprocess exits.
+        # Synthetic scripts are used only to force both failure boundaries.
+        block = source[source.index("    Invoke-Checked $Python @('tools/test_source_archives.py')"):
+                       source.index("    Invoke-Checked $Python @('tools/check_static.py'")]
+        quote = lambda value: "'" + str(value).replace("'", "''") + "'"
+        for failed_stage in ('tests', 'prepare'):
+            with self.subTest(stage=failed_stage):
+                root = self.root / failed_stage
+                (root / 'tools').mkdir(parents=True)
+                (root / 'evidence').mkdir()
+                (root / 'tools/test_source_archives.py').write_text(
+                    'raise SystemExit(' + ('9' if failed_stage == 'tests' else '0') + ')\n', encoding='utf-8')
+                (root / 'tools/prepare_source_archives.py').write_text(
+                    "from pathlib import Path\nimport sys\nPath('helper-called').write_bytes(b'yes')\n"
+                    "Path(sys.argv[-1]).write_bytes(b'{\"passed\":true}')\nraise SystemExit(17)\n",
+                    encoding='utf-8')
+                script = root / 'probe.ps1'
+                script.write_text("Set-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n" + checked + f"""
+$Root = {quote(root)}
+$Evidence = Join-Path $Root 'evidence'
+$Bin = Join-Path $Root 'no-build-tools'
+$Python = {quote(sys.executable)}
+$script:Extractions = 0
+function Expand-VerifiedArchive {{ $script:Extractions++; throw 'Extraction must not run' }}
+Push-Location $Root
+$Failure = ''
+try {{
+{block}
+}} catch {{ $Failure = $_.Exception.Message }} finally {{ Pop-Location }}
+if ($Failure -notlike 'Command failed with exit code *' -or $script:Extractions -ne 0) {{
+    throw 'Offline preparation did not fail before extraction and build'
+}}
+Write-Output 'OFFLINE_FAILURE_GUARD_PASS'
+""", encoding='utf-8')
+                result = subprocess.run([powershell, '-NoProfile', '-NonInteractive', '-File', str(script)],
+                    capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn('OFFLINE_FAILURE_GUARD_PASS', result.stdout)
+                self.assertEqual((root / 'helper-called').exists(), failed_stage == 'prepare')
+                if failed_stage == 'prepare':
+                    self.assertTrue(json.loads((root / 'evidence/source-archives.json').read_text(encoding='utf-8'))['passed'])
+                self.assertFalse((root / 'vendor').exists())
 
     def test_archive_powershell_host_controls_fail_windows_and_skip_only_when_absent(self):
         for platform in ('win32', 'linux'):
