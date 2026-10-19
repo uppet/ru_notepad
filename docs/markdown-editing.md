@@ -31,3 +31,9 @@ The new portable policy and extension fixtures execute real Ru code. Native fixt
 ## Initial coloring regression
 
 The initial Windows GUI check exposed a cleared-style lifecycle bug: after selecting Markdown, `SCI_CLEARDOCUMENTSTYLE` zeroed the style bytes and advanced Scintilla's styled prefix to EOF. With no subsequent Markdown keyword/property invalidation, ordinary painting skipped the lexer. Selection now uses the existing ownership-guarded `SCI_STARTSTYLING(0)` to invalidate that prefix; it does not synchronously colorize the whole document. The native fixture separately requires hidden mode reinitialization to leave the prefix invalid before message pumping, an ordinary message pump to paint the colored heading without `SCI_COLOURISE`, and stale initialization to leave a replacement document untouched. The older explicit-colorize assertion remains a lexer-output check. The repaired product still requires complete Windows native and detached GUI acceptance.
+
+## Scan-cost regression work
+
+The subsequent Windows run confirmed natural Markdown coloring and all four many-line GUI operations. It also exposed a test counter that included the replacement document's legitimate EOL setup and a 1 MB single-line, two-Undo phase exceeding the unchanged 30 s deadline. The lifecycle test now counts only the stale style-prefix mutation it is meant to forbid.
+
+The policy avoids five closer-suffix checks except on `>` and avoids a redundant whole-chunk byte-count pass. The original 1024-scalar limit still runs before state access; each scalar contributes at most four bytes, and the consuming loop still accounts for every actual byte. UTF-8 validation, scheduling, ownership guards and fold publication are unchanged. Boundary and full-state comparisons cover these optimizations; complete Windows acceptance, including the unclosed-fence shape, remains required.

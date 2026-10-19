@@ -20,7 +20,7 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-CASES = {'markdown_policy': 181, 'markdown_selection_policy': 31}
+CASES = {'markdown_policy': 199, 'markdown_selection_policy': 31}
 LIMIT = 1024 * 1024
 
 

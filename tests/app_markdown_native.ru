@@ -12,10 +12,11 @@ _RemoveWindowSubclass 取 (窗 其 控件) 其 绑定 'RemoveWindowSubclass' (�
 _DefSubclassProc 取 (窗 其 控件) 其 绑定 'DefSubclassProc' (密 其 签名 (窗 其 IP) ([(窗 其 PTR),(窗 其 U),(窗 其 UP),(窗 其 IP)]) 'win64').
 _InvalidateRect 取 (窗 其 用户) 其 绑定 'InvalidateRect' (密 其 签名 (窗 其 I) ([(窗 其 PTR),(窗 其 PTR),(窗 其 I)]) 'win64').
 _子型 取 密 其 签名 (窗 其 IP) ([(窗 其 PTR),(窗 其 U),(窗 其 UP),(窗 其 IP),(窗 其 UP),(窗 其 UP)]) 'win64'.
-_选测 取 {'action':'','writes':0,'fired':假,'paints':0}.
+_选测 取 {'action':'','writes':0,'styleStarts':0,'fired':假,'paints':0}.
 算 选择子过程 柄 消息 宽 长 号 引:
     码 取 消息 其 数.
     若 码 == 2031 或 码 == 2032 或 码 == 4005 则 _选测 其 增 'writes' (_选测['writes']+1). 然
+    若 码 == 2032 则 _选测 其 增 'styleStarts' (_选测['styleStarts']+1). 然
     若 码 == 15 则 _选测 其 增 'paints' (_选测['paints']+1). 然
     动作 取 ''.
     若 码 == 2357 且 _选测['action'] != '' 则
@@ -128,9 +129,11 @@ _选测 取 {'action':'','writes':0,'fired':假,'paints':0}.
     确认 (拒[0] 且 _选测['writes'] == 0) 'guard query forgetting rejects text setup before its mutation'.
     旧 取 语 其 _新选择 柄.
     原文档 取 (窗 其 发送 柄 2357 0 0) 其 句.
-    _选测 其 增 'writes' 0. _选测 其 增 'action' 'replace'. 拒[0] 取 假.
+    # Replacement text setup legitimately sends SETEOLMODE (2031). Only the
+    # stale STARTSTYLING (2032) would reset its freshly cleared styled prefix.
+    _选测 其 增 'writes' 0. _选测 其 增 'styleStarts' 0. _选测 其 增 'action' 'replace'. 拒[0] 取 假.
     试 语 其 _发设 旧 柄 2032 0 0. 救 原因 拒[0] 取 真. 终
-    确认 (拒[0] 且 _选测['writes'] == 0 且 (窗 其 发送 柄 2357 0 0) 其 句 != 原文档 且 (编 其 文本 柄) == '# replacement\nbody' 且 (窗 其 发送 柄 2028 0 0) 其 数 == (窗 其 发送 柄 2183 0 0) 其 数) 'stale Markdown invalidation cannot reset a replacement document styled prefix'.
+    确认 (拒[0] 且 _选测['styleStarts'] == 0 且 (窗 其 发送 柄 2357 0 0) 其 句 != 原文档 且 (编 其 文本 柄) == '# replacement\nbody' 且 (窗 其 发送 柄 2028 0 0) 其 数 == (窗 其 发送 柄 2183 0 0) 其 数) 'stale Markdown invalidation cannot reset a replacement document styled prefix'.
     旧 取 语 其 _新选择 柄.
     _选测 其 增 'writes' 0. _选测 其 增 'action' 'close'. 拒[0] 取 假.
     试 语 其 _发设 旧 柄 2031 1 0. 救 原因 拒[0] 取 真. 终

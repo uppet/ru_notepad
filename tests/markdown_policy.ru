@@ -184,4 +184,61 @@
 失败 取 [假].
 试 模 其 喂入 包[0] 'x' 真. 救 原因 失败[0] 取 真. 终
 确认 失败[0] 'finished policy rejects new input'.
+# Check the entire fixed state, including both nested arrays; Ru array equality
+# is identity equality and would not prove absence of mutation.
+算 同全态 甲 乙:
+    若 甲 其 量 != 24 或 乙 其 量 != 24 则 得 假. 然
+    位 取 0.
+    循 24 次
+        若 位 == 3 则
+            若 甲[3] 其 量 != 乙[3] 其 量 则 得 假. 然
+            层 取 0.
+            循 甲[3] 其 量 次
+                若 甲[3][层] 其 量 != 4 或 乙[3][层] 其 量 != 4 则 得 假. 然
+                项 取 0.
+                循 4 次
+                    若 甲[3][层][项] != 乙[3][层][项] 则 得 假. 然
+                    项 取 项+1.
+                环
+                层 取 层+1.
+            环
+        另
+            若 位 == 19 则
+                若 甲[19] 其 量 != 5 或 乙[19] 其 量 != 5 则 得 假. 然
+                项 取 0.
+                循 5 次
+                    若 甲[19][项] != 乙[19][项] 则 得 假. 然
+                    项 取 项+1.
+                环
+            另
+                若 甲[位] != 乙[位] 则 得 假. 然
+            然
+        然
+        位 取 位+1.
+    环
+    得 真.
+法
+作 核输入边界 名 为 句 单元 为 句 重复 为 数 字节 为 数:
+    文 取 ''. 循 重复 次 文 取 文+单元. 环
+    态 取 模 其 新状态.
+    果 取 模 其 喂入 态 文 真.
+    确认 (文 其 量 == 1024 且 果['used'] == 1024 且 果['bytes'] == 字节 且 态[23] == 字节 且 果['finished']) (名+' accepts exactly 1024 scalars with exact bytes').
+    态 取 模 其 新状态. 对照 取 模 其 新状态.
+    模 其 喂入 态 '# root\nbody' 假. 模 其 喂入 对照 '# root\nbody' 假.
+    拒 取 [假].
+    试 模 其 喂入 态 (文+'x') 假.
+    救 原因 拒[0] 取 (原因 为 句) 其 含 'Markdown input exceeds 1024 Unicode scalars.'. 终
+    确认 (拒[0] 且 (同全态 态 对照)) (名+' rejects 1025 scalars before any state mutation').
+    模 其 喂入 态 '' 真. 模 其 喂入 对照 '' 真.
+    拒[0] 取 假.
+    试 模 其 喂入 态 (文+'x') 假.
+    救 原因 拒[0] 取 (原因 为 句) 其 含 'Markdown input exceeds 1024 Unicode scalars.'. 终
+    确认 (拒[0] 且 (同全态 态 对照)) (名+' keeps scalar-limit error ahead of finished-state error').
+为
+核输入边界 'ASCII' 'a' 1024 1024.
+核输入边界 'two-byte' 'é' 1024 2048.
+核输入边界 'CJK' '中' 1024 3072.
+核输入边界 'emoji' '😀' 1024 4096.
+核输入边界 'combining' 'é' 512 1536.
+核输入边界 'mixed-width' 'Aé中😀' 256 2560.
 显 'TOTAL PASS: '+(次数[0] 为 句).

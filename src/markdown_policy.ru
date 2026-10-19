@@ -128,11 +128,15 @@
     尾 取 态[18]+小字.
     若 尾 其 量 > 11 则 尾 取 尾[(尾 其 量)-11:]. 然
     态[18] 取 尾.
-    若 _末为 尾 '-->' 则 态[19][0] 取 真. 然
-    若 _末为 尾 '</script>' 则 态[19][1] 取 真. 然
-    若 _末为 尾 '</pre>' 则 态[19][2] 取 真. 然
-    若 _末为 尾 '</style>' 则 态[19][3] 取 真. 然
-    若 _末为 尾 '</textarea>' 则 态[19][4] 取 真. 然
+    # Every recognized closer ends in >. Keep the exact rolling tail, but
+    # avoid five pure suffix calls when none can possibly match.
+    若 字 == '>' 则
+        若 _末为 尾 '-->' 则 态[19][0] 取 真. 然
+        若 _末为 尾 '</script>' 则 态[19][1] 取 真. 然
+        若 _末为 尾 '</pre>' 则 态[19][2] 取 真. 然
+        若 _末为 尾 '</style>' 则 态[19][3] 取 真. 然
+        若 _末为 尾 '</textarea>' 则 态[19][4] 取 真. 然
+    然
     得 空.
 法
 算 _容器 文 为 句:
@@ -267,8 +271,9 @@
     得 空.
 法
 算 喂入 态 文 为 句 结束 为 事实:
-    总字节 取 字节数 文.
-    若 总字节 > 4096 则 卒 'Markdown input exceeds 4096 UTF-8 bytes.'. 然
+    # _宽 returns at most four bytes per scalar. Keep the original scalar-limit
+    # check before any state access; a separate full byte-count pass is redundant.
+    若 文 其 量 > 1024 则 卒 'Markdown input exceeds 1024 Unicode scalars.'. 然
     列 取 []. 位 取 0.
     若 态[2] 则
         若 文 != '' 或 非 结束 则 卒 'Markdown state is already finished.'. 然

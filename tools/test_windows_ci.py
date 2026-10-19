@@ -362,7 +362,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'ru_lexical_policy': r'^TOTAL PASS: 338\s*$',
             'ru_syntax_native': r'^TOTAL PASS: 149\s*$',
             'ru_direct_styling_native': r'^TOTAL PASS: 36\s*$',
-            'markdown_policy': r'^TOTAL PASS: 181\s*$',
+            'markdown_policy': r'^TOTAL PASS: 199\s*$',
             'markdown_selection_policy': r'^TOTAL PASS: 31\s*$',
             'markdown_native': r'^TOTAL PASS: 44\s*$',
             'app_markdown_native': r'^TOTAL PASS: 57\s*$',
@@ -1187,7 +1187,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         prior = [test for test in summary['tests'] if test['name'] not in added]
         self.assertEqual(len(prior), 33)
         self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1800)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1818)
 
     def test_direct_style_fixture_is_built_packaged_and_required(self):
         name = 'ru_direct_styling_native'
@@ -2911,7 +2911,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             ci.copy_runtime_licenses(self.root / 'mingw', self.root / 'out')
 
     def test_markdown_gate_preserves_old_counts_and_requires_exact_new_counts(self):
-        expected = {'markdown_policy': 181, 'markdown_selection_policy': 31,
+        expected = {'markdown_policy': 199, 'markdown_selection_policy': 31,
                     'markdown_native': 44, 'app_markdown_native': 57}
         self.assertEqual({name: ci.expected_assertions(name) for name in expected}, expected)
         self.assertEqual(ci.console_command('app_markdown_native', self.root, self.root),
@@ -2945,8 +2945,37 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertNotIn('UpdateWindow', natural)
         self.assertIn('试 语 其 _发设 旧 柄 2032 0 0.', fixture)
         self.assertIn('stale Markdown invalidation cannot reset a replacement document styled prefix', fixture)
+        callback = fixture.split('算 选择子过程 柄 消息 宽 长 号 引:', 1)[1].split('次数 取 [0].', 1)[0]
+        self.assertIn("若 码 == 2031 或 码 == 2032 或 码 == 4005 则 _选测 其 增 'writes' (_选测['writes']+1). 然", callback)
+        self.assertIn("若 码 == 2032 则 _选测 其 增 'styleStarts' (_选测['styleStarts']+1). 然", callback)
+        self.assertEqual(callback.count("_选测 其 增 'styleStarts'"), 1)
+        self.assertIn("_选测 其 增 'styleStarts' 0. _选测 其 增 'action' 'replace'.", fixture)
+        replacement_check = next(line for line in fixture.splitlines()
+            if 'stale Markdown invalidation cannot reset a replacement document styled prefix' in line)
+        self.assertIn("拒[0] 且 _选测['styleStarts'] == 0", replacement_check)
+        self.assertNotIn("_选测['writes']", replacement_check)
         self.assertEqual(fixture.count('窗 其 发送 柄 4003 0 (-1).'), 1)
         self.assertLess(fixture.index('    验自然配色 主 柄 页.'), fixture.index('窗 其 发送 柄 4003 0 (-1).'))
+
+    def test_markdown_replacement_counter_contract_rejects_contamination_and_missing_detection(self):
+        # Source-contract controls, not native callback execution evidence.
+        path = ci.ROOT / 'tests/app_markdown_native.ru'
+        source = path.read_text(encoding='utf-8')
+        original_read_text = Path.read_text
+        mutations = (
+            ("若 码 == 2032 则 _选测 其 增 'styleStarts'", "若 码 == 2031 或 码 == 2032 则 _选测 其 增 'styleStarts'"),
+            ("若 码 == 2032 则 _选测 其 增 'styleStarts'", "若 码 == 2031 则 _选测 其 增 'styleStarts'"),
+            ("拒[0] 且 _选测['styleStarts'] == 0", "拒[0] 且 _选测['writes'] == 0"),
+            ("_选测 其 增 'styleStarts' 0. _选测 其 增 'action' 'replace'.", "_选测 其 增 'action' 'replace'."),
+        )
+        for before, after in mutations:
+            with self.subTest(mutation=after):
+                self.assertEqual(source.count(before), 1)
+                mutated = source.replace(before, after)
+                def read_text(actual, *args, **kwargs):
+                    return mutated if actual == path else original_read_text(actual, *args, **kwargs)
+                with patch.object(Path, 'read_text', read_text), self.assertRaises(AssertionError):
+                    self.test_markdown_selection_invalidates_native_prefix_and_requires_natural_paint()
 
     def test_markdown_gui_corpora_are_fixed_separate_shapes_and_sixteen_style_bytes(self):
         sizes = {'many-lines': 100000, 'singleline': 1000000, 'unclosed-fence': 1000000}
@@ -3143,7 +3172,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
     def test_markdown_pure_backend_gate_and_fixed_historical_workflow_are_mandatory(self):
         import test_markdown_portable as portable_policy
         portable_policy.controls()
-        self.assertEqual(portable_policy.CASES, {'markdown_policy': 181, 'markdown_selection_policy': 31})
+        self.assertEqual(portable_policy.CASES, {'markdown_policy': 199, 'markdown_selection_policy': 31})
         workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text()
         self.assertIn('python -I tools/test_markdown_portable.py --ru-root .ci/ru-language', workflow)
         self.assertIn('needs: helper-policy', workflow)

@@ -56,7 +56,7 @@ NATIVE_CONSOLE_TESTS = (
     ('ru_lexical_policy', r'^TOTAL PASS: 338\s*$'),
     ('ru_syntax_native', r'^TOTAL PASS: 149\s*$'),
     ('ru_direct_styling_native', r'^TOTAL PASS: 36\s*$'),
-    ('markdown_policy', r'^TOTAL PASS: 181\s*$'),
+    ('markdown_policy', r'^TOTAL PASS: 199\s*$'),
     ('markdown_selection_policy', r'^TOTAL PASS: 31\s*$'),
     ('markdown_native', r'^TOTAL PASS: 44\s*$'),
     ('app_markdown_native', r'^TOTAL PASS: 57\s*$'),
