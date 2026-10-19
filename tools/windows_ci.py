@@ -383,6 +383,22 @@ class Windows:
         self.scalar(hwnd, 0x000D, length + 1, ctypes.addressof(buffer))
         return buffer.value
 
+    def markdown_status(self, hwnd):
+        # This numeric status changes while the GUI is processing messages.
+        # A separate WM_GETTEXTLENGTH can become stale before WM_GETTEXT and
+        # truncate a growing marker. Read once with the existing inspection
+        # limit plus one overflow sentinel and the terminating NUL. A buffer
+        # of limit+1 cannot distinguish a full permitted value from truncation.
+        limit = 4096
+        buffer = ctypes.create_unicode_buffer(limit + 2)
+        copied = self.scalar(hwnd, 0x000D, limit + 2, ctypes.addressof(buffer))
+        value = buffer.value
+        if copied > limit:
+            raise RuntimeError('Synthetic GUI text exceeds the bounded inspection limit')
+        if copied != len(value.encode('utf-16-le', 'surrogatepass')) // 2:
+            raise RuntimeError('Synthetic GUI text copy count is inconsistent')
+        return value
+
     def control(self, hwnd, identifier):
         child = self.user.GetDlgItem(hwnd, identifier)
         if not child:
@@ -2284,6 +2300,19 @@ def parse_markdown_diagnostic(status):
     return validate_markdown_diagnostic(result)
 
 
+def markdown_diagnostic_failure(status):
+    # Record structure only on rejected, already-bounded status reads. Never
+    # retain status prose, marker text, paths, source bytes or arbitrary errors.
+    start = status.find('[MDP')
+    suffix = status[start:] if start >= 0 else ''
+    return {'status_code_units': len(status.encode('utf-16-le', 'surrogatepass')) // 2,
+        'marker_occurrences': status.count('[MDP'),
+        'marker_suffix_code_units': len(suffix.encode('utf-16-le', 'surrogatepass')) // 2,
+        'ends_with_closing_bracket': suffix.endswith(']'),
+        'opening_brackets': suffix.count('['), 'closing_brackets': suffix.count(']'),
+        'control_characters': sum(ord(char) < 32 or ord(char) == 127 for char in suffix),
+        'non_ascii_characters': sum(ord(char) > 127 for char in suffix)}
+
 
 GUI_MARKDOWN_MEMORY_MEASUREMENT = ('Read-only K32GetProcessMemoryInfo on the already-owned child process handle, '
     'once per existing at-most-4-Hz GUI snapshot. sampledWorkingSetPeak is the maximum observed working set, '
@@ -2542,7 +2571,7 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
                 editor, status_handle = api.editor(hwnd), api.control(hwnd, 11)
                 length = api.scalar(editor, 2006)
                 dirty = bool(api.scalar(editor, 2159))
-                status = api.text(status_handle)
+                status = api.markdown_status(status_handle)
                 pending = GUI_MARKDOWN_PENDING in status
                 state = ('failure' if 'Markdown folding was disabled:' in status else
                          'opening' if status.lstrip().startswith('Opening:') else
@@ -2551,7 +2580,11 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
                     'status': state, 'tail_requested': tail_requested, 'diagnostic': None}
                 # Preserve observations before any completion/style gate. Reuse
                 # the existing status read; no extra observer message is sent.
-                stage['last_progress']['diagnostic'] = parse_markdown_diagnostic(status)
+                try:
+                    stage['last_progress']['diagnostic'] = parse_markdown_diagnostic(status)
+                except RuntimeError:
+                    stage['diagnostic_failure'] = markdown_diagnostic_failure(status)
+                    raise
                 validate_markdown_progress(stage['last_progress'])
                 done = markdown_status_complete(status)
                 if stage['dirty'] and not response and pending and length == len(expected):

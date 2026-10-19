@@ -331,6 +331,8 @@ _时存 取 _计数型 其 新建.
     得 空.
 法
 算 登记直属 柄 父:
+    # A null optional HWND has no capability key; reject before string conversion.
+    若 柄 == 空 则 得 假. 然
     撤销直属 柄.
     若 非 _直库态['ready'] 或 非 (_同线程 柄) 或 非 (_同线程 父) 则 得 假. 然
     若 (窗 其 结果 (_GetParent 其 调用 [柄])) 其 句 != 父 其 句 则 得 假. 然

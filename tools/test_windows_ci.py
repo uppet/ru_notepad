@@ -26,6 +26,28 @@ import windows_ci as ci
 import build as builder
 
 
+class SyntheticWindowText(ci.Windows):
+    """Controlled WM_GETTEXT payloads; no native API or platform override."""
+    def __init__(self, before, after, reported_count=None):
+        self.before, self.after = before, after
+        self.reported_count, self.calls = reported_count, []
+
+    def scalar(self, hwnd, message, wparam=0, lparam=0):
+        self.calls.append((hwnd, message, wparam))
+        if message == 0x000E:
+            return len(self.before.encode('utf-16-le', 'surrogatepass')) // 2
+        if message != 0x000D:
+            raise AssertionError('Unexpected window-text message')
+        encoded = self.after.encode('utf-16-le', 'surrogatepass')
+        units = [int.from_bytes(encoded[index:index + 2], 'little') for index in range(0, len(encoded), 2)]
+        count = min(len(units), wparam - 1)
+        buffer = ctypes.cast(lparam, ctypes.POINTER(ctypes.c_wchar))
+        for index, value in enumerate(units[:count]):
+            buffer[index] = chr(value)
+        buffer[count] = '\0'
+        return count if self.reported_count is None else self.reported_count
+
+
 def observer_evidence():
     """Synthetic receipt data only; never native or GUI execution evidence."""
     observer = ci.gui_ru_observer_record()
@@ -3253,7 +3275,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         # Reviewed source contract only. Actual callback/contraction behavior is
         # separately required from markdown_native and the detached GUI cases.
         source = (ci.ROOT / 'src/markdown_syntax.ru').read_text(encoding='utf-8')
-        expected = {'_本态': '8a5ac21dfaed5a7acd9633c5ee30aed02517b6da4e61edd6724bb9da154653fe', '_须本态': 'ad619e1b49326aeb41de2f838a49662358aae6827f3f9603b16945ad224dd37e', '_护': 'd09426159fc731acf23725021e04cb93ad33dbe58526e9741f5806adf93d5445', '_讯': '5b1cac1da67dd9bf65ae91029f5622121301b70a03056a52d72e96ccd41ec9e2', '_全显': 'a2facd577a3085e305284e6e205a9c0d014773f06ef00070f51da71e8289cbf7', '_发布': 'f31481eadda2b032e94434f1fcb1739c41e2d81e9e07a1391f95d3e4d3a5c053', '_须直属': '8105e93a67e66078a2ccf57a377687c3d134626b74b11e627985cd7255f74bab', '登记直属': '46faed27dcb4968de9bd90d058a2075af690f5ffaa032ba0213c8919a8107eac', '撤销直属': '11a975a7a865fc61009d3a6b5cdf0c2455b4e4355d47d9a1773567acee14ba3b', '_直护': '1196e2af8d48e4a4f37b07baf4059b8be846956e8cd9e55556b0d0724db28c7d', '_直发布': 'aca4265d0f732a9f63c5cfc4815d3d4b05fc7e6d79219a05bf770c704565d701', '_批移位': '92922d737d210319ee19b50aaf68d26840a1ed15c5bbb56f6aa1ccc69a0bfeb1', '_写批计划': '68d92c84edc831a296a616569d92d3911fce0f8552d0cc0fafe6271f2a0afef8', '_验批果': '699c0a3c5ff2192219f5c22f6880be40d36fcf7fd4d7ce941a2c2e23e100d063', '_批发布': '2a175bb7efff6a5af78b2e405e3b550ae70f92012a2bac5685e7ce9f57836e16', '_统计': 'f31451b38baa49c039a772bc0d5aaa04e0d2d32d57c68ac23bca3a7f16b91f94', '_统计时刻': '55ec9489e7c0421b0617e70b5953c732d3bfbdb3d0bc882153e3d0607e51bbf5', '_统计耗时': '1e51b386ebba4ebb1613196a14c9bdd64cacbade50eb8ab029ef596c3ddcd4aa', '_丢弃': '9a0ff8228817367569a13c16929e1917f42bbd5967c766fa7ffdbe3c33d52845', '状态': 'a1789ccfe386ad090afa5a6097bb58ee9928346122f2d964c5d0705deb9e3eab'}
+        expected = {'_本态': '8a5ac21dfaed5a7acd9633c5ee30aed02517b6da4e61edd6724bb9da154653fe', '_须本态': 'ad619e1b49326aeb41de2f838a49662358aae6827f3f9603b16945ad224dd37e', '_护': 'd09426159fc731acf23725021e04cb93ad33dbe58526e9741f5806adf93d5445', '_讯': '5b1cac1da67dd9bf65ae91029f5622121301b70a03056a52d72e96ccd41ec9e2', '_全显': 'a2facd577a3085e305284e6e205a9c0d014773f06ef00070f51da71e8289cbf7', '_发布': 'f31481eadda2b032e94434f1fcb1739c41e2d81e9e07a1391f95d3e4d3a5c053', '_须直属': '8105e93a67e66078a2ccf57a377687c3d134626b74b11e627985cd7255f74bab', '登记直属': 'd528efc0163c27444df666080dd6522a7de514b626223bf0ce6c6fbf2e9acccd', '撤销直属': '11a975a7a865fc61009d3a6b5cdf0c2455b4e4355d47d9a1773567acee14ba3b', '_直护': '1196e2af8d48e4a4f37b07baf4059b8be846956e8cd9e55556b0d0724db28c7d', '_直发布': 'aca4265d0f732a9f63c5cfc4815d3d4b05fc7e6d79219a05bf770c704565d701', '_批移位': '92922d737d210319ee19b50aaf68d26840a1ed15c5bbb56f6aa1ccc69a0bfeb1', '_写批计划': '68d92c84edc831a296a616569d92d3911fce0f8552d0cc0fafe6271f2a0afef8', '_验批果': '699c0a3c5ff2192219f5c22f6880be40d36fcf7fd4d7ce941a2c2e23e100d063', '_批发布': '2a175bb7efff6a5af78b2e405e3b550ae70f92012a2bac5685e7ce9f57836e16', '_统计': 'f31451b38baa49c039a772bc0d5aaa04e0d2d32d57c68ac23bca3a7f16b91f94', '_统计时刻': '55ec9489e7c0421b0617e70b5953c732d3bfbdb3d0bc882153e3d0607e51bbf5', '_统计耗时': '1e51b386ebba4ebb1613196a14c9bdd64cacbade50eb8ab029ef596c3ddcd4aa', '_丢弃': '9a0ff8228817367569a13c16929e1917f42bbd5967c766fa7ffdbe3c33d52845', '状态': 'a1789ccfe386ad090afa5a6097bb58ee9928346122f2d964c5d0705deb9e3eab'}
         for name, digest in expected.items():
             functions = re.findall(r'^算 ' + re.escape(name) + r'(?=[ \n])[^\n]*\n(.*?)^法$',
                                    source, re.MULTILINE | re.DOTALL)
@@ -3284,6 +3306,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         source = path.read_text(encoding='utf-8')
         read_original = Path.read_text
         mutations = (
+            ('    若 柄 == 空 则 得 假. 然\n    撤销直属 柄.', '    撤销直属 柄.'),
             ("        _须直属 柄 态 权.\n        若 非 (借 其 为空) 且 _直接策略['enabled']", "        若 非 (借 其 为空) 且 _直接策略['enabled']"),
             ("            _护 柄 态.\n            _须直属 柄 态 权.\n            果 取 结果存", "            _须直属 柄 态 权.\n            果 取 结果存"),
             ("若 状码 != 0 且 状码 != 1 则 卒", "若 假 则 卒"),
@@ -3425,6 +3448,88 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         with patch.object(ci.time, 'perf_counter', side_effect=lambda: now[0]), \
              patch.object(ci.time, 'sleep', side_effect=lambda seconds: now.__setitem__(0, now[0] + seconds)):
             self.run_markdown_stage_control(stale_pending_diagnostic=True)
+
+    def markdown_marker(self, seq=9):
+        record = dict(markdown_evidence()['cases'][0]['stages'][0]['last_progress']['diagnostic'], seq=seq)
+        return ' [MDP2 ' + ' '.join(f'{name}={record[name]}' for name in ci.MARKDOWN_DIAGNOSTIC_FIELDS) + ']'
+
+    def test_markdown_status_legacy_length_then_text_reproduces_truncated_marker(self):
+        before, after = self.markdown_marker(9), self.markdown_marker(10)
+        api = SyntheticWindowText(before, after)
+        truncated = api.text(3)
+        self.assertEqual(truncated, after[:-1])
+        self.assertEqual([call[1] for call in api.calls], [0x000E, 0x000D])
+        with self.assertRaisesRegex(RuntimeError, '^Markdown numeric phase marker is malformed$'):
+            ci.parse_markdown_diagnostic(truncated)
+        api = SyntheticWindowText(before, after)
+        self.assertEqual(ci.parse_markdown_diagnostic(api.markdown_status(3))['seq'], 10)
+        self.assertEqual(api.calls, [(3, 0x000D, 4098)])
+
+    def test_markdown_status_single_read_accepts_growth_shrinkage_and_stable_markers(self):
+        short, long = self.markdown_marker(9), self.markdown_marker(10)
+        for before, after in ((short, long), (long, short), (long, long), ('', long)):
+            with self.subTest(before=len(before), after=len(after)):
+                api = SyntheticWindowText(before, after)
+                self.assertEqual(api.markdown_status(3), after)
+                ci.parse_markdown_diagnostic(after)
+                self.assertEqual(api.calls, [(3, 0x000D, 4098)])
+
+    def test_markdown_status_fixed_cap_preserves_utf16_boundary_and_rejects_overflow(self):
+        for text in ('', 'x' * 4095, 'x' * 4096, '甲😀' + 'x' * 4093):
+            with self.subTest(code_units=len(text.encode('utf-16-le')) // 2):
+                api = SyntheticWindowText('', text)
+                self.assertEqual(api.markdown_status(3).encode('utf-16-le', 'surrogatepass'), text.encode('utf-16-le'))
+                self.assertEqual(api.calls, [(3, 0x000D, 4098)])
+        for text in ('x' * 4097, 'x' * 8192, '甲😀' + 'x' * 4094):
+            api = SyntheticWindowText('', text)
+            with self.subTest(code_units=len(text.encode('utf-16-le')) // 2), self.assertRaisesRegex(RuntimeError, 'bounded inspection limit'):
+                api.markdown_status(3)
+            self.assertEqual(api.calls, [(3, 0x000D, 4098)])
+
+    def test_markdown_status_copy_mismatch_and_timeout_fail_without_retry(self):
+        for count in (-1, 0, 2, 4097):
+            api = SyntheticWindowText('', 'x', reported_count=count)
+            with self.subTest(count=count), self.assertRaises(RuntimeError):
+                api.markdown_status(3)
+            self.assertEqual(api.calls, [(3, 0x000D, 4098)])
+        api = SyntheticWindowText('', 'x\0y')
+        with self.assertRaisesRegex(RuntimeError, 'copy count is inconsistent'):
+            api.markdown_status(3)
+        self.assertEqual(api.calls, [(3, 0x000D, 4098)])
+        api = SyntheticWindowText('', 'x')
+        with patch.object(api, 'scalar', side_effect=RuntimeError('synthetic timeout')) as scalar:
+            with self.assertRaisesRegex(RuntimeError, '^synthetic timeout$'):
+                api.markdown_status(3)
+        scalar.assert_called_once()
+
+    def test_markdown_status_single_read_keeps_strict_parser_and_private_failure_shape(self):
+        marker = self.markdown_marker()
+        for malformed in (marker[:-1], marker + marker, marker.replace('seq=9', 'seq=9.0'),
+                          marker.replace('seq=9', 'seq=9e0'), marker + '\r', marker + 'PRIVATE_TEXT_SENTINEL'):
+            api = SyntheticWindowText('', 'PRIVATE_PATH_SENTINEL\\甲😀' + malformed)
+            status = api.markdown_status(3)
+            with self.subTest(marker=malformed), self.assertRaises(RuntimeError):
+                ci.parse_markdown_diagnostic(status)
+            failure = ci.markdown_diagnostic_failure(status)
+            self.assertTrue(all(type(value) in (int, bool) for value in failure.values()))
+            self.assertTrue(all(0 <= value <= 4096 for value in failure.values()))
+            self.assertNotIn('PRIVATE', json.dumps(failure))
+            self.assertEqual(failure['status_code_units'], len(status.encode('utf-16-le', 'surrogatepass')) // 2)
+        failure = ci.markdown_diagnostic_failure(marker[:-1])
+        self.assertEqual(failure['marker_occurrences'], 1)
+        self.assertEqual(failure['opening_brackets'], 1)
+        self.assertEqual(failure['closing_brackets'], 0)
+        self.assertFalse(failure['ends_with_closing_bracket'])
+
+    def test_markdown_real_stage_records_only_bounded_failure_structure(self):
+        self.run_markdown_stage_control(malformed_diagnostic=True)
+
+    def test_markdown_success_receipt_rejects_failure_diagnostics(self):
+        record = markdown_evidence()
+        stage = record['cases'][0]['stages'][0]
+        stage['diagnostic_failure'] = ci.markdown_diagnostic_failure(self.markdown_marker()[:-1])
+        with self.assertRaisesRegex(RuntimeError, 'bounded stage metadata'):
+            ci.validate_gui_markdown(record, require_windows_clock=True)
 
     def test_markdown_numeric_phase_parser_rejects_unbounded_private_or_missing_fields(self):
         marker = ' [MDP2 seq=1 via=0 id=2 gen=3 rev=0 phase=2 pending=1 length=1000000 feed=470180 published=47104 tick=123 work_us=100000 gap_us=200000 bulkCalls=736 bulkLines=47104 fallbackBatches=0 directCalls=0 directLines=0 maxPlanBytes=1056 bulkUs=1234 ownedBufferBytes=1088 metric_valid=1]'
@@ -3570,7 +3675,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
     def test_markdown_real_stage_rejects_production_failure_warning_despite_ready_native_styles(self):
         self.run_markdown_stage_control(warning=True)
 
-    def run_markdown_stage_control(self, warning=False, bad_style=False, pending_forever=False, missing_diagnostic=False, stale_pending_diagnostic=False):
+    def run_markdown_stage_control(self, warning=False, bad_style=False, pending_forever=False, missing_diagnostic=False, stale_pending_diagnostic=False, malformed_diagnostic=False):
         kind, operation = 'many-lines', 'insert'
         original = ci.gui_markdown_fixture(kind)[0]
         expected, probes, folds = ci.markdown_expected(kind, operation)
@@ -3598,7 +3703,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         memory_patch = patch.object(ci, 'MarkdownProcessMemory', side_effect=mocked_memory)
         memory_patch.start()
         self.addCleanup(memory_patch.stop)
-        class Api:
+        class Api(ci.Windows):
             def __init__(self):
                 self.caret, self.visible, self.status_reads = 9, False, 0
                 self.messages, self.navigation = [], []
@@ -3610,6 +3715,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             def text(self, hwnd):
                 self.scalar(hwnd, 0x000E)
                 self.scalar(hwnd, 0x000D)
+                return self.window_text(hwnd)
+            def window_text(self, hwnd):
                 if hwnd == 1: return '* ' + path.name + ' · ru_notepad'
                 self.status_reads += 1
                 marker = (' [MDP2 seq=1 via=0 id=2 gen=3 rev=0 phase=1 pending=1 length=' + str(len(expected)) +
@@ -3617,6 +3724,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 # Use valid progress bounded to this smaller synthetic corpus.
                 marker = marker.replace('feed=470180', 'feed=47018')
                 if missing_diagnostic: marker = ''
+                if malformed_diagnostic: marker = marker[:-1]
                 if pending_forever or self.status_reads <= 2: return 'Folding Markdown...' + marker
                 if warning: return 'Ln 1 UTF-8 Markdown folding was disabled: synthetic publication failure'
                 if not stale_pending_diagnostic:
@@ -3625,6 +3733,13 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 return 'Ln 1 UTF-8 Markdown' + marker
             def scalar(self, hwnd, message, wparam=0, lparam=0):
                 self.messages.append((hwnd, message, wparam, lparam))
+                if message == 0x000D and wparam:
+                    text = self.window_text(hwnd)
+                    buffer = ctypes.cast(lparam, ctypes.POINTER(ctypes.c_wchar))
+                    count = min(len(text), wparam - 1)
+                    for index, char in enumerate(text[:count]): buffer[index] = char
+                    buffer[count] = '\0'
+                    return count
                 if message == 2006: return len(expected)
                 if message == 2159: return 1
                 if message == 2008: return self.caret
@@ -3645,6 +3760,21 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             def invalidate_for_paint(self, hwnd): return False
             def paint_pending(self, hwnd): return False
         api, stage = Api(), {}
+        if malformed_diagnostic:
+            with self.assertRaisesRegex(RuntimeError, '^Markdown numeric phase marker is malformed$'):
+                ci.run_gui_markdown_stage(api, Process(), 1, path, kind, operation, stage,
+                                         lambda: api.scalar(2, 0x0102, ord('x'), 1))
+            failure = stage['diagnostic_failure']
+            self.assertTrue(all(type(value) in (int, bool) and 0 <= value <= 4096 for value in failure.values()))
+            self.assertEqual(failure['marker_occurrences'], 1)
+            self.assertEqual(failure['closing_brackets'], 0)
+            self.assertFalse(failure['ends_with_closing_bracket'])
+            self.assertIsNone(stage['last_progress']['diagnostic'])
+            self.assertFalse(stage['last_probe'])
+            self.assertEqual([msg[1:3] for msg in api.messages if msg[0] == 3], [(0x000D, 4098)])
+            self.assertFalse(any(item['final'] for item in stage['observer']['snapshots']))
+            self.assertEqual(path.read_bytes(), original)
+            return
         if pending_forever:
             with self.assertRaisesRegex(RuntimeError, '30-second deadline'):
                 ci.run_gui_markdown_stage(api, Process(), 1, path, kind, operation, stage,
@@ -3717,6 +3847,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             return
         ci.run_gui_markdown_stage(api, Process(), 1, path, kind, operation, stage,
                                  lambda: api.scalar(2, 0x0102, ord('x'), 1))
+        self.assertNotIn('diagnostic_failure', stage)
+        self.assertTrue(any(msg[0] == 3 and msg[1:3] == (0x000D, 4098) for msg in api.messages))
         ci.validate_gui_ru_observer(stage['observer'], stage['wall_ms'], stage['probes'])
         ci.validate_gui_markdown_responsiveness(stage['responsiveness'], stage['wall_ms'])
         ci.validate_markdown_memory(stage['memory'], stage['observer'], stage['wall_ms'])
