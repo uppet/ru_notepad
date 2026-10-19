@@ -76,6 +76,24 @@ function Invoke-Checked([string]$Command, [string[]]$Arguments) {
     & $Command @Arguments
     if ($LASTEXITCODE -ne 0) { throw "Command failed with exit code ${LASTEXITCODE}: $Command" }
 }
+
+# Research is separate from product acceptance. Even an unsuccessful research
+# sample must not prevent the original full product inventory from executing.
+function Invoke-ResearchThenAcceptance(
+    [string]$Command, [string[]]$ResearchArguments, [string[]]$AcceptanceArguments
+) {
+    $ResearchPassed = $false
+    try {
+        Invoke-Checked $Command $ResearchArguments
+        $ResearchPassed = $true
+    } catch {
+        Write-Host 'MARKDOWN_CALLBACK_RESEARCH_FAILED=1'
+    }
+    Invoke-Checked $Command $AcceptanceArguments
+    if (-not $ResearchPassed) {
+        throw 'Markdown callback research failed; full product execution was still attempted.'
+    }
+}
 function Git-Value([string[]]$Arguments) {
     $value = & $Git -C $RuRoot @Arguments
     if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the pinned Ru checkout.' }
@@ -107,6 +125,7 @@ try {
     # Orchestration tests are separate from the native application acceptance.
     Invoke-Checked $Python @('tools/test_windows_ci.py')
     Invoke-Checked $Python @('tools/test_package.py')
+    Invoke-Checked $Python @('tools/test_markdown_callback_cost.py')
     Invoke-Checked $Python @('tools/test_markdown_portable.py','--ru-root',$RuRoot,
         '--cc',(Join-Path $Bin 'gcc.exe'))
 
@@ -150,7 +169,12 @@ try {
     $AcceptArgs = @('tools/windows_ci.py','--bin-dir',$Output,'--evidence-dir',$Evidence,
         '--mingw-root',$MinGW,'--objdump',(Join-Path $Bin 'objdump.exe'))
     if ($RunAclTests) { $AcceptArgs += '--acl' }
-    Invoke-Checked $Python $AcceptArgs
+    # The research EXE and its instrumented translation unit stay outside bin
+    # and the package inventory. Both modes use the same research executable.
+    $ResearchArgs = @('tools/run_markdown_callback_cost.py','--ru-root',$RuRoot,
+        '--binary-dir',$Output,'--evidence-dir',$Evidence,
+        '--cc',(Join-Path $Bin 'gcc.exe'),'--windres',(Join-Path $Bin 'windres.exe'))
+    Invoke-ResearchThenAcceptance $Python $ResearchArgs $AcceptArgs
 } finally {
     Pop-Location
 }
