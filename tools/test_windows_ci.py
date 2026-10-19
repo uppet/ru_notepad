@@ -365,7 +365,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'markdown_policy': r'^TOTAL PASS: 181\s*$',
             'markdown_selection_policy': r'^TOTAL PASS: 31\s*$',
             'markdown_native': r'^TOTAL PASS: 44\s*$',
-            'app_markdown_native': r'^TOTAL PASS: 53\s*$',
+            'app_markdown_native': r'^TOTAL PASS: 57\s*$',
             'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=73\s*$',
             'file_streaming_native': r'^FILE_STREAMING_TESTS_PASS=99\s*$',
             'editor_streaming_native': r'^EDITOR_STREAMING_TESTS_PASS=21\s*$',
@@ -1187,7 +1187,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         prior = [test for test in summary['tests'] if test['name'] not in added]
         self.assertEqual(len(prior), 33)
         self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1796)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1800)
 
     def test_direct_style_fixture_is_built_packaged_and_required(self):
         name = 'ru_direct_styling_native'
@@ -2912,7 +2912,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
 
     def test_markdown_gate_preserves_old_counts_and_requires_exact_new_counts(self):
         expected = {'markdown_policy': 181, 'markdown_selection_policy': 31,
-                    'markdown_native': 44, 'app_markdown_native': 53}
+                    'markdown_native': 44, 'app_markdown_native': 57}
         self.assertEqual({name: ci.expected_assertions(name) for name in expected}, expected)
         self.assertEqual(ci.console_command('app_markdown_native', self.root, self.root),
                          [str(self.root / 'app_markdown_native.exe'), str(self.root)])
@@ -2921,6 +2921,32 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             summary['tests'] = [case for case in summary['tests'] if case['name'] != name]
             with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, 'inventory'):
                 ci.validate_acceptance(summary)
+
+    def test_markdown_selection_invalidates_native_prefix_and_requires_natural_paint(self):
+        syntax = (ci.ROOT / 'src/syntax.ru').read_text(encoding='utf-8')
+        selection = syntax.split('算 _选择 态 柄, 语言 为 句:', 1)[1].split('算 选择 柄 语言 为 句:', 1)[0]
+        reset = '_发设 态 柄 2032 0 0.'
+        self.assertEqual(selection.count(reset), 1)
+        self.assertLess(selection.index('_清样式 态 柄.'), selection.index(reset))
+        self.assertLess(selection.index(reset), selection.index('已选 取 标语 其 选择 柄.'))
+        self.assertIn("若 语言 == 'markdown' 则\n        # CLEARDOCUMENTSTYLE", selection)
+        self.assertNotIn('4003', selection)
+        fixture = (ci.ROOT / 'tests/app_markdown_native.ru').read_text(encoding='utf-8')
+        natural = fixture.split('作 验自然配色 主 柄 页:', 1)[1].split('作 验选择重入 主:', 1)[0]
+        self.assertIn('2028 0 0) 其 数 == 0', natural)
+        self.assertLess(natural.index('窗 其 发送 主 273 701 0.'), natural.index('窗 其 发送 主 273 705 0.'))
+        self.assertLess(natural.index('窗 其 发送 主 273 705 0.'), natural.index('2028 0 0) 其 数 == 0'))
+        self.assertLess(natural.index('2028 0 0) 其 数 == 0'), natural.index('PeekMessageW'))
+        self.assertIn('_InvalidateRect 其 调用 [柄,空,0]', natural)
+        self.assertIn('PeekMessageW', natural)
+        self.assertIn('DispatchMessageW', natural)
+        self.assertIn("_选测['paints'] > 0", natural)
+        self.assertNotIn('4003', natural)
+        self.assertNotIn('UpdateWindow', natural)
+        self.assertIn('试 语 其 _发设 旧 柄 2032 0 0.', fixture)
+        self.assertIn('stale Markdown invalidation cannot reset a replacement document styled prefix', fixture)
+        self.assertEqual(fixture.count('窗 其 发送 柄 4003 0 (-1).'), 1)
+        self.assertLess(fixture.index('    验自然配色 主 柄 页.'), fixture.index('窗 其 发送 柄 4003 0 (-1).'))
 
     def test_markdown_gui_corpora_are_fixed_separate_shapes_and_sixteen_style_bytes(self):
         sizes = {'many-lines': 100000, 'singleline': 1000000, 'unclosed-fence': 1000000}

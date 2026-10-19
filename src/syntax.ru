@@ -197,6 +197,10 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
         得 _纯文 态 柄.
     然
     若 语言 == 'markdown' 则
+        # CLEARDOCUMENTSTYLE above writes zero styles through EOF. Markdown has
+        # no keyword/property update to invalidate that prefix: reset only the
+        # styling cursor so ordinary paint can request native Lexilla colouring.
+        _发设 态 柄 2032 0 0.
         已选 取 标语 其 选择 柄.
         _验选择 态 柄.
         若 已选 != 'markdown' 则 得 _纯文 态 柄. 然

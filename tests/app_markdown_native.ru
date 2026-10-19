@@ -10,11 +10,13 @@ Delete 取 (窗 其 内核) 其 绑定 'DeleteFileW' (密 其 签名 (窗 其 I)
 _SetWindowSubclass 取 (窗 其 控件) 其 绑定 'SetWindowSubclass' (密 其 签名 (窗 其 I) ([(窗 其 PTR),(窗 其 PTR),(窗 其 UP),(窗 其 UP)]) 'win64').
 _RemoveWindowSubclass 取 (窗 其 控件) 其 绑定 'RemoveWindowSubclass' (密 其 签名 (窗 其 I) ([(窗 其 PTR),(窗 其 PTR),(窗 其 UP)]) 'win64').
 _DefSubclassProc 取 (窗 其 控件) 其 绑定 'DefSubclassProc' (密 其 签名 (窗 其 IP) ([(窗 其 PTR),(窗 其 U),(窗 其 UP),(窗 其 IP)]) 'win64').
+_InvalidateRect 取 (窗 其 用户) 其 绑定 'InvalidateRect' (密 其 签名 (窗 其 I) ([(窗 其 PTR),(窗 其 PTR),(窗 其 I)]) 'win64').
 _子型 取 密 其 签名 (窗 其 IP) ([(窗 其 PTR),(窗 其 U),(窗 其 UP),(窗 其 IP),(窗 其 UP),(窗 其 UP)]) 'win64'.
-_选测 取 {'action':'','writes':0,'fired':假}.
+_选测 取 {'action':'','writes':0,'fired':假,'paints':0}.
 算 选择子过程 柄 消息 宽 长 号 引:
     码 取 消息 其 数.
-    若 码 == 2031 或 码 == 4005 则 _选测 其 增 'writes' (_选测['writes']+1). 然
+    若 码 == 2031 或 码 == 2032 或 码 == 4005 则 _选测 其 增 'writes' (_选测['writes']+1). 然
+    若 码 == 15 则 _选测 其 增 'paints' (_选测['paints']+1). 然
     动作 取 ''.
     若 码 == 2357 且 _选测['action'] != '' 则
         动作 取 _选测['action'].
@@ -22,6 +24,13 @@ _选测 取 {'action':'','writes':0,'fired':假}.
         _选测 其 增 'fired' 真.
         若 动作 == 'plain' 则 语 其 选择 柄 'plain'. 然
         若 动作 == 'forget' 则 语 其 遗忘 柄. 然
+        若 动作 == 'replace' 则
+            # The supported owner invalidates before replacing its document.
+            语 其 遗忘 柄.
+            编 其 _新文档 柄 假.
+            编 其 设文本 柄 '# replacement\nbody'.
+            语 其 选择 柄 'plain'.
+        然
     然
     果 取 窗 其 结果 (_DefSubclassProc 其 调用 [柄,消息,宽,长]).
     若 动作 == 'close' 则
@@ -63,6 +72,43 @@ _选测 取 {'action':'','writes':0,'fired':假}.
     试 窗 其 成功 (Delete 其 调用 [存]) 'Delete owned Markdown fixture'. 救 原因 存 其 关闭. 卒 原因. 终
     存 其 关闭.
 为
+作 验自然配色 主 柄 页:
+    # Reinitialize through the real menus while hidden. Check immediately,
+    # before pumping: a previously posted native insertion-idle message may
+    # otherwise legitimately consume the invalid prefix even without paint.
+    窗 其 发送 主 273 701 0.
+    窗 其 发送 主 273 705 0.
+    确认 ((窗 其 发送 柄 2028 0 0) 其 数 == 0) 'hidden Markdown reinitialization invalidates the cleared prefix before pumping'.
+    回调 取 密 其 回调 _子型 (算 选择子过程) 0.
+    消 取 (窗 其 MSG) 其 新建.
+    窗 其 成功 (_SetWindowSubclass 其 调用 [柄,回调 其 地址,9982,0]) 'Subclass natural paint fixture'.
+    _选测 其 增 'paints' 0.
+    起 取 语 其 时刻.
+    试
+        窗 其 结果 ((窗 其 ShowWindow) 其 调用 [主,5]).
+        窗 其 成功 (_InvalidateRect 其 调用 [柄,空,0]) 'Invalidate natural paint fixture'.
+        循
+            若 _选测['paints'] > 0 且 (窗 其 发送 柄 2010 0 0) 其 数 == 6 则 破. 然
+            若 (语 其 时刻)-起 > 5000 则 卒 'Natural Markdown paint did not colour the heading within five seconds.'. 然
+            若 非 ((窗 其 结果 ((窗 其 PeekMessageW) 其 调用 [消,空,0,0,1])) 其 为空) 则
+                若 (消 其 读 'message') 其 数 == 18 则 卒 'Unexpected quit during natural Markdown paint.'. 然
+                窗 其 结果 ((窗 其 TranslateMessage) 其 调用 [消]).
+                窗 其 结果 ((窗 其 DispatchMessageW) 其 调用 [消]).
+            另 Sleep 其 调用 [1]. 然
+        环
+        确认 (_选测['paints'] > 0 且 (窗 其 发送 柄 2028 0 0) 其 数 > 0 且 (窗 其 发送 柄 2010 0 0) 其 数 == 6) 'ordinary message pumping paints a coloured Markdown heading without COLOURISE'.
+        确认 ((编 其 文本 柄) == 源 且 非 (应用 其 脏 页) 且 (页 其 查 'revision') == 0 且 (窗 其 发送 柄 2174 0 0) 其 为空) 'natural initial colouring preserves text savepoint revision and undo'.
+    救 原因
+        窗 其 结果 ((窗 其 ShowWindow) 其 调用 [主,0]).
+        窗 其 成功 (_RemoveWindowSubclass 其 调用 [柄,回调 其 地址,9982]) 'Remove natural paint fixture'.
+        消 其 关闭. 回调 其 关闭.
+        卒 原因.
+    终
+    窗 其 结果 ((窗 其 ShowWindow) 其 调用 [主,0]).
+    窗 其 成功 (_RemoveWindowSubclass 其 调用 [柄,回调 其 地址,9982]) 'Remove natural paint fixture'.
+    消 其 关闭. 回调 其 关闭.
+    泵 30000.
+为
 作 验选择重入 主:
     柄 取 编 其 创建 主 ((应用 其 A) 其 查 'instance') 9981.
     编 其 设文本 柄 '# fixture\nbody'.
@@ -80,6 +126,11 @@ _选测 取 {'action':'','writes':0,'fired':假}.
     _选测 其 增 'writes' 0. _选测 其 增 'action' 'forget'. 拒[0] 取 假.
     试 语 其 _发文设 旧 柄 4005 0 'keyword'. 救 原因 拒[0] 取 真. 终
     确认 (拒[0] 且 _选测['writes'] == 0) 'guard query forgetting rejects text setup before its mutation'.
+    旧 取 语 其 _新选择 柄.
+    原文档 取 (窗 其 发送 柄 2357 0 0) 其 句.
+    _选测 其 增 'writes' 0. _选测 其 增 'action' 'replace'. 拒[0] 取 假.
+    试 语 其 _发设 旧 柄 2032 0 0. 救 原因 拒[0] 取 真. 终
+    确认 (拒[0] 且 _选测['writes'] == 0 且 (窗 其 发送 柄 2357 0 0) 其 句 != 原文档 且 (编 其 文本 柄) == '# replacement\nbody' 且 (窗 其 发送 柄 2028 0 0) 其 数 == (窗 其 发送 柄 2183 0 0) 其 数) 'stale Markdown invalidation cannot reset a replacement document styled prefix'.
     旧 取 语 其 _新选择 柄.
     _选测 其 增 'writes' 0. _选测 其 增 'action' 'close'. 拒[0] 取 假.
     试 语 其 _发设 旧 柄 2031 1 0. 救 原因 拒[0] 取 真. 终
@@ -111,6 +162,9 @@ _选测 取 {'action':'','writes':0,'fired':假}.
     确认 ((窗 其 发送 柄 2223 4 0) 其 数 == 9216) 'following H1 closes earlier section'.
     确认 ((窗 其 取文 (态 其 查 'status')) 其 含 'Markdown') 'status names Markdown mode'.
     确认 ((语 其 状态 柄)['maxRead'] <= 1024 且 (语 其 状态 柄)['maxPublish'] <= 64) 'real timer respects byte and publication admission caps'.
+    验自然配色 主 柄 页.
+    # Explicit lexing verifies lexer output only; it cannot detect the initial
+    # cleared-prefix lifecycle bug covered by the natural-paint checks above.
     窗 其 发送 柄 4003 0 (-1).
     确认 ((窗 其 发送 柄 2010 0 0) 其 数 == 6) 'native Markdown heading style is visible'.
     窗 其 发送 柄 2160 2 12.

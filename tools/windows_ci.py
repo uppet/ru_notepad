@@ -59,7 +59,7 @@ NATIVE_CONSOLE_TESTS = (
     ('markdown_policy', r'^TOTAL PASS: 181\s*$'),
     ('markdown_selection_policy', r'^TOTAL PASS: 31\s*$'),
     ('markdown_native', r'^TOTAL PASS: 44\s*$'),
-    ('app_markdown_native', r'^TOTAL PASS: 53\s*$'),
+    ('app_markdown_native', r'^TOTAL PASS: 57\s*$'),
 )
 SYNTAX_FALLBACK_TESTS = (
     ('syntax_missing_lexilla', '--expect-missing', False),
