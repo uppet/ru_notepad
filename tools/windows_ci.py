@@ -60,6 +60,7 @@ NATIVE_CONSOLE_TESTS = (
     ('markdown_selection_policy', r'^TOTAL PASS: 31\s*$'),
     ('markdown_native', r'^TOTAL PASS: 58\s*$'),
     ('app_markdown_native', r'^TOTAL PASS: 70\s*$'),
+    ('markdown_direct_native', r'^TOTAL PASS: 114\s*$'),
 )
 SYNTAX_FALLBACK_TESTS = (
     ('syntax_missing_lexilla', '--expect-missing', False),
@@ -86,7 +87,7 @@ FIXTURE_ARGUMENT_TESTS = {'file_codec_tests', 'file_streaming_native', 'app_stre
 CONSOLE_TIMEOUT_SECONDS = {'file_streaming_native': 300, 'app_streaming_native': 180,
                            'editor_streaming_native': 300,
                            'editor_largefile_native': 900, 'app_ru_native': 180,
-                           'app_ru_timer_native': 60, 'ru_direct_styling_native': 120, 'app_markdown_native': 240}
+                           'app_ru_timer_native': 60, 'ru_direct_styling_native': 120, 'app_markdown_native': 240, 'markdown_direct_native': 180}
 LARGE_FILE_MIN_FREE_BYTES = 2 * 1024 * 1024 * 1024
 GUI_FILE_CHECKS = ('cli_unicode_paths', 'cli_exact_text', 'drop_unicode_paths',
                    'drop_exact_text', 'child_drop_routed', 'busy_observed', 'busy_responsive',
@@ -612,6 +613,81 @@ def collect_ru_gui_measurement(result, stdout):
         result['measurement_error'] = str(exc)
 
 
+MARKDOWN_DIRECT_GC_ENV = {'RU_GC_THRESHOLD': '64', 'RU_GC_STATS': '1'}
+
+
+def validate_markdown_direct_gc(record):
+    if (not isinstance(record, dict) or set(record) != {'threshold', 'stats_enabled', 'live', 'freed', 'collections'} or
+            type(record['threshold']) is not int or record['threshold'] != 64 or
+            record['stats_enabled'] is not True or
+            any(type(record[key]) is not int or not 0 <= record[key] <= 2**53 - 1
+                for key in ('live', 'freed', 'collections')) or
+            record['freed'] <= 0 or record['collections'] < 2):
+        raise RuntimeError('Markdown direct native GC-stress evidence is missing or invalid')
+
+
+def parse_markdown_direct_gc(stderr):
+    # Native runtime writes exactly this one fixed numeric line at process exit.
+    # One collection could be cleanup only; require an additional actual GC.
+    text = stderr.replace('\r\n', '\n')
+    match = re.fullmatch(r'RU_GC live=([0-9]{1,16}) freed=([0-9]{1,16}) collections=([0-9]{1,16})\n', text)
+    if match is None:
+        raise RuntimeError('Markdown direct native GC-stress output is malformed')
+    record = dict(zip(('live', 'freed', 'collections'), map(int, match.groups())))
+    record.update(threshold=64, stats_enabled=True)
+    validate_markdown_direct_gc(record)
+    return record
+
+
+
+FOLD_ROUTE_METRIC_FIELDS = ('bulkCalls', 'bulkLines', 'fallbackBatches', 'directCalls',
+    'directLines', 'maxPlanBytes', 'ownedBufferBytes', 'bulkUs', 'metric_valid')
+FOLD_ROUTE_ORDER = ('fallback', 'bulk', 'perline')
+
+
+def validate_markdown_route_metrics(records):
+    if not isinstance(records, list) or len(records) != 3:
+        raise RuntimeError('Markdown route metrics require all three actual control routes')
+    for record, route in zip(records, FOLD_ROUTE_ORDER):
+        if (not isinstance(record, dict) or set(record) != {'route', *FOLD_ROUTE_METRIC_FIELDS} or
+                record['route'] != route or
+                any(type(record[key]) is not int or not 0 <= record[key] <= 2**53 - 1
+                    for key in FOLD_ROUTE_METRIC_FIELDS) or record['metric_valid'] != 1 or
+                record['bulkLines'] > 64 * record['bulkCalls'] or
+                record['directLines'] != record['directCalls']):
+            raise RuntimeError('Markdown route metrics have malformed fields or counters')
+        if route == 'bulk':
+            if (record['bulkCalls'] < 1 or record['bulkLines'] < 1 or
+                    record['fallbackBatches'] != 0 or record['directCalls'] != 0 or
+                    record['maxPlanBytes'] not in range(48, 1057, 16) or record['ownedBufferBytes'] != 1088):
+                raise RuntimeError('Markdown bulk control lacks actual bounded Apply calls')
+        elif (any(record[key] != 0 for key in ('bulkCalls', 'bulkLines', 'maxPlanBytes', 'ownedBufferBytes', 'bulkUs')) or
+                (route == 'fallback' and (record['fallbackBatches'] < 1 or record['directCalls'] != 0)) or
+                (route == 'perline' and (record['fallbackBatches'] != 0 or record['directCalls'] < 1))):
+            raise RuntimeError('Markdown fallback or perline control counters disagree with its route')
+    return records
+
+
+def parse_markdown_route_metrics(stdout):
+    # Fixed numeric observations from this child's current bounded stdout only.
+    # No cached receipt, arbitrary path, source text, or inferred line count.
+    text = stdout.replace('\r\n', '\n')
+    lines = re.findall(r'^FOLD_METRICS1 ([^\r\n]{1,512})\n', text, re.M)
+    if len(lines) != 3 or text.count('FOLD_METRICS') != 3:
+        raise RuntimeError('Markdown route metric marker count or framing is malformed')
+    records = []
+    for line, route in zip(lines, FOLD_ROUTE_ORDER):
+        parts = line.split(' ')
+        if len(parts) != 1 + len(FOLD_ROUTE_METRIC_FIELDS) or parts[0] != 'route=' + route:
+            raise RuntimeError('Markdown route metric field inventory or order is malformed')
+        record = {'route': route}
+        for name, part in zip(FOLD_ROUTE_METRIC_FIELDS, parts[1:]):
+            if re.fullmatch(re.escape(name) + r'=(0|[1-9][0-9]{0,15})', part) is None:
+                raise RuntimeError('Markdown route metric integer is malformed')
+            record[name] = int(part.split('=', 1)[1])
+        records.append(record)
+    return validate_markdown_route_metrics(records)
+
 def run_console(api, name, command, evidence, marker, timeout=120, expected_assertions=None, cwd=None):
     clock = PerformanceClock()
     out, err = evidence / f'{name}.stdout.log', evidence / f'{name}.stderr.log'
@@ -621,7 +697,13 @@ def run_console(api, name, command, evidence, marker, timeout=120, expected_asse
     try:
         started = clock()
         with out.open('xb') as stdout, err.open('xb') as stderr:
-            process = subprocess.Popen(command, cwd=cwd or ROOT, stdout=stdout, stderr=stderr)
+            options = {}
+            if name == 'markdown_direct_native':
+                # Isolated child-only instrumentation, never the GUI or other tests.
+                environment = os.environ.copy()
+                environment.update(MARKDOWN_DIRECT_GC_ENV)
+                options['env'] = environment
+            process = subprocess.Popen(command, cwd=cwd or ROOT, stdout=stdout, stderr=stderr, **options)
             result['executed'] = True
             deadline = clock() + timeout
             while process.poll() is None:
@@ -654,6 +736,11 @@ def run_console(api, name, command, evidence, marker, timeout=120, expected_asse
             result['native_fixture_preflight'] = True
         elif 'WRONG_LEXER_FIXTURE_PREFLIGHT' in stdout_text + stderr_text:
             raise RuntimeError('Unexpected wrong-lexer fixture preflight marker')
+        if name == 'markdown_direct_native':
+            result['gc_stress'] = parse_markdown_direct_gc(stderr_text)
+            result['bulk_route_metrics'] = parse_markdown_route_metrics(stdout_text)
+        elif 'FOLD_METRICS' in stdout_text + stderr_text:
+            raise RuntimeError('Unexpected Markdown route metric marker')
         if name == 'ru_syntax_native':
             result['performance'] = parse_ru_performance(stdout_text)
         if name in RU_GUI_CONSOLE_MEASUREMENTS:
@@ -1067,6 +1154,8 @@ def run_gui(api, binary_dir, evidence, *, name='main-gui-smoke', arguments=(),
             required += ('[operation] cancelled',)
         if any(marker not in text for marker in required):
             raise RuntimeError('Launcher log does not prove full startup and normal return 0')
+        if 'FOLD_METRICS' in text:
+            raise RuntimeError('Unexpected Markdown route metric marker in GUI launcher log')
         if re.search(r'initialization failed|exited before returning|fatal|FAIL:', text, re.I):
             raise RuntimeError('Launcher log records an error despite the exit code')
         result['passed'] = True
@@ -2104,9 +2193,13 @@ GUI_MARKDOWN_MEASUREMENT = ('Detached production GUI; a 100 KB/5000-newline coll
     'Backspace, queued RIGHT/LEFT input and natural invalidated-region service requested after '
     'observing pending Markdown folds. Completion may follow pending work. Fixed 16-byte '
     'head/tail style samples, fold/status/length/dirty checks are not whole-content style proof. '
-    'EOF caret/scroll requests ordinary native styling; no forced paint or full-document colourise.')
+    'EOF caret/scroll requests ordinary native styling; no forced paint or full-document colourise. '
+    'Elapsed time includes numeric status diagnostics and read-only process-memory sampling overhead. '
+    'bulkLines/directLines count completed assignments, not distinct lines. ownedBufferBytes is the peak '
+    'per-call owned plan/result capacity, not live process memory or total Ru/helper stack memory. '
+    'bulkUs cumulatively measures the typed Apply FFI and result-wrapper interval per scan identity.')
 GUI_MARKDOWN_STAGE_FIELDS = {'operation', 'length', 'dirty', 'source_sha256', 'wall_ms',
-    'probes', 'observer', 'responsiveness', 'last_probe', 'last_progress', 'undo_commands', 'collapsed_before_edit'}
+    'probes', 'observer', 'responsiveness', 'last_probe', 'last_progress', 'undo_commands', 'collapsed_before_edit', 'memory'}
 
 
 def gui_markdown_fixture(kind):
@@ -2143,7 +2236,10 @@ def markdown_expected(kind, operation):
 
 
 MARKDOWN_DIAGNOSTIC_FIELDS = ('seq', 'via', 'id', 'gen', 'rev', 'phase', 'pending', 'length',
-                              'feed', 'published', 'tick', 'work_us', 'gap_us')
+                              'feed', 'published', 'tick', 'work_us', 'gap_us', 'bulkCalls', 'bulkLines',
+                              'fallbackBatches', 'directCalls', 'directLines', 'maxPlanBytes',
+                              'bulkUs', 'ownedBufferBytes', 'metric_valid')
+MARKDOWN_DIAGNOSTIC_MAX_CHARS = 768
 
 
 def validate_markdown_diagnostic(record):
@@ -2155,17 +2251,27 @@ def validate_markdown_diagnostic(record):
             (record['phase'] == 4) != (record['pending'] == 0) or
             (record['via'] == 1 and record['pending'] != 0) or
             not 0 <= record['feed'] <= record['length'] <= 32000000 or
-            record['published'] > record['length'] + 1):
+            record['published'] > record['length'] + 1 or record['metric_valid'] != 1 or
+            record['bulkLines'] > 64 * record['bulkCalls'] or
+            record['directLines'] > record['directCalls'] or
+            (not record['pending'] and (record['directLines'] != record['directCalls'] or
+                record['bulkLines'] + record['directLines'] > record['published'] or
+                record['fallbackBatches'] > record['published'])) or
+            record['maxPlanBytes'] not in (0, *range(48, 1057, 16)) or
+            record['ownedBufferBytes'] not in (0, 1088) or
+            (record['maxPlanBytes'] == 0) != (record['ownedBufferBytes'] == 0) or
+            (record['bulkCalls'] > 0 and record['ownedBufferBytes'] != 1088) or
+            (record['bulkCalls'] == 0 and (record['bulkLines'] != 0 or record['bulkUs'] != 0))):
         raise RuntimeError('Markdown numeric phase projection is invalid')
     return record
 
 
 def parse_markdown_diagnostic(status):
     # Never retain status prose, paths, source text or arbitrary error strings.
-    if '[MDP1' not in status:
+    if '[MDP' not in status:
         return None
-    match = re.search(r' \[MDP1 ([^\[\]\r\n]{1,300})\]$', status)
-    if match is None or status.count('[MDP1') != 1:
+    match = re.search(r' \[MDP2 ([^\[\]\r\n]{1,760})\]$', status)
+    if match is None or status.count('[MDP') != 1 or len(match.group(0)) > MARKDOWN_DIAGNOSTIC_MAX_CHARS:
         raise RuntimeError('Markdown numeric phase marker is malformed')
     parts = match.group(1).split(' ')
     if len(parts) != len(MARKDOWN_DIAGNOSTIC_FIELDS):
@@ -2177,6 +2283,103 @@ def parse_markdown_diagnostic(status):
         result[name] = int(part.split('=', 1)[1])
     return validate_markdown_diagnostic(result)
 
+
+
+GUI_MARKDOWN_MEMORY_MEASUREMENT = ('Read-only K32GetProcessMemoryInfo on the already-owned child process handle, '
+    'once per existing at-most-4-Hz GUI snapshot. sampledWorkingSetPeak is the maximum observed working set, '
+    'not an instantaneous stage peak or RSS delta. processPeakWorkingSet is the OS cumulative process-lifetime '
+    'peak, including earlier stages. External API cost is separate from synchronous GUI-message cost; '
+    'stage elapsed and snapshot wall time include both.')
+
+
+class MarkdownMemoryCounters(ctypes.Structure):
+    # Fixed Windows DWORD widths keep host schema controls platform-independent.
+    # https://learn.microsoft.com/windows/win32/api/psapi/ns-psapi-process_memory_counters
+    _fields_ = [('cb', ctypes.c_uint32), ('PageFaultCount', ctypes.c_uint32)] + [
+        (name, ctypes.c_size_t) for name in ('PeakWorkingSetSize', 'WorkingSetSize',
+        'QuotaPeakPagedPoolUsage', 'QuotaPagedPoolUsage', 'QuotaPeakNonPagedPoolUsage',
+        'QuotaNonPagedPoolUsage', 'PagefileUsage', 'PeakPagefileUsage')]
+
+
+def markdown_memory_record():
+    return {'measurement': GUI_MARKDOWN_MEMORY_MEASUREMENT, 'sample_count': 0,
+        'sampledWorkingSetPeak': 0, 'processPeakWorkingSet': 0,
+        'query_wall_ms': 0.0, 'max_query_ms': 0.0, 'samples': []}
+
+
+class MarkdownProcessMemory:
+    def __init__(self, process, record, started, clock):
+        if sys.platform != 'win32':
+            raise RuntimeError('Markdown process memory requires actual Windows execution')
+        # Popen owns this exact launched process handle. No OpenProcess, PID
+        # reopening, new access rights, handle closing, or UI messages occur.
+        if not getattr(process, '_handle', None):
+            raise RuntimeError('Markdown process memory requires the owned launcher handle')
+        self.process, self.record, self.started, self.clock = process, record, started, clock
+        self.kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        self.query = self.kernel.K32GetProcessMemoryInfo
+        self.query.argtypes = [wintypes.HANDLE, ctypes.POINTER(MarkdownMemoryCounters), wintypes.DWORD]
+        self.query.restype = wintypes.BOOL
+
+    def sample(self):
+        if len(self.record['samples']) >= 121:
+            raise RuntimeError('Markdown process memory exceeded its bounded snapshot count')
+        counters = MarkdownMemoryCounters()
+        counters.cb = ctypes.sizeof(counters)
+        begin = self.clock()
+        try:
+            if not self.query(int(self.process._handle), ctypes.byref(counters), ctypes.sizeof(counters)):
+                raise RuntimeError('Markdown process memory query failed')
+        finally:
+            elapsed = round((self.clock() - begin) * 1000, 3)
+            self.record['query_wall_ms'] = round(self.record['query_wall_ms'] + elapsed, 3)
+            self.record['max_query_ms'] = max(self.record['max_query_ms'], elapsed)
+        sample = {'start_ms': round((begin - self.started) * 1000, 3), 'query_wall_ms': elapsed,
+            'workingSetBytes': int(counters.WorkingSetSize),
+            'processPeakWorkingSetBytes': int(counters.PeakWorkingSetSize)}
+        if (not 0 <= sample['workingSetBytes'] <= sample['processPeakWorkingSetBytes'] <= 9007199254740991 or
+                sample['processPeakWorkingSetBytes'] == 0 or
+                (self.record['samples'] and sample['processPeakWorkingSetBytes'] <
+                    self.record['samples'][-1]['processPeakWorkingSetBytes'])):
+            raise RuntimeError('Markdown process memory query returned invalid counters')
+        self.record['samples'].append(sample)
+        self.record['sample_count'] += 1
+        self.record['sampledWorkingSetPeak'] = max(self.record['sampledWorkingSetPeak'], sample['workingSetBytes'])
+        self.record['processPeakWorkingSet'] = max(self.record['processPeakWorkingSet'], sample['processPeakWorkingSetBytes'])
+
+
+def validate_markdown_memory(record, observer, wall_ms):
+    if (not isinstance(record, dict) or set(record) != {'measurement', 'sample_count',
+            'sampledWorkingSetPeak', 'processPeakWorkingSet', 'query_wall_ms', 'max_query_ms', 'samples'} or
+            record['measurement'] != GUI_MARKDOWN_MEMORY_MEASUREMENT or
+            type(record['sample_count']) is not int or not 1 <= record['sample_count'] <= 121 or
+            not isinstance(record['samples'], list) or len(record['samples']) != record['sample_count'] or
+            record['sample_count'] != observer['snapshot_count'] or
+            any(type(record[key]) is not int or not 0 <= record[key] <= 9007199254740991
+                for key in ('sampledWorkingSetPeak', 'processPeakWorkingSet')) or
+            record['processPeakWorkingSet'] == 0 or
+            any(not finite_nonnegative(record[key]) or record[key] > wall_ms + 0.001
+                for key in ('query_wall_ms', 'max_query_ms'))):
+        raise RuntimeError('Markdown process memory evidence is missing or malformed')
+    previous_peak = 0
+    for sample, snapshot in zip(record['samples'], observer['snapshots']):
+        if (not isinstance(sample, dict) or set(sample) != {'start_ms', 'query_wall_ms',
+                'workingSetBytes', 'processPeakWorkingSetBytes'} or
+                any(not finite_nonnegative(sample[key]) for key in ('start_ms', 'query_wall_ms')) or
+                any(type(sample[key]) is not int or not 0 <= sample[key] <= 9007199254740991
+                    for key in ('workingSetBytes', 'processPeakWorkingSetBytes')) or
+                sample['processPeakWorkingSetBytes'] == 0 or
+                sample['workingSetBytes'] > sample['processPeakWorkingSetBytes'] or
+                sample['processPeakWorkingSetBytes'] < previous_peak or
+                sample['start_ms'] < snapshot['start_ms'] - 0.001 or
+                sample['start_ms'] + sample['query_wall_ms'] > snapshot['start_ms'] + snapshot['wall_ms'] + 0.002):
+            raise RuntimeError('Markdown process memory sample lacks an actual bounded snapshot')
+        previous_peak = sample['processPeakWorkingSetBytes']
+    if (record['sampledWorkingSetPeak'] != max(s['workingSetBytes'] for s in record['samples']) or
+            record['processPeakWorkingSet'] != max(s['processPeakWorkingSetBytes'] for s in record['samples']) or
+            abs(record['query_wall_ms'] - sum(s['query_wall_ms'] for s in record['samples'])) > 0.001 or
+            record['max_query_ms'] != max(s['query_wall_ms'] for s in record['samples'])):
+        raise RuntimeError('Markdown process memory summaries disagree with measured samples')
 
 def validate_markdown_progress(progress, *, complete=False, expected_length=None, expected_dirty=None):
     if (not isinstance(progress, dict) or set(progress) != {'opened', 'length', 'dirty', 'status', 'tail_requested', 'diagnostic'} or
@@ -2195,7 +2398,9 @@ def validate_markdown_progress(progress, *, complete=False, expected_length=None
     if complete and (not progress['opened'] or progress['length'] != expected_length or
             progress['dirty'] is not expected_dirty or progress['status'] != 'complete' or
             not progress['tail_requested'] or progress['diagnostic'] is None or
-            progress['diagnostic']['pending'] != 0):
+            progress['diagnostic']['pending'] != 0 or
+            progress['diagnostic']['length'] != expected_length or
+            progress['diagnostic']['feed'] != expected_length):
         raise RuntimeError('Markdown completion lacks bounded phase evidence')
 
 
@@ -2285,6 +2490,11 @@ def validate_gui_markdown(record, *, require_windows_clock=False):
                     samples['actual'] != expected_styles):
                 raise RuntimeError('Markdown GUI fixed style sample evidence is invalid or mismatched')
             validate_gui_ru_observer(stage['observer'], stage['wall_ms'], stage['probes'])
+            validate_markdown_memory(stage['memory'], stage['observer'], stage['wall_ms'])
+            if kind == 'unclosed-fence' and operation == 'open':
+                diagnostic = stage['last_progress']['diagnostic']
+                if diagnostic['bulkCalls'] < 1 or diagnostic['bulkLines'] < 1:
+                    raise RuntimeError('Registered production fence fixture did not actually use bulk publication')
             if dirty:
                 validate_gui_markdown_responsiveness(stage['responsiveness'], stage['wall_ms'])
             elif stage['responsiveness'] != {}:
@@ -2303,7 +2513,7 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
         source_sha256=hashlib.sha256(original).hexdigest(), wall_ms=0.0, probes=0,
         observer=gui_ru_observer_record(), responsiveness={}, last_probe={},
         last_progress={'opened': False, 'length': None, 'dirty': None, 'status': 'not-open', 'tail_requested': False, 'diagnostic': None},
-        undo_commands=0, collapsed_before_edit=False)
+        undo_commands=0, collapsed_before_edit=False, memory=markdown_memory_record())
     editor = status_handle = None
     tail_requested = False
     opened = False
@@ -2313,6 +2523,7 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
     navigation_before = None
     navigation_pending = []
     try:
+        memory = MarkdownProcessMemory(process, stage['memory'], started, clock)
         with GuiRuObserver(api, stage['observer'], started, clock) as observer:
             if kind == 'many-lines' and stage['dirty']:
                 stage['collapsed_before_edit'] = not bool(api.scalar(api.editor(hwnd), 2228, 1))
@@ -2323,6 +2534,7 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
                 stage['undo_commands'] = 1
             def snapshot():
                 nonlocal editor, status_handle, tail_requested, input_started, paint_started, navigation_before, opened
+                memory.sample()
                 if not opened:
                     if api.text(hwnd).removeprefix('* ') != source.name + ' · ru_notepad':
                         return False
@@ -2399,7 +2611,9 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
                 return (length == len(expected) and dirty == stage['dirty'] and end_styled == len(expected) and
                         lexer == 98 and style_match and fold_match and children_visible and context == expected[6:10] and
                         stage['last_progress']['diagnostic'] is not None and
-                        stage['last_progress']['diagnostic']['pending'] == 0)
+                        stage['last_progress']['diagnostic']['pending'] == 0 and
+                        stage['last_progress']['diagnostic']['length'] == len(expected) and
+                        stage['last_progress']['diagnostic']['feed'] == len(expected))
             while True:
                 api.no_dialog(process.pid)
                 if process.poll() is not None:
@@ -2690,6 +2904,11 @@ def validate_acceptance(summary, root=None):
             raise RuntimeError(f'Native acceptance test did not pass normally: {test["name"]}')
         if test['name'] not in GUI_NAMES and test.get('assertions_passed') != expected_assertions(test['name']):
             raise RuntimeError(f'Native acceptance assertion count mismatch: {test["name"]}')
+        if test['name'] == 'markdown_direct_native':
+            validate_markdown_direct_gc(test.get('gc_stress'))
+            validate_markdown_route_metrics(test.get('bulk_route_metrics'))
+        elif 'gc_stress' in test or 'bulk_route_metrics' in test:
+            raise RuntimeError('Unexpected Markdown direct GC-stress or route metric evidence')
         if test['name'] == 'ru_syntax_native':
             validate_ru_performance(test.get('performance'))
         if test['name'] in RU_GUI_CONSOLE_MEASUREMENTS:

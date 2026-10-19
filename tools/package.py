@@ -29,7 +29,7 @@ DEPENDENCIES = {
 NATIVE_HELPER_NAME = 'RuSyntax.dll'
 NATIVE_WRONG_ABI_NAME = 'RuSyntaxWrongAbi.dll'
 NATIVE_COMPILE_SOURCES = {
-    NATIVE_HELPER_NAME: ('native/ru_scan.c',),
+    NATIVE_HELPER_NAME: ('native/ru_scan.c', 'native/ru_markdown_fold.c'),
     NATIVE_WRONG_ABI_NAME: ('native/ru_wrong_abi.c',),
 }
 NATIVE_SOURCE_SUFFIXES = {'.c', '.h', '.inc', '.inl', '.def'}
@@ -37,7 +37,7 @@ NATIVE_BUILD_DRIVERS = ('tools/build.py', 'tools/package.py')
 NATIVE_CFLAGS = ('-std=c99', '-O2', '-Wall', '-Wextra', '-shared', '-static-libgcc',
                  '-Wl,--no-insert-timestamp', '-Wl,--kill-at', '-s',
                  '-Inative')
-NATIVE_LINK_LIBRARIES = ()
+NATIVE_LINK_LIBRARIES = ('user32',)
 RUNTIME_NAMES = ('ru_notepad.exe', *DEPENDENCIES, NATIVE_HELPER_NAME)
 TEST_NAMES = ('document_policy.exe', 'ui_arguments.exe', 'file_codec_flags.exe',
               'editor_native.exe', 'app_native.exe', 'app_features_native.exe', 'file_codec_tests.exe',
@@ -46,7 +46,7 @@ TEST_NAMES = ('document_policy.exe', 'ui_arguments.exe', 'file_codec_flags.exe',
               'associations_policy.exe', 'associations_native.exe', 'file_drop_native.exe', 'app_streaming_native.exe',
               'ru_lexical_policy.exe', 'ru_syntax_native.exe', 'app_ru_native.exe',
               'ru_direct_styling_native.exe', 'markdown_policy.exe', 'markdown_selection_policy.exe',
-              'markdown_native.exe', 'app_markdown_native.exe')
+              'markdown_native.exe', 'app_markdown_native.exe', 'markdown_direct_native.exe')
 TEST_SUPPORT_DLL_NAMES = (NATIVE_WRONG_ABI_NAME,)
 SCANNER_PREFLIGHT_NAME = 'ru-scanner-preflight'
 BINARY_NAMES = (*RUNTIME_NAMES, *TEST_NAMES, *TEST_SUPPORT_DLL_NAMES)

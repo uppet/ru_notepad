@@ -4,6 +4,12 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      historical_callback:
+        description: Reproduce the completed d47b1836 callback experiment and its historical product outcome
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -27,6 +33,7 @@ jobs:
       - name: Check out application
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.historical_callback && 'd47b1836930c896fec29207e957880dd90c774c6' || github.sha }}
           persist-credentials: false
       - name: Check out reviewed Ru compiler
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -54,6 +61,11 @@ jobs:
         run: python -I tools/test_ru_cli_diagnostics.py --ru-root .ci/ru-language -v
       - name: Require pure Markdown policy and selection in interpreter and generated C
         run: python -I tools/test_markdown_portable.py --ru-root .ci/ru-language
+      - name: Verify bounded Markdown fold batches under ASan and UBSan
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.historical_callback) }}
+        run: |
+          mkdir -p build/markdown-fold-helper-evidence
+          python -I tools/test_markdown_fold_helper.py --cc gcc --sanitize --output build/markdown-fold-helper-evidence/markdown-bulk-helper-controls.json
       - name: Verify actual cleanup rescue bodies and original scalar negative controls
         run: >-
           python -I tools/test_cleanup_paths.py --ru-root .ci/ru-language
@@ -103,7 +115,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: helper-policy-evidence-${{ github.sha }}
+          name: helper-policy-evidence-source-${{ github.event_name == 'workflow_dispatch' && inputs.historical_callback && 'd47b1836930c896fec29207e957880dd90c774c6' || github.sha }}-trigger-${{ github.sha }}
           path: build/helper-policy-evidence/*
           if-no-files-found: warn
           retention-days: 14
@@ -111,10 +123,18 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: markdown-policy-evidence-${{ github.sha }}
+          name: markdown-policy-evidence-source-${{ github.event_name == 'workflow_dispatch' && inputs.historical_callback && 'd47b1836930c896fec29207e957880dd90c774c6' || github.sha }}-trigger-${{ github.sha }}
           path: |
             build/markdown-policy-evidence/report.json
             build/markdown-policy-evidence/*.log
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload bounded Markdown bulk helper evidence
+        if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.historical_callback) }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: markdown-bulk-helper-${{ github.sha }}
+          path: build/markdown-fold-helper-evidence/markdown-bulk-helper-controls.json
           if-no-files-found: warn
           retention-days: 14
   windows-native:
@@ -136,8 +156,9 @@ jobs:
       - name: Check out application
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.historical_callback && 'd47b1836930c896fec29207e957880dd90c774c6' || github.sha }}
           persist-credentials: false
-          # Research compares production bytes with its exact public parent.
+          # Historical research requires the exact parent object.
           fetch-depth: 2
       - name: Check out reviewed Ru compiler
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -149,6 +170,7 @@ jobs:
       # Research baseline is separate from the accepted product/candidate
       # compiler. Both exact identities and generated-C deltas are enforced.
       - name: Check out fixed pre-root-list research compiler
+        if: github.event_name == 'workflow_dispatch' && inputs.historical_callback
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: uppet/ru-language
@@ -182,7 +204,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: windows-native-evidence-${{ github.sha }}
+          name: windows-native-evidence-source-${{ github.event_name == 'workflow_dispatch' && inputs.historical_callback && 'd47b1836930c896fec29207e957880dd90c774c6' || github.sha }}-trigger-${{ github.sha }}
           path: |
             build/windows-ci/evidence/*.json
             build/windows-ci/evidence/*.log
@@ -192,7 +214,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ru-notepad-windows-x64-${{ github.sha }}
+          name: ru-notepad-windows-x64-source-${{ github.event_name == 'workflow_dispatch' && inputs.historical_callback && 'd47b1836930c896fec29207e957880dd90c774c6' || github.sha }}-trigger-${{ github.sha }}
           path: |
             build/windows-ci/dist/*.zip
             build/windows-ci/dist/*.sha256

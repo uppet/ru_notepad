@@ -83,6 +83,8 @@ _选测 取 {'action':'','writes':0,'styleStarts':0,'fired':假,'paints':0}.
     确认 ((窗 其 发送 柄 2028 0 0) 其 数 == 0) 'hidden Markdown reinitialization invalidates the cleared prefix before pumping'.
     回调 取 密 其 回调 _子型 (算 选择子过程) 0.
     消 取 (窗 其 MSG) 其 新建.
+    # This extra observation hook is outside production's exclusive hook contract.
+    折 其 撤销直属 柄.
     窗 其 成功 (_SetWindowSubclass 其 调用 [柄,回调 其 地址,9982,0]) 'Subclass natural paint fixture'.
     _选测 其 增 'paints' 0.
     起 取 语 其 时刻.
@@ -155,16 +157,16 @@ _选测 取 {'action':'','writes':0,'styleStarts':0,'fired':假,'paints':0}.
     状 其 增 'markdownDiagnosticEnabled' 真.
     应用 其 诊断Markdown 1000.
     条 取 窗 其 取文 (状 其 查 'status').
-    确认 ((状 其 查 'markdownDiagnosticSeq') == 1 且 (条 其 含 ' [MDP1 seq=1 ') 且 (条 其 含 ' phase=4 pending=0 ') 且 (条 其 含 ' work_us=')) 'enabled numeric status projection contains fixed completed-stage fields'.
+    确认 ((状 其 查 'markdownDiagnosticSeq') == 1 且 (条 其 含 ' [MDP2 seq=1 ') 且 (条 其 含 ' phase=4 pending=0 ') 且 (条 其 含 ' work_us=')) 'enabled numeric status projection contains fixed completed-stage fields'.
     应用 其 诊断Markdown 1000. 应用 其 诊断Markdown 1249.
     确认 ((状 其 查 'markdownDiagnosticSeq') == 1 且 (窗 其 取文 (状 其 查 'status')) == 条) 'phase status writes remain capped to one per250 milliseconds'.
     应用 其 诊断Markdown 1250.
-    确认 ((状 其 查 'markdownDiagnosticSeq') == 2 且 (窗 其 取文 (状 其 查 'status')) 其 含 ' [MDP1 seq=2 ') 'phase status becomes eligible exactly at its next bounded slot'.
+    确认 ((状 其 查 'markdownDiagnosticSeq') == 2 且 (窗 其 取文 (状 其 查 'status')) 其 含 ' [MDP2 seq=2 ') 'phase status becomes eligible exactly at its next bounded slot'.
     旧投影 取 语 其 状态 柄.
     # Exercise the real revision notification without modifying document bytes.
     语 其 变化 柄 0 0 0 1.
     应用 其 刷新.
-    确认 (非 ((窗 其 取文 (状 其 查 'status')) 其 含 '[MDP1') 且 (状 其 查 'markdownDiagnosticSeq') == 2) 'a new pending identity cannot reuse the earlier diagnostic marker'.
+    确认 (非 ((窗 其 取文 (状 其 查 'status')) 其 含 '[MDP2') 且 (状 其 查 'markdownDiagnosticSeq') == 2) 'a new pending identity cannot reuse the earlier diagnostic marker'.
     语 其 排空 柄.
     应用 其 刷新.
     新投影 取 语 其 状态 柄.
@@ -192,7 +194,7 @@ _选测 取 {'action':'','writes':0,'styleStarts':0,'fired':假,'paints':0}.
     状 其 增 'markdownDiagnosticSeq' 4096. 应用 其 诊断Markdown 1750.
     确认 ((状 其 查 'markdownDiagnosticSeq') == 4096) 'phase diagnostics stop at the fixed4096 process cap'.
     状 其 增 'markdownDiagnosticEnabled' 假. 应用 其 刷新.
-    确认 (非 ((窗 其 取文 (状 其 查 'status')) 其 含 '[MDP1') 且 (编 其 文本 柄) == 文 且 非 (应用 其 脏 页) 且 (窗 其 发送 柄 2009 0 0) 其 数 == 选始 且 (窗 其 发送 柄 2008 0 0) 其 数 == 选末 且 (窗 其 发送 柄 2174 0 0) 其 为空 且 (状 其 查 'syntaxTicks') == 原次 且 (状 其 查 'syntaxWorkMs') == 原工 且 (状 其 查 'syntaxGapMs') == 原隙) 'diagnostics preserve bytes savepoint selection undo and scanner timing counters'.
+    确认 (非 ((窗 其 取文 (状 其 查 'status')) 其 含 '[MDP2') 且 (编 其 文本 柄) == 文 且 非 (应用 其 脏 页) 且 (窗 其 发送 柄 2009 0 0) 其 数 == 选始 且 (窗 其 发送 柄 2008 0 0) 其 数 == 选末 且 (窗 其 发送 柄 2174 0 0) 其 为空 且 (状 其 查 'syntaxTicks') == 原次 且 (状 其 查 'syntaxWorkMs') == 原工 且 (状 其 查 'syntaxGapMs') == 原隙) 'diagnostics preserve bytes savepoint selection undo and scanner timing counters'.
     状 其 增 'markdownDiagnosticSeq' 0. 状 其 增 'markdownDiagnosticNext' 0. 状 其 增 'markdownDiagnosticIdentity' 0. 状 其 增 'markdownDiagnosticPending' 真. 状 其 增 'markdownDiagnosticText' ''.
 为
 算 元初 参数 为 句 阵:

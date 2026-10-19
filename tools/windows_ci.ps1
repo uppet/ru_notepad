@@ -6,7 +6,8 @@ param(
     [Parameter(Mandatory=$true)][string]$RuRoot,
     [string]$ResearchBaselineRoot,
     [Parameter(Mandatory=$true)][string]$MsysRoot,
-    [switch]$RunAclTests
+    [switch]$RunAclTests,
+    [switch]$RunCallbackResearch
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -100,6 +101,33 @@ function Invoke-ResearchThenAcceptance(
         throw 'Markdown callback research failed; full product execution was still attempted.'
     }
 }
+# Optional measurements cannot mask product failure or turn product success into
+# failure. Every public fallback is fixed metadata, never exception text.
+function Invoke-OptionalMarkdownStudy(
+    [string]$Python, [string[]]$ControlArguments, [string[]]$RunArguments,
+    [string]$Evidence,
+    [ValidateSet('native-baseline','cpu-profile')][string]$Name
+) {
+    $SavedExit = $global:LASTEXITCODE
+    $Stage = 'host_controls'
+    try {
+        Invoke-Checked $Python $ControlArguments
+        $Stage = 'execution'
+        Invoke-Checked $Python $RunArguments
+    } catch {
+        Write-Host ('MARKDOWN_OPTIONAL_STUDY_FAILED=' + $Name)
+        try {
+            @{ schema = 1; diagnostic_only = $true; status = 'unavailable';
+                stage = $Stage; reason = 'optional_study_command_failed';
+                measurement_claimed = $false } | ConvertTo-Json -Depth 3 |
+                Set-Content -LiteralPath (Join-Path $Evidence ("markdown-" + $Name + "-runner-failure.json")) -Encoding utf8
+        } catch {
+            Write-Host 'MARKDOWN_OPTIONAL_STUDY_EVIDENCE_UNAVAILABLE=1'
+        }
+    } finally {
+        $global:LASTEXITCODE = $SavedExit
+    }
+}
 function Git-Value([string[]]$Arguments) {
     $value = & $Git -C $RuRoot @Arguments
     if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the pinned Ru checkout.' }
@@ -132,21 +160,25 @@ try {
     Invoke-Checked $Python @('tools/test_windows_ci.py')
     Invoke-Checked $Python @('tools/test_package.py')
     Invoke-Checked $Python @('-I','tools/test_ru_cli_diagnostics.py','--ru-root',$RuRoot,'-v')
-    # A research-only control failure prohibits research execution, but it
-    # does not suppress the independent original product builds/acceptance.
-    $ResearchControlsPassed = $false
-    try {
-        Invoke-Checked $Python @('tools/test_markdown_callback_cost.py')
-        $ResearchControlsPassed = $true
-    } catch {
-        Write-Host 'MARKDOWN_CALLBACK_RESEARCH_CONTROLS_FAILED=1'
-        $ControlFailure = @{
-            schema = 2; research_only = $true; product_acceptance = 'not_claimed'
-            status = 'failed'; samples = @()
-            failure = @{ stage = 'host_controls'; code = 'research_controls_failed' }
+    # Historical research is opt-in. Normal product CI does not execute a
+    # locked old-source experiment against a new application graph.
+    if ($RunCallbackResearch) {
+        # A research-only control failure prohibits research execution, but it
+        # does not suppress the independent original product builds/acceptance.
+        $ResearchControlsPassed = $false
+        try {
+            Invoke-Checked $Python @('tools/test_markdown_callback_cost.py')
+            $ResearchControlsPassed = $true
+        } catch {
+            Write-Host 'MARKDOWN_CALLBACK_RESEARCH_CONTROLS_FAILED=1'
+            $ControlFailure = @{
+                schema = 2; research_only = $true; product_acceptance = 'not_claimed'
+                status = 'failed'; samples = @()
+                failure = @{ stage = 'host_controls'; code = 'research_controls_failed' }
+            }
+            $ControlFailure | ConvertTo-Json -Depth 4 |
+                Set-Content -LiteralPath (Join-Path $Evidence 'markdown-callback-summary.json') -Encoding utf8
         }
-        $ControlFailure | ConvertTo-Json -Depth 4 |
-            Set-Content -LiteralPath (Join-Path $Evidence 'markdown-callback-summary.json') -Encoding utf8
     }
     Invoke-Checked $Python @('tools/test_markdown_portable.py','--ru-root',$RuRoot,
         '--cc',(Join-Path $Bin 'gcc.exe'))
@@ -185,24 +217,54 @@ try {
         '--windres',(Join-Path $Bin 'windres.exe'),'--ar',(Join-Path $Bin 'ar.exe'),
         '--ranlib',(Join-Path $Bin 'ranlib.exe'),'--skip-scintilla','--skip-lexilla')
     Invoke-Checked $Python ($BuildArgs + @('--source','src/main.ru','--output',(Join-Path $Output 'ru_notepad.exe')))
-    foreach ($test in @('document_policy','ui_arguments','file_codec_flags','editor_native','app_native','app_features_native','file_codec_tests','file_codec_security_probe','syntax_native','syntax_policy','shortcuts','status_native','file_streaming_native','editor_streaming_native','associations_policy','associations_native','file_drop_native','app_streaming_native','ru_lexical_policy','ru_syntax_native','app_ru_native','ru_direct_styling_native','markdown_policy','markdown_selection_policy','markdown_native','app_markdown_native')) {
+    # The bounded fold helper is a product input, unlike optional timing studies.
+    # Execute shared-core controls and the real DLL/foreign-owner tests before
+    # admitting any product native/GUI result; these are mandatory on Windows.
+    Invoke-Checked $Python @('-I','tools/test_markdown_fold_helper.py',
+        '--cc',(Join-Path $Bin 'gcc.exe'),'--runtime-dir',$Output,
+        '--output',(Join-Path $Evidence 'markdown-bulk-helper-controls.json'))
+    foreach ($test in @('document_policy','ui_arguments','file_codec_flags','editor_native','app_native','app_features_native','file_codec_tests','file_codec_security_probe','syntax_native','syntax_policy','shortcuts','status_native','file_streaming_native','editor_streaming_native','associations_policy','associations_native','file_drop_native','app_streaming_native','ru_lexical_policy','ru_syntax_native','app_ru_native','ru_direct_styling_native','markdown_policy','markdown_selection_policy','markdown_native','app_markdown_native','markdown_direct_native')) {
         Invoke-Checked $Python ($BuildArgs + @('--console','--source',"tests/$test.ru",'--output',(Join-Path $Output "$test.exe")))
     }
     $AcceptArgs = @('tools/windows_ci.py','--bin-dir',$Output,'--evidence-dir',$Evidence,
         '--mingw-root',$MinGW,'--objdump',(Join-Path $Bin 'objdump.exe'))
     if ($RunAclTests) { $AcceptArgs += '--acl' }
-    # The research EXE and its instrumented translation unit stay outside bin
-    # and the package inventory. Each compiler uses one binary for both modes.
-    # The candidate compiler must also match the accepted product pin. Both
-    # accepted pins and exact generated-C comparison are required before launch.
-    if ([string]::IsNullOrWhiteSpace($ResearchBaselineRoot)) {
-        $ResearchBaselineRoot = Join-Path $Root '.ci/ru-research-baseline'
+    if ($RunCallbackResearch) {
+        # The research EXE and its instrumented translation unit stay outside bin
+        # and the package inventory. Each compiler uses one binary for both modes.
+        # The candidate compiler must also match the accepted product pin. Both
+        # accepted pins and exact generated-C comparison are required before launch.
+        if ([string]::IsNullOrWhiteSpace($ResearchBaselineRoot)) {
+            $ResearchBaselineRoot = Join-Path $Root '.ci/ru-research-baseline'
+        }
+        $ResearchArgs = @('tools/run_markdown_callback_cost.py','--ru-root',$RuRoot,
+            '--old-ru-root',$ResearchBaselineRoot,'--new-ru-root',$RuRoot,
+            '--binary-dir',$Output,'--evidence-dir',$Evidence,
+            '--cc',(Join-Path $Bin 'gcc.exe'),'--windres',(Join-Path $Bin 'windres.exe'))
+        Invoke-ResearchThenAcceptance $Python $ResearchArgs $AcceptArgs -ControlsPassed $ResearchControlsPassed
+    } else {
+        try {
+            Invoke-Checked $Python $AcceptArgs
+        } finally {
+            # Diagnostics are separate runs AFTER the original acceptance. Their
+            # commands/JSON failures cannot replace its exception or exit status.
+            $ProductExit = $global:LASTEXITCODE
+            try {
+                Invoke-OptionalMarkdownStudy $Python @('tools/test_markdown_native_baseline.py','-v') @(
+                    'tools/run_markdown_native_baseline.py','--cc',(Join-Path $Bin 'gcc.exe'),
+                    '--runtime-dir',$Output,'--output',(Join-Path $Evidence 'markdown-native-baseline.json')
+                ) $Evidence 'native-baseline'
+                Invoke-OptionalMarkdownStudy $Python @('tools/test_markdown_cpu_profile.py','-v') @(
+                    'tools/run_markdown_cpu_profile.py','--runtime-dir',$Output,
+                    '--output',(Join-Path $Evidence 'markdown-cpu-profile.json')
+                ) $Evidence 'cpu-profile'
+            } catch {
+                Write-Host 'MARKDOWN_OPTIONAL_DIAGNOSTICS_UNAVAILABLE=1'
+            } finally {
+                $global:LASTEXITCODE = $ProductExit
+            }
+        }
     }
-    $ResearchArgs = @('tools/run_markdown_callback_cost.py','--ru-root',$RuRoot,
-        '--old-ru-root',$ResearchBaselineRoot,'--new-ru-root',$RuRoot,
-        '--binary-dir',$Output,'--evidence-dir',$Evidence,
-        '--cc',(Join-Path $Bin 'gcc.exe'),'--windres',(Join-Path $Bin 'windres.exe'))
-    Invoke-ResearchThenAcceptance $Python $ResearchArgs $AcceptArgs -ControlsPassed $ResearchControlsPassed
 } finally {
     Pop-Location
 }

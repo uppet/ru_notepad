@@ -57,6 +57,9 @@ if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo app_markdown_native.exe: production Markdown menu routing, folding option, tab isolation and document state.
 app_markdown_native.exe "%TESTDIR%" >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo markdown_direct_native.exe: guarded direct fold equivalence, acquisition invalidation and actual GC stress.
+cmd /d /c "set RU_GC_THRESHOLD=64&&set RU_GC_STATS=1&&markdown_direct_native.exe" >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo shortcuts.exe: keyboard shortcut routing and modifier combinations.
 shortcuts.exe >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"

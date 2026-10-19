@@ -8,13 +8,51 @@ commit `85c7821fda35aa79deeaf67b4d430f24ddd7f07f`, tree
 [language CI](https://github.com/uppet/ru-language/actions/runs/39229099554)
 passed all 13 jobs, including the ten new root-index regressions on all three
 Windows/Python versions. The product pin is updated to that exact compiler.
-Application acceptance and the eight-process comparison are still pending;
-language acceptance does not establish application performance.
+The [eight-process Windows comparison](https://github.com/uppet/ru_notepad/actions/runs/39242868617)
+completed at public application commit
+`d47b1836930c896fec29207e957880dd90c774c6`, tree
+`b15ab1f25a1ba3d00ef46cc7427d625f1ba147e5`. All 47 research controls and all
+functional proofs in the eight fresh processes passed. The complete product gate
+still failed the unclosed-fence opening deadline: 1,845 console assertions passed,
+37 of 38 result groups passed, and no release ZIP was produced.
 
-The complete Windows product acceptance remains separate and mandatory:
-1,845 original console assertions, 38 result groups, all three Markdown corpora,
-and the original 30-second limit for each initial/edit stage. Research executables
-are private build products and never enter either user ZIP.
+Observed timed publication/check-loop seconds, grouped by compiler and route:
+
+| Compiler | Subclass | First sample | Second sample | Median |
+| --- | --- | ---: | ---: | ---: |
+| 0.22.0 | present | 19.599723 | 20.070485 | 19.835104 |
+| 0.22.1 | present | 15.716485 | 15.746729 | 15.731607 |
+| 0.22.0 | absent | 11.317571 | 11.325888 | 11.321730 |
+| 0.22.1 | absent | 11.742688 | 11.581747 | 11.662218 |
+
+The present median fell 20.688%; the absent median rose 3.007%, with both adjacent
+absent pairs slower. These are two samples per cell on one runner, not a general
+speed guarantee or an application end-to-end speed measurement. The
+heap header changed from 32 to 48 bytes; sampled live-object peaks were 1,718 with
+the subclass and 1,703 without it. The corresponding extra-header estimates are
+27,488 and 27,248 bytes. They are structural estimates, not measured RSS differences.
+
+The complete Windows product acceptance remains separate and mandatory. The
+current direct-fold candidate retains all original 1,845 console assertions,
+38 result groups and three Markdown corpora, adds its own native safety gate,
+and preserves the 30-second initial/edit deadline. Research executables never
+enter either user ZIP.
+
+### Manual historical reproduction
+
+The existing `windows.yml` workflow accepts an optional boolean
+`historical_callback`, default `false`. Setting it to `true` on a manual dispatch
+checks out the literal public application commit `d47b1836930c896fec29207e957880dd90c774c6`
+for both jobs and uses its original scripts and compiler pins. No arbitrary
+historical-ref input is accepted. Artifact names distinguish the actual historical
+source from the revision containing the workflow that was dispatched.
+
+This deliberately reproduces the original full historical run: the research can
+pass while that source's full product acceptance still fails. It does not relabel
+that product failure as success. Normal pushes, pull requests and manual runs
+with the default input execute only the current complete product gates. The
+historical source/identity checks are unchanged; the old experiment is not run
+against the new direct-fold implementation.
 
 ## Evidence motivating the comparison
 

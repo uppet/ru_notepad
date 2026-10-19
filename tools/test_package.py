@@ -72,15 +72,24 @@ def markdown_evidence():
                           'cleared': True, 'wall_ms': 1.0, 'request_pending': True}} if dirty else {}
             case['stages'].append({'operation': operation, 'length': len(expected), 'dirty': dirty,
                 'source_sha256': case['source_sha256'], 'wall_ms': 100.0, 'probes': 1, 'observer': observer,
+                'memory': {'measurement': ci.GUI_MARKDOWN_MEMORY_MEASUREMENT, 'sample_count': 1,
+                    'sampledWorkingSetPeak': 1048576, 'processPeakWorkingSet': 2097152,
+                    'query_wall_ms': 0.1, 'max_query_ms': 0.1, 'samples': [
+                        {'start_ms': 10.0, 'query_wall_ms': 0.1, 'workingSetBytes': 1048576,
+                         'processPeakWorkingSetBytes': 2097152}]},
                 'responsiveness': response, 'undo_commands': 2 if operation == 'undo' else 0,
                 'collapsed_before_edit': kind == 'many-lines' and dirty,
                 'last_progress': {'opened': True, 'length': len(expected), 'dirty': dirty, 'status': 'complete', 'tail_requested': True,
-                    'diagnostic': {'seq': 1, 'via': 0, 'id': 1, 'gen': 1, 'rev': 0, 'phase': 4, 'pending': 0, 'length': len(expected), 'feed': len(expected), 'published': 1, 'tick': 1, 'work_us': 1, 'gap_us': 1}},
+                    'diagnostic': {'seq': 1, 'via': 0, 'id': 1, 'gen': 1, 'rev': 0, 'phase': 4, 'pending': 0, 'length': len(expected), 'feed': len(expected), 'published': 1, 'tick': 1, 'work_us': 1, 'gap_us': 1, 'bulkCalls': 0, 'bulkLines': 0, 'fallbackBatches': 1, 'directCalls': 0, 'directLines': 0, 'maxPlanBytes': 0, 'bulkUs': 0, 'ownedBufferBytes': 0, 'metric_valid': 1}},
                 'last_probe': {'length': len(expected), 'dirty': dirty, 'end_styled': len(expected),
                     'status_done': True, 'styles_match': True,
                     'style_samples': {'positions': style_positions, 'expected': style_values, 'actual': list(style_values)},
                     'folds_match': True, 'context_match': True,
                     'lexer': 98, 'tail_requested': True, 'children_visible': True}})
+            if kind == 'unclosed-fence' and operation == 'open':
+                case['stages'][-1]['last_progress']['diagnostic'].update(
+                    bulkCalls=1, bulkLines=1, fallbackBatches=0,
+                    maxPlanBytes=48, bulkUs=1, ownedBufferBytes=1088)
     return record
 
 
@@ -97,7 +106,7 @@ class PackageTests(unittest.TestCase):
                          *ci.SCANNER_PREFLIGHT_SOURCES,
                          *package.RESOURCE_INPUTS, *package.NATIVE_BUILD_DRIVERS,
                          *(source for sources in package.NATIVE_COMPILE_SOURCES.values() for source in sources),
-                         'native/ru_scan.h', 'native/ru_unicode_data.h',
+                         'native/ru_scan.h', 'native/ru_unicode_data.h', 'native/ru_markdown_fold.h',
                          'packaging/diagnostic_launcher.c', 'packaging/samples/example.txt',
                          'packaging/samples/example.ru'}:
             target = self.root / relative
@@ -178,6 +187,20 @@ class PackageTests(unittest.TestCase):
                 result.update(main_hwnd_seen=True, close_posted=True, detached_from_console=True)
             else:
                 result['assertions_passed'] = ci.expected_assertions(name)
+            if name == 'markdown_direct_native':
+                result['gc_stress'] = {'threshold': 64, 'stats_enabled': True,
+                                       'live': 0, 'freed': 100, 'collections': 4}
+                result['bulk_route_metrics'] = [
+                    {'route': 'fallback', 'bulkCalls': 0, 'bulkLines': 0, 'fallbackBatches': 1,
+                     'directCalls': 0, 'directLines': 0, 'maxPlanBytes': 0,
+                     'ownedBufferBytes': 0, 'bulkUs': 0, 'metric_valid': 1},
+                    {'route': 'bulk', 'bulkCalls': 1, 'bulkLines': 1, 'fallbackBatches': 0,
+                     'directCalls': 0, 'directLines': 0, 'maxPlanBytes': 48,
+                     'ownedBufferBytes': 1088, 'bulkUs': 1, 'metric_valid': 1},
+                    {'route': 'perline', 'bulkCalls': 0, 'bulkLines': 0, 'fallbackBatches': 0,
+                     'directCalls': 1, 'directLines': 1, 'maxPlanBytes': 0,
+                     'ownedBufferBytes': 0, 'bulkUs': 0, 'metric_valid': 1}]
+
             if name == 'ru_syntax_native':
                 result['performance'] = [{'size': size, 'initial_read_bytes': size,
                     'edit_read_bytes': 1024, 'reused_bytes': size - 1024, 'max_read': 1024,
@@ -733,7 +756,7 @@ class PackageTests(unittest.TestCase):
         for path in ('docs/markdown-editing.md', 'docs/markdown-policy-subset.md'):
             self.assertIn(path, runtime)
             self.assertEqual(runtime[path], tests[path])
-        for name in ('markdown_policy', 'markdown_selection_policy', 'markdown_native', 'app_markdown_native'):
+        for name in ('markdown_policy', 'markdown_selection_policy', 'markdown_native', 'app_markdown_native', 'markdown_direct_native'):
             self.assertNotIn(name + '.exe', runtime)
             self.assertIn(name + '.exe', tests)
         self.assertIn('native-test-evidence/main-markdown-launcher-0.log', tests)

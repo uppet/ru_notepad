@@ -5,6 +5,7 @@ These verify orchestration/fail-closed policy only. They are NOT native editor,
 GUI, DLL, file-codec, ACL, or Windows runtime acceptance evidence.
 """
 from pathlib import Path
+import ctypes
 import hashlib
 import io
 import json
@@ -85,14 +86,36 @@ def markdown_evidence():
                 'source_sha256': case['source_sha256'], 'wall_ms': 100.0, 'probes': 1, 'observer': observer,
                 'responsiveness': response, 'undo_commands': 2 if operation == 'undo' else 0,
                 'collapsed_before_edit': kind == 'many-lines' and dirty,
+                'memory': {'measurement': ci.GUI_MARKDOWN_MEMORY_MEASUREMENT, 'sample_count': 1,
+                    'sampledWorkingSetPeak': 1048576, 'processPeakWorkingSet': 2097152,
+                    'query_wall_ms': 0.1, 'max_query_ms': 0.1, 'samples': [{'start_ms': 10.0,
+                    'query_wall_ms': 0.1, 'workingSetBytes': 1048576, 'processPeakWorkingSetBytes': 2097152}]},
                 'last_progress': {'opened': True, 'length': len(expected), 'dirty': dirty, 'status': 'complete', 'tail_requested': True,
-                    'diagnostic': {'seq': 1, 'via': 0, 'id': 1, 'gen': 1, 'rev': 0, 'phase': 4, 'pending': 0, 'length': len(expected), 'feed': len(expected), 'published': 1, 'tick': 1, 'work_us': 1, 'gap_us': 1}},
+                    'diagnostic': {'seq': 1, 'via': 0, 'id': 1, 'gen': 1, 'rev': 0, 'phase': 4, 'pending': 0, 'length': len(expected), 'feed': len(expected), 'published': 1, 'tick': 1, 'work_us': 1, 'gap_us': 1, 'bulkCalls': 1, 'bulkLines': 1, 'fallbackBatches': 0,
+                        'directCalls': 0, 'directLines': 0, 'maxPlanBytes': 48, 'bulkUs': 1, 'ownedBufferBytes': 1088, 'metric_valid': 1}},
                 'last_probe': {'length': len(expected), 'dirty': dirty, 'end_styled': len(expected),
                     'status_done': True, 'styles_match': True,
                     'style_samples': {'positions': style_positions, 'expected': style_values, 'actual': list(style_values)},
                     'folds_match': True, 'context_match': True,
                     'lexer': 98, 'tail_requested': True, 'children_visible': True}})
     return record
+
+
+def markdown_route_metrics():
+    """Synthetic validator controls only; never Windows measurements."""
+    records = [dict(route=route, **dict.fromkeys(ci.FOLD_ROUTE_METRIC_FIELDS, 0))
+               for route in ci.FOLD_ROUTE_ORDER]
+    for record in records:
+        record['metric_valid'] = 1
+    records[0]['fallbackBatches'] = 1
+    records[1].update(bulkCalls=1, bulkLines=1, maxPlanBytes=48, ownedBufferBytes=1088, bulkUs=1)
+    records[2].update(directCalls=1, directLines=1)
+    return records
+
+
+def markdown_route_markers():
+    return ''.join('FOLD_METRICS1 route=' + row['route'] + ''.join(' ' + key + '=' + str(row[key])
+        for key in ci.FOLD_ROUTE_METRIC_FIELDS) + '\n' for row in markdown_route_metrics())
 
 
 class NoDialogs:
@@ -368,6 +391,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'markdown_selection_policy': r'^TOTAL PASS: 31\s*$',
             'markdown_native': r'^TOTAL PASS: 58\s*$',
             'app_markdown_native': r'^TOTAL PASS: 70\s*$',
+            'markdown_direct_native': r'^TOTAL PASS: 114\s*$',
             'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=73\s*$',
             'file_streaming_native': r'^FILE_STREAMING_TESTS_PASS=99\s*$',
             'editor_streaming_native': r'^EDITOR_STREAMING_TESTS_PASS=21\s*$',
@@ -377,9 +401,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'file_drop_native': r'^TOTAL PASS: 38\s*$',
         }
         self.assertEqual(dict(ci.NATIVE_CONSOLE_TESTS), expected)
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 27)
-        # The original 33 gates remain, with four Markdown consoles and one GUI.
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 38)
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 28)
+        # The original 38 gates remain, with one new direct-fold native console.
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 39)
 
     def test_console_and_gui_receipts_share_all_manifest_resource_inputs(self):
         common = {'packaging/app.rc', 'packaging/app.manifest', 'assets/app-icon.ico', 'VERSION'}
@@ -427,7 +451,11 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             self.assertEqual(ci.BINARY_NAMES.count(name + '.exe'), 1)
             self.assertIn(name + '.exe:', runner, 'Each executable needs a plain purpose label')
         for name in required:
-            self.assertRegex(runner, rf'(?m)^{name}\.exe(?: |$)')
+            if name == 'markdown_direct_native':
+                self.assertIn('cmd /d /c "set RU_GC_THRESHOLD=64&&set RU_GC_STATS=1&&markdown_direct_native.exe" >>test-results.txt 2>&1\n'
+                              'if not "%ERRORLEVEL%"=="0" set "FAILED=1"', runner)
+            else:
+                self.assertRegex(runner, rf'(?m)^{name}\.exe(?: |$)')
         self.assertIn('call :syntax_fallback missing-lexilla --expect-missing', runner)
         self.assertIn('call :syntax_fallback bad-lexer --expect-bad-lexer', runner)
         self.assertIn('call :syntax_fallback missing-ru-lexilla --expect-missing-lexilla ru_syntax_native', runner)
@@ -481,7 +509,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertNotIn('if errorlevel 1', runner.lower())
         lines = runner.split('\n:syntax_fallback\n', 1)[0].splitlines()
         commands = [index for index, line in enumerate(lines)
-                    if re.match(r'^[a-z_]+\.exe(?: |$)|^call :syntax_fallback ', line)]
+                    if (re.match(r'^[a-z_]+\.exe(?: |$)|^call :syntax_fallback ', line) or
+                        line == 'cmd /d /c "set RU_GC_THRESHOLD=64&&set RU_GC_STATS=1&&markdown_direct_native.exe" >>test-results.txt 2>&1')]
         self.assertEqual(len(commands), len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS))
         for index in commands:
             self.assertEqual(lines[index + 1], 'if not "%ERRORLEVEL%"=="0" set "FAILED=1"')
@@ -683,6 +712,10 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 result.update(main_hwnd_seen=True, close_posted=True, detached_from_console=True)
             else:
                 result['assertions_passed'] = ci.expected_assertions(name)
+            if name == 'markdown_direct_native':
+                result['gc_stress'] = {'threshold': 64, 'stats_enabled': True,
+                                       'live': 0, 'freed': 100, 'collections': 4}
+                result['bulk_route_metrics'] = markdown_route_metrics()
             if name == 'ru_syntax_native':
                 result['performance'] = [{'size': size, 'initial_read_bytes': size,
                     'edit_read_bytes': 1024, 'reused_bytes': size - 1024, 'max_read': 1024,
@@ -764,7 +797,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
 
     def scanner_preflight(self, mode='normal'):
         for relative in (*ci.SCANNER_PREFLIGHT_SOURCES, 'native/ru_scan.c',
-                         'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h'):
+                         'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h',
+                         'native/ru_markdown_fold.c', 'native/ru_markdown_fold.h'):
             path = self.root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('synthetic fixture\n')
@@ -1176,7 +1210,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         ci.validate_acceptance(summary)
         new = {'ru_lexical_policy', 'ru_syntax_native', 'app_ru_native', 'app_ru_timer_native',
                'ru_direct_styling_native', 'markdown_policy', 'markdown_selection_policy',
-               'markdown_native', 'app_markdown_native', 'main-gui-markdown',
+               'markdown_native', 'app_markdown_native', 'markdown_direct_native', 'main-gui-markdown',
                'ru_syntax_missing_lexilla', 'main-gui-ru-syntax', *ci.HELPER_FALLBACK_LAYOUTS}
         prior = [test for test in summary['tests'] if test['name'] not in new]
         self.assertEqual(len(prior), 23)
@@ -1185,13 +1219,13 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
     def test_acceptance_preserves_original_33_groups_1487_assertions_and_adds_markdown(self):
         summary = self.acceptance()
         ci.validate_acceptance(summary)
-        self.assertEqual(len(summary['tests']), 38)
+        self.assertEqual(len(summary['tests']), 39)
         added = {'markdown_policy', 'markdown_selection_policy', 'markdown_native',
-                 'app_markdown_native', 'main-gui-markdown'}
+                 'app_markdown_native', 'markdown_direct_native', 'main-gui-markdown'}
         prior = [test for test in summary['tests'] if test['name'] not in added]
         self.assertEqual(len(prior), 33)
         self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1845)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1959)
 
     def test_direct_style_fixture_is_built_packaged_and_required(self):
         name = 'ru_direct_styling_native'
@@ -2667,14 +2701,16 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         (self.root / 'tests/entry.ru').write_text('test entry')
         helper = self.root / 'tests/imported_helper.ru'
         helper.write_text('helper source')
-        for relative in ('native/ru_scan.c', 'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h'):
+        for relative in ('native/ru_scan.c', 'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h',
+                         'native/ru_markdown_fold.c', 'native/ru_markdown_fold.h'):
             target = self.root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text('native input')
         with patch.object(builder, 'ROOT', self.root):
             before = builder.source_snapshot()
             self.assertEqual(set(before), {'src/main.ru', 'tests/entry.ru', 'tests/imported_helper.ru',
-                'native/ru_scan.c', 'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h'})
+                'native/ru_scan.c', 'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h',
+                'native/ru_markdown_fold.c', 'native/ru_markdown_fold.h'})
             helper.write_text('changed helper source')
             after = builder.source_snapshot()
         self.assertNotEqual(before['tests/imported_helper.ru'], after['tests/imported_helper.ru'])
@@ -2778,6 +2814,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                          '[launcher] Ru program returned with status 0.']
                 if mode == 'bad-log':
                     lines[-1] = '[launcher] Ru program exited before returning to the launcher.'
+                if mode == 'fold-metric-log':
+                    lines.append(markdown_route_markers())
                 (binary / 'ru_notepad-synthetic.log').write_text('\n'.join(lines), encoding='utf-8')
             return process
         class FakeWindows:
@@ -2914,9 +2952,239 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         with self.assertRaisesRegex(RuntimeError, 'Runtime Library Exception'):
             ci.copy_runtime_licenses(self.root / 'mingw', self.root / 'out')
 
+    def test_bounded_fold_helper_is_mandatory_before_native_acceptance_and_not_packaged(self):
+        script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        call = "Invoke-Checked $Python @('-I','tools/test_markdown_fold_helper.py',"
+        self.assertEqual(script.count(call), 1)
+        self.assertLess(script.index(call), script.index("$AcceptArgs = @('tools/windows_ci.py'"))
+        block = script[script.index(call):script.index("    foreach ($test", script.index(call))]
+        self.assertIn("'--runtime-dir',$Output", block)
+        self.assertIn("'--cc',(Join-Path $Bin 'gcc.exe')", block)
+        self.assertIn("'markdown-bulk-helper-controls.json'", block)
+        self.assertIn('python -I tools/test_markdown_fold_helper.py --cc gcc --sanitize', workflow)
+        self.assertIn("ASAN_OPTIONS: 'detect_leaks=1:halt_on_error=1:abort_on_error=1'", workflow)
+        self.assertIn('mkdir -p build/markdown-fold-helper-evidence', workflow)
+        self.assertIn('build/markdown-fold-helper-evidence/markdown-bulk-helper-controls.json', workflow)
+        self.assertEqual(ci.portable.NATIVE_COMPILE_SOURCES['RuSyntax.dll'],
+                         ('native/ru_scan.c', 'native/ru_markdown_fold.c'))
+        self.assertIn('user32', ci.portable.NATIVE_LINK_LIBRARIES)
+        for name in ('markdown_fold_windows.exe', 'markdown_fold_host.exe'):
+            self.assertNotIn(name, ci.BINARY_NAMES)
+            self.assertNotIn(name, ci.portable.TEST_NAMES)
+
+    def test_optional_markdown_studies_are_separate_from_product_acceptance(self):
+        script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        self.assertIn("[ValidateSet('native-baseline','cpu-profile')]", script)
+        self.assertIn("$Stage = 'host_controls'", script)
+        self.assertIn("$Stage = 'execution'", script)
+        self.assertIn("measurement_claimed = $false", script)
+        self.assertIn('$global:LASTEXITCODE = $SavedExit', script)
+        self.assertIn('$global:LASTEXITCODE = $ProductExit', script)
+        self.assertIn("Write-Host 'MARKDOWN_OPTIONAL_STUDY_EVIDENCE_UNAVAILABLE=1'", script)
+        tail = script[script.index('    } else {\n        try {\n            Invoke-Checked $Python $AcceptArgs'):]
+        self.assertLess(tail.index('Invoke-Checked $Python $AcceptArgs'), tail.index('Invoke-OptionalMarkdownStudy'))
+        for name in ('native_baseline', 'cpu_profile'):
+            self.assertIn('tools/test_markdown_' + name + '.py', tail)
+            self.assertIn('tools/run_markdown_' + name + '.py', tail)
+        self.assertNotIn('markdown_baseline.exe', ci.BINARY_NAMES)
+        self.assertNotIn('markdown_baseline.exe', ci.portable.TEST_NAMES)
+
+    def test_optional_markdown_powershell_preserves_product_exit_and_original_exception(self):
+        pwsh = shutil.which('pwsh')
+        if not pwsh:
+            if os.name == 'nt':
+                self.fail('Required Windows PowerShell optional-diagnostic control is unavailable')
+            self.skipTest('PowerShell 7 unavailable on this non-Windows host')
+        source = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        match = re.search(r'^function Invoke-OptionalMarkdownStudy\(.*?^}', source, re.M | re.S)
+        self.assertIsNotNone(match)
+        script = self.root / 'optional-control.ps1'
+        destination = str(self.root / 'study-evidence').replace("'", "''")
+        script.write_text("$ErrorActionPreference='Stop'\nSet-StrictMode -Version Latest\n" +
+            "function Invoke-Checked([string]$Command,[string[]]$Arguments) { " +
+            "$global:Calls.Add($Arguments[0]); $global:LASTEXITCODE=0; " +
+            "if ($Arguments[0] -like '*fail*') {$global:LASTEXITCODE=9; throw 'controlled command'} }\n" +
+            match.group(0) + "\n$Evidence='" + destination + "'\n" +
+            "New-Item -ItemType Directory -Path $Evidence | Out-Null\n" +
+            "foreach($mode in @('success','controls-fail','run-fail','write-fail')) {\n" +
+            "$global:Calls=[System.Collections.Generic.List[string]]::new(); $global:LASTEXITCODE=73\n" +
+            "$c=if($mode -eq 'controls-fail'){'controls-fail'}else{'controls'}\n" +
+            "$r=if($mode -in @('run-fail','write-fail')){'run-fail'}else{'run'}\n" +
+            "$d=$Evidence; if($mode -eq 'write-fail') {$d=Join-Path $Evidence 'regular'; Set-Content -LiteralPath $d -Value x}\n" +
+            "try { try {throw 'original product failure'} finally {\n" +
+            "Invoke-OptionalMarkdownStudy 'unused' @($c) @($r) $d 'native-baseline'\n" +
+            "} } catch {if($_.Exception.Message -ne 'original product failure'){throw 'product exception replaced'}}\n" +
+            "if($global:LASTEXITCODE -ne 73){throw 'product exit changed'}\n" +
+            "$expected=if($mode -eq 'controls-fail'){1}else{2}; if($global:Calls.Count -ne $expected){throw 'wrong command coverage'}\n" +
+            "}\nWrite-Output 'OPTIONAL_DIAGNOSTICS_CONTROLS_PASSED'\n", encoding='utf-8', newline='\n')
+        result = subprocess.run([pwsh, '-NoProfile', '-NonInteractive', '-File', str(script)],
+                                capture_output=True, timeout=30, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr.decode('utf-8', errors='replace'))
+        self.assertIn(b'OPTIONAL_DIAGNOSTICS_CONTROLS_PASSED', result.stdout)
+        self.assertEqual(result.stderr, b'')
+
+    def test_markdown_direct_gate_retains_original_inventory_and_requires_gc(self):
+        summary = self.acceptance()
+        direct = next(t for t in summary['tests'] if t['name'] == 'markdown_direct_native')
+        prior = [t for t in summary['tests'] if t['name'] != 'markdown_direct_native']
+        self.assertEqual(len(prior), 38)
+        self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1845)
+        self.assertEqual(direct['assertions_passed'], 114)
+        self.assertEqual(ci.console_command('markdown_direct_native', self.root, self.root),
+                         [str(self.root / 'markdown_direct_native.exe')])
+        self.assertEqual(ci.CONSOLE_TIMEOUT_SECONDS['markdown_direct_native'], 180)
+        self.assertIn('markdown_direct_native.exe', ci.portable.TEST_NAMES)
+        self.assertNotIn('markdown_direct_native.exe', ci.portable.RUNTIME_NAMES)
+        self.assertIn("'markdown_direct_native'", (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8'))
+        command = 'cmd /d /c "set RU_GC_THRESHOLD=64&&set RU_GC_STATS=1&&markdown_direct_native.exe"'
+        self.assertIn(command + ' >>test-results.txt 2>&1\nif not "%ERRORLEVEL%"=="0" set "FAILED=1"',
+                      (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8'))
+        for value in (None, {}, {'threshold': 64, 'stats_enabled': True, 'live': 0, 'freed': 0, 'collections': 1}):
+            with self.subTest(value=value), self.assertRaisesRegex(RuntimeError, 'GC-stress'):
+                direct['gc_stress'] = value
+                ci.validate_acceptance(summary)
+
+    def test_markdown_direct_gc_record_requires_actual_collection_and_exact_types(self):
+        good = {'threshold': 64, 'stats_enabled': True, 'live': 0, 'freed': 100, 'collections': 4}
+        ci.validate_markdown_direct_gc(good)
+        for ending in ('\n', '\r\n'):
+            self.assertEqual(ci.parse_markdown_direct_gc('RU_GC live=0 freed=100 collections=4' + ending), good)
+        for field, value in (('threshold', 63), ('threshold', True), ('stats_enabled', 1),
+                             ('live', -1), ('live', 2**53), ('freed', 0), ('freed', True),
+                             ('collections', 1), ('collections', 2.0)):
+            with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
+                ci.validate_markdown_direct_gc(dict(good, **{field: value}))
+        for text in ('', 'RU_GC live=0 freed=100 collections=4',
+                     'RU_GC live=0 freed=100 collections=4\r',
+                     'RU_GC live=0 freed=100 collections=1\n',
+                     'RU_GC live=0 freed=100 collections=4\nextra\n',
+                     'RU_GC live=0 freed=100 collections=4\n' * 2):
+            with self.subTest(text=text), self.assertRaises(RuntimeError):
+                ci.parse_markdown_direct_gc(text)
+
+    def test_markdown_route_metric_parser_requires_exact_measured_three_route_shape(self):
+        good, output = markdown_route_metrics(), markdown_route_markers()
+        for text in (output, output.replace('\n', '\r\n')):
+            self.assertEqual(ci.parse_markdown_route_metrics(text), good)
+        for mutation in ('missing', 'duplicate', 'order', 'unknown', 'truncated', 'private',
+                         'negative', 'float', 'leading-zero', 'overflow', 'no-bulk', 'line-bound',
+                         'buffer', 'plan', 'mixed', 'no-fallback', 'no-perline', 'invalid-clock'):
+            text = output
+            if mutation == 'missing': text = ''.join(text.splitlines(keepends=True)[1:])
+            elif mutation == 'duplicate': text += text.splitlines(keepends=True)[0]
+            elif mutation == 'order': text = ''.join(reversed(text.splitlines(keepends=True)))
+            elif mutation == 'unknown': text = text.replace('bulkCalls=', 'unknown=')
+            elif mutation == 'truncated': text = text[:-1]
+            elif mutation == 'private': text += 'FOLD_METRICS_PRIVATE_SENTINEL\n'
+            elif mutation == 'negative': text = text.replace('bulkCalls=1', 'bulkCalls=-1')
+            elif mutation == 'float': text = text.replace('bulkCalls=1', 'bulkCalls=1.0')
+            elif mutation == 'leading-zero': text = text.replace('bulkCalls=1', 'bulkCalls=01')
+            elif mutation == 'overflow': text = text.replace('bulkCalls=1', 'bulkCalls=9007199254740992')
+            elif mutation == 'no-bulk': text = text.replace('bulkCalls=1', 'bulkCalls=0')
+            elif mutation == 'line-bound': text = text.replace('bulkLines=1', 'bulkLines=65')
+            elif mutation == 'buffer': text = text.replace('ownedBufferBytes=1088', 'ownedBufferBytes=1089')
+            elif mutation == 'plan': text = text.replace('maxPlanBytes=48', 'maxPlanBytes=1057')
+            elif mutation == 'mixed': text = text.replace('fallbackBatches=0', 'fallbackBatches=1', 1)
+            elif mutation == 'no-fallback': text = text.replace('fallbackBatches=1', 'fallbackBatches=0')
+            elif mutation == 'no-perline': text = text.replace('directCalls=1', 'directCalls=0')
+            elif mutation == 'invalid-clock': text = text.replace('metric_valid=1', 'metric_valid=0')
+            with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
+                ci.parse_markdown_route_metrics(text)
+        for key in ci.FOLD_ROUTE_METRIC_FIELDS:
+            for value in (-1, True, 1.5, '1', 2**53):
+                records = json.loads(json.dumps(good))
+                records[1][key] = value
+                with self.subTest(key=key, value=value), self.assertRaises(RuntimeError):
+                    ci.validate_markdown_route_metrics(records)
+            records = json.loads(json.dumps(good))
+            records[1].pop(key)
+            with self.subTest(missing=key), self.assertRaises(RuntimeError):
+                ci.validate_markdown_route_metrics(records)
+
+    def test_markdown_route_metric_acceptance_binding_forbids_missing_or_other_groups(self):
+        summary = self.acceptance()
+        direct = next(row for row in summary['tests'] if row['name'] == 'markdown_direct_native')
+        direct.pop('bulk_route_metrics')
+        with self.assertRaisesRegex(RuntimeError, 'route metrics'):
+            ci.validate_acceptance(summary)
+        direct['bulk_route_metrics'] = markdown_route_metrics()
+        other = next(row for row in summary['tests'] if row['name'] == 'document_policy')
+        other['bulk_route_metrics'] = markdown_route_metrics()
+        with self.assertRaisesRegex(RuntimeError, 'Unexpected Markdown'):
+            ci.validate_acceptance(summary)
+
+    def test_markdown_route_metric_console_forbids_foreign_marker(self):
+        result = self.console('print("PASS: control");print("TOTAL PASS: 1");print(' + repr(markdown_route_markers()) + ')')
+        self.assertFalse(result['passed'])
+        self.assertIn('Unexpected Markdown route metric marker', result['error'])
+
+    def test_markdown_route_metric_gui_forbids_foreign_marker(self):
+        result, _ = self.gui(mode='fold-metric-log')
+        self.assertFalse(result['passed'])
+        self.assertIn('Unexpected Markdown route metric marker', result['error'])
+
+    def test_markdown_route_metric_console_rejects_missing_current_stdout_receipt(self):
+        code = "import sys;print('PASS: control');print('TOTAL PASS: 1');sys.stderr.write('RU_GC live=0 freed=100 collections=4\\n')"
+        result = ci.run_console(NoDialogs(), 'markdown_direct_native', [sys.executable, '-c', code],
+            self.root, r'^TOTAL PASS: 1\s*$', expected_assertions=1)
+        self.assertFalse(result['passed'])
+        self.assertIn('route metric marker', result['error'])
+        self.assertNotIn('bulk_route_metrics', result)
+
+    def test_markdown_direct_child_gc_environment_is_fixed_and_required(self):
+        code = ("import os,sys\n"
+                "assert os.environ['RU_GC_THRESHOLD'] == '64'\n"
+                "assert os.environ['RU_GC_STATS'] == '1'\n"
+                "print('PASS: child fixed GC environment')\nprint('TOTAL PASS: 1')\n"
+                f'print({markdown_route_markers()!r}, end="")\n'
+                "sys.stderr.write('RU_GC live=0 freed=100 collections=4\\n')\n")
+        before = dict(os.environ)
+        with patch.dict(os.environ, {'RU_GC_THRESHOLD': '999999', 'RU_GC_STATS': '0'}):
+            result = ci.run_console(NoDialogs(), 'markdown_direct_native',
+                                    [sys.executable, '-c', code], self.root,
+                                    r'^TOTAL PASS: 1\s*$', expected_assertions=1)
+            self.assertTrue(result['passed'], result)
+            self.assertEqual(result['gc_stress']['collections'], 4)
+            self.assertEqual(result['bulk_route_metrics'], markdown_route_metrics())
+            self.assertEqual(os.environ['RU_GC_THRESHOLD'], '999999')
+            self.assertEqual(os.environ['RU_GC_STATS'], '0')
+        self.assertEqual(dict(os.environ), before)
+
+    def test_callback_history_dispatch_is_literal_and_normal_product_is_separate(self):
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        source = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        historical = "d47b1836930c896fec29207e957880dd90c774c6"
+        checkout = ("ref: ${{ github.event_name == 'workflow_dispatch' && "
+                    "inputs.historical_callback && '" + historical + "' || github.sha }}")
+        self.assertEqual(workflow.count(checkout), 2)
+        self.assertIn('historical_callback:', workflow)
+        self.assertIn('type: boolean', workflow)
+        self.assertIn('default: false', workflow)
+        self.assertNotIn('inputs.ref', workflow)
+        baseline = workflow.split('      - name: Check out fixed pre-root-list research compiler', 1)[1]
+        baseline = baseline.split('      - name:', 1)[0]
+        self.assertIn("if: github.event_name == 'workflow_dispatch' && inputs.historical_callback", baseline)
+        self.assertIn('ref: 95ee638f705f0fd75292da7eda150559dbe8fc3a', baseline)
+        self.assertIn('[switch]$RunCallbackResearch', source)
+        self.assertNotIn('-RunCallbackResearch', workflow)
+        control_start = source.index('    if ($RunCallbackResearch) {')
+        control_end = source.index("    Invoke-Checked $Python @('tools/test_markdown_portable.py'", control_start)
+        self.assertIn("'tools/test_markdown_callback_cost.py'", source[control_start:control_end])
+        execution = source[source.index('    if ($RunCallbackResearch) {', control_end):]
+        self.assertIn('Invoke-ResearchThenAcceptance $Python $ResearchArgs $AcceptArgs', execution)
+        self.assertIn('    } else {\n        try {\n            Invoke-Checked $Python $AcceptArgs\n        } finally {', execution)
+        self.assertIn('-source-${{', workflow)
+        self.assertIn('-trigger-${{ github.sha }}', workflow)
+        # Historical runners and their exact source/parent checks are retained.
+        runner = (ci.ROOT / 'tools/run_markdown_callback_cost.py').read_text(encoding='utf-8')
+        self.assertIn("BASE_COMMIT = 'ce2ff998e778d9991462a78f245bd17cec32f940'", runner)
+        self.assertIn("BASE_TREE = '115c353c5206967854d58d726afe280d5b4350c2'", runner)
+        self.assertIn("'candidate_parent_mismatch'", runner)
+
     def test_markdown_gate_preserves_old_counts_and_requires_exact_new_counts(self):
         expected = {'markdown_policy': 199, 'markdown_selection_policy': 31,
-                    'markdown_native': 58, 'app_markdown_native': 70}
+                    'markdown_native': 58, 'app_markdown_native': 70, 'markdown_direct_native': 114}
         self.assertEqual({name: ci.expected_assertions(name) for name in expected}, expected)
         self.assertEqual(ci.console_command('app_markdown_native', self.root, self.root),
                          [str(self.root / 'app_markdown_native.exe'), str(self.root)])
@@ -2985,14 +3253,20 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         # Reviewed source contract only. Actual callback/contraction behavior is
         # separately required from markdown_native and the detached GUI cases.
         source = (ci.ROOT / 'src/markdown_syntax.ru').read_text(encoding='utf-8')
-        expected = {'_本态': '8a5ac21dfaed5a7acd9633c5ee30aed02517b6da4e61edd6724bb9da154653fe', '_须本态': 'ad619e1b49326aeb41de2f838a49662358aae6827f3f9603b16945ad224dd37e', '_护': 'd09426159fc731acf23725021e04cb93ad33dbe58526e9741f5806adf93d5445', '_讯': '5b1cac1da67dd9bf65ae91029f5622121301b70a03056a52d72e96ccd41ec9e2', '_全显': 'a2facd577a3085e305284e6e205a9c0d014773f06ef00070f51da71e8289cbf7', '_发布': '954453433a6a1ac50a3694aeda2e40120d64b71c4c553edd6dcb1cd3dab84016'}
+        expected = {'_本态': '8a5ac21dfaed5a7acd9633c5ee30aed02517b6da4e61edd6724bb9da154653fe', '_须本态': 'ad619e1b49326aeb41de2f838a49662358aae6827f3f9603b16945ad224dd37e', '_护': 'd09426159fc731acf23725021e04cb93ad33dbe58526e9741f5806adf93d5445', '_讯': '5b1cac1da67dd9bf65ae91029f5622121301b70a03056a52d72e96ccd41ec9e2', '_全显': 'a2facd577a3085e305284e6e205a9c0d014773f06ef00070f51da71e8289cbf7', '_发布': 'f31481eadda2b032e94434f1fcb1739c41e2d81e9e07a1391f95d3e4d3a5c053', '_须直属': '8105e93a67e66078a2ccf57a377687c3d134626b74b11e627985cd7255f74bab', '登记直属': '46faed27dcb4968de9bd90d058a2075af690f5ffaa032ba0213c8919a8107eac', '撤销直属': '11a975a7a865fc61009d3a6b5cdf0c2455b4e4355d47d9a1773567acee14ba3b', '_直护': '1196e2af8d48e4a4f37b07baf4059b8be846956e8cd9e55556b0d0724db28c7d', '_直发布': 'aca4265d0f732a9f63c5cfc4815d3d4b05fc7e6d79219a05bf770c704565d701', '_批移位': '92922d737d210319ee19b50aaf68d26840a1ed15c5bbb56f6aa1ccc69a0bfeb1', '_写批计划': '68d92c84edc831a296a616569d92d3911fce0f8552d0cc0fafe6271f2a0afef8', '_验批果': '699c0a3c5ff2192219f5c22f6880be40d36fcf7fd4d7ce941a2c2e23e100d063', '_批发布': '2a175bb7efff6a5af78b2e405e3b550ae70f92012a2bac5685e7ce9f57836e16', '_统计': 'f31451b38baa49c039a772bc0d5aaa04e0d2d32d57c68ac23bca3a7f16b91f94', '_统计时刻': '55ec9489e7c0421b0617e70b5953c732d3bfbdb3d0bc882153e3d0607e51bbf5', '_统计耗时': '1e51b386ebba4ebb1613196a14c9bdd64cacbade50eb8ab029ef596c3ddcd4aa', '_丢弃': '9a0ff8228817367569a13c16929e1917f42bbd5967c766fa7ffdbe3c33d52845', '状态': 'a1789ccfe386ad090afa5a6097bb58ee9928346122f2d964c5d0705deb9e3eab'}
         for name, digest in expected.items():
-            functions = re.findall(r'^算 ' + re.escape(name) + r'[^\n]*\n(.*?)^法$',
+            functions = re.findall(r'^算 ' + re.escape(name) + r'(?=[ \n])[^\n]*\n(.*?)^法$',
                                    source, re.MULTILINE | re.DOTALL)
             self.assertEqual(len(functions), 1, name)
             code = '\n'.join(line.strip() for line in functions[0].splitlines()
                              if line.strip() and not line.lstrip().startswith('#'))
             self.assertEqual(hashlib.sha256(code.encode('utf-8')).hexdigest(), digest, name)
+        binding_blocks = {'_批库态 取': ('_批统计们 取', '01bd6f4bd7eedd46d287845b9dc2a7731e85e5f8a1ff7d089ddce2a6940d75ab'), '_批路径 取': ('_范围型 取', '70872c2451f22776d2d6d58756ceffa041ece2eaadfbc81709762b7a78637f03')}
+        for begin, (end, digest) in binding_blocks.items():
+            block = source.split(begin, 1)[1].split(end, 1)[0]
+            code = '\n'.join(line.strip() for line in block.splitlines()
+                if line.strip() and not line.lstrip().startswith('#'))
+            self.assertEqual(hashlib.sha256(code.encode('utf-8')).hexdigest(), digest, begin)
         for name in ('折叠', '全折'):
             function = re.findall(r'^算 ' + name + r'[^\n]*\n(.*?)^法$', source,
                                   re.MULTILINE | re.DOTALL)
@@ -3010,15 +3284,28 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         source = path.read_text(encoding='utf-8')
         read_original = Path.read_text
         mutations = (
+            ("        _须直属 柄 态 权.\n        若 非 (借 其 为空) 且 _直接策略['enabled']", "        若 非 (借 其 为空) 且 _直接策略['enabled']"),
+            ("            _护 柄 态.\n            _须直属 柄 态 权.\n            果 取 结果存", "            _须直属 柄 态 权.\n            果 取 结果存"),
+            ("若 状码 != 0 且 状码 != 1 则 卒", "若 假 则 卒"),
+            ("字节数 取 _写批计划 计划 态 范围们 位 偏.", "字节数 取 32."),
+            ("_批版本 == 65536", "_批版本 == 1"),
+            ("['status',窗 其 U],['attempted',窗 其 U]", "['status',窗 其 U],['attempted',窗 其 IP]"),
             ("    _护 柄 态.\n    范围们 取 态['ranges'].", "    范围们 取 态['ranges']."),
-            ('        窗 其 发送 柄 2222 行 层.\n        _护 柄 态.',
-             '        窗 其 发送 柄 2222 行 层.'),
-            ('        数量 取 数量+1.', '        窗 其 发送 柄 2383 0 0.\n        数量 取 数量+1.'),
+            ('            窗 其 发送 柄 2222 行 层.\n            _护 柄 态.',
+             '            窗 其 发送 柄 2222 行 层.'),
+            ('            数量 取 数量+1.\n            偏 取 偏+1.',
+             '            窗 其 发送 柄 2383 0 0.\n            数量 取 数量+1.\n            偏 取 偏+1.'),
             ("态['phase'] != 'scan' 或 非 态['pending']", "态['phase'] != 'scan'"),
             ('    _讯 柄 态 2662 1 0.', '    _讯 柄 态 2226 0 0.'),
             ('    _讯 柄 态 2663 0 0.', '    _讯 柄 态 2663 5 0.'),
-            ("文档 != 态['document']", '假'),
-            ("长 != 态['length']", '假'),
+            ("若 文档 != 态['document'] 则 卒 'Stale Markdown document.'.", "若 假 则 卒 'Stale Markdown document.'."),
+            ("若 长 != 态['length'] 则 卒 'Markdown text changed without invalidation.'.", "若 假 则 卒 'Markdown text changed without invalidation.'."),
+            ('借 取 窗 其 发送 柄 2185 0 0.\n        _须直属 柄 态 权.\n        若 非 (借 其 为空) 则',
+             '借 取 窗 其 发送 柄 2185 0 0.\n        若 非 (借 其 为空) 则'),
+            ('                    _直护 柄 态 直.\n                    # G0,M1',
+             '                    # G0,M1'),
+            ("    _须本态 柄 态.\n    若 文档 != 态['document'] 则 卒 'Stale Markdown direct document.'.",
+             "    若 文档 != 态['document'] 则 卒 'Stale Markdown direct document.'."),
         )
         for before, after in mutations:
             with self.subTest(mutation=after):
@@ -3047,7 +3334,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         ci.validate_gui_markdown(markdown_evidence(), require_windows_clock=True)
         mutations = ['missing-case', 'duplicate-case', 'missing-stage', 'wrong-source', 'wrong-size', 'wrong-probe',
                      'wrong-fold', 'late', 'nonfinite', 'wrong-length', 'wrong-dirty', 'not-collapsed',
-                     'not-expanded', 'style', 'fold', 'context', 'status', 'end-only', 'lexer', 'tail',
+                     'not-expanded', 'style', 'fold', 'context', 'status', 'end-only', 'lexer', 'tail', 'phase-length', 'phase-feed',
                      'no-input', 'request-not-pending', 'paint-not-pending', 'not-cleared', 'slow-input',
                      'oversized-snapshot', 'no-final-proof', 'undo-count', 'clock']
         for mutation in mutations:
@@ -3072,6 +3359,10 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             elif mutation == 'end-only': stage['last_probe']['styles_match'] = False
             elif mutation == 'lexer': stage['last_probe']['lexer'] = 0
             elif mutation == 'tail': stage['last_probe']['tail_requested'] = False
+            elif mutation == 'phase-length':
+                stage['last_progress']['diagnostic']['length'] -= 1
+                stage['last_progress']['diagnostic']['feed'] -= 1
+            elif mutation == 'phase-feed': stage['last_progress']['diagnostic']['feed'] -= 1
             elif mutation == 'no-input': stage['responsiveness'] = {}
             elif mutation == 'request-not-pending': stage['responsiveness']['navigation'][0]['request_pending'] = False
             elif mutation == 'paint-not-pending': stage['responsiveness']['paint']['request_pending'] = False
@@ -3136,7 +3427,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             self.run_markdown_stage_control(stale_pending_diagnostic=True)
 
     def test_markdown_numeric_phase_parser_rejects_unbounded_private_or_missing_fields(self):
-        marker = ' [MDP1 seq=1 via=0 id=2 gen=3 rev=0 phase=2 pending=1 length=1000000 feed=470180 published=47104 tick=123 work_us=100000 gap_us=200000]'
+        marker = ' [MDP2 seq=1 via=0 id=2 gen=3 rev=0 phase=2 pending=1 length=1000000 feed=470180 published=47104 tick=123 work_us=100000 gap_us=200000 bulkCalls=736 bulkLines=47104 fallbackBatches=0 directCalls=0 directLines=0 maxPlanBytes=1056 bulkUs=1234 ownedBufferBytes=1088 metric_valid=1]'
         result = ci.parse_markdown_diagnostic('PRIVATE_PATH_SENTINEL' + marker)
         self.assertEqual(result['phase'], 2)
         self.assertNotIn('PRIVATE', json.dumps(result))
@@ -3146,9 +3437,132 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     marker.replace('feed=470180', 'feed=1000001'), marker.replace('tick=123', 'tick=true'),
                     marker.replace('tick=123', 'tick=01'), marker.replace('id=2', 'id=-1'),
                     marker.replace('rev=0 ', ''), marker.replace('gen=3', 'private=3'),
-                    marker + marker, ' [MDP1 error=1]', marker.replace('gap_us=200000', 'gap_us=9999999999999999')]:
+                    marker + marker, ' [MDP2 error=1]', marker.replace('gap_us=200000', 'gap_us=9999999999999999')]:
             with self.subTest(bad=bad), self.assertRaises(RuntimeError): ci.parse_markdown_diagnostic(bad)
         self.assertIsNone(ci.parse_markdown_diagnostic('ordinary Markdown status'))
+        self.assertLessEqual(len(marker), ci.MARKDOWN_DIAGNOSTIC_MAX_CHARS)
+        for field in ci.MARKDOWN_DIAGNOSTIC_FIELDS:
+            for value in (-1, True, 1.5, '1', 9007199254740992):
+                with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
+                    ci.validate_markdown_diagnostic(dict(result, **{field: value}))
+            missing = dict(result)
+            missing.pop(field)
+            with self.subTest(missing=field), self.assertRaises(RuntimeError):
+                ci.validate_markdown_diagnostic(missing)
+        for change in ({'bulkCalls': 0}, {'bulkLines': 47105}, {'directLines': 1},
+                       {'maxPlanBytes': 1057}, {'maxPlanBytes': 1041}, {'ownedBufferBytes': 1089},
+                       {'ownedBufferBytes': 0}, {'metric_valid': 0}):
+            with self.subTest(change=change), self.assertRaises(RuntimeError):
+                ci.validate_markdown_diagnostic(dict(result, **change))
+        terminal = dict(result, phase=4, pending=0)
+        ci.validate_markdown_diagnostic(terminal)
+        ci.validate_markdown_diagnostic(dict(terminal, bulkCalls=1, bulkLines=0,
+            fallbackBatches=1, published=1, maxPlanBytes=48))  # Valid zero-write prewrite fallback.
+        for change in ({'directCalls': 1}, {'published': 47103}, {'fallbackBatches': 47105}):
+            with self.subTest(terminal=change), self.assertRaises(RuntimeError):
+                ci.validate_markdown_diagnostic(dict(terminal, **change))
+        for bad in (marker.replace('MDP2', 'MDP1'), marker.replace('MDP2', 'MDP3'),
+                    marker.replace('bulkUs=1234', 'bulkUs=NaN'),
+                    marker.replace('metric_valid=1', 'metric_valid=1 extra=1')):
+            with self.subTest(marker=bad), self.assertRaises(RuntimeError):
+                ci.parse_markdown_diagnostic(bad)
+
+    def test_markdown_memory_schema_rejects_fabricated_unbounded_or_mislabeled_peak(self):
+        baseline = markdown_evidence()['cases'][0]['stages'][0]
+        ci.validate_markdown_memory(baseline['memory'], baseline['observer'], baseline['wall_ms'])
+        for mutation in ('missing', 'type', 'overflow', 'zero', 'summary', 'cost', 'count',
+                         'measurement', 'outside', 'below', 'unknown', 'unsampled'):
+            stage = json.loads(json.dumps(baseline))
+            memory = stage['memory']
+            if mutation == 'missing': memory.pop('sampledWorkingSetPeak')
+            elif mutation == 'type': memory['samples'][0]['workingSetBytes'] = True
+            elif mutation == 'overflow': memory['samples'][0]['workingSetBytes'] = 9007199254740992
+            elif mutation == 'zero': memory['samples'][0]['processPeakWorkingSetBytes'] = 0
+            elif mutation == 'summary': memory['sampledWorkingSetPeak'] += 1
+            elif mutation == 'cost': memory['query_wall_ms'] = 1.0
+            elif mutation == 'count': memory['sample_count'] = 2
+            elif mutation == 'measurement': memory['measurement'] = 'instantaneous stage peak'
+            elif mutation == 'outside': memory['samples'][0]['start_ms'] = 40.0
+            elif mutation == 'below': memory['samples'][0]['processPeakWorkingSetBytes'] = 1
+            elif mutation == 'unknown': memory['samples'][0]['private'] = 'text'
+            elif mutation == 'unsampled': memory['samples'] = []
+            with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
+                ci.validate_markdown_memory(memory, stage['observer'], stage['wall_ms'])
+
+    def test_markdown_fence_specific_fixture_requires_actual_bulk_calls(self):
+        record = markdown_evidence()
+        diagnostic = record['cases'][2]['stages'][0]['last_progress']['diagnostic']
+        diagnostic.update(bulkCalls=0, bulkLines=0, bulkUs=0, maxPlanBytes=0,
+                          ownedBufferBytes=0, fallbackBatches=1)
+        ci.validate_markdown_diagnostic(diagnostic)  # Product fallback remains valid.
+        with self.assertRaisesRegex(RuntimeError, 'did not actually use bulk'):
+            ci.validate_gui_markdown(record)
+
+    def test_markdown_memory_query_requires_windows_and_owned_handle(self):
+        with patch.object(ci.sys, 'platform', 'linux'), self.assertRaisesRegex(RuntimeError, 'actual Windows'):
+            ci.MarkdownProcessMemory(object(), ci.markdown_memory_record(), 0, lambda: 0)
+        with patch.object(ci.sys, 'platform', 'win32'), self.assertRaisesRegex(RuntimeError, 'owned launcher handle'):
+            ci.MarkdownProcessMemory(object(), ci.markdown_memory_record(), 0, lambda: 0)
+        self.assertEqual(ctypes.sizeof(ci.MarkdownMemoryCounters), 72)
+
+    def test_markdown_memory_api_records_real_return_values_and_separate_cost(self):
+        def query(handle, pointer, size):
+            self.assertEqual((handle, size), (456, 72))
+            counters = ctypes.cast(pointer, ctypes.POINTER(ci.MarkdownMemoryCounters)).contents
+            self.assertEqual(counters.cb, 72)
+            counters.WorkingSetSize, counters.PeakWorkingSetSize = 123456, 234567
+            return 1
+        native = Mock(side_effect=query)
+        kernel = SimpleNamespace(K32GetProcessMemoryInfo=native)
+        record = ci.markdown_memory_record()
+        clock = iter((0.1, 0.1002))
+        with patch.object(ci.sys, 'platform', 'win32'), patch.object(ci.ctypes, 'WinDLL', return_value=kernel, create=True) as load:
+            collector = ci.MarkdownProcessMemory(SimpleNamespace(_handle=456), record, 0, lambda: next(clock))
+            collector.sample()
+        load.assert_called_once_with('kernel32', use_last_error=True)
+        self.assertEqual(native.call_count, 1)
+        self.assertEqual(record['samples'], [{'start_ms': 100.0, 'query_wall_ms': 0.2,
+            'workingSetBytes': 123456, 'processPeakWorkingSetBytes': 234567}])
+        self.assertEqual(record['sampledWorkingSetPeak'], 123456)
+        self.assertEqual(record['processPeakWorkingSet'], 234567)
+        self.assertEqual(record['query_wall_ms'], 0.2)
+        self.assertEqual(record['max_query_ms'], 0.2)
+        ci.validate_markdown_memory(record, {'snapshot_count': 1,
+            'snapshots': [{'start_ms': 100.0, 'wall_ms': 1.0}]}, 101.0)
+        self.assertEqual(native.argtypes, [ci.wintypes.HANDLE, ctypes.POINTER(ci.MarkdownMemoryCounters), ci.wintypes.DWORD])
+
+    def test_markdown_memory_success_can_report_trimmed_zero_current_set(self):
+        def query(handle, pointer, size):
+            counters = ctypes.cast(pointer, ctypes.POINTER(ci.MarkdownMemoryCounters)).contents
+            counters.WorkingSetSize, counters.PeakWorkingSetSize = 0, 234567
+            return 1
+        kernel = SimpleNamespace(K32GetProcessMemoryInfo=Mock(side_effect=query))
+        record = ci.markdown_memory_record()
+        clock = iter((0.1, 0.1002))
+        with patch.object(ci.sys, 'platform', 'win32'), patch.object(ci.ctypes, 'WinDLL', return_value=kernel, create=True):
+            collector = ci.MarkdownProcessMemory(SimpleNamespace(_handle=456), record, 0, lambda: next(clock))
+            collector.sample()
+        self.assertEqual(record['sampledWorkingSetPeak'], 0)
+        self.assertEqual(record['processPeakWorkingSet'], 234567)
+        ci.validate_markdown_memory(record, {'snapshot_count': 1,
+            'snapshots': [{'start_ms': 100.0, 'wall_ms': 1.0}]}, 101.0)
+
+    def test_markdown_memory_api_failure_cannot_invent_zero_usage(self):
+        for returned, working, peak in ((0, 0, 0), (1, 0, 0), (1, 2, 1)):
+            def query(handle, pointer, size):
+                counters = ctypes.cast(pointer, ctypes.POINTER(ci.MarkdownMemoryCounters)).contents
+                counters.WorkingSetSize, counters.PeakWorkingSetSize = working, peak
+                return returned
+            kernel = SimpleNamespace(K32GetProcessMemoryInfo=Mock(side_effect=query))
+            record = ci.markdown_memory_record()
+            clock = iter((0.1, 0.1002))
+            with patch.object(ci.sys, 'platform', 'win32'), patch.object(ci.ctypes, 'WinDLL', return_value=kernel, create=True):
+                collector = ci.MarkdownProcessMemory(SimpleNamespace(_handle=456), record, 0, lambda: next(clock))
+                with self.subTest(returned=returned, working=working, peak=peak), self.assertRaises(RuntimeError):
+                    collector.sample()
+            self.assertEqual(record['sample_count'], 0)
+            self.assertEqual(record['samples'], [])
+            self.assertEqual(record['query_wall_ms'], 0.2)
 
     def test_markdown_real_stage_uses_bounded_observer_and_pending_requests(self):
         self.run_markdown_stage_control()
@@ -3163,8 +3577,27 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         path = self.root / 'many-lines.md'
         path.write_bytes(original)
         class Process:
-            pid = 123
+            pid, _handle = 123, 456
             def poll(self): return None
+        def memory_factory(process, record, started, clock):
+            collector = object.__new__(ci.MarkdownProcessMemory)
+            collector.process, collector.record = process, record
+            collector.started, collector.clock = started, clock
+            def query(handle, pointer, size):
+                self.assertEqual((handle, size), (456, ctypes.sizeof(ci.MarkdownMemoryCounters)))
+                counters = ctypes.cast(pointer, ctypes.POINTER(ci.MarkdownMemoryCounters)).contents
+                counters.WorkingSetSize, counters.PeakWorkingSetSize = 1048576, 2097152
+                return 1
+            collector.query = query
+            return collector
+        original_memory = ci.MarkdownProcessMemory
+        def mocked_memory(*args):
+            # Constructor is patched, so retain the real class explicitly.
+            with patch.object(ci, 'MarkdownProcessMemory', original_memory):
+                return memory_factory(*args)
+        memory_patch = patch.object(ci, 'MarkdownProcessMemory', side_effect=mocked_memory)
+        memory_patch.start()
+        self.addCleanup(memory_patch.stop)
         class Api:
             def __init__(self):
                 self.caret, self.visible, self.status_reads = 9, False, 0
@@ -3179,8 +3612,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 self.scalar(hwnd, 0x000D)
                 if hwnd == 1: return '* ' + path.name + ' · ru_notepad'
                 self.status_reads += 1
-                marker = (' [MDP1 seq=1 via=0 id=2 gen=3 rev=0 phase=1 pending=1 length=' + str(len(expected)) +
-                          ' feed=470180 published=47104 tick=123 work_us=100000 gap_us=200000]')
+                marker = (' [MDP2 seq=1 via=0 id=2 gen=3 rev=0 phase=1 pending=1 length=' + str(len(expected)) +
+                          ' feed=470180 published=47104 tick=123 work_us=100000 gap_us=200000 bulkCalls=736 bulkLines=47104 fallbackBatches=0 directCalls=0 directLines=0 maxPlanBytes=1056 bulkUs=1234 ownedBufferBytes=1088 metric_valid=1]')
                 # Use valid progress bounded to this smaller synthetic corpus.
                 marker = marker.replace('feed=470180', 'feed=47018')
                 if missing_diagnostic: marker = ''
@@ -3188,6 +3621,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 if warning: return 'Ln 1 UTF-8 Markdown folding was disabled: synthetic publication failure'
                 if not stale_pending_diagnostic:
                     marker = marker.replace('seq=1 via=0', 'seq=2 via=1').replace('phase=1 pending=1', 'phase=4 pending=0')
+                    marker = marker.replace('feed=47018 ', 'feed=' + str(len(expected)) + ' ')
                 return 'Ln 1 UTF-8 Markdown' + marker
             def scalar(self, hwnd, message, wparam=0, lparam=0):
                 self.messages.append((hwnd, message, wparam, lparam))
@@ -3285,6 +3719,10 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                                  lambda: api.scalar(2, 0x0102, ord('x'), 1))
         ci.validate_gui_ru_observer(stage['observer'], stage['wall_ms'], stage['probes'])
         ci.validate_gui_markdown_responsiveness(stage['responsiveness'], stage['wall_ms'])
+        ci.validate_markdown_memory(stage['memory'], stage['observer'], stage['wall_ms'])
+        self.assertEqual(stage['memory']['sample_count'], stage['observer']['snapshot_count'])
+        self.assertEqual(stage['memory']['sampledWorkingSetPeak'], 1048576)
+        self.assertEqual(stage['memory']['processPeakWorkingSet'], 2097152)
         self.assertTrue(stage['collapsed_before_edit'])
         self.assertTrue(stage['last_probe']['children_visible'])
         self.assertEqual(api.navigation, ['RIGHT', 'LEFT'])

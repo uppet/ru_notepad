@@ -24,12 +24,14 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         待 取 0. 若 扫['pending'] 则 待 取 1. 然
         工 取 (A 其 查 'syntaxWorkMs')*1000. 工 取 工-工%1.
         隙 取 (A 其 查 'syntaxGapMs')*1000. 隙 取 隙-隙%1.
-        文 取 ' [MDP1 seq='+(序 为 句)+' via='+(来源 为 句)+' id='+(扫['identity'] 为 句)+' gen='+(扫['generation'] 为 句)+' rev='+(扫['revision'] 为 句)+' phase='+(扫['phaseCode'] 为 句)+' pending='+(待 为 句)+' length='+(扫['length'] 为 句)+' feed='+(扫['feed'] 为 句)+' published='+(扫['published'] 为 句)+' tick='+((A 其 查 'syntaxTicks') 为 句)+' work_us='+(工 为 句)+' gap_us='+(隙 为 句)+']'.
+        有效 取 0. 若 扫['bulkMetricsValid'] 则 有效 取 1. 然
+        文 取 ' [MDP2 seq='+(序 为 句)+' via='+(来源 为 句)+' id='+(扫['identity'] 为 句)+' gen='+(扫['generation'] 为 句)+' rev='+(扫['revision'] 为 句)+' phase='+(扫['phaseCode'] 为 句)+' pending='+(待 为 句)+' length='+(扫['length'] 为 句)+' feed='+(扫['feed'] 为 句)+' published='+(扫['published'] 为 句)+' tick='+((A 其 查 'syntaxTicks') 为 句)+' work_us='+(工 为 句)+' gap_us='+(隙 为 句)+' bulkCalls='+(扫['bulkCalls'] 为 句)+' bulkLines='+(扫['bulkLines'] 为 句)+' fallbackBatches='+(扫['fallbackBatches'] 为 句)+' directCalls='+(扫['directCalls'] 为 句)+' directLines='+(扫['directLines'] 为 句)+' maxPlanBytes='+(扫['maxPlanBytes'] 为 句)+' bulkUs='+(扫['bulkUs'] 为 句)+' ownedBufferBytes='+(扫['ownedBufferBytes'] 为 句)+' metric_valid='+(有效 为 句)+']'.
+        若 文 其 量 > 768 则 卒 'Bounded Markdown numeric marker overflow.'. 然
         A 其 增 'markdownDiagnosticIdentity' 扫['identity'].
         A 其 增 'markdownDiagnosticPending' 扫['pending'].
         A 其 增 'markdownDiagnosticText' 文.
     救 原因
-        A 其 增 'markdownDiagnosticText' ' [MDP1 error=1]'.
+        A 其 增 'markdownDiagnosticText' ' [MDP2 error=1]'.
         A 其 增 'markdownDiagnosticFailed' 真.
         显 'FAIL: Markdown numeric phase diagnostic failed.'.
     终
@@ -65,7 +67,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         窗 其 标题 (A 其 查 'status') ((A 其 查 'statusBase')+(A 其 查 'markdownDiagnosticText')).
     救 原因
         # Fixed failure marker only; never disclose paths, text or native errors.
-        A 其 增 'markdownDiagnosticText' ' [MDP1 error=1]'.
+        A 其 增 'markdownDiagnosticText' ' [MDP2 error=1]'.
         A 其 增 'markdownDiagnosticFailed' 真.
         # The existing launcher FAIL gate rejects even if an earlier marker
         # remains visible after a failed status write. Emit this fixed line once.
@@ -405,11 +407,13 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     刷新.
     得 空.
 法
-# All app editors have one private document and this controlled UI parent.
+# All app editors have one exclusive private document, this controlled parent,
+# and only the known file_drop child subclass. Any future hook/shared-document
+# path MUST revoke direct ownership before its first change.
 # Selection discards prior capability; only this owning path opts back in.
 算 选择语法 柄 语言 为 句:
     已选 取 语 其 选择 柄 语言.
-    若 已选 == 'ru' 则 语 其 登记直属 柄 (A 其 查 'window'). 然
+    若 已选 == 'ru' 或 已选 == 'markdown' 则 语 其 登记直属 柄 (A 其 查 'window'). 然
     得 已选.
 法
 # Tab ownership is committed only after initialization and native insertion succeed.
