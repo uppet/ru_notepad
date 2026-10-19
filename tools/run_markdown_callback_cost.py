@@ -24,8 +24,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE_COMMIT = 'd15132a28a537463e146daab6a925654cfb48ae0'
-BASE_TREE = 'b8b0ae39aa76ae742e3fee79fd66e13c35ceac54'
+BASE_COMMIT = 'ce2ff998e778d9991462a78f245bd17cec32f940'
+BASE_TREE = '115c353c5206967854d58d726afe280d5b4350c2'
 # Product receipt identity is deliberately independent of research old/new.
 PRODUCT_COMMIT = '85c7821fda35aa79deeaf67b4d430f24ddd7f07f'
 PRODUCT_TREE = 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba'

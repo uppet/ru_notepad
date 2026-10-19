@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bounded host controls for the research driver, never Windows acceptance."""
 from pathlib import Path
-from contextlib import redirect_stdout
+from contextlib import nullcontext, redirect_stdout
 from copy import deepcopy
 import math
 import time
@@ -228,7 +228,7 @@ class ProcessControls(unittest.TestCase):
 class EvidenceControls(unittest.TestCase):
     def test_failed_build_with_private_diagnostics_exposes_only_fixed_metadata(self):
         with tempfile.TemporaryDirectory(prefix='markdown-research-evidence-') as folder:
-            root = Path(folder)
+            root = Path(folder).resolve()
             evidence = root / 'evidence'
             sentinel = b'PRIVATE_SOURCE_SENTINEL /private/user/source.ru\n'
             def failed_emit(command, private, label, timeout):
@@ -345,18 +345,42 @@ class ApprovalAndDeltaControls(unittest.TestCase):
 
     def test_nested_compiler_roots_normalize_only_paths_and_keep_stdlib_hashes(self):
         with tempfile.TemporaryDirectory(prefix='markdown-graph-') as folder:
-            root=Path(folder); app=root/'src/main.ru'; app.parent.mkdir(); app.write_text('same app')
+            # The graph loader resolves paths, including Windows 8.3 temp aliases.
+            root=Path(folder).resolve(); app=root/'src/main.ru'; app.parent.mkdir()
+            app.write_text('same app', encoding='utf-8', newline='\n')
             roots=[root/'.ci/old',root/'.ci/new']
             graphs=[]
             for compiler in roots:
-                source=compiler/'rulang/stdlib/密.ru'; source.parent.mkdir(parents=True); source.write_text('same stdlib')
+                source=compiler/'rulang/stdlib/密.ru'; source.parent.mkdir(parents=True)
+                source.write_text('same stdlib', encoding='utf-8', newline='\n')
                 graphs.append({str(app):None,str(source):None})
             with patch.object(research,'ROOT',root):
                 old=research.graph_identity(graphs[0],roots[0]); new=research.graph_identity(graphs[1],roots[1])
                 self.assertEqual(old,new)
                 self.assertEqual(set(old),{'app/src/main.ru','compiler-stdlib/密.ru'})
-                (roots[1]/'rulang/stdlib/密.ru').write_text('changed stdlib')
+                (roots[1]/'rulang/stdlib/密.ru').write_text('changed stdlib', encoding='utf-8', newline='\n')
                 self.assertNotEqual(old,research.graph_identity(graphs[1],roots[1]))
+
+    def test_nested_graph_fixture_resolves_noncanonical_temporary_spelling(self):
+        with tempfile.TemporaryDirectory(prefix='markdown-graph-alias-') as folder:
+            root = Path(folder).resolve()
+            (root / 'spelling').mkdir()
+            alias = root / 'spelling' / '..'
+            self.assertNotEqual(alias, alias.resolve())
+            with patch.object(tempfile, 'TemporaryDirectory', return_value=nullcontext(str(alias))):
+                self.test_nested_compiler_roots_normalize_only_paths_and_keep_stdlib_hashes()
+
+    def test_graph_source_outside_the_exact_roots_still_fails(self):
+        with tempfile.TemporaryDirectory(prefix='markdown-graph-outside-') as folder:
+            root = Path(folder).resolve()
+            compiler = root / '.ci/compiler'
+            for relative in ('outside.ru', 'src-other/other.ru', '.ci/compiler/rulang/other.ru'):
+                source = root / relative
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_text('outside', encoding='utf-8', newline='\n')
+                with self.subTest(relative=relative), patch.object(research, 'ROOT', root), \
+                     self.assertRaisesRegex(research.ResearchError, '^graph_source_outside_roots$'):
+                    research.graph_identity({str(source): None}, compiler)
 
     def test_baseline_compiler_identity_and_version_when_local_pin_available(self):
         roots = (ROOT / '.ci/ru-research-baseline', ROOT / '.ci/research-baseline')
@@ -469,7 +493,7 @@ int main(void) {
 """
         with tempfile.TemporaryDirectory(prefix='markdown-live-c-') as folder:
             src=Path(folder)/'control.c'; binary=Path(folder)/('control.exe' if sys.platform=='win32' else 'control')
-            src.write_text(code)
+            src.write_text(code, encoding='utf-8', newline='\n')
             build=subprocess.run([cc,'-std=c99','-O2',str(src),'-o',str(binary)],capture_output=True,timeout=30)
             self.assertEqual(build.returncode,0,build.stderr.decode())
             result=subprocess.run([str(binary)],capture_output=True,timeout=5)
@@ -601,7 +625,7 @@ class MemoryControls(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='markdown-descendant-') as folder:
             directory=Path(folder)
             result=research.run_private([sys.executable,'-I','-c',program],directory,'sample-descendant',1,monitor_memory=True)
-            pid=int((directory/'sample-descendant.stdout').read_text().strip())
+            pid=int((directory/'sample-descendant.stdout').read_text(encoding='utf-8').strip())
             kernel=ctypes.WinDLL('kernel32',use_last_error=True)
             kernel.OpenProcess.argtypes=[wintypes.DWORD,wintypes.BOOL,wintypes.DWORD]; kernel.OpenProcess.restype=wintypes.HANDLE
             kernel.WaitForSingleObject.argtypes=[wintypes.HANDLE,wintypes.DWORD]; kernel.WaitForSingleObject.restype=wintypes.DWORD
@@ -621,7 +645,7 @@ class MemoryControls(unittest.TestCase):
 class FullRunnerControls(unittest.TestCase):
     def exercise(self, failure=None):
         with tempfile.TemporaryDirectory(prefix='markdown-full-runner-') as temporary:
-            root=Path(temporary); binary=root/'bin'; binary.mkdir(); evidence=root/'evidence'
+            root=Path(temporary).resolve(); binary=root/'bin'; binary.mkdir(); evidence=root/'evidence'
             dependencies={}
             for name in ('Scintilla.dll','Lexilla.dll','RuSyntax.dll'):
                 (binary/name).write_bytes(name.encode()); dependencies[name]=research.sha(binary/name)
@@ -637,8 +661,9 @@ class FullRunnerControls(unittest.TestCase):
                 if label=='emit':
                     build_calls.append((role,label)); self.assertLessEqual(timeout,120)
                     code=generated_pair()[role=='new']
-                    for filename in ('original.c','instrumented.c'): (private/filename).write_text(code)
-                    (private/'instrumentation.diff').write_text('SYNTHETIC_PRIVATE_DIFF')
+                    for filename in ('original.c','instrumented.c'):
+                        (private/filename).write_text(code, encoding='utf-8', newline='\n')
+                    (private/'instrumentation.diff').write_text('SYNTHETIC_PRIVATE_DIFF', encoding='utf-8', newline='\n')
                     research.save(private/'emission.json',{'callback_function':'ru_function_1','reader_function':'ru_function_2',
                         'diagnostic_functions':{'reset':'ru_function_3','peak':'ru_function_4','size':'ru_function_5','samples':'ru_function_6'},
                         'full_application_graph':True,'module_count':21,'graph_source_sha256':{'app/src/main.ru':'9'*64},
@@ -672,10 +697,11 @@ class FullRunnerControls(unittest.TestCase):
                  patch.object(research,'fixture_identity',return_value={'sha256':research.INPUT_SHA256}), \
                  patch.object(research,'run_private',side_effect=fake_run),patch.object(sys,'argv',argv),redirect_stdout(io.StringIO()):
                 result=research.main()
-            summary=json.loads((evidence/'markdown-callback-summary.json').read_text())
+            summary=json.loads((evidence/'markdown-callback-summary.json').read_text(encoding='utf-8'))
             for path in evidence.iterdir():
                 self.assertNotIn(b'SYNTHETIC_PRIVATE_DIFF',path.read_bytes())
-                self.assertNotIn(str(root).encode(),path.read_bytes())
+                self.assertNotIn(str(root).encode('utf-8'),path.read_bytes())
+                self.assertNotIn(json.dumps(str(root), ensure_ascii=True)[1:-1].encode('utf-8'),path.read_bytes())
             return result,summary,sample_calls,build_calls
 
     def test_full_two_compiler_control_uses_eight_fresh_processes_and_sanitized_receipts(self):
@@ -689,6 +715,30 @@ class FullRunnerControls(unittest.TestCase):
         self.assertFalse(summary['general_speedup_claimed'])
         self.assertTrue(all(row['binary_before']==row['binary_after'] for row in summary['samples']))
         self.assertIn('build_wall_ms',summary); self.assertIn('execution_wall_ms',summary); self.assertIn('research_wall_ms',summary)
+
+    def test_fake_emission_is_exact_lf_under_windows_default_translation(self):
+        original_write = Path.write_text
+        c_writes = []
+        def windows_write(path, data, encoding=None, errors=None, newline=None):
+            result = original_write(path, data, encoding=encoding, errors=errors,
+                                    newline='\r\n' if newline is None else newline)
+            if path.name in ('original.c', 'instrumented.c'):
+                c_writes.append(path.name)
+                self.assertEqual(encoding, 'utf-8')
+                self.assertEqual(path.read_bytes(), data.encode('utf-8'))
+                self.assertNotIn(b'\r', path.read_bytes())
+            return result
+        with patch.object(Path, 'write_text', windows_write):
+            result, summary, samples, builds = self.exercise()
+        self.assertEqual(result, 0, summary.get('failure'))
+        self.assertEqual(samples, research.sample_order())
+        self.assertEqual(len(builds), 6)
+        self.assertEqual(c_writes, ['original.c', 'instrumented.c'] * 2)
+        # Fixture repair cannot make CRLF generated bytes pass the exact gate.
+        old, new = generated_pair()
+        with self.assertRaisesRegex(research.ResearchError, '^generator_banner_mismatch$'):
+            research.validate_generated_delta(old.replace('\n', '\r\n'), new.replace('\n', '\r\n'),
+                                              approved(), research.COMPILER_VERSIONS)
 
     def test_failed_sample_continues_only_with_confirmed_cleanup(self):
         result,summary,samples,_=self.exercise('memory')
@@ -704,13 +754,13 @@ class FullRunnerControls(unittest.TestCase):
             config=Path(folder)/'unconfigured.json'
             value=research.load_approval()
             value.update(new=None,approval_commit=None,replacements=None,expected_heap_size={'old':32,'new':None})
-            config.write_text(json.dumps(value))
+            config.write_text(json.dumps(value), encoding='utf-8', newline='\n')
             with patch.object(research,'APPROVAL_FILE',config), \
                  patch.object(sys,'argv',['probe','--evidence-dir',folder]), \
                  patch.object(research,'run_private') as spawn, redirect_stdout(io.StringIO()):
                 self.assertEqual(research.main(),1)
                 spawn.assert_not_called()
-                summary=json.loads((Path(folder)/'markdown-callback-summary.json').read_text())
+                summary=json.loads((Path(folder)/'markdown-callback-summary.json').read_text(encoding='utf-8'))
                 self.assertEqual(summary['failure']['code'],'new_compiler_not_approved')
                 self.assertEqual(summary['samples'],[])
 
