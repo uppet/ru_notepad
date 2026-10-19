@@ -409,7 +409,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'ru_lexical_policy': r'^TOTAL PASS: 338\s*$',
             'ru_syntax_native': r'^TOTAL PASS: 149\s*$',
             'ru_direct_styling_native': r'^TOTAL PASS: 36\s*$',
-            'markdown_policy': r'^TOTAL PASS: 199\s*$',
+            'markdown_policy': r'^TOTAL PASS: 221\s*$',
             'markdown_selection_policy': r'^TOTAL PASS: 31\s*$',
             'markdown_native': r'^TOTAL PASS: 58\s*$',
             'app_markdown_native': r'^TOTAL PASS: 70\s*$',
@@ -1247,7 +1247,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         prior = [test for test in summary['tests'] if test['name'] not in added]
         self.assertEqual(len(prior), 33)
         self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1959)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1981)
 
     def test_direct_style_fixture_is_built_packaged_and_required(self):
         name = 'ru_direct_styling_native'
@@ -3051,7 +3051,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         direct = next(t for t in summary['tests'] if t['name'] == 'markdown_direct_native')
         prior = [t for t in summary['tests'] if t['name'] != 'markdown_direct_native']
         self.assertEqual(len(prior), 38)
-        self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1845)
+        self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1867)
         self.assertEqual(direct['assertions_passed'], 114)
         self.assertEqual(ci.console_command('markdown_direct_native', self.root, self.root),
                          [str(self.root / 'markdown_direct_native.exe')])
@@ -3205,7 +3205,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertIn("'candidate_parent_mismatch'", runner)
 
     def test_markdown_gate_preserves_old_counts_and_requires_exact_new_counts(self):
-        expected = {'markdown_policy': 199, 'markdown_selection_policy': 31,
+        expected = {'markdown_policy': 221, 'markdown_selection_policy': 31,
                     'markdown_native': 58, 'app_markdown_native': 70, 'markdown_direct_native': 114}
         self.assertEqual({name: ci.expected_assertions(name) for name in expected}, expected)
         self.assertEqual(ci.console_command('app_markdown_native', self.root, self.root),
@@ -3869,7 +3869,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
     def test_markdown_pure_backend_gate_and_fixed_historical_workflow_are_mandatory(self):
         import test_markdown_portable as portable_policy
         portable_policy.controls()
-        self.assertEqual(portable_policy.CASES, {'markdown_policy': 199, 'markdown_selection_policy': 31})
+        self.assertEqual(portable_policy.CASES, {'markdown_policy': 221, 'markdown_selection_policy': 31})
         workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text()
         self.assertIn('python -I tools/test_markdown_portable.py --ru-root .ci/ru-language', workflow)
         self.assertIn('needs: helper-policy', workflow)

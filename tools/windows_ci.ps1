@@ -159,6 +159,7 @@ try {
     # Orchestration tests are separate from the native application acceptance.
     Invoke-Checked $Python @('tools/test_windows_ci.py')
     Invoke-Checked $Python @('tools/test_package.py')
+    Invoke-Checked $Python @('-I','tools/test_package_manual_preview.py')
     Invoke-Checked $Python @('-I','tools/test_ru_cli_diagnostics.py','--ru-root',$RuRoot,'-v')
     # Historical research is opt-in. Normal product CI does not execute a
     # locked old-source experiment against a new application graph.
@@ -229,6 +230,18 @@ try {
     $AcceptArgs = @('tools/windows_ci.py','--bin-dir',$Output,'--evidence-dir',$Evidence,
         '--mingw-root',$MinGW,'--objdump',(Join-Path $Bin 'objdump.exe'))
     if ($RunAclTests) { $AcceptArgs += '--acl' }
+    # Reserve the fresh-run identity before acceptance creates any receipt.
+    # A refused preview must not suppress the original product run.
+    $PreviewPrepared = $false
+    if (-not $RunCallbackResearch) {
+        try {
+            Invoke-Checked $Python @('tools/package_manual_preview.py','prepare',
+                '--objdump',(Join-Path $Bin 'objdump.exe'))
+            $PreviewPrepared = $true
+        } catch {
+            Write-Host 'MANUAL_PREVIEW_PREPARE_REFUSED=1'
+        }
+    }
     if ($RunCallbackResearch) {
         # The research EXE and its instrumented translation unit stay outside bin
         # and the package inventory. Each compiler uses one binary for both modes.
@@ -249,6 +262,19 @@ try {
             # Diagnostics are separate runs AFTER the original acceptance. Their
             # commands/JSON failures cannot replace its exception or exit status.
             $ProductExit = $global:LASTEXITCODE
+            try {
+                # A known pending Markdown timeout may produce a clearly labelled
+                # manual preview while the original exception/exit stays failed.
+                if ($PreviewPrepared) {
+                    Invoke-Checked $Python @('tools/package_manual_preview.py','package',
+                        '--objdump',(Join-Path $Bin 'objdump.exe'),'--mingw-root',$MinGW)
+                }
+            } catch {
+                Write-Host 'MANUAL_PREVIEW_SAFETY_GATE_REFUSED=1'
+                if ($ProductExit -eq 0) { throw }
+            } finally {
+                $global:LASTEXITCODE = $ProductExit
+            }
             try {
                 Invoke-OptionalMarkdownStudy $Python @('tools/test_markdown_native_baseline.py','-v') @(
                     'tools/run_markdown_native_baseline.py','--cc',(Join-Path $Bin 'gcc.exe'),

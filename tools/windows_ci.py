@@ -56,7 +56,7 @@ NATIVE_CONSOLE_TESTS = (
     ('ru_lexical_policy', r'^TOTAL PASS: 338\s*$'),
     ('ru_syntax_native', r'^TOTAL PASS: 149\s*$'),
     ('ru_direct_styling_native', r'^TOTAL PASS: 36\s*$'),
-    ('markdown_policy', r'^TOTAL PASS: 199\s*$'),
+    ('markdown_policy', r'^TOTAL PASS: 221\s*$'),
     ('markdown_selection_policy', r'^TOTAL PASS: 31\s*$'),
     ('markdown_native', r'^TOTAL PASS: 58\s*$'),
     ('app_markdown_native', r'^TOTAL PASS: 70\s*$'),
@@ -2784,8 +2784,9 @@ def run_gui_markdown(api, binary_dir, fixtures, evidence):
     finally:
         api.release_drops()
     result.update(fixture_binary_sha256=hashes, markdown_performance=record)
-    if (sha(small) != hashlib.sha256(original).hexdigest() or any(
-            sha(source) != hashlib.sha256(gui_markdown_fixture(kind)[0]).hexdigest() for kind, source in sources.items())):
+    result['source_bytes_preserved'] = (sha(small) == hashlib.sha256(original).hexdigest() and all(
+            sha(source) == hashlib.sha256(gui_markdown_fixture(kind)[0]).hexdigest() for kind, source in sources.items()))
+    if not result['source_bytes_preserved']:
         result.update(passed=False, source_bytes_preserved=False,
                       error='Markdown normal-close flow changed synthetic source bytes')
     return result

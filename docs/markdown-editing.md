@@ -38,6 +38,10 @@ The subsequent Windows run confirmed natural Markdown coloring and all four many
 
 The policy avoids five closer-suffix checks except on `>` and avoids a redundant whole-chunk byte-count pass. The original 1024-scalar limit still runs before state access; each scalar contributes at most four bytes, and the consuming loop still accounts for every actual byte. UTF-8 validation, scheduling and ownership checks remain required. Boundary and full-state comparisons cover these optimizations; complete Windows acceptance, including the unclosed-fence shape, remains required.
 
+The next policy revision indexes local windows of at most 32 Unicode scalars instead of repeatedly indexing the entire input chunk. A feed that begins inside a fence, outside HTML, contains a line ending and contains no `>` can defer transient line-text construction after that line is proven unable to close the fence. Original line transitions still run. Pending characters are replayed before any actual `>` and before EOF or return, preserving all public state fields and retained closer-flag aliases. Other feeds use the original scalar transitions with the same local windows. The input/range limits, UTF-8 byte accounting, folding rules, bridge ownership guards and scheduling budgets are unchanged. Twenty-two additional policy assertions bring that fixture to 221 and the native product total to 1,981 across 39 groups.
+
+The preceding Windows run passed all 1,959 native assertions but the unclosed-fence two-Undo GUI stage exceeded its original shared 30-second deadline. Each real undo requires its own completed scan. Local policy comparisons do not establish whole-application Windows speed; the new policy must run the same three GUI shapes and unchanged deadline.
+
 ## Fold-publication regression work
 
 The next Windows run passed all 1,818 console assertions, all four many-line operations and all four single-line operations (including the two-Undo phase in 27.50 s). The 1 MB unclosed-fence open phase still exceeded 30 s. It had no final probe, so that record alone does not identify its precise stopping point; the three following edits were not reached.

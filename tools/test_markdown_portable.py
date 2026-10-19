@@ -22,7 +22,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 from ru_cli_diagnostics import prepare_compile_diagnostics, validate_stderr
-CASES = {'markdown_policy': 199, 'markdown_selection_policy': 31}
+CASES = {'markdown_policy': 221, 'markdown_selection_policy': 31}
 LIMIT = 1024 * 1024
 
 

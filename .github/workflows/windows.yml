@@ -220,3 +220,14 @@ jobs:
             build/windows-ci/dist/*.sha256
           if-no-files-found: error
           retention-days: 14
+      - name: Upload safety-gated manual preview without changing acceptance
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ru-notepad-manual-preview-${{ github.sha }}
+          path: |
+            build/windows-ci/manual-preview/*.zip
+            build/windows-ci/manual-preview/*.sha256
+            build/windows-ci/manual-preview/preview-artifact.json
+          if-no-files-found: warn
+          retention-days: 14
