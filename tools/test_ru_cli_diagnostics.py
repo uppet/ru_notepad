@@ -25,7 +25,8 @@ class CliDiagnosticsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.temporary = tempfile.TemporaryDirectory(prefix='ru-cli-style-')
-        cls.directory = Path(cls.temporary.name)
+        # The CLI canonicalizes source paths, including Windows short names.
+        cls.directory = Path(cls.temporary.name).resolve()
         cls.source = cls.directory / 'source 中文.ru'
         cls.imported = cls.directory / 'helper.ru'
         cls.imported.write_text('算 值:\n    得 7.\n法\n', encoding='utf-8')
@@ -87,7 +88,10 @@ class CliDiagnosticsTests(unittest.TestCase):
         self.reject(''.join(reversed(self.lines)))
 
     def test_forged_source_path_is_rejected(self):
-        self.reject(self.expected.stderr.replace(str(self.imported), str(self.source)))
+        self.assertIn(str(self.imported), self.expected.stderr)
+        forged = self.expected.stderr.replace(str(self.imported), str(self.source))
+        self.assertNotEqual(forged, self.expected.stderr)
+        self.reject(forged)
 
     def test_forged_line_or_column_is_rejected(self):
         self.reject(self.expected.stderr.replace(':3:2:', ':3:3:'))
