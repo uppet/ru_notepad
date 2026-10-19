@@ -3101,14 +3101,37 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     return self.returncode
                 raise subprocess.TimeoutExpired('synthetic', timeout)
         process = Process()
+        # This exercises the POSIX branch on every host, including Windows where
+        # neither os.killpg nor signal.SIGKILL exists. Keep both mocks local to
+        # this driver rather than changing the process-wide platform modules.
+        posix_os = SimpleNamespace(name='posix',
+            killpg=lambda pid, sig: events.append((pid, sig)))
+        posix_signal = SimpleNamespace(SIGKILL=9)
         with patch.object(gate.subprocess, 'Popen', return_value=process) as launch, \
              patch.object(gate.time, 'monotonic', side_effect=[0.0, 2.0]), \
-             patch.object(gate.os, 'name', 'posix'), \
-             patch.object(gate.os, 'killpg', side_effect=lambda pid, sig: events.append((pid, sig))):
+             patch.object(gate, 'os', posix_os), \
+             patch.object(gate, 'signal', posix_signal):
             with self.assertRaisesRegex(RuntimeError, 'deadline'):
                 gate.checked_run(['synthetic'], self.root, 'deadline', 1)
         self.assertTrue(launch.call_args.kwargs['start_new_session'])
-        self.assertEqual(events, [(98765, gate.signal.SIGKILL), 'wait-cleanup'])
+        self.assertEqual(events, [(98765, 9), 'wait-cleanup'])
+
+    def test_markdown_portable_posix_mock_is_independent_of_host_only_attributes(self):
+        import test_markdown_portable as gate
+        original_os, original_signal = gate.os, gate.signal
+        windows_os, windows_signal = SimpleNamespace(name='nt'), SimpleNamespace()
+        with patch.object(gate, 'os', windows_os), patch.object(gate, 'signal', windows_signal):
+            self.assertFalse(hasattr(gate.os, 'killpg'))
+            self.assertFalse(hasattr(gate.signal, 'SIGKILL'))
+            self.test_markdown_portable_timeout_cleans_owned_process_tree_before_returning()
+            self.assertIs(gate.os, windows_os)
+            self.assertIs(gate.signal, windows_signal)
+            self.assertFalse(hasattr(gate.os, 'killpg'))
+            self.assertFalse(hasattr(gate.signal, 'SIGKILL'))
+            # The POSIX mock must not leak into either Windows cleanup outcome.
+            self.test_markdown_portable_windows_cleanup_targets_tree_and_fails_closed()
+        self.assertIs(gate.os, original_os)
+        self.assertIs(gate.signal, original_signal)
 
     def test_markdown_portable_windows_cleanup_targets_tree_and_fails_closed(self):
         import test_markdown_portable as gate
