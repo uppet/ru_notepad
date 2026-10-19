@@ -429,7 +429,12 @@ _时存 取 _计数型 其 新建.
 算 状态 柄:
     态 取 _编辑们 其 查 (柄 其 句).
     若 态 == 空 则 得 空. 然
-    得 {'enabled':(态['language'] == 'markdown'),'foldEnabled':态['foldEnabled'],'language':态['language'],'warning':态['warning'],'pending':态['pending'],'generation':态['generation'],'revision':态['revision'],'identity':态['identity'],'feed':态['feed'],'bytes':态['feed'],'length':态['length'],'chunks':态['chunks'],'readBytes':态['readBytes'],'published':态['published'],'maxRead':态['maxRead'],'maxPublish':态['maxPublish'],'maxRanges':态['maxRanges'],'maxTickMs':态['maxTickMs'],'maxChunkMs':态['maxChunkMs'],'restart':0,'points':0,'eof':态['eof'],'queuedRanges':((态['ranges']) 其 量),'rangeIndex':态['rangeIndex'],'rangeOffset':态['rangeOffset']}.
+    # Fixed numeric observational phase; never advances scanner state.
+    阶段 取 0.
+    若 态['phase'] == 'scan' 则 阶段 取 1. 若 (态['ranges']) 其 量 > 0 则 阶段 取 2. 然 然
+    若 态['phase'] == 'visibility' 则 阶段 取 3. 然
+    若 非 态['pending'] 则 阶段 取 4. 然
+    得 {'phaseCode':阶段,'enabled':(态['language'] == 'markdown'),'foldEnabled':态['foldEnabled'],'language':态['language'],'warning':态['warning'],'pending':态['pending'],'generation':态['generation'],'revision':态['revision'],'identity':态['identity'],'feed':态['feed'],'bytes':态['feed'],'length':态['length'],'chunks':态['chunks'],'readBytes':态['readBytes'],'published':态['published'],'maxRead':态['maxRead'],'maxPublish':态['maxPublish'],'maxRanges':态['maxRanges'],'maxTickMs':态['maxTickMs'],'maxChunkMs':态['maxChunkMs'],'restart':0,'points':0,'eof':态['eof'],'queuedRanges':((态['ranges']) 其 量),'rangeIndex':态['rangeIndex'],'rangeOffset':态['rangeOffset']}.
 法
 算 排空 柄:
     # Acceptance-test helper only; production admits one tick per timer.

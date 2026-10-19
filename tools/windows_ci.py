@@ -59,7 +59,7 @@ NATIVE_CONSOLE_TESTS = (
     ('markdown_policy', r'^TOTAL PASS: 199\s*$'),
     ('markdown_selection_policy', r'^TOTAL PASS: 31\s*$'),
     ('markdown_native', r'^TOTAL PASS: 58\s*$'),
-    ('app_markdown_native', r'^TOTAL PASS: 57\s*$'),
+    ('app_markdown_native', r'^TOTAL PASS: 70\s*$'),
 )
 SYNTAX_FALLBACK_TESTS = (
     ('syntax_missing_lexilla', '--expect-missing', False),
@@ -2105,7 +2105,7 @@ GUI_MARKDOWN_MEASUREMENT = ('Detached production GUI; a 100 KB/5000-newline coll
     'head/tail style samples, fold/status/length/dirty checks are not whole-content style proof. '
     'EOF caret/scroll requests ordinary native styling; no forced paint or full-document colourise.')
 GUI_MARKDOWN_STAGE_FIELDS = {'operation', 'length', 'dirty', 'source_sha256', 'wall_ms',
-    'probes', 'observer', 'responsiveness', 'last_probe', 'undo_commands', 'collapsed_before_edit'}
+    'probes', 'observer', 'responsiveness', 'last_probe', 'last_progress', 'undo_commands', 'collapsed_before_edit'}
 
 
 def gui_markdown_fixture(kind):
@@ -2139,6 +2139,63 @@ def markdown_expected(kind, operation):
     if inserted:
         data = data[:8] + b'x' + data[8:]
     return data, [dict(p, offset=p['offset'] + int(inserted and p['offset'] >= 8)) for p in probes], folds
+
+
+MARKDOWN_DIAGNOSTIC_FIELDS = ('seq', 'via', 'id', 'gen', 'rev', 'phase', 'pending', 'length',
+                              'feed', 'published', 'tick', 'work_us', 'gap_us')
+
+
+def validate_markdown_diagnostic(record):
+    if (not isinstance(record, dict) or set(record) != set(MARKDOWN_DIAGNOSTIC_FIELDS) or
+            any(type(record[key]) is not int or not 0 <= record[key] <= 9007199254740991
+                for key in MARKDOWN_DIAGNOSTIC_FIELDS) or
+            not 1 <= record['seq'] <= 4096 or record['via'] not in (0, 1) or record['id'] < 1 or record['gen'] < 1 or
+            record['phase'] not in range(5) or record['pending'] not in (0, 1) or
+            (record['phase'] == 4) != (record['pending'] == 0) or
+            (record['via'] == 1 and record['pending'] != 0) or
+            not 0 <= record['feed'] <= record['length'] <= 32000000 or
+            record['published'] > record['length'] + 1):
+        raise RuntimeError('Markdown numeric phase projection is invalid')
+    return record
+
+
+def parse_markdown_diagnostic(status):
+    # Never retain status prose, paths, source text or arbitrary error strings.
+    if '[MDP1' not in status:
+        return None
+    match = re.search(r' \[MDP1 ([^\[\]\r\n]{1,300})\]$', status)
+    if match is None or status.count('[MDP1') != 1:
+        raise RuntimeError('Markdown numeric phase marker is malformed')
+    parts = match.group(1).split(' ')
+    if len(parts) != len(MARKDOWN_DIAGNOSTIC_FIELDS):
+        raise RuntimeError('Markdown numeric phase field inventory changed')
+    result = {}
+    for name, part in zip(MARKDOWN_DIAGNOSTIC_FIELDS, parts):
+        if re.fullmatch(re.escape(name) + r'=(0|[1-9][0-9]{0,15})', part) is None:
+            raise RuntimeError('Markdown numeric phase field is malformed')
+        result[name] = int(part.split('=', 1)[1])
+    return validate_markdown_diagnostic(result)
+
+
+def validate_markdown_progress(progress, *, complete=False, expected_length=None, expected_dirty=None):
+    if (not isinstance(progress, dict) or set(progress) != {'opened', 'length', 'dirty', 'status', 'tail_requested', 'diagnostic'} or
+            type(progress['opened']) is not bool or type(progress['tail_requested']) is not bool or
+            progress['status'] not in ('not-open', 'opening', 'folding', 'failure', 'complete', 'unknown')):
+        raise RuntimeError('Markdown bounded partial progress is malformed')
+    if not progress['opened']:
+        if (progress['length'] is not None or progress['dirty'] is not None or progress['status'] != 'not-open' or
+                progress['tail_requested'] or progress['diagnostic'] is not None):
+            raise RuntimeError('Markdown unopened progress contains invented observations')
+    elif (type(progress['length']) is not int or not 0 <= progress['length'] <= 32000000 or
+          type(progress['dirty']) is not bool):
+        raise RuntimeError('Markdown observed partial size or dirty flag is malformed')
+    if progress['diagnostic'] is not None:
+        validate_markdown_diagnostic(progress['diagnostic'])
+    if complete and (not progress['opened'] or progress['length'] != expected_length or
+            progress['dirty'] is not expected_dirty or progress['status'] != 'complete' or
+            not progress['tail_requested'] or progress['diagnostic'] is None or
+            progress['diagnostic']['pending'] != 0):
+        raise RuntimeError('Markdown completion lacks bounded phase evidence')
 
 
 def markdown_status_complete(status):
@@ -2207,6 +2264,7 @@ def validate_gui_markdown(record, *, require_windows_clock=False):
                     type(stage['undo_commands']) is not int or
                     (not 1 <= stage['undo_commands'] <= 2 if operation == 'undo' else stage['undo_commands'] != 0)):
                 raise RuntimeError('Markdown GUI bounded stage metadata is invalid')
+            validate_markdown_progress(stage['last_progress'], complete=True, expected_length=len(expected), expected_dirty=dirty)
             last = stage['last_probe']
             if (not isinstance(last, dict) or set(last) != {'length', 'dirty', 'end_styled', 'status_done',
                     'styles_match', 'style_samples', 'folds_match', 'context_match', 'lexer', 'tail_requested', 'children_visible'} or
@@ -2242,7 +2300,9 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
     started = clock()  # Includes the opening drop or actual input and all observers.
     stage.update(operation=operation, length=len(expected), dirty=operation in ('insert', 'backspace'),
         source_sha256=hashlib.sha256(original).hexdigest(), wall_ms=0.0, probes=0,
-        observer=gui_ru_observer_record(), responsiveness={}, last_probe={}, undo_commands=0, collapsed_before_edit=False)
+        observer=gui_ru_observer_record(), responsiveness={}, last_probe={},
+        last_progress={'opened': False, 'length': None, 'dirty': None, 'status': 'not-open', 'tail_requested': False, 'diagnostic': None},
+        undo_commands=0, collapsed_before_edit=False)
     editor = status_handle = None
     tail_requested = False
     opened = False
@@ -2271,6 +2331,15 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
                 dirty = bool(api.scalar(editor, 2159))
                 status = api.text(status_handle)
                 pending = GUI_MARKDOWN_PENDING in status
+                state = ('failure' if 'Markdown folding was disabled:' in status else
+                         'opening' if status.lstrip().startswith('Opening:') else
+                         'folding' if pending else 'complete' if markdown_status_complete(status) else 'unknown')
+                stage['last_progress'] = {'opened': True, 'length': length, 'dirty': dirty,
+                    'status': state, 'tail_requested': tail_requested, 'diagnostic': None}
+                # Preserve observations before any completion/style gate. Reuse
+                # the existing status read; no extra observer message is sent.
+                stage['last_progress']['diagnostic'] = parse_markdown_diagnostic(status)
+                validate_markdown_progress(stage['last_progress'])
                 done = markdown_status_complete(status)
                 if stage['dirty'] and not response and pending and length == len(expected):
                     # Capture pending before each request. Do not require it to
@@ -2302,6 +2371,7 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
                     api.scalar(editor, 2025, len(expected))
                     api.scalar(editor, 2169)
                     tail_requested = True
+                    stage['last_progress']['tail_requested'] = True
                     return False
                 if not done:
                     return False
@@ -2326,7 +2396,9 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
                     'children_visible': children_visible}
                 api.verify_owned_handles(process.pid, editor, status_handle)
                 return (length == len(expected) and dirty == stage['dirty'] and end_styled == len(expected) and
-                        lexer == 98 and style_match and fold_match and children_visible and context == expected[6:10])
+                        lexer == 98 and style_match and fold_match and children_visible and context == expected[6:10] and
+                        stage['last_progress']['diagnostic'] is not None and
+                        stage['last_progress']['diagnostic']['pending'] == 0)
             while True:
                 api.no_dialog(process.pid)
                 if process.poll() is not None:
@@ -2460,7 +2532,7 @@ def run_gui_markdown(api, binary_dir, fixtures, evidence):
         return checks
     try:
         result = run_gui(api, isolated, evidence, name='main-gui-markdown', exercise=exercise,
-                         log_prefix='main-markdown-launcher')
+                         log_prefix='main-markdown-launcher', arguments=('--markdown-phase-diagnostics',))
     finally:
         api.release_drops()
     result.update(fixture_binary_sha256=hashes, markdown_performance=record)

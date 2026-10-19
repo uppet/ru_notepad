@@ -85,6 +85,8 @@ def markdown_evidence():
                 'source_sha256': case['source_sha256'], 'wall_ms': 100.0, 'probes': 1, 'observer': observer,
                 'responsiveness': response, 'undo_commands': 2 if operation == 'undo' else 0,
                 'collapsed_before_edit': kind == 'many-lines' and dirty,
+                'last_progress': {'opened': True, 'length': len(expected), 'dirty': dirty, 'status': 'complete', 'tail_requested': True,
+                    'diagnostic': {'seq': 1, 'via': 0, 'id': 1, 'gen': 1, 'rev': 0, 'phase': 4, 'pending': 0, 'length': len(expected), 'feed': len(expected), 'published': 1, 'tick': 1, 'work_us': 1, 'gap_us': 1}},
                 'last_probe': {'length': len(expected), 'dirty': dirty, 'end_styled': len(expected),
                     'status_done': True, 'styles_match': True,
                     'style_samples': {'positions': style_positions, 'expected': style_values, 'actual': list(style_values)},
@@ -365,7 +367,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'markdown_policy': r'^TOTAL PASS: 199\s*$',
             'markdown_selection_policy': r'^TOTAL PASS: 31\s*$',
             'markdown_native': r'^TOTAL PASS: 58\s*$',
-            'app_markdown_native': r'^TOTAL PASS: 57\s*$',
+            'app_markdown_native': r'^TOTAL PASS: 70\s*$',
             'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=73\s*$',
             'file_streaming_native': r'^FILE_STREAMING_TESTS_PASS=99\s*$',
             'editor_streaming_native': r'^EDITOR_STREAMING_TESTS_PASS=21\s*$',
@@ -1187,7 +1189,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         prior = [test for test in summary['tests'] if test['name'] not in added]
         self.assertEqual(len(prior), 33)
         self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1832)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1845)
 
     def test_direct_style_fixture_is_built_packaged_and_required(self):
         name = 'ru_direct_styling_native'
@@ -2912,7 +2914,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
 
     def test_markdown_gate_preserves_old_counts_and_requires_exact_new_counts(self):
         expected = {'markdown_policy': 199, 'markdown_selection_policy': 31,
-                    'markdown_native': 58, 'app_markdown_native': 57}
+                    'markdown_native': 58, 'app_markdown_native': 70}
         self.assertEqual({name: ci.expected_assertions(name) for name in expected}, expected)
         self.assertEqual(ci.console_command('app_markdown_native', self.root, self.root),
                          [str(self.root / 'app_markdown_native.exe'), str(self.root)])
@@ -3113,13 +3115,46 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
              patch.object(ci.time, 'sleep', side_effect=lambda seconds: now.__setitem__(0, now[0] + seconds)):
             self.run_markdown_stage_control(bad_style=True)
 
+    def test_markdown_real_pending_stage_retains_numeric_progress_without_extra_queries(self):
+        now = [0.0]
+        with patch.object(ci.time, 'perf_counter', side_effect=lambda: now[0]), \
+             patch.object(ci.time, 'sleep', side_effect=lambda seconds: now.__setitem__(0, now[0] + seconds)):
+            self.run_markdown_stage_control(pending_forever=True)
+
+    def test_markdown_real_stage_rejects_missing_phase_diagnostic_despite_ready_styles(self):
+        now = [0.0]
+        with patch.object(ci.time, 'perf_counter', side_effect=lambda: now[0]), \
+             patch.object(ci.time, 'sleep', side_effect=lambda seconds: now.__setitem__(0, now[0] + seconds)):
+            self.run_markdown_stage_control(missing_diagnostic=True)
+
+    def test_markdown_real_stage_rejects_stale_pending_marker_despite_ready_styles(self):
+        now = [0.0]
+        with patch.object(ci.time, 'perf_counter', side_effect=lambda: now[0]), \
+             patch.object(ci.time, 'sleep', side_effect=lambda seconds: now.__setitem__(0, now[0] + seconds)):
+            self.run_markdown_stage_control(stale_pending_diagnostic=True)
+
+    def test_markdown_numeric_phase_parser_rejects_unbounded_private_or_missing_fields(self):
+        marker = ' [MDP1 seq=1 via=0 id=2 gen=3 rev=0 phase=2 pending=1 length=1000000 feed=470180 published=47104 tick=123 work_us=100000 gap_us=200000]'
+        result = ci.parse_markdown_diagnostic('PRIVATE_PATH_SENTINEL' + marker)
+        self.assertEqual(result['phase'], 2)
+        self.assertNotIn('PRIVATE', json.dumps(result))
+        for bad in [marker + 'tail', marker.replace('seq=1', 'seq=0'), marker.replace('seq=1', 'seq=4097'),
+                    marker.replace('via=0', 'via=2'), marker.replace('via=0', 'via=1'),
+                    marker.replace('phase=2', 'phase=9'), marker.replace('phase=2', 'phase=4'),
+                    marker.replace('feed=470180', 'feed=1000001'), marker.replace('tick=123', 'tick=true'),
+                    marker.replace('tick=123', 'tick=01'), marker.replace('id=2', 'id=-1'),
+                    marker.replace('rev=0 ', ''), marker.replace('gen=3', 'private=3'),
+                    marker + marker, ' [MDP1 error=1]', marker.replace('gap_us=200000', 'gap_us=9999999999999999')]:
+            with self.subTest(bad=bad), self.assertRaises(RuntimeError): ci.parse_markdown_diagnostic(bad)
+        self.assertIsNone(ci.parse_markdown_diagnostic('ordinary Markdown status'))
+
     def test_markdown_real_stage_uses_bounded_observer_and_pending_requests(self):
         self.run_markdown_stage_control()
 
     def test_markdown_real_stage_rejects_production_failure_warning_despite_ready_native_styles(self):
         self.run_markdown_stage_control(warning=True)
 
-    def run_markdown_stage_control(self, warning=False, bad_style=False):
+    def run_markdown_stage_control(self, warning=False, bad_style=False, pending_forever=False, missing_diagnostic=False, stale_pending_diagnostic=False):
         kind, operation = 'many-lines', 'insert'
         original = ci.gui_markdown_fixture(kind)[0]
         expected, probes, folds = ci.markdown_expected(kind, operation)
@@ -3142,9 +3177,16 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 self.scalar(hwnd, 0x000D)
                 if hwnd == 1: return '* ' + path.name + ' · ru_notepad'
                 self.status_reads += 1
-                if self.status_reads <= 2: return 'Folding Markdown...'
+                marker = (' [MDP1 seq=1 via=0 id=2 gen=3 rev=0 phase=1 pending=1 length=' + str(len(expected)) +
+                          ' feed=470180 published=47104 tick=123 work_us=100000 gap_us=200000]')
+                # Use valid progress bounded to this smaller synthetic corpus.
+                marker = marker.replace('feed=470180', 'feed=47018')
+                if missing_diagnostic: marker = ''
+                if pending_forever or self.status_reads <= 2: return 'Folding Markdown...' + marker
                 if warning: return 'Ln 1 UTF-8 Markdown folding was disabled: synthetic publication failure'
-                return 'Ln 1 UTF-8 Markdown'
+                if not stale_pending_diagnostic:
+                    marker = marker.replace('seq=1 via=0', 'seq=2 via=1').replace('phase=1 pending=1', 'phase=4 pending=0')
+                return 'Ln 1 UTF-8 Markdown' + marker
             def scalar(self, hwnd, message, wparam=0, lparam=0):
                 self.messages.append((hwnd, message, wparam, lparam))
                 if message == 2006: return len(expected)
@@ -3167,6 +3209,41 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             def invalidate_for_paint(self, hwnd): return False
             def paint_pending(self, hwnd): return False
         api, stage = Api(), {}
+        if pending_forever:
+            with self.assertRaisesRegex(RuntimeError, '30-second deadline'):
+                ci.run_gui_markdown_stage(api, Process(), 1, path, kind, operation, stage,
+                                         lambda: api.scalar(2, 0x0102, ord('x'), 1))
+            progress = json.loads(json.dumps(stage))['last_progress']
+            ci.validate_markdown_progress(progress)
+            self.assertEqual(progress['status'], 'folding')
+            self.assertEqual(progress['diagnostic']['feed'], 47018)
+            self.assertEqual(progress['diagnostic']['published'], 47104)
+            self.assertEqual(progress['length'], len(expected))
+            self.assertFalse(stage['last_probe'])
+            self.assertFalse(any(item['final'] for item in stage['observer']['snapshots']))
+            self.assertFalse(any(msg[1] in (2010, 2007, 2028, 4002) for msg in api.messages))
+            self.assertLessEqual(stage['observer']['max_snapshot_messages'], 32)
+            with self.assertRaisesRegex(RuntimeError, 'completion lacks'):
+                ci.validate_markdown_progress(progress, complete=True, expected_length=len(expected), expected_dirty=True)
+            return
+        if missing_diagnostic or stale_pending_diagnostic:
+            with self.assertRaisesRegex(RuntimeError, '30-second deadline'):
+                ci.run_gui_markdown_stage(api, Process(), 1, path, kind, operation, stage,
+                                         lambda: api.scalar(2, 0x0102, ord('x'), 1))
+            if missing_diagnostic:
+                self.assertIsNone(stage['last_progress']['diagnostic'])
+            else:
+                self.assertEqual(stage['last_progress']['diagnostic']['pending'], 1)
+                with self.assertRaisesRegex(RuntimeError, 'completion lacks'):
+                    ci.validate_markdown_progress(stage['last_progress'], complete=True,
+                        expected_length=len(expected), expected_dirty=True)
+            self.assertEqual(stage['last_progress']['status'], 'complete')
+            self.assertTrue(all(stage['last_probe'][key] for key in
+                ('status_done', 'styles_match', 'folds_match', 'context_match', 'children_visible')))
+            self.assertFalse(any(item['final'] for item in stage['observer']['snapshots']))
+            self.assertLessEqual(stage['observer']['max_snapshot_messages'], 32)
+            self.assertEqual(path.read_bytes(), original)
+            return
         if bad_style:
             with self.assertRaisesRegex(RuntimeError, '30-second deadline'):
                 ci.run_gui_markdown_stage(api, Process(), 1, path, kind, operation, stage,

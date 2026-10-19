@@ -74,6 +74,8 @@ def markdown_evidence():
                 'source_sha256': case['source_sha256'], 'wall_ms': 100.0, 'probes': 1, 'observer': observer,
                 'responsiveness': response, 'undo_commands': 2 if operation == 'undo' else 0,
                 'collapsed_before_edit': kind == 'many-lines' and dirty,
+                'last_progress': {'opened': True, 'length': len(expected), 'dirty': dirty, 'status': 'complete', 'tail_requested': True,
+                    'diagnostic': {'seq': 1, 'via': 0, 'id': 1, 'gen': 1, 'rev': 0, 'phase': 4, 'pending': 0, 'length': len(expected), 'feed': len(expected), 'published': 1, 'tick': 1, 'work_us': 1, 'gap_us': 1}},
                 'last_probe': {'length': len(expected), 'dirty': dirty, 'end_styled': len(expected),
                     'status_done': True, 'styles_match': True,
                     'style_samples': {'positions': style_positions, 'expected': style_values, 'actual': list(style_values)},
@@ -738,7 +740,7 @@ class PackageTests(unittest.TestCase):
         self.assertFalse(any(name.startswith('native-test-evidence/') for name in runtime))
 
     def test_markdown_gui_schema_is_rechecked_at_packaging_boundary(self):
-        for mutation in ('missing', 'late', 'pending', 'source', 'collapse', 'observer', 'clock'):
+        for mutation in ('missing', 'late', 'pending', 'source', 'collapse', 'observer', 'clock', 'progress-missing', 'diagnostic-missing', 'diagnostic-malformed'):
             with self.subTest(mutation=mutation):
                 case = next(case for case in self.summary['tests'] if case['name'] == 'main-gui-markdown')
                 case['markdown_performance'] = markdown_evidence()
@@ -751,6 +753,9 @@ class PackageTests(unittest.TestCase):
                 elif mutation == 'collapse': stage['collapsed_before_edit'] = False
                 elif mutation == 'observer': stage['observer']['snapshots'][0]['messages'] = 33
                 elif mutation == 'clock': record['clock']['implementation'] = 'fake()'
+                elif mutation == 'progress-missing': stage.pop('last_progress')
+                elif mutation == 'diagnostic-missing': stage['last_progress']['diagnostic'] = None
+                elif mutation == 'diagnostic-malformed': stage['last_progress']['diagnostic']['via'] = 9
                 with self.assertRaises(RuntimeError): self.create('bad-markdown-' + mutation)
 
     def test_source_zip_cannot_enter_even_a_rehashed_portable_archive(self):

@@ -3,6 +3,7 @@
 窗 取 外言 '../src/win32.ru'.
 编 取 外言 '../src/editor.ru'.
 语 取 外言 '../src/syntax.ru'.
+折 取 外言 '../src/markdown_syntax.ru'.
 件编 取 外言 '../src/file_codec.ru'.
 密 取 外言 '如:密'.
 Sleep 取 (窗 其 内核) 其 绑定 'Sleep' (密 其 签名 (窗 其 V) ([(窗 其 U)]) 'win64').
@@ -140,6 +141,60 @@ _选测 取 {'action':'','writes':0,'styleStarts':0,'fired':假,'paints':0}.
     确认 (拒[0] 且 _选测['writes'] == 0 且 (语 其 状态 柄) == 空) 'query-return destruction cannot authorize subsequent setup'.
     回调 其 关闭.
 为
+作 验阶段诊断 柄 页:
+    状 取 应用 其 A.
+    文 取 编 其 文本 柄.
+    选始 取 (窗 其 发送 柄 2009 0 0) 其 数.
+    选末 取 (窗 其 发送 柄 2008 0 0) 其 数.
+    原次 取 状 其 查 'syntaxTicks'.
+    原工 取 状 其 查 'syntaxWorkMs'.
+    原隙 取 状 其 查 'syntaxGapMs'.
+    原条 取 窗 其 取文 (状 其 查 'status').
+    应用 其 诊断Markdown 1000.
+    确认 ((状 其 查 'markdownDiagnosticSeq') == 0 且 (窗 其 取文 (状 其 查 'status')) == 原条) 'Markdown phase diagnostics are disabled in ordinary application startup'.
+    状 其 增 'markdownDiagnosticEnabled' 真.
+    应用 其 诊断Markdown 1000.
+    条 取 窗 其 取文 (状 其 查 'status').
+    确认 ((状 其 查 'markdownDiagnosticSeq') == 1 且 (条 其 含 ' [MDP1 seq=1 ') 且 (条 其 含 ' phase=4 pending=0 ') 且 (条 其 含 ' work_us=')) 'enabled numeric status projection contains fixed completed-stage fields'.
+    应用 其 诊断Markdown 1000. 应用 其 诊断Markdown 1249.
+    确认 ((状 其 查 'markdownDiagnosticSeq') == 1 且 (窗 其 取文 (状 其 查 'status')) == 条) 'phase status writes remain capped to one per250 milliseconds'.
+    应用 其 诊断Markdown 1250.
+    确认 ((状 其 查 'markdownDiagnosticSeq') == 2 且 (窗 其 取文 (状 其 查 'status')) 其 含 ' [MDP1 seq=2 ') 'phase status becomes eligible exactly at its next bounded slot'.
+    旧投影 取 语 其 状态 柄.
+    # Exercise the real revision notification without modifying document bytes.
+    语 其 变化 柄 0 0 0 1.
+    应用 其 刷新.
+    确认 (非 ((窗 其 取文 (状 其 查 'status')) 其 含 '[MDP1') 且 (状 其 查 'markdownDiagnosticSeq') == 2) 'a new pending identity cannot reuse the earlier diagnostic marker'.
+    语 其 排空 柄.
+    应用 其 刷新.
+    新投影 取 语 其 状态 柄.
+    确认 (新投影['identity'] != 旧投影['identity'] 且 新投影['revision'] == 旧投影['revision']+1 且 (状 其 查 'markdownDiagnosticSeq') == 3 且 (状 其 查 'markdownDiagnosticNext') == 1500 且 ((窗 其 取文 (状 其 查 'status')) 其 含 ' via=1 ') 且 ((窗 其 取文 (状 其 查 'status')) 其 含 ' phase=4 pending=0 ')) 'completion inside a reserved rate slot attaches its new identity to the existing refresh'.
+    # Same identity already has a periodic pending sample; finish before its
+    # next slot and require the existing refresh to replace that exact cache.
+    语 其 变化 柄 0 0 0 1.
+    # Exactly one real prepare step initializes length while remaining pending.
+    同态 取 (折 其 _编辑们) 其 查 (柄 其 句).
+    折 其 _一步 柄 同态. 应用 其 刷新.
+    同投影 取 语 其 状态 柄.
+    应用 其 诊断Markdown 1500.
+    确认 (同投影['pending'] 且 (状 其 查 'markdownDiagnosticSeq') == 4 且 (状 其 查 'markdownDiagnosticIdentity') == 同投影['identity'] 且 (状 其 查 'markdownDiagnosticPending') 且 ((窗 其 取文 (状 其 查 'status')) 其 含 ' pending=1 ')) 'a current identity retains an actual periodic pending marker before completion'.
+    语 其 排空 柄. 应用 其 刷新.
+    同终 取 语 其 状态 柄. 终条 取 窗 其 取文 (状 其 查 'status').
+    确认 (同终['identity'] == 同投影['identity'] 且 非 同终['pending'] 且 (状 其 查 'markdownDiagnosticSeq') == 5 且 (状 其 查 'markdownDiagnosticNext') == 1750 且 非 (状 其 查 'markdownDiagnosticPending') 且 (终条 其 含 'seq=5 via=1 ') 且 (终条 其 含 ' phase=4 pending=0 ')) 'same identity completion replaces its pending marker inside the reserved250 millisecond slot'.
+    应用 其 刷新.
+    确认 ((状 其 查 'markdownDiagnosticSeq') == 5 且 (窗 其 取文 (状 其 查 'status')) == 终条) 'repeated completion refresh does not consume another diagnostic sequence'.
+    状 其 增 'busy' 真. 应用 其 诊断Markdown 1750. 状 其 增 'busy' 假.
+    原位 取 状 其 查 'active'. 状 其 增 'active' (-1). 应用 其 诊断Markdown 1750. 状 其 增 'active' 原位.
+    状 其 增 'ready' 假. 应用 其 诊断Markdown 1750. 状 其 增 'ready' 真.
+    确认 ((状 其 查 'markdownDiagnosticSeq') == 5) 'busy missing-active and not-ready states cannot reserve a diagnostic slot'.
+    所属 取 状 其 查 'statusOwner'. 状 其 增 'statusOwner' 'other-document'. 应用 其 诊断Markdown 1750. 状 其 增 'statusOwner' 所属.
+    确认 ((状 其 查 'markdownDiagnosticSeq') == 5) 'a status base owned by another editor rejects the numeric projection'.
+    状 其 增 'markdownDiagnosticSeq' 4096. 应用 其 诊断Markdown 1750.
+    确认 ((状 其 查 'markdownDiagnosticSeq') == 4096) 'phase diagnostics stop at the fixed4096 process cap'.
+    状 其 增 'markdownDiagnosticEnabled' 假. 应用 其 刷新.
+    确认 (非 ((窗 其 取文 (状 其 查 'status')) 其 含 '[MDP1') 且 (编 其 文本 柄) == 文 且 非 (应用 其 脏 页) 且 (窗 其 发送 柄 2009 0 0) 其 数 == 选始 且 (窗 其 发送 柄 2008 0 0) 其 数 == 选末 且 (窗 其 发送 柄 2174 0 0) 其 为空 且 (状 其 查 'syntaxTicks') == 原次 且 (状 其 查 'syntaxWorkMs') == 原工 且 (状 其 查 'syntaxGapMs') == 原隙) 'diagnostics preserve bytes savepoint selection undo and scanner timing counters'.
+    状 其 增 'markdownDiagnosticSeq' 0. 状 其 增 'markdownDiagnosticNext' 0. 状 其 增 'markdownDiagnosticIdentity' 0. 状 其 增 'markdownDiagnosticPending' 真. 状 其 增 'markdownDiagnosticText' ''.
+为
 算 元初 参数 为 句 阵:
     若 参数 其 量 != 1 则 显 'Usage: app_markdown_native.exe EXISTING_DISPOSABLE_DIRECTORY'. 得 2. 然
     入路 取 参数[0]+'\\markdown-stage-a-甲😀.MARKDOWN'.
@@ -165,6 +220,7 @@ _选测 取 {'action':'','writes':0,'styleStarts':0,'fired':假,'paints':0}.
     确认 ((窗 其 发送 柄 2223 4 0) 其 数 == 9216) 'following H1 closes earlier section'.
     确认 ((窗 其 取文 (态 其 查 'status')) 其 含 'Markdown') 'status names Markdown mode'.
     确认 ((语 其 状态 柄)['maxRead'] <= 1024 且 (语 其 状态 柄)['maxPublish'] <= 64) 'real timer respects byte and publication admission caps'.
+    验阶段诊断 柄 页.
     验自然配色 主 柄 页.
     # Explicit lexing verifies lexer output only; it cannot detect the initial
     # cleared-prefix lifecycle bug covered by the natural-paint checks above.

@@ -11,9 +11,68 @@
 关联 取 外言 'associations.ru'.
 拖放 取 外言 'file_drop.ru'.
 修改头 取 密 其 结构 [['header',窗 其 NMHDR],['position',窗 其 IP],['ch',窗 其 I],['modifiers',窗 其 I],['modificationType',窗 其 I],['text',窗 其 PTR],['length',窗 其 IP],['linesAdded',窗 其 IP],['message',窗 其 I],['wParam',窗 其 UP],['lParam',窗 其 IP],['line',窗 其 IP],['foldLevelNow',窗 其 I],['foldLevelPrev',窗 其 I],['margin',窗 其 I]].
-A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0}.
+A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
 
 # Syntax work is deferred out of Scintilla callbacks, with one shared UI budget.
+# Pure cache update shared by periodic sampling and an already-required final refresh.
+算 缓存Markdown诊断 扫, 来源 为 数:
+    若 非 (A 其 查 'markdownDiagnosticEnabled') 或 (A 其 查 'markdownDiagnosticFailed') 或 (A 其 查 'markdownDiagnosticSeq') >= 4096 或 扫 == 空 则 得 空. 然
+    若 扫['language'] != 'markdown' 或 扫['length'] < 0 则 得 空. 然
+    试
+        序 取 (A 其 查 'markdownDiagnosticSeq')+1.
+        A 其 增 'markdownDiagnosticSeq' 序.
+        待 取 0. 若 扫['pending'] 则 待 取 1. 然
+        工 取 (A 其 查 'syntaxWorkMs')*1000. 工 取 工-工%1.
+        隙 取 (A 其 查 'syntaxGapMs')*1000. 隙 取 隙-隙%1.
+        文 取 ' [MDP1 seq='+(序 为 句)+' via='+(来源 为 句)+' id='+(扫['identity'] 为 句)+' gen='+(扫['generation'] 为 句)+' rev='+(扫['revision'] 为 句)+' phase='+(扫['phaseCode'] 为 句)+' pending='+(待 为 句)+' length='+(扫['length'] 为 句)+' feed='+(扫['feed'] 为 句)+' published='+(扫['published'] 为 句)+' tick='+((A 其 查 'syntaxTicks') 为 句)+' work_us='+(工 为 句)+' gap_us='+(隙 为 句)+']'.
+        A 其 增 'markdownDiagnosticIdentity' 扫['identity'].
+        A 其 增 'markdownDiagnosticPending' 扫['pending'].
+        A 其 增 'markdownDiagnosticText' 文.
+    救 原因
+        A 其 增 'markdownDiagnosticText' ' [MDP1 error=1]'.
+        A 其 增 'markdownDiagnosticFailed' 真.
+        显 'FAIL: Markdown numeric phase diagnostic failed.'.
+    终
+    得 空.
+法
+算 刷新Markdown诊断 语态:
+    若 非 (A 其 查 'markdownDiagnosticEnabled') 或 (A 其 查 'markdownDiagnosticFailed') 或 语态 == 空 则 得 ''. 然
+    若 语态['language'] != 'markdown' 则 得 ''. 然
+    # A scan may finish within the preceding 250 ms slot. Use this existing
+    # refresh's projection and status write; do not create another tick/message.
+    若 非 语态['pending'] 且 ((A 其 查 'markdownDiagnosticIdentity') != 语态['identity'] 或 (A 其 查 'markdownDiagnosticPending')) 则 缓存Markdown诊断 语态 1. 然
+    若 (A 其 查 'markdownDiagnosticFailed') 或 (A 其 查 'markdownDiagnosticIdentity') != 语态['identity'] 则 得 ''. 然
+    # At the process cap, never present a stale pending record as terminal.
+    若 非 语态['pending'] 且 (A 其 查 'markdownDiagnosticPending') 则 得 ''. 然
+    得 A 其 查 'markdownDiagnosticText'.
+法
+# CI-only numeric projection. The ordinary UI leaves this disabled.
+# Reuse the scheduler's existing QPC timestamp; at most one status write/250 ms.
+# No document/native query or scan is performed. A status failure cannot abort work.
+算 诊断Markdown 现在 为 数:
+    若 非 (A 其 查 'markdownDiagnosticEnabled') 或 (A 其 查 'markdownDiagnosticFailed') 或 非 (A 其 查 'ready') 或 (A 其 查 'busy') 或 现在 < (A 其 查 'markdownDiagnosticNext') 或 (A 其 查 'markdownDiagnosticSeq') >= 4096 则 得 空. 然
+    位 取 A 其 查 'active'.
+    文们 取 A 其 查 'docs'.
+    若 位 < 0 或 位 >= 文们 其 量 则 得 空. 然
+    文档 取 文们[位].
+    若 (文档 其 查 'language') != 'markdown' 或 (文档 其 查 'large') 或 (文档 其 查 'editor') 其 句 != (A 其 查 'statusOwner') 则 得 空. 然
+    A 其 增 'markdownDiagnosticNext' (现在+250).
+    试
+        扫 取 语 其 状态 (文档 其 查 'editor').
+        若 扫 == 空 或 扫['language'] != 'markdown' 或 扫['length'] < 0 则 得 空. 然
+        缓存Markdown诊断 扫 0.
+        若 (A 其 查 'markdownDiagnosticFailed') 或 (A 其 查 'markdownDiagnosticIdentity') != 扫['identity'] 则 得 空. 然
+        窗 其 标题 (A 其 查 'status') ((A 其 查 'statusBase')+(A 其 查 'markdownDiagnosticText')).
+    救 原因
+        # Fixed failure marker only; never disclose paths, text or native errors.
+        A 其 增 'markdownDiagnosticText' ' [MDP1 error=1]'.
+        A 其 增 'markdownDiagnosticFailed' 真.
+        # The existing launcher FAIL gate rejects even if an earlier marker
+        # remains visible after a failed status write. Emit this fixed line once.
+        显 'FAIL: Markdown numeric phase diagnostic failed.'.
+    终
+    得 空.
+法
 算 所属文档 柄:
     文们 取 A 其 查 'docs'.
     位 取 0.
@@ -140,6 +199,9 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
             若 间隔 > (A 其 查 'syntaxMaxGapMs') 则 A 其 增 'syntaxMaxGapMs' 间隔. 然
         然
         A 其 增 'syntaxLastEndMs' 终时.
+        # Diagnostic status writes are outside measured work; their cost is
+        # included in the next scheduler gap and the unchanged GUI wall deadline.
+        诊断Markdown 终时.
     救 原因
         A 其 增 'syntaxTick' 假.
         停止语法.
@@ -263,7 +325,12 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         然
         若 (文档 其 查 'language') == 'markdown' 且 非 (文档 其 查 'markdownFolds') 则 模式文 取 模式文+'    Heading folds off'. 然
     然
-    窗 其 标题 (A 其 查 'status') ('  '+(态 其 文本 (文档 其 查 'editor'))+'    '+编文+'    '+语言名+模式文).
+    基文 取 '  '+(态 其 文本 (文档 其 查 'editor'))+'    '+编文+'    '+语言名+模式文.
+    A 其 增 'statusBase' 基文.
+    A 其 增 'statusOwner' ((文档 其 查 'editor') 其 句).
+    诊文 取 ''.
+    若 (文档 其 查 'language') == 'markdown' 则 诊文 取 刷新Markdown诊断 语态. 然
+    窗 其 标题 (A 其 查 'status') (基文+诊文).
     得 空.
 法
 算 移控 柄, 横, 纵, 宽, 高:
@@ -1080,6 +1147,10 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
 
 算 元初 参数 为 句 阵:
     显 '[startup] Ru application modules loaded'.
+    若 (参数 其 量) > 0 且 参数[0] == '--markdown-phase-diagnostics' 则
+        A 其 增 'markdownDiagnosticEnabled' 真.
+        参数 取 参数[1:].
+    然
     试
         初始化 参数 真.
     救 原因
