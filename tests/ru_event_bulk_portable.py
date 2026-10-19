@@ -13,6 +13,8 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from ru_cli_diagnostics import prepare_compile_diagnostics, validate_stderr
 BULK_EVENT_CASES = (
     'all 384 fields of the full batch',
     'near-32-MB exact metadata',
@@ -163,16 +165,20 @@ def main():
         ('build', [sys.executable, str(ru_root / 'ru'), 'build', '--cc', args.cc, str(probe), '-o', str(executable)]),
         ('c', [str(executable)]),
     ):
-        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=120)
-        (directory / f'{backend}.log').write_text(result.stdout + result.stderr, encoding='utf-8')
-        if result.returncode or result.stderr:
-            raise RuntimeError(f'{backend} failed: {result.stdout}{result.stderr}')
+        diagnostics = (prepare_compile_diagnostics(command, ru_root, probe)
+                       if backend == 'build' else None)
+        result = subprocess.run(command, cwd=ROOT, capture_output=True, timeout=120)
+        (directory / (backend + '.stdout.log')).write_bytes(result.stdout)
+        (directory / (backend + '.stderr.log')).write_bytes(result.stderr)
+        (directory / (backend + '.log')).write_bytes(result.stdout + result.stderr)
+        validate_stderr(command, result.returncode, result.stderr, diagnostics)
+        stdout = result.stdout.decode('utf-8', 'strict').replace('\r\n', '\n')
         if backend != 'build':
             expected = ''.join(f'PASS: {label}\n' for label in BULK_EVENT_CASES) + 'TOTAL PASS: 23\n'
-            if count != 23 or result.stdout != expected:
+            if count != 23 or stdout != expected:
                 raise ValueError(f'{backend}: incomplete or unexpected production decoder assertions')
-            outputs.append(result.stdout)
-            print(f'BACKEND: {backend}\n{result.stdout}', end='')
+            outputs.append(stdout)
+            print(f'BACKEND: {backend}\n{stdout}', end='')
     if outputs[0] != outputs[1]:
         raise ValueError('Interpreter and host C output differ')
     print(f'RU_EVENT_BULK_PORTABLE_PASS: 2 backends, {count} assertions each')

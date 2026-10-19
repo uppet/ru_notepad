@@ -18,6 +18,20 @@ _固定键 取 ['identity','generation','revision','hwnd','thread','document','l
     # Exact stub replaced only in the separately receipted research C unit.
     得 -1.
 法
+# Fixed diagnostic stubs, replaced only in research C. The initial count check
+# is excluded: sampling starts at the explicit reset immediately before QPC.
+算 研究堆重置:
+    得 -1.
+法
+算 研究堆峰值:
+    得 -1.
+法
+算 研究堆大小:
+    得 -1.
+法
+算 研究堆样本:
+    得 -1.
+法
 作 须 条件 为 事实 名 为 句:
     若 非 条件 则 卒 ('FAIL: callback research '+名). 然
 为
@@ -190,6 +204,7 @@ _固定键 取 ['identity','generation','revision','hwnd','thread','document','l
         若 模式 == 'absent' 则 移除 柄 主. 然
         验路由 柄 主 (模式 == 'present'). 验路由 初 主 真.
         已 取 0. 批 取 0. 回调数 取 0.
+        须 (研究堆重置 == 0) 'live diagnostic reset'.
         起 取 折 其 时刻.
         循
             若 已 == 100002 则 破. 然
@@ -203,6 +218,8 @@ _固定键 取 ['identity','generation','revision','hwnd','thread','document','l
             核批 柄 态 原 原策 范围 已.
         环
         用时 取 (折 其 时刻)-起.
+        堆峰 取 研究堆峰值. 堆大小 取 研究堆大小. 堆样本 取 研究堆样本.
+        须 (堆峰 > 0 且 堆大小 > 0 且 堆大小 <= 4096 且 堆样本 == 3126) 'bounded live diagnostics'.
         须 (批 == 1563 且 用时 > 0 且 用时 <= 120000) 'bounded measured publication'.
         验路由 柄 主 (模式 == 'present'). 验路由 初 主 真.
         # Verification is deliberately outside timing with both measured editors'
@@ -216,7 +233,7 @@ _固定键 取 ['identity','generation','revision','hwnd','thread','document','l
         须 (应用 其 关程序) 'normal owned teardown'.
         须 (((应用 其 A) 其 查 'errors') 其 量 == 0) 'no teardown application error'.
         微秒 取 用时*1000. 微秒 取 微秒-微秒%1.
-        显 ('MD_CALLBACK_RESULT mode='+模式+' elapsed_us='+(微秒 为 句)+' assignments='+(已 为 句)+' batches='+(批 为 句)+' callback_entries='+(回调数 为 句)+' verified_lines=100001 verified_bytes=1000000 state_checks=1563 route_restored=1 initial_route_untouched=1 text=1 folds=1 visible=1 expanded=1 dirty=1 selection=1 undo=1 teardown=1').
+        显 ('MD_CALLBACK_RESULT mode='+模式+' elapsed_us='+(微秒 为 句)+' assignments='+(已 为 句)+' batches='+(批 为 句)+' callback_entries='+(回调数 为 句)+' heap_size='+(堆大小 为 句)+' live_peak='+(堆峰 为 句)+' live_samples='+(堆样本 为 句)+' verified_lines=100001 verified_bytes=1000000 state_checks=1563 route_restored=1 initial_route_untouched=1 text=1 folds=1 visible=1 expanded=1 dirty=1 selection=1 undo=1 teardown=1').
     救 原因
         试 失败清理 主 柄 初. 救 清因 显 'MD_CALLBACK_CLEANUP_FAILED'. 终
         卒 原因.

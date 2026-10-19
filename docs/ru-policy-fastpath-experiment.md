@@ -44,9 +44,12 @@ Use Linux, Python 3, Git and GCC with these exact clean checkouts:
   `e8a402fb3eb551bfe416b8aee0aaaf942d2d4f4a`.
 - Baseline policy blob: `876a99f76db706cfd76427b9341ee5f05180ce0d`, SHA-256
   `f78589e247186890855526f7bb3624d34e4004bb8fbc69587c96d38c826a602c`.
-- Ru 0.21.6: `a2f6faa0f914781dea74cb6f0a7574f1dd6808ce` from
+- Current semantic-gate compiler, Ru 0.22.1: `85c7821fda35aa79deeaf67b4d430f24ddd7f07f` from
   [uppet/ru-language](https://github.com/uppet/ru-language), tree
-  `7b4331d51bc6ab2ec95fec1f8368465343fcd5af`.
+  `a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba`.
+
+These pins apply to the current semantic gate. Historical Windows benchmark
+workflows retain their original source/compiler identities.
 
 For example, from a candidate checkout:
 
@@ -54,7 +57,7 @@ For example, from a candidate checkout:
 git clone https://github.com/uppet/ru_notepad.git ../ru-policy-baseline
 git -C ../ru-policy-baseline checkout --detach a5f5fd825767cd5af662cba792f5ce352991c21e
 git clone https://github.com/uppet/ru-language.git ../ru-policy-toolchain
-git -C ../ru-policy-toolchain checkout --detach a2f6faa0f914781dea74cb6f0a7574f1dd6808ce
+git -C ../ru-policy-toolchain checkout --detach 85c7821fda35aa79deeaf67b4d430f24ddd7f07f
 python -I tools/test_ru_policy_fast.py \
   --baseline ../ru-policy-baseline --ru-root ../ru-policy-toolchain
 python -I tools/verify_ru_policy_fast_outputs.py

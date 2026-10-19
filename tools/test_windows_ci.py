@@ -458,8 +458,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     self.assertIn(resolved.relative_to(ci.ROOT).as_posix(), snapshot)
 
     def test_reviewed_compiler_pin_is_consistent_across_all_build_entrypoints(self):
-        commit = 'a2f6faa0f914781dea74cb6f0a7574f1dd6808ce'
-        tree = '7b4331d51bc6ab2ec95fec1f8368465343fcd5af'
+        commit = '85c7821fda35aa79deeaf67b4d430f24ddd7f07f'
+        tree = 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba'
         self.assertEqual(builder.BASELINE_TREE, tree)
         self.assertEqual(ci.HELPER_POLICY_COMMIT, commit)
         self.assertEqual(ci.HELPER_POLICY_TREE, tree)
@@ -887,6 +887,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     self.assertIn('tests/app_ru_native.ru', result['source_sha256'])
                     self.assertIn('tests/ru_event_bulk_portable.py', result['source_sha256'])
                     self.assertIn('src/ru_native_syntax.ru', result['source_sha256'])
+                    self.assertIn('tools/ru_cli_diagnostics.py', result['source_sha256'])
+                    self.assertIn('tools/test_ru_cli_diagnostics.py', result['source_sha256'])
                 else:
                     with self.assertRaisesRegex(RuntimeError, 'clean reviewed'):
                         ci.helper_policy_inputs(ci.ROOT)
@@ -3318,6 +3320,22 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertIn('Invoke-WebRequest', historical)
         self.assertIn('import run_direct_style_benchmark as runner', historical)
 
+
+    def test_compiler_diagnostic_controls_are_mandatory_and_private_logs_are_not_uploaded(self):
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        controls = 'python -I tools/test_ru_cli_diagnostics.py --ru-root .ci/ru-language -v'
+        self.assertEqual(workflow.count(controls), 1)
+        self.assertLess(workflow.index(controls), workflow.index(
+            'python -I tools/test_markdown_portable.py --ru-root .ci/ru-language'))
+        script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        controls = "Invoke-Checked $Python @('-I','tools/test_ru_cli_diagnostics.py','--ru-root',$RuRoot,'-v')"
+        self.assertEqual(script.count(controls), 1)
+        self.assertLess(script.index(controls), script.index(
+            "Invoke-Checked $Python @('tools/test_markdown_portable.py'"))
+        for private in ('build/ru-cli-diagnostics-evidence', 'build/markdown-policy-private'):
+            self.assertNotIn(private, workflow)
+        self.assertFalse(any('compile' in name or 'ru-cli-diagnostics' in name
+                            for name in ci.HELPER_POLICY_EVIDENCE_FILES))
 
     def test_markdown_portable_timeout_cleans_owned_process_tree_before_returning(self):
         import test_markdown_portable as gate

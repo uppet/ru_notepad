@@ -20,6 +20,8 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from ru_cli_diagnostics import prepare_compile_diagnostics, validate_stderr
 CASES = {'markdown_policy': 199, 'markdown_selection_policy': 31}
 LIMIT = 1024 * 1024
 
@@ -55,6 +57,7 @@ def source_snapshot(root):
                 raise RuntimeError('Pure Markdown policy graph must not import native or external modules')
             pending.append(path.parent / imported)
     snapshot['tools/test_markdown_portable.py'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    snapshot['tools/ru_cli_diagnostics.py'] = hashlib.sha256((root / 'tools/ru_cli_diagnostics.py').read_bytes()).hexdigest()
     return snapshot
 
 
@@ -79,7 +82,7 @@ def stop_process_tree(process):
     process.wait(timeout=5)
 
 
-def checked_run(command, directory, label, timeout):
+def checked_run(command, directory, label, timeout, compile_diagnostics=None):
     out, err = directory / (label + '.stdout'), directory / (label + '.stderr')
     process = None
     with out.open('xb') as stdout, err.open('xb') as stderr:
@@ -99,8 +102,9 @@ def checked_run(command, directory, label, timeout):
                 except subprocess.TimeoutExpired:
                     pass
             if (time.monotonic() - started > timeout or process.returncode or
-                    err.stat().st_size or out.stat().st_size > LIMIT):
+                    err.stat().st_size > LIMIT or out.stat().st_size > LIMIT):
                 raise RuntimeError('Markdown backend failed: ' + label)
+            validate_stderr(command, process.returncode, err.read_bytes(), compile_diagnostics)
         except BaseException:
             # Even if the parent just exited, its compiler group may still be
             # alive. POSIX killpg targets that owned group, not only its leader.
@@ -162,8 +166,11 @@ def main():
                 outputs['interpreter'] = checked_run([sys.executable, '-I', '-c', code, str(ru), str(source)],
                                                      private, name + '-interpreter', 120)
                 executable = private / (name + ('.exe' if os.name == 'nt' else ''))
-                checked_run([sys.executable, str(ru / 'ru'), 'build', '--cc', args.cc,
-                             str(source), '-o', str(executable)], private, name + '-build', 120)
+                build_command = [sys.executable, str(ru / 'ru'), 'build', '--cc', args.cc,
+                                 str(source), '-o', str(executable)]
+                diagnostics = prepare_compile_diagnostics(build_command, ru, source)
+                checked_run(build_command, private, name + '-build', 120,
+                            compile_diagnostics=diagnostics)
                 outputs['host-c'] = checked_run([str(executable)], private, name + '-host-c', 30)
                 if verify_output(outputs['interpreter'], count) != verify_output(outputs['host-c'], count):
                     raise RuntimeError('Markdown backend assertion outputs disagree')
@@ -177,6 +184,12 @@ def main():
             cleanup_allowed = False
             raise
         finally:
+            # Raw compiler streams can contain private source paths. Keep them
+            # outside the public evidence directory and its upload glob.
+            private_logs = ROOT / 'build/markdown-policy-private' / private.name
+            private_logs.mkdir(parents=True, exist_ok=False)
+            for log in (*private.glob('*.stdout'), *private.glob('*.stderr')):
+                shutil.copyfile(log, private_logs / (log.name + '.log'))
             if cleanup_allowed:
                 shutil.rmtree(private)
         report['passed'] = True

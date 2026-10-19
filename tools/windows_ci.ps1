@@ -4,6 +4,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][string]$RuRoot,
+    [string]$ResearchBaselineRoot,
     [Parameter(Mandatory=$true)][string]$MsysRoot,
     [switch]$RunAclTests
 )
@@ -80,14 +81,19 @@ function Invoke-Checked([string]$Command, [string[]]$Arguments) {
 # Research is separate from product acceptance. Even an unsuccessful research
 # sample must not prevent the original full product inventory from executing.
 function Invoke-ResearchThenAcceptance(
-    [string]$Command, [string[]]$ResearchArguments, [string[]]$AcceptanceArguments
+    [string]$Command, [string[]]$ResearchArguments, [string[]]$AcceptanceArguments,
+    [bool]$ControlsPassed = $true
 ) {
     $ResearchPassed = $false
-    try {
-        Invoke-Checked $Command $ResearchArguments
-        $ResearchPassed = $true
-    } catch {
-        Write-Host 'MARKDOWN_CALLBACK_RESEARCH_FAILED=1'
+    if ($ControlsPassed) {
+        try {
+            Invoke-Checked $Command $ResearchArguments
+            $ResearchPassed = $true
+        } catch {
+            Write-Host 'MARKDOWN_CALLBACK_RESEARCH_FAILED=1'
+        }
+    } else {
+        Write-Host 'MARKDOWN_CALLBACK_RESEARCH_CONTROLS_FAILED=1'
     }
     Invoke-Checked $Command $AcceptanceArguments
     if (-not $ResearchPassed) {
@@ -102,10 +108,10 @@ function Git-Value([string[]]$Arguments) {
 
 Push-Location $Root
 try {
-    if ((Git-Value @('rev-parse','HEAD')) -ne 'a2f6faa0f914781dea74cb6f0a7574f1dd6808ce') {
+    if ((Git-Value @('rev-parse','HEAD')) -ne '85c7821fda35aa79deeaf67b4d430f24ddd7f07f') {
         throw 'Ru public commit does not match the reviewed pin.'
     }
-    if ((Git-Value @('rev-parse','HEAD^{tree}')) -ne '7b4331d51bc6ab2ec95fec1f8368465343fcd5af') {
+    if ((Git-Value @('rev-parse','HEAD^{tree}')) -ne 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba') {
         throw 'Ru compiler tree does not match the reviewed pin.'
     }
     if (Git-Value @('status','--porcelain')) { throw 'Ru checkout must be unmodified.' }
@@ -125,7 +131,23 @@ try {
     # Orchestration tests are separate from the native application acceptance.
     Invoke-Checked $Python @('tools/test_windows_ci.py')
     Invoke-Checked $Python @('tools/test_package.py')
-    Invoke-Checked $Python @('tools/test_markdown_callback_cost.py')
+    Invoke-Checked $Python @('-I','tools/test_ru_cli_diagnostics.py','--ru-root',$RuRoot,'-v')
+    # A research-only control failure prohibits research execution, but it
+    # does not suppress the independent original product builds/acceptance.
+    $ResearchControlsPassed = $false
+    try {
+        Invoke-Checked $Python @('tools/test_markdown_callback_cost.py')
+        $ResearchControlsPassed = $true
+    } catch {
+        Write-Host 'MARKDOWN_CALLBACK_RESEARCH_CONTROLS_FAILED=1'
+        $ControlFailure = @{
+            schema = 2; research_only = $true; product_acceptance = 'not_claimed'
+            status = 'failed'; samples = @()
+            failure = @{ stage = 'host_controls'; code = 'research_controls_failed' }
+        }
+        $ControlFailure | ConvertTo-Json -Depth 4 |
+            Set-Content -LiteralPath (Join-Path $Evidence 'markdown-callback-summary.json') -Encoding utf8
+    }
     Invoke-Checked $Python @('tools/test_markdown_portable.py','--ru-root',$RuRoot,
         '--cc',(Join-Path $Bin 'gcc.exe'))
 
@@ -170,11 +192,17 @@ try {
         '--mingw-root',$MinGW,'--objdump',(Join-Path $Bin 'objdump.exe'))
     if ($RunAclTests) { $AcceptArgs += '--acl' }
     # The research EXE and its instrumented translation unit stay outside bin
-    # and the package inventory. Both modes use the same research executable.
+    # and the package inventory. Each compiler uses one binary for both modes.
+    # The candidate compiler must also match the accepted product pin. Both
+    # accepted pins and exact generated-C comparison are required before launch.
+    if ([string]::IsNullOrWhiteSpace($ResearchBaselineRoot)) {
+        $ResearchBaselineRoot = Join-Path $Root '.ci/ru-research-baseline'
+    }
     $ResearchArgs = @('tools/run_markdown_callback_cost.py','--ru-root',$RuRoot,
+        '--old-ru-root',$ResearchBaselineRoot,'--new-ru-root',$RuRoot,
         '--binary-dir',$Output,'--evidence-dir',$Evidence,
         '--cc',(Join-Path $Bin 'gcc.exe'),'--windres',(Join-Path $Bin 'windres.exe'))
-    Invoke-ResearchThenAcceptance $Python $ResearchArgs $AcceptArgs
+    Invoke-ResearchThenAcceptance $Python $ResearchArgs $AcceptArgs -ControlsPassed $ResearchControlsPassed
 } finally {
     Pop-Location
 }

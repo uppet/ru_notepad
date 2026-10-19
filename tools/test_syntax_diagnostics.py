@@ -11,6 +11,8 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from ru_cli_diagnostics import prepare_compile_diagnostics, validate_stderr
 FIELDS = ('seq ok generation revision pending bytes feed read_bytes restart chunks ticks '
           'work_ms gap_ms max_tick_ms max_gap_ms posts continuation_ticks queue_yields '
           'stale_messages text_notifications style_notifications fold_notifications').split()
@@ -139,14 +141,18 @@ def main():
         ('build', [sys.executable, str(ru_root / 'ru'), 'build', '--cc', 'gcc', str(source), '-o', str(executable)]),
         ('c', [str(executable)]),
     ):
-        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=120 if backend == 'build' else 30)
-        (directory / (backend + '.log')).write_text(result.stdout + result.stderr, encoding='utf-8')
-        if result.returncode != 0 or result.stderr:
-            raise RuntimeError(f'{backend} failed: {result.stdout}{result.stderr}')
+        diagnostics = (prepare_compile_diagnostics(command, ru_root, source)
+                       if backend == 'build' else None)
+        result = subprocess.run(command, cwd=ROOT, capture_output=True, timeout=120 if backend == 'build' else 30)
+        (directory / (backend + '.stdout.log')).write_bytes(result.stdout)
+        (directory / (backend + '.stderr.log')).write_bytes(result.stderr)
+        (directory / (backend + '.log')).write_bytes(result.stdout + result.stderr)
+        validate_stderr(command, result.returncode, result.stderr, diagnostics)
+        stdout = result.stdout.decode('utf-8', 'strict').replace('\r\n', '\n')
         if backend != 'build':
-            validate(result.stdout)
-            outputs.append(result.stdout)
-            print(f'BACKEND: {backend}\n{result.stdout}', end='')
+            validate(stdout)
+            outputs.append(stdout)
+            print(f'BACKEND: {backend}\n{stdout}', end='')
     if outputs[0] != outputs[1]:
         raise ValueError('The two actual Ru backends disagree')
     print('RU_DIAGNOSTIC_PORTABLE_PASS: 2')

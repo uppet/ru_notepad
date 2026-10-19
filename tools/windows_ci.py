@@ -155,8 +155,8 @@ HELPER_POLICY_EVIDENCE_FILES = ('helper-policy.stdout.log', 'helper-policy.stder
     'policy-prefix-order.stdout.log', 'policy-prefix-order.stderr.log',
     'scanner-build.log', 'differential-python.log', 'differential-build.log',
     'differential-c.log', 'sanitize-build.log', 'sanitize.log', 'report.json')
-HELPER_POLICY_COMMIT = 'a2f6faa0f914781dea74cb6f0a7574f1dd6808ce'
-HELPER_POLICY_TREE = '7b4331d51bc6ab2ec95fec1f8368465343fcd5af'
+HELPER_POLICY_COMMIT = '85c7821fda35aa79deeaf67b4d430f24ddd7f07f'
+HELPER_POLICY_TREE = 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba'
 POLICY_PREFIX_BASELINE_COMMIT = 'a5f5fd825767cd5af662cba792f5ce352991c21e'
 POLICY_PREFIX_BASELINE_TREE = 'e8a402fb3eb551bfe416b8aee0aaaf942d2d4f4a'
 POLICY_PREFIX_BASELINE_SHA256 = 'f78589e247186890855526f7bb3624d34e4004bb8fbc69587c96d38c826a602c'
@@ -708,6 +708,7 @@ def helper_policy_inputs(root):
                      'src/main.ru', 'src/ru_syntax.ru', 'tests/ru_syntax_native.ru',
                      'tests/app_ru_native.ru', 'tools/test_ru_timer_corpus.py',
                      'tools/test_syntax_diagnostics.py', 'src/ru_native_syntax.ru',
+                     'tools/ru_cli_diagnostics.py', 'tools/test_ru_cli_diagnostics.py',
                      'tests/ru_event_bulk_portable.py', *POLICY_PREFIX_SOURCES)}}
 
 

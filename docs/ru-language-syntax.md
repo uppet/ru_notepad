@@ -4,7 +4,7 @@
 
 ## Language baseline
 
-The unchanged lexical/folding policy was derived from the Ru 0.21.3 language source (public baseline `dd6cb81b`). The build now pins Ru 0.21.6 for the generic owned-memory bulk-read transport; this dependency update does not change the policy rules below:
+The unchanged lexical/folding policy was derived from the Ru 0.21.3 language source (public baseline `dd6cb81b`). The build pins Ru 0.22.1, retaining the generic owned-memory bulk-read transport introduced with the earlier Ru 0.21.6 pin. The current callback-runtime update does not change the application policy rules below:
 
 - `rulang/frontend.py`: `KEYWORDS`, `NUMBER`, `comment_marker`, `block_comment_end`, `lex`, and the `Parser` declaration, literal, reference, statement and expression rules
 - `rulang/language-spec.md`: sections 2–4, including contextual scope/recovery delimiters

@@ -1,6 +1,6 @@
 # Markdown Stage A heading-fold subset
 
-This is a new reconstruction against Ru 0.21.6. It is not a byte-for-byte restoration of earlier files or evidence. The production folding policy is `src/markdown_policy.ru`; its portable fixture is `tests/markdown_policy.ru`. Syntax coloring is a separate concern. No renderer or Enter behavior is implemented here.
+This policy was reconstructed against Ru 0.21.6; the current reproducible build uses the exact Ru 0.22.1 pin in [build provenance](build-provenance.md). It is not a byte-for-byte restoration of earlier files or evidence. The production folding policy is `src/markdown_policy.ru`; its portable fixture is `tests/markdown_policy.ru`. Syntax coloring is a separate concern. No renderer or Enter behavior is implemented here.
 
 ## Streaming contract
 
@@ -37,7 +37,7 @@ This is not a CommonMark parser. It may omit valid folds; unsupported constructs
 
 ## Fresh portable validation
 
-Set `RU_ROOT` to the exact Ru 0.21.6 compiler checkout, then run both paths from the application repository:
+Set `RU_ROOT` to the exact pinned Ru 0.22.1 compiler checkout, then run both paths from the application repository:
 
 ```
 python "$RU_ROOT/ru" run tests/markdown_policy.ru
