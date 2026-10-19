@@ -2209,11 +2209,22 @@ def validate_gui_markdown(record, *, require_windows_clock=False):
                 raise RuntimeError('Markdown GUI bounded stage metadata is invalid')
             last = stage['last_probe']
             if (not isinstance(last, dict) or set(last) != {'length', 'dirty', 'end_styled', 'status_done',
-                    'styles_match', 'folds_match', 'context_match', 'lexer', 'tail_requested', 'children_visible'} or
+                    'styles_match', 'style_samples', 'folds_match', 'context_match', 'lexer', 'tail_requested', 'children_visible'} or
                     type(last['length']) is not int or last['length'] != len(expected) or last['dirty'] is not dirty or
                     type(last['end_styled']) is not int or last['end_styled'] != len(expected) or type(last['lexer']) is not int or last['lexer'] != 98 or
                     any(last[key] is not True for key in ('status_done', 'styles_match', 'folds_match', 'context_match', 'tail_requested', 'children_visible'))):
                 raise RuntimeError('Markdown GUI final fixed style/fold/text probe failed')
+            samples = last['style_samples']
+            positions = [position for probe in styles
+                         for position in range(probe['offset'], probe['offset'] + probe['length'])]
+            expected_styles = [probe['style'] for probe in styles for _ in range(probe['length'])]
+            if (not isinstance(samples, dict) or set(samples) != {'positions', 'expected', 'actual'} or
+                    any(not isinstance(samples[key], list) or len(samples[key]) != 16 or
+                        any(type(value) is not int for value in samples[key]) for key in samples) or
+                    samples['positions'] != positions or samples['expected'] != expected_styles or
+                    any(not 0 <= value <= 255 for value in samples['actual']) or
+                    samples['actual'] != expected_styles):
+                raise RuntimeError('Markdown GUI fixed style sample evidence is invalid or mismatched')
             validate_gui_ru_observer(stage['observer'], stage['wall_ms'], stage['probes'])
             if dirty:
                 validate_gui_markdown_responsiveness(stage['responsiveness'], stage['wall_ms'])
@@ -2225,6 +2236,9 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
     clock = PerformanceClock()
     original, _, _ = gui_markdown_fixture(kind)
     expected, styles, folds = markdown_expected(kind, operation)
+    style_positions = [position for probe in styles
+                       for position in range(probe['offset'], probe['offset'] + probe['length'])]
+    expected_styles = [probe['style'] for probe in styles for _ in range(probe['length'])]
     started = clock()  # Includes the opening drop or actual input and all observers.
     stage.update(operation=operation, length=len(expected), dirty=operation in ('insert', 'backspace'),
         source_sha256=hashlib.sha256(original).hexdigest(), wall_ms=0.0, probes=0,
@@ -2291,8 +2305,10 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
                     return False
                 if not done:
                     return False
-                style_match = all([api.scalar(editor, 2010, position) == probe['style']
-                    for probe in styles for position in range(probe['offset'], probe['offset'] + probe['length'])])
+                # Retain exactly the existing sixteen scalar query results, also
+                # on failure. No extra messages or source text are collected.
+                actual_styles = [api.scalar(editor, 2010, position) for position in style_positions]
+                style_match = actual_styles == expected_styles
                 fold_match = all([bool(api.scalar(editor, 2223, probe['line']) & 0x2000) == probe['header'] for probe in folds])
                 # Four actual bytes around each real edit, separate from the
                 # sixteen fixed head/tail style bytes. Never read whole content.
@@ -2303,7 +2319,9 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
                 # Final independent length/dirty recheck is in the same bounded snapshot.
                 length, dirty = api.scalar(editor, 2006), bool(api.scalar(editor, 2159))
                 stage['last_probe'] = {'length': length, 'dirty': dirty, 'end_styled': end_styled,
-                    'status_done': done, 'styles_match': style_match, 'folds_match': fold_match,
+                    'status_done': done, 'styles_match': style_match,
+                    'style_samples': {'positions': style_positions, 'expected': expected_styles, 'actual': actual_styles},
+                    'folds_match': fold_match,
                     'context_match': context == expected[6:10], 'lexer': lexer, 'tail_requested': tail_requested,
                     'children_visible': children_visible}
                 api.verify_owned_handles(process.pid, editor, status_handle)

@@ -64,7 +64,10 @@ def markdown_evidence():
                 'style_probes': probes, 'fold_probes': folds, 'stages': []}
         record['cases'].append(case)
         for operation in ('open', 'insert', 'backspace', 'undo'):
-            expected, _, _ = ci.markdown_expected(kind, operation)
+            expected, styles, _ = ci.markdown_expected(kind, operation)
+            style_positions = [position for probe in styles
+                               for position in range(probe['offset'], probe['offset'] + probe['length'])]
+            style_values = [probe['style'] for probe in styles for _ in range(probe['length'])]
             dirty = operation in ('insert', 'backspace')
             observer = ci.gui_ru_observer_record()
             observer.update(scalar_calls=30, wm_null_calls=1, sendmessage_calls=31,
@@ -83,7 +86,9 @@ def markdown_evidence():
                 'responsiveness': response, 'undo_commands': 2 if operation == 'undo' else 0,
                 'collapsed_before_edit': kind == 'many-lines' and dirty,
                 'last_probe': {'length': len(expected), 'dirty': dirty, 'end_styled': len(expected),
-                    'status_done': True, 'styles_match': True, 'folds_match': True, 'context_match': True,
+                    'status_done': True, 'styles_match': True,
+                    'style_samples': {'positions': style_positions, 'expected': style_values, 'actual': list(style_values)},
+                    'folds_match': True, 'context_match': True,
                     'lexer': 98, 'tail_requested': True, 'children_visible': True}})
     return record
 
@@ -2979,13 +2984,39 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             case.pop(key)
             with self.subTest(key=key), self.assertRaises(RuntimeError): ci.validate_acceptance(summary)
 
+    def test_markdown_gui_style_sample_schema_rejects_missing_forged_or_unbounded_values(self):
+        for mutation in ('missing', 'extra', 'short', 'long', 'tuple', 'bool', 'negative',
+                         'overflow', 'wrong-position', 'wrong-expected', 'mismatch-hidden-by-boolean'):
+            record = markdown_evidence()
+            last = record['cases'][0]['stages'][0]['last_probe']
+            samples = last['style_samples']
+            if mutation == 'missing': last.pop('style_samples')
+            elif mutation == 'extra': samples['text'] = 'must not be collected'
+            elif mutation == 'short': samples['actual'].pop()
+            elif mutation == 'long': samples['actual'].append(0)
+            elif mutation == 'tuple': samples['actual'] = tuple(samples['actual'])
+            elif mutation == 'bool': samples['actual'][1] = False
+            elif mutation == 'negative': samples['actual'][1] = -1
+            elif mutation == 'overflow': samples['actual'][1] = 256
+            elif mutation == 'wrong-position': samples['positions'][1] += 1
+            elif mutation == 'wrong-expected': samples['expected'][1] = 17
+            elif mutation == 'mismatch-hidden-by-boolean': samples['actual'][1] = 17
+            with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
+                ci.validate_gui_markdown(record, require_windows_clock=True)
+
+    def test_markdown_real_stage_preserves_actual_styles_when_mismatch_reaches_deadline(self):
+        now = [0.0]
+        with patch.object(ci.time, 'perf_counter', side_effect=lambda: now[0]), \
+             patch.object(ci.time, 'sleep', side_effect=lambda seconds: now.__setitem__(0, now[0] + seconds)):
+            self.run_markdown_stage_control(bad_style=True)
+
     def test_markdown_real_stage_uses_bounded_observer_and_pending_requests(self):
         self.run_markdown_stage_control()
 
     def test_markdown_real_stage_rejects_production_failure_warning_despite_ready_native_styles(self):
         self.run_markdown_stage_control(warning=True)
 
-    def run_markdown_stage_control(self, warning=False):
+    def run_markdown_stage_control(self, warning=False, bad_style=False):
         kind, operation = 'many-lines', 'insert'
         original = ci.gui_markdown_fixture(kind)[0]
         expected, probes, folds = ci.markdown_expected(kind, operation)
@@ -3020,6 +3051,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 if message == 2228: return int(self.visible)
                 if message == 2223: return 0x2400 if wparam == 0 else 0x400
                 if message == 2010:
+                    if bad_style and wparam == 2: return 17
                     return next((probe['style'] for probe in probes if probe['offset'] <= wparam < probe['offset'] + probe['length']), 0)
                 if message == 2007: return expected[wparam]
                 if message == 2028: return len(expected)
@@ -3032,6 +3064,24 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             def invalidate_for_paint(self, hwnd): return False
             def paint_pending(self, hwnd): return False
         api, stage = Api(), {}
+        if bad_style:
+            with self.assertRaisesRegex(RuntimeError, '30-second deadline'):
+                ci.run_gui_markdown_stage(api, Process(), 1, path, kind, operation, stage,
+                                         lambda: api.scalar(2, 0x0102, ord('x'), 1))
+            last = json.loads(json.dumps(stage))['last_probe']
+            samples = last['style_samples']
+            self.assertFalse(last['styles_match'])
+            self.assertEqual(samples['positions'], [0, *range(2, 9), *range(len(expected) - 8, len(expected))])
+            self.assertEqual(samples['expected'], [6] + [0] * 15)
+            self.assertEqual(samples['actual'], [6, 17] + [0] * 14)
+            self.assertTrue(all(last[key] for key in ('status_done', 'folds_match', 'context_match', 'children_visible')))
+            self.assertFalse(any(item['final'] for item in stage['observer']['snapshots']))
+            self.assertLessEqual(stage['observer']['max_snapshot_messages'], 32)
+            self.assertGreaterEqual(stage['wall_ms'], 30000)
+            self.assertEqual(sum(msg[1] == 2010 for msg in api.messages) % 16, 0)
+            self.assertFalse(any(msg[1] in (2009, 2153, 2182, 4003) for msg in api.messages))
+            self.assertEqual(path.read_bytes(), original)
+            return
         if warning:
             # Exercise the real snapshot path with matching length, dirty flag,
             # lexer, styles and old headers. Only the production warning blocks
@@ -3058,6 +3108,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertEqual(api.navigation, ['RIGHT', 'LEFT'])
         self.assertLessEqual(stage['observer']['max_snapshot_messages'], 32)
         self.assertEqual(sum(msg[1] == 2010 for msg in api.messages), 16)
+        self.assertEqual(stage['last_probe']['style_samples']['actual'],
+                         stage['last_probe']['style_samples']['expected'])
         self.assertEqual(sum(msg[1] == 2007 for msg in api.messages), 4)
         self.assertFalse(any(msg[1] in (2009, 2153, 2182, 4003) for msg in api.messages))
         self.assertEqual(path.read_bytes(), original)

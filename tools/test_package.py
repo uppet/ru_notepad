@@ -53,7 +53,10 @@ def markdown_evidence():
                 'style_probes': probes, 'fold_probes': folds, 'stages': []}
         record['cases'].append(case)
         for operation in ('open', 'insert', 'backspace', 'undo'):
-            expected, _, _ = ci.markdown_expected(kind, operation)
+            expected, styles, _ = ci.markdown_expected(kind, operation)
+            style_positions = [position for probe in styles
+                               for position in range(probe['offset'], probe['offset'] + probe['length'])]
+            style_values = [probe['style'] for probe in styles for _ in range(probe['length'])]
             dirty = operation in ('insert', 'backspace')
             observer = ci.gui_ru_observer_record()
             observer.update(scalar_calls=30, wm_null_calls=1, sendmessage_calls=31,
@@ -72,7 +75,9 @@ def markdown_evidence():
                 'responsiveness': response, 'undo_commands': 2 if operation == 'undo' else 0,
                 'collapsed_before_edit': kind == 'many-lines' and dirty,
                 'last_probe': {'length': len(expected), 'dirty': dirty, 'end_styled': len(expected),
-                    'status_done': True, 'styles_match': True, 'folds_match': True, 'context_match': True,
+                    'status_done': True, 'styles_match': True,
+                    'style_samples': {'positions': style_positions, 'expected': style_values, 'actual': list(style_values)},
+                    'folds_match': True, 'context_match': True,
                     'lexer': 98, 'tail_requested': True, 'children_visible': True}})
     return record
 
