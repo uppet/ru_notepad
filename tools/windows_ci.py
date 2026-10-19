@@ -58,7 +58,7 @@ NATIVE_CONSOLE_TESTS = (
     ('ru_direct_styling_native', r'^TOTAL PASS: 36\s*$'),
     ('markdown_policy', r'^TOTAL PASS: 199\s*$'),
     ('markdown_selection_policy', r'^TOTAL PASS: 31\s*$'),
-    ('markdown_native', r'^TOTAL PASS: 44\s*$'),
+    ('markdown_native', r'^TOTAL PASS: 58\s*$'),
     ('app_markdown_native', r'^TOTAL PASS: 57\s*$'),
 )
 SYNTAX_FALLBACK_TESTS = (

@@ -53,7 +53,7 @@ CreateLexer 取 词法库 其 绑定 'CreateLexer' (密 其 签名 (窗 其 PTR)
     得 安装 柄.
 法
 算 计数 柄:
-    计 取 {'fold':0,'fullLine':0,'query':0,'target':0,'action':'','fired':假}.
+    计 取 {'fold':0,'foldLine':0,'fullLine':0,'query':0,'target':0,'action':'','fired':假,'replaceStopFold':0,'invalidateAt':0,'postTarget':2357}.
     路由 其 增 (柄 其 句) 计.
     得 计.
 法
@@ -62,6 +62,7 @@ CreateLexer 取 词法库 其 绑定 'CreateLexer' (密 其 签名 (窗 其 PTR)
     码 取 消息 其 数.
     若 计 != 空 则
         若 码 == 2222 则 计 其 增 'fold' (计['fold']+1). 然
+        若 码 == 2237 则 计 其 增 'foldLine' (计['foldLine']+1). 然
         若 码 == 2153 则 计 其 增 'fullLine' (计['fullLine']+1). 然
         若 码 == 2357 或 码 == 2183 或 码 == 2154 或 码 == 2039 或 码 == 2417 则 计 其 增 'query' (计['query']+1). 然
         若 码 == 计['target'] 且 计['action'] != '' 则
@@ -78,6 +79,7 @@ CreateLexer 取 词法库 其 绑定 'CreateLexer' (密 其 签名 (窗 其 PTR)
                 安装 柄.
                 折 其 排空 柄.
                 折 其 全折 柄 0.
+                计 其 增 'replaceStopFold' 计['fold'].
             然
             若 动作 == 'language' 则
                 折 其 停用 柄.
@@ -90,7 +92,12 @@ CreateLexer 取 词法库 其 绑定 'CreateLexer' (密 其 签名 (窗 其 PTR)
         然
     然
     果 取 窗 其 结果 (_DefSubclassProc 其 调用 [柄,消息,宽,长]).
-    若 计 != 空 且 码 == 2222 且 计['action'] == 'invalidate-after-fold' 则
+    若 计 != 空 且 码 == 2222 且 计['action'] == 'replace-after-fold-query' 则
+        # Arm the next READ only after the native fold mutation returned.
+        计 其 增 'target' 计['postTarget'].
+        计 其 增 'action' 'replace'.
+    然
+    若 计 != 空 且 码 == 2222 且 计['action'] == 'invalidate-after-fold' 且 (计['invalidateAt'] == 0 或 计['fold'] == 计['invalidateAt']) 则
         计 其 增 'action' ''.
         计 其 增 'fired' 真.
         # The native mutation has returned. Invalidate memory only; do not swap
@@ -104,6 +111,15 @@ CreateLexer 取 词法库 其 绑定 'CreateLexer' (密 其 签名 (窗 其 PTR)
     行 取 0.
     循 行数 次
         若 (窗 其 发送 柄 2228 行 0) 其 数 != 1 则 得 假. 然
+        行 取 行+1.
+    环
+    得 真.
+法
+算 全展开 柄:
+    行数 取 (窗 其 发送 柄 2154 0 0) 其 数.
+    行 取 0.
+    循 行数 次
+        若 (窗 其 发送 柄 2230 行 0) 其 数 != 1 则 得 假. 然
         行 取 行+1.
     环
     得 真.
@@ -291,6 +307,88 @@ CreateLexer 取 词法库 其 绑定 'CreateLexer' (密 其 签名 (窗 其 PTR)
     写前 取 甲计['fold'].
     折 其 排空 甲.
     确认 (甲计['fired'] 且 甲计['fold'] == 写前+1 且 (折 其 状态 甲) == 空) 'post-fold-write invalidation prevents every subsequent write or stale cleanup'.
+
+    # Preparation, not per-line SCI_FOLDLINE, owns the expansion invariant.
+    # Deliberately seed old header AND nonheader collapsed bits/hidden children.
+    准备 甲 文.
+    新态 取 (折 其 _编辑们) 其 查 (甲 其 句).
+    拒旧 甲 新态 甲计 'publication rejects an unprepared owner before any fold mutation'.
+    窗 其 发送 甲 2222 0 9216. 窗 其 发送 甲 2222 1 1024. 窗 其 发送 甲 2222 2 1024.
+    窗 其 发送 甲 2229 0 0. 窗 其 发送 甲 2229 1 0. 窗 其 发送 甲 2229 2 0.
+    窗 其 发送 甲 2227 1 3.
+    初种 取 (窗 其 发送 甲 2223 0 0) 其 数 == 9216 且 (窗 其 发送 甲 2223 1 0) 其 数 == 1024 且 (窗 其 发送 甲 2223 2 0) 其 数 == 1024 且 (窗 其 发送 甲 2230 2 0) 其 数 == 0 且 (窗 其 发送 甲 2230 0 0) 其 数 == 0 且 (窗 其 发送 甲 2230 1 0) 其 数 == 0 且 非 (全显 甲).
+    折 其 _一步 甲 新态.
+    确认 (初种 且 新态['phase'] == 'scan' 且 新态['pending'] 且 (全显 甲) 且 (全展开 甲) 且 (窗 其 发送 甲 2664 0 0) 其 数 == 0) 'prepare expands every old header and nonheader bit before bounded publication'.
+    确认 (非 (折 其 折叠 甲 0) 且 非 (折 其 全折 甲 0) 且 非 (折 其 全折 甲 1) 且 非 (折 其 全折 甲 2) 且 (全显 甲) 且 (全展开 甲)) 'all public fold actions reject pending work without changing prepared visibility'.
+    展前 取 甲计['foldLine'].
+    折 其 排空 甲.
+    确认 (甲计['foldLine'] == 展前 且 (全显 甲) 且 (全展开 甲) 且 (窗 其 发送 甲 2223 0 0) 其 数 == 9216 且 (窗 其 发送 甲 2223 2 0) 其 数 == 9217 且 (编 其 文本 甲) == 文 且 非 (编 其 已变 甲) 且 (窗 其 发送 甲 2174 0 0) 其 为空) 'new headers publish with exact levels and no per-line FoldLine or text undo changes'.
+    折 其 全折 甲 0.
+    确认 (非 (全显 甲)) 'completed headings remain collapsible after redundant FoldLine removal'.
+    完态 取 (折 其 _编辑们) 其 查 (甲 其 句).
+    写前 取 甲计['fold']. 拒 取 [假].
+    试 折 其 _发布 甲 完态. 救 原因 拒[0] 取 真. 终
+    确认 (拒[0] 且 甲计['fold'] == 写前 且 非 (全显 甲)) 'publication rejects a completed owner and preserves its user-collapsed state'.
+    窗 其 发送 甲 2190 0 0. 窗 其 发送 甲 2192 1 0.
+    窗 其 发文 甲 2194 1 ' '.
+    新态 取 (折 其 _编辑们) 其 查 (甲 其 句).
+    折 其 _一步 甲 新态.
+    确认 (新态['pending'] 且 (全显 甲) 且 (全展开 甲)) 'editing a collapsed header creates a prepared all-visible expanded revision'.
+    展前 取 甲计['foldLine'].
+    折 其 排空 甲.
+    准备 乙 (' '+文[1:]). 折 其 排空 乙.
+    等价 取 (同折 甲 乙) 且 (全显 甲) 且 (全展开 甲) 且 甲计['foldLine'] == 展前 且 (编 其 已变 甲).
+    窗 其 发送 甲 2176 0 0. 折 其 排空 甲.
+    确认 (等价 且 (编 其 文本 甲) == 文 且 非 (编 其 已变 甲)) 'removed collapsed header matches independent folds and keeps the original one-step undo'.
+
+    # Restore the sibling used by the unchanged late-close isolation check.
+    准备 乙 ('# inserted\n'+大文). 折 其 排空 乙.
+
+    # Re-entry after a mutation is checked by the shared full post/pre guard.
+    # The status query is deliberately reached only after the whole range.
+    后查们 取 [2357,2183,2383]. 后位 取 0.
+    循 后查们 其 量 次
+        准备 甲 文.
+        新态 取 (折 其 _编辑们) 其 查 (甲 其 句).
+        折 其 _一步 甲 新态.
+        新态 其 增 'ranges' ([[0,2,0,假]]).
+        甲计 其 增 'postTarget' 后查们[后位].
+        甲计 其 增 'target' 0. 甲计 其 增 'action' 'replace-after-fold-query'.
+        甲计 其 增 'fired' 假.
+        折 其 推进 甲 8.
+        态 取 折 其 状态 甲.
+        确认 (甲计['fired'] 且 甲计['fold'] == 甲计['replaceStopFold'] 且 新态['published'] == 0 且 新态['rangeOffset'] == 0 且 态 != 空 且 态['identity'] != 新态['identity'] 且 非 态['pending'] 且 态['warning'] == '' 且 (编 其 文本 甲) == 替文 且 (窗 其 发送 甲 2228 1 0) 其 数 == 0) ('post-mutation query'+(后查们[后位] 为 句)+' rejects stale publication and leaves replacement folds collapsed').
+
+        后位 取 后位+1.
+    环
+
+    边界文 取 '# boundary\n'. 循 70 次 边界文 取 边界文+'body\n'. 环
+    准备 甲 边界文.
+    新态 取 (折 其 _编辑们) 其 查 (甲 其 句).
+    折 其 _一步 甲 新态.
+    新态 其 增 'ranges' ([[0,65,0,假]]).
+    写前 取 甲计['fold']. 展前 取 甲计['foldLine'].
+    折 其 _发布 甲 新态.
+    确认 (甲计['fold'] == 写前+64 且 甲计['foldLine'] == 展前 且 新态['rangeOffset'] == 64 且 新态['published'] == 64 且 新态['maxPublish'] == 64 且 (全显 甲) 且 (全展开 甲)) 'shared guards keep the exact64-line publication cap and resume cursor'.
+    # No proof is carried across calls: invalidate after the next call's first
+    # (and final) mutation, before its cursor/status tail can commit.
+    甲计 其 增 'target' 0. 甲计 其 增 'action' 'invalidate-after-fold'.
+    甲计 其 增 'invalidateAt' (写前+65). 甲计 其 增 'fired' 假.
+    拒 取 [假].
+    试 折 其 _发布 甲 新态. 救 原因 拒[0] 取 真. 终
+    确认 (拒[0] 且 甲计['fired'] 且 甲计['fold'] == 写前+65 且 (折 其 状态 甲) == 空 且 新态['published'] == 64 且 新态['rangeOffset'] == 64) 'final mutation invalidation rejects the shared post-guard before cursor completion'.
+    甲计 其 增 'invalidateAt' 0.
+    准备 甲 边界文.
+    新态 取 (折 其 _编辑们) 其 查 (甲 其 句).
+    折 其 _一步 甲 新态.
+    新态 其 增 'ranges' ([[0,64,0,假]]).
+    写前 取 甲计['fold'].
+    甲计 其 增 'target' 0. 甲计 其 增 'action' 'invalidate-after-fold'.
+    甲计 其 增 'invalidateAt' (写前+64). 甲计 其 增 'fired' 假.
+    拒 取 [假].
+    试 折 其 _发布 甲 新态. 救 原因 拒[0] 取 真. 终
+    确认 (拒[0] 且 甲计['fired'] 且 甲计['fold'] == 写前+64 且 (折 其 状态 甲) == 空 且 新态['published'] == 0 且 新态['rangeOffset'] == 0) 'the64th mutation retains its complete post-guard before any batch cursor commit'.
+    甲计 其 增 'invalidateAt' 0.
 
     # A cleanup query may deliver a real same-document edit. The disabled new
     # revision must inherit visibility work instead of leaving old folds hidden.

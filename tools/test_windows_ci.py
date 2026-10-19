@@ -364,7 +364,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'ru_direct_styling_native': r'^TOTAL PASS: 36\s*$',
             'markdown_policy': r'^TOTAL PASS: 199\s*$',
             'markdown_selection_policy': r'^TOTAL PASS: 31\s*$',
-            'markdown_native': r'^TOTAL PASS: 44\s*$',
+            'markdown_native': r'^TOTAL PASS: 58\s*$',
             'app_markdown_native': r'^TOTAL PASS: 57\s*$',
             'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=73\s*$',
             'file_streaming_native': r'^FILE_STREAMING_TESTS_PASS=99\s*$',
@@ -1187,7 +1187,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         prior = [test for test in summary['tests'] if test['name'] not in added]
         self.assertEqual(len(prior), 33)
         self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1818)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1832)
 
     def test_direct_style_fixture_is_built_packaged_and_required(self):
         name = 'ru_direct_styling_native'
@@ -2912,7 +2912,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
 
     def test_markdown_gate_preserves_old_counts_and_requires_exact_new_counts(self):
         expected = {'markdown_policy': 199, 'markdown_selection_policy': 31,
-                    'markdown_native': 44, 'app_markdown_native': 57}
+                    'markdown_native': 58, 'app_markdown_native': 57}
         self.assertEqual({name: ci.expected_assertions(name) for name in expected}, expected)
         self.assertEqual(ci.console_command('app_markdown_native', self.root, self.root),
                          [str(self.root / 'app_markdown_native.exe'), str(self.root)])
@@ -2976,6 +2976,54 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     return mutated if actual == path else original_read_text(actual, *args, **kwargs)
                 with patch.object(Path, 'read_text', read_text), self.assertRaises(AssertionError):
                     self.test_markdown_selection_invalidates_native_prefix_and_requires_natural_paint()
+
+    def test_markdown_publisher_keeps_reviewed_full_guards_and_prepared_expansion(self):
+        # Reviewed source contract only. Actual callback/contraction behavior is
+        # separately required from markdown_native and the detached GUI cases.
+        source = (ci.ROOT / 'src/markdown_syntax.ru').read_text(encoding='utf-8')
+        expected = {'_本态': '8a5ac21dfaed5a7acd9633c5ee30aed02517b6da4e61edd6724bb9da154653fe', '_须本态': 'ad619e1b49326aeb41de2f838a49662358aae6827f3f9603b16945ad224dd37e', '_护': 'd09426159fc731acf23725021e04cb93ad33dbe58526e9741f5806adf93d5445', '_讯': '5b1cac1da67dd9bf65ae91029f5622121301b70a03056a52d72e96ccd41ec9e2', '_全显': 'a2facd577a3085e305284e6e205a9c0d014773f06ef00070f51da71e8289cbf7', '_发布': '954453433a6a1ac50a3694aeda2e40120d64b71c4c553edd6dcb1cd3dab84016'}
+        for name, digest in expected.items():
+            functions = re.findall(r'^算 ' + re.escape(name) + r'[^\n]*\n(.*?)^法$',
+                                   source, re.MULTILINE | re.DOTALL)
+            self.assertEqual(len(functions), 1, name)
+            code = '\n'.join(line.strip() for line in functions[0].splitlines()
+                             if line.strip() and not line.lstrip().startswith('#'))
+            self.assertEqual(hashlib.sha256(code.encode('utf-8')).hexdigest(), digest, name)
+        for name in ('折叠', '全折'):
+            function = re.findall(r'^算 ' + name + r'[^\n]*\n(.*?)^法$', source,
+                                  re.MULTILINE | re.DOTALL)
+            self.assertEqual(len(function), 1)
+            self.assertIn("或 态['pending']", function[0].splitlines()[1])
+        fixture = (ci.ROOT / 'tests/markdown_native.ru').read_text(encoding='utf-8')
+        self.assertIn('窗 其 发送 柄 2230 行 0', fixture)
+        self.assertIn('后查们 取 [2357,2183,2383]', fixture)
+        self.assertIn("新态 其 增 'ranges' ([[0,64,0,假]])", fixture)
+        self.assertIn("甲计 其 增 'invalidateAt' (写前+64)", fixture)
+        self.assertIn("甲计 其 增 'invalidateAt' (写前+65)", fixture)
+
+    def test_markdown_publisher_source_guard_contract_rejects_unsafe_mutations(self):
+        path = ci.ROOT / 'src/markdown_syntax.ru'
+        source = path.read_text(encoding='utf-8')
+        read_original = Path.read_text
+        mutations = (
+            ("    _护 柄 态.\n    范围们 取 态['ranges'].", "    范围们 取 态['ranges']."),
+            ('        窗 其 发送 柄 2222 行 层.\n        _护 柄 态.',
+             '        窗 其 发送 柄 2222 行 层.'),
+            ('        数量 取 数量+1.', '        窗 其 发送 柄 2383 0 0.\n        数量 取 数量+1.'),
+            ("态['phase'] != 'scan' 或 非 态['pending']", "态['phase'] != 'scan'"),
+            ('    _讯 柄 态 2662 1 0.', '    _讯 柄 态 2226 0 0.'),
+            ('    _讯 柄 态 2663 0 0.', '    _讯 柄 态 2663 5 0.'),
+            ("文档 != 态['document']", '假'),
+            ("长 != 态['length']", '假'),
+        )
+        for before, after in mutations:
+            with self.subTest(mutation=after):
+                self.assertEqual(source.count(before), 1)
+                changed = source.replace(before, after)
+                def read_text(actual, *args, **kwargs):
+                    return changed if actual == path else read_original(actual, *args, **kwargs)
+                with patch.object(Path, 'read_text', read_text), self.assertRaises(AssertionError):
+                    self.test_markdown_publisher_keeps_reviewed_full_guards_and_prepared_expansion()
 
     def test_markdown_gui_corpora_are_fixed_separate_shapes_and_sixteen_style_bytes(self):
         sizes = {'many-lines': 100000, 'singleline': 1000000, 'unclosed-fence': 1000000}

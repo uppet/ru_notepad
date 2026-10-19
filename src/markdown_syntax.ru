@@ -295,6 +295,8 @@ _时存 取 _计数型 其 新建.
     得 空.
 法
 算 _发布 柄 态:
+    # Only a prepared scan owns the all-visible/all-expanded invariant below.
+    若 态['phase'] != 'scan' 或 非 态['pending'] 或 非 态['foldEnabled'] 或 态['language'] != 'markdown' 则 卒 'Markdown publication is not a prepared pending scan.'. 然
     _护 柄 态.
     范围们 取 态['ranges'].
     _验范围 态 范围们.
@@ -307,10 +309,16 @@ _时存 取 _计数型 其 新建.
         行 取 项[0]+偏.
         层 取 1024+项[2].
         若 项[3] 则 层 取 层+8192. 然
-        # Each fold write has independent before/after identity+doc+length guards.
-        # Pending rescans always leave the touched line expanded and visible.
-        _讯 柄 态 2222 行 层.
-        _讯 柄 态 2237 行 1.
+        # G0,M1,G1,M2,G2: a full post-guard also guards the next mutation.
+        # Between it and the next write there is ONLY built-in range/cursor
+        # arithmetic. Never carry this proof across any native/reentrant call or return.
+        窗 其 发送 柄 2222 行 层.
+        _护 柄 态.
+        # prepare already ran guarded FoldAll(Expand), which expands even old
+        # nonheaders, and disabled automatic folding. Public folding entrypoints
+        # reject pending work; edits replace this state and re-run prepare.
+        # Do not repeat SCI_FOLDLINE(Expand)=2237 here: that traverses children
+        # and refreshes scrollbars/paint for every line, not merely one bit.
         数量 取 数量+1.
         偏 取 偏+1.
         若 偏 >= 项[1] 则 位 取 位+1. 偏 取 0. 然
