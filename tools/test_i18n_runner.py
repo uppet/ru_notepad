@@ -43,6 +43,39 @@ def assertion_output(names):
     return ('\n'.join('PASS: ' + name for name in names) + f'\nTOTAL PASS: {len(names)}\n').encode()
 
 
+def command_arguments(data):
+    """Read argv semantically: JSON escapes are not filesystem path bytes."""
+    command = json.loads(data)
+    if type(command) is not list or not command or any(type(arg) is not str for arg in command):
+        raise ValueError('Expected a nonempty string argv')
+    return command
+
+
+def json_strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            yield key
+            yield from json_strings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from json_strings(item)
+
+
+def assert_public_hides_paths(test, data, suffix, paths):
+    """Inspect decoded JSON keys/values, and raw or escaped text in log files."""
+    values = list(json_strings(json.loads(data))) if suffix == '.json' else [data.decode('utf-8')]
+    for private in paths:
+        forms = {str(private)}
+        if suffix != '.json':
+            forms.update(json.dumps(str(private), ensure_ascii=ascii_only)[1:-1]
+                         for ascii_only in (False, True))
+        for value in values:
+            for form in forms:
+                test.assertNotIn(form, value)
+
+
 class ChildContracts(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='i18n-runner-controls-')
@@ -66,10 +99,10 @@ class ChildContracts(unittest.TestCase):
         self.assertEqual(record['stdout_bytes'], len(data))
         self.assertEqual(record['stderr_bytes'], 0)
         self.assertEqual(record['exit_code'], 0)
-        raw = json.loads((self.directory / 'probe.command.json').read_text())
+        raw = command_arguments((self.directory / 'probe.command.json').read_bytes())
         self.assertEqual(raw, self.command(code))
         self.assertEqual(record['command_sha256'], hashlib.sha256(json.dumps(raw).encode()).hexdigest())
-        self.assertNotIn(sys.executable, json.dumps(record))
+        assert_public_hides_paths(self, json.dumps(record).encode(), '.json', [sys.executable])
         self.assertNotIn('command', record)
 
     def test_both_wrappers_reject_runtime_stderr_and_nonzero_exit(self):
@@ -320,9 +353,12 @@ class PublicationContracts(unittest.TestCase):
                 for name, digest in report['source_sha256'].items():
                     self.assertEqual(digest, runner.file_sha256(fixture.root / name))
                 private_root = fixture.root / 'build' / ('i18n-policy-private' if which == 'i18n' else 'syntax-warning-private')
-                for record in report['commands']:
+                private_commands = []
+                for index, record in enumerate(report['commands']):
                     command_file, = private_root.glob('*/' + record['stage'] + '.command.json')
-                    command = json.loads(command_file.read_text())
+                    command = command_arguments(command_file.read_bytes())
+                    private_commands.append(command)
+                    self.assertEqual(command, fixture.commands[index])
                     self.assertEqual(record['command_sha256'], hashlib.sha256(json.dumps(command).encode()).hexdigest())
                     for stream in ('stdout', 'stderr'):
                         path = command_file.with_name(record['stage'] + '.' + stream)
@@ -330,12 +366,24 @@ class PublicationContracts(unittest.TestCase):
                         self.assertEqual(record[stream + '_bytes'], path.stat().st_size)
                 private_bytes = b''.join(path.read_bytes() for path in private_root.rglob('*') if path.is_file())
                 self.assertIn(b'PRIVATE_DIAGNOSTIC', private_bytes)
-                self.assertIn(str(fixture.root).encode(), private_bytes)
+                self.assertEqual(private_commands, fixture.commands)
+                self.assertTrue(any(command[:3] == [sys.executable,
+                    str(fixture.root / 'compiler' / 'ru'), 'build'] for command in private_commands))
+                private_paths = [fixture.root, sys.executable]
+                for source in fixture.prepared:
+                    private_paths.extend((source, source.parent))
+                for command in private_commands:
+                    for arg in command:
+                        path = Path(arg)
+                        if path.is_absolute():
+                            private_paths.append(path)
+                            if path.suffix == '.ru':
+                                private_paths.append(path.parent)
                 for path in public.iterdir():
                     self.assertIn(path.suffix, ('.json', '.log'))
                     data = path.read_bytes()
                     self.assertNotIn(b'PRIVATE_', data)
-                    self.assertNotIn(str(fixture.root).encode(), data)
+                    assert_public_hides_paths(self, data, path.suffix, private_paths)
                     self.assertNotIn(b'\r', data)
                 if which == 'i18n':
                     source, = private_root.glob('*/catalog_exact.ru')
@@ -433,6 +481,69 @@ class PublicationContracts(unittest.TestCase):
                 with self.assertRaises(FileExistsError):
                     self.run_fixture(fixture, which)
                 self.assertEqual((public / 'report.json').read_text(), 'existing receipt\n')
+
+
+class SerializationContracts(unittest.TestCase):
+    PATHS = (
+        r'C:\Users\测试 User 📝\private work',
+        r'\\server\共享 Folder\private work',
+        '/tmp/测试 User/private work',
+    )
+
+    def test_private_argv_roundtrips_windows_unicode_spaces_and_json_newlines(self):
+        for root in self.PATHS:
+            expected = [r'C:\Program Files\Python\python.exe', root + r'\compiler\ru',
+                        'build', root + r'\源文件 with spaces.ru']
+            for ascii_only in (False, True):
+                for newline in ('\n', '\r\n'):
+                    with self.subTest(root=root, ascii_only=ascii_only, newline=newline):
+                        data = (json.dumps(expected, ensure_ascii=ascii_only, indent=2) + '\n')
+                        data = data.replace('\n', newline).encode('utf-8')
+                        self.assertEqual(command_arguments(data), expected)
+        for invalid in ('{}', 'null', '[]', '["tool", 123]', '["tool", true]'):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                command_arguments(invalid)
+
+    def test_public_json_rejects_escaped_private_paths_in_nested_values_and_keys(self):
+        for root in self.PATHS:
+            for ascii_only in (False, True):
+                for newline in ('\n', '\r\n'):
+                    for leaked in ({'commands': [{'argv': [root + r'\源文件.ru']}]},
+                                   {root + r'\private key': {'passed': True}}):
+                        data = (json.dumps(leaked, ensure_ascii=ascii_only, indent=2) + '\n')
+                        data = data.replace('\n', newline).encode('utf-8')
+                        with self.subTest(root=root, ascii_only=ascii_only, newline=newline), \
+                                self.assertRaises(AssertionError):
+                            assert_public_hides_paths(self, data, '.json', [root])
+            assert_public_hides_paths(self, b'{"source":"src/i18n.ru","passed":true}\n', '.json', [root])
+
+    def test_public_logs_reject_raw_and_json_escaped_private_paths(self):
+        for root in self.PATHS:
+            for text in (root, json.dumps(root, ensure_ascii=True), json.dumps(root, ensure_ascii=False)):
+                with self.subTest(root=root, text=text), self.assertRaises(AssertionError):
+                    assert_public_hides_paths(self, ('PASS: ' + text + '\n').encode(), '.log', [root])
+            assert_public_hides_paths(self, b'PASS: synthetic assertion\n', '.log', [root])
+
+    def test_both_report_writers_disable_windows_newline_translation(self):
+        original = Path.write_text
+        for which in ('i18n', 'warnings'):
+            with self.subTest(which=which), sandbox() as fixture:
+                observed = []
+                def windows_write_text(path, text, *args, **kwargs):
+                    if path.name == 'report.json':
+                        observed.append(kwargs.get('newline'))
+                        if kwargs.get('newline') is None:
+                            text = text.replace('\n', '\r\n')
+                        # Emulate Windows default translation on any host without
+                        # translating twice when this control itself runs there.
+                        kwargs['newline'] = ''
+                    return original(path, text, *args, **kwargs)
+                with patch.object(Path, 'write_text', autospec=True, side_effect=windows_write_text):
+                    public = PublicationContracts().run_fixture(fixture, which)
+                data = (public / 'report.json').read_bytes()
+                self.assertEqual(observed, ['\n'])
+                self.assertNotIn(b'\r', data)
+                self.assertTrue(json.loads(data)['passed'])
 
 
 if __name__ == '__main__':

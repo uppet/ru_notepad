@@ -598,7 +598,7 @@ def run_backends(ru_root, cc, output):
         raise
     finally:
         if output is not None:
-            (output / 'report.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
+            (output / 'report.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8', newline='\n')
     print(f'I18N_PORTABLE_PASS policy={ASSERTIONS}x2 exact_catalog={exact_count}x2 catalog_keys={len(data)}')
 
 
