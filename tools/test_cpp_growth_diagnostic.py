@@ -34,11 +34,12 @@ class Controls(unittest.TestCase):
         with self.assertRaises(RuntimeError): validate_measurements(self.text, 'error')
     def test_manual_isolation(self):
         workflow = (ROOT/'.github/workflows/windows.yml').read_text()
-        job = workflow.split('  cpp-growth-diagnostic:\n', 1)[1]
+        job = workflow.split('  cpp-growth-diagnostic:\n', 1)[1].split('  window-size-diagnostic:\n', 1)[0]
         mode = "(github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic)"
         self.assertIn('if: ${{ ' + mode + ' }}', job)
         self.assertIn("'-cpp-growth-diagnostic'", workflow)
-        self.assertEqual(workflow.count('if: ${{ !(' + mode + ') }}'), 2)
+        self.assertEqual(workflow.count('if: ${{ !(' + mode + ' || '), 2)
+        self.assertIn('inputs.i18n_window_diagnostic', workflow)
         self.assertIn('if: ${{ inputs.historical_callback }}', job)
         self.assertIn("throw 'Select only one diagnostic mode.'", job)
         self.assertNotIn('*.zip', job)
