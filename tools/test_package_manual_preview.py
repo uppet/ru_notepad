@@ -20,6 +20,35 @@ import windows_ci as ci
 import test_markdown_fold_helper as helper
 
 
+def acceptance_finally_body(source):
+    # Match only the ordinary acceptance branch and its outer, zero-indent
+    # handler boundary. The outer driver may catch before its final cleanup.
+    matches = re.findall(
+        r'    } else {\n(        try {\n            Invoke-Checked \$Python \$AcceptArgs.*?)'
+        r'\n    }\n} (?:catch|finally) {', source, re.S)
+    if len(matches) != 1:
+        raise ValueError('Expected exactly one ordinary acceptance/finally body')
+    return matches[0]
+
+
+class AcceptanceExtractionTests(unittest.TestCase):
+    def test_actual_driver_body_and_both_outer_handler_shapes(self):
+        source = (Path(__file__).parent / 'windows_ci.ps1').read_text(encoding='utf-8')
+        body = acceptance_finally_body(source)
+        self.assertIn('} finally {', body)
+        self.assertIn('$global:LASTEXITCODE = $ProductExit', body)
+        self.assertIn("'tools/package_manual_preview.py','package'", body)
+        self.assertNotIn('Pop-Location', body)
+        self.assertNotIn('MARKDOWN_OWNED_PROFILE_DIAGNOSTIC_FAILED', body)
+        for handler in ('catch', 'finally'):
+            wrapper = '    } else {\n' + body + '\n    }\n} ' + handler + ' {\n}'
+            self.assertEqual(acceptance_finally_body(wrapper), body)
+            with self.assertRaises(ValueError):
+                acceptance_finally_body(wrapper + '\n' + wrapper)
+        with self.assertRaises(ValueError):
+            acceptance_finally_body(source.replace('Invoke-Checked $Python $AcceptArgs', 'REMOVED'))
+
+
 class ManualPreviewTests(unittest.TestCase):
     def setUp(self):
         self.fixture = fixtures.PackageTests('runTest')
@@ -485,9 +514,7 @@ class ManualPreviewTests(unittest.TestCase):
         start = source.index('    # Reserve the fresh-run identity')
         end = source.index('    if ($RunCallbackResearch) {', start)
         prepare = source[start:end]
-        match = re.search(r'    } else {\n(        try {\n            Invoke-Checked \$Python \$AcceptArgs.*)\n    }\n} finally {',
-                          source, re.S)
-        self.assertIsNotNone(match)
+        acceptance = acceptance_finally_body(source)
         script = self.root / 'preview-finally-control.ps1'
         script.write_text("""$ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -511,7 +538,7 @@ foreach($PackageFail in @($false,$true)) {
     $global:LASTEXITCODE=0
     $Caught=''
     try {
-""" + prepare + match.group(1) + """
+""" + prepare + acceptance + """
     } catch { $Caught=$_.Exception.Message }
     if($ProductFail){
         if($Caught -ne 'original-product-failure'){throw 'Original product exception changed'}
