@@ -520,7 +520,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
         self.assertIn(f"-ne '{commit}'", script)
         self.assertIn(f"-ne '{tree}'", script)
-        self.assertEqual(workflow.count(f'ref: {commit}'), 3)  # two acceptance jobs plus manual growth diagnostic
+        self.assertEqual(workflow.count(f'ref: {commit}'), 4)  # two acceptance jobs plus isolated growth and focused diagnostics
 
     def test_historical_replays_retain_their_exact_compiler_pin(self):
         historical = 'a2f6faa0f914781dea74cb6f0a7574f1dd6808ce'

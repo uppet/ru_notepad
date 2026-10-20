@@ -40,6 +40,7 @@ class Controls(unittest.TestCase):
         self.assertIn("'-cpp-growth-diagnostic'", workflow)
         self.assertEqual(workflow.count('if: ${{ !(' + mode + ' || '), 2)
         self.assertIn('inputs.i18n_window_diagnostic', workflow)
+        self.assertIn('inputs.i18n_focused_diagnostic', job)
         self.assertIn('if: ${{ inputs.historical_callback }}', job)
         self.assertIn("throw 'Select only one diagnostic mode.'", job)
         self.assertNotIn('*.zip', job)
@@ -76,6 +77,8 @@ class Controls(unittest.TestCase):
             ('pull_request','refs/heads/wip',{'head_commit':{'message':ONE_SHOT_TITLE}}),
             ('workflow_dispatch','refs/heads/wip',{'inputs':{'syntax_growth_diagnostic':'false'}}),
             ('workflow_dispatch','refs/heads/wip',{'inputs':{'syntax_growth_diagnostic':'true','historical_callback':'true'}}),
+            ('workflow_dispatch','refs/heads/wip',{'inputs':{'syntax_growth_diagnostic':'true','i18n_focused_diagnostic':'true'}}),
+            ('workflow_dispatch','refs/heads/wip',{'inputs':{'syntax_growth_diagnostic':'true','i18n_window_diagnostic':'true'}}),
         ]:
             with self.assertRaises(RuntimeError): validate_trigger(event,ref,payload)
         # Every push, including the former diagnostic title and ref variants,

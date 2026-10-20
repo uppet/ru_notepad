@@ -25,6 +25,61 @@ _RemoveDirectoryW 取 (窗 其 内核) 其 绑定 'RemoveDirectoryW' (密 其 �
 _DeleteFileW 取 (窗 其 内核) 其 绑定 'DeleteFileW' (密 其 签名 (窗 其 I) ([(窗 其 PTR)]) 'win64').
 _GetFileAttributesW 取 (窗 其 内核) 其 绑定 'GetFileAttributesW' (密 其 签名 (窗 其 U) ([(窗 其 PTR)]) 'win64').
 _Sleep 取 (窗 其 内核) 其 绑定 'Sleep' (密 其 签名 (窗 其 V) ([(窗 其 U)]) 'win64').
+# Test-owned only. CI's 1024px desktop defaults maxTrackX to 1044; allowing
+# this hidden fixture to exceed the monitor preserves the exact 1600px test.
+# The production WM_GETMINMAXINFO handler is always called first and untouched.
+_SetWindowSubclass 取 (窗 其 控件) 其 绑定 'SetWindowSubclass' (密 其 签名 (窗 其 I) ([(窗 其 PTR),(窗 其 PTR),(窗 其 UP),(窗 其 UP)]) 'win64').
+_RemoveWindowSubclass 取 (窗 其 控件) 其 绑定 'RemoveWindowSubclass' (密 其 签名 (窗 其 I) ([(窗 其 PTR),(窗 其 PTR),(窗 其 UP)]) 'win64').
+_DefSubclassProc 取 (窗 其 控件) 其 绑定 'DefSubclassProc' (密 其 签名 (窗 其 IP) ([(窗 其 PTR),(窗 其 U),(窗 其 UP),(窗 其 IP)]) 'win64').
+_布局型 取 密 其 签名 (窗 其 IP) ([(窗 其 PTR),(窗 其 U),(窗 其 UP),(窗 其 IP),(窗 其 UP),(窗 其 UP)]) 'win64'.
+_布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
+算 布局上限 宽 为 数 高 为 数:
+    若 宽 < 4096 则 宽 取 4096. 然
+    若 高 < 4096 则 高 取 4096. 然
+    得 [宽,高].
+法
+算 布局子过程 柄 消息 宽 长 号 引:
+    果 取 窗 其 结果 (_DefSubclassProc 其 调用 [柄,消息,宽,长]).
+    若 消息 其 数 == 36 则
+        若 (柄 其 句) != ((_布局钩 其 查 'window') 其 句) 则 卒 'Layout fixture owner mismatch.'. 然
+        若 非 ((窗 其 结果 (_IsWindowVisible 其 调用 [柄])) 其 为空) 则 卒 'Layout fixture must stay hidden.'. 然
+        矩 取 (窗 其 MINMAXINFO) 其 新建.
+        试
+            指 取 (窗 其 PTR) 其 重释 长.
+            窗 其 结果 ((窗 其 RtlMoveMemory) 其 调用 [矩,指,((窗 其 MINMAXINFO) 其 大小)]).
+            若 (矩 其 读 'minTrackX') 其 数 != 640 或 (矩 其 读 'minTrackY') 其 数 != 400 则 卒 'Production minimum tracking policy changed.'. 然
+            限 取 布局上限 ((矩 其 读 'maxTrackX') 其 数) ((矩 其 读 'maxTrackY') 其 数).
+            矩 其 写 'maxTrackX' 限[0]. 矩 其 写 'maxTrackY' 限[1].
+            窗 其 结果 ((窗 其 RtlMoveMemory) 其 调用 [指,矩,((窗 其 MINMAXINFO) 其 大小)]).
+            _布局钩 其 增 'calls' ((_布局钩 其 查 'calls')+1).
+            _布局钩 其 增 'maxX' 限[0]. _布局钩 其 增 'maxY' 限[1].
+        救 原因 矩 其 关闭. 卒 原因. 终
+        矩 其 关闭.
+    然
+    得 果.
+法
+作 装布局钩 主:
+    若 非 ((窗 其 结果 (_IsWindowVisible 其 调用 [主])) 其 为空) 则 卒 'Layout fixture must start hidden.'. 然
+    回调 取 密 其 回调 _布局型 (算 布局子过程) 0.
+    回调 其 失败时 (窗 其 PostQuitMessage) ([1]).
+    _布局钩 其 增 'window' 主. _布局钩 其 增 'callback' 回调.
+    试
+        窗 其 成功 (_SetWindowSubclass 其 调用 [主,(回调 其 地址),9931,0]) 'Install test-owned layout guard'.
+    救 原因
+        _布局钩 其 增 'window' 空. _布局钩 其 增 'callback' 空.
+        回调 其 关闭.
+        卒 原因.
+    终
+为
+算 卸布局钩:
+    主 取 _布局钩 其 查 'window'.
+    若 主 == 空 则 得 空. 然
+    回调 取 _布局钩 其 查 'callback'.
+    窗 其 成功 (_RemoveWindowSubclass 其 调用 [主,(回调 其 地址),9931]) 'Remove test-owned layout guard'.
+    _布局钩 其 增 'window' 空. _布局钩 其 增 'callback' 空.
+    回调 其 关闭.
+    得 空.
+法
 次数 取 [0].
 关闭询问 取 [0].
 语言们 取 ['en','zh-CN','ja','ko','es','ru','it'].
@@ -138,7 +193,7 @@ _Sleep 取 (窗 其 内核) 其 绑定 'Sleep' (密 其 签名 (窗 其 V) ([(�
     应用 其 布局.
     内 取 客矩 主.
     前 取 代码+' '+(宽 为 句)+'px '.
-    确认 (内[2]-内[0] == 宽 且 内[3]-内[1] >= 400) (前+'actual client width and usable height').
+    确认 (内[2]-内[0] == 宽 且 内[3]-内[1] >= 400 且 (_布局钩 其 查 'calls') > 0 且 (_布局钩 其 查 'maxX') >= 4096 且 (_布局钩 其 查 'maxY') >= 4096) (前+'actual client width and usable height').
     控们 取 ['find','replace','case','next','one','all','hide'].
     矩们 取 [].
     位 取 0.
@@ -332,6 +387,7 @@ _Sleep 取 (窗 其 内核) 其 绑定 'Sleep' (密 其 签名 (窗 其 V) ([(�
     件编 其 写文件 入路 源 1200 真 ''.
     主 取 应用 其 初始化 [入路] 假.
     态 取 应用 其 A.
+    装布局钩 主.
     态 其 增 'confirmClose' (算 页: 关闭询问[0] 取 关闭询问[0]+1. 得 2. 法).
     确认 ((态 其 查 'ready') 且 非 (态 其 查 'visible') 且 (窗 其 结果 (_IsWindowVisible 其 调用 [主])) 其 为空) 'real application initializes with a hidden main window'.
     确认 (态 其 查 'busy') 'Unicode CLI fixture begins asynchronous loading'.
@@ -403,6 +459,7 @@ _Sleep 取 (窗 其 内核) 其 绑定 'Sleep' (密 其 签名 (窗 其 V) ([(�
     确认 (读回['text'] == 源 且 读回['encoding'] == 1200 且 读回['bom']) 'saved Unicode filename round-trips exact multilingual UTF16LE text and BOM'.
     确认 ((页 其 查 'path') == 出路 且 非 (应用 其 脏 页)) 'successful Unicode Save As keeps the named document clean'.
     确认 (((态 其 查 'errors') 其 量) == 0) 'real language switches and file operations report no application errors'.
+    卸布局钩.
     确认 (应用 其 关程序) 'all clean localized documents close without prompting'.
     确认 (关闭询问[0] == 0 且 非 (态 其 查 'ready')) 'shutdown requires no dirty prompt and releases the real window'.
 为
@@ -433,6 +490,7 @@ _Sleep 取 (窗 其 内核) 其 绑定 'Sleep' (密 其 签名 (窗 其 V) ([(�
         检验 根 入路 出路.
     救 原因
         试 应用 其 清操作. 救 清因 显 'Fixture pending-operation cleanup failed: '+清因. 终
+        试 卸布局钩. 救 清因 显 'Fixture layout-guard cleanup failed: '+清因. 终
         态 取 应用 其 A.
         若 态 其 查 'ready' 则
             态 其 增 'ready' 假.

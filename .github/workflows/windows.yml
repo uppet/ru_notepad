@@ -5,6 +5,11 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      i18n_focused_diagnostic:
+        description: Run only full 114/1417 native fixtures; never package or certify product acceptance
+        type: boolean
+        required: false
+        default: false
       i18n_window_diagnostic:
         description: Measure only synthetic hidden-window dimensions; never package or certify acceptance
         type: boolean
@@ -25,12 +30,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-native-${{ github.ref }}${{ ((github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：确认七语验收窗口尺寸约束')) && '-window-size-diagnostic' || (github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) && '-cpp-growth-diagnostic' || '' }}
+  group: windows-native-${{ github.ref }}${{ ((github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：验收七语原生完整流程')) && '-focused-native-diagnostic' || (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) && '-window-size-diagnostic' || (github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) && '-cpp-growth-diagnostic' || '' }}
   cancel-in-progress: true
 
 jobs:
   helper-policy:
-    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || ((github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：确认七语验收窗口尺寸约束'))) }}
+    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) || ((github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：验收七语原生完整流程'))) }}
     name: Verify scanner against pure Ru and ASan/UBSan
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -173,7 +178,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
   windows-native:
-    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || ((github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：确认七语验收窗口尺寸约束'))) }}
+    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) || ((github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：验收七语原生完整流程'))) }}
     name: Build and execute on Windows x64
     needs: helper-policy
     runs-on: windows-2022
@@ -293,7 +298,7 @@ jobs:
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - name: Reject mixed window and growth diagnostics
-        if: ${{ inputs.i18n_window_diagnostic }}
+        if: ${{ inputs.i18n_window_diagnostic || inputs.i18n_focused_diagnostic }}
         run: throw 'Select only one diagnostic mode.'
       - name: Reject mixed historical and growth diagnostics
         if: ${{ inputs.historical_callback }}
@@ -345,7 +350,7 @@ jobs:
           retention-days: 14
 
   window-size-diagnostic:
-    if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：确认七语验收窗口尺寸约束')) }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) }}
     name: Measure synthetic hidden-window geometry only
     runs-on: windows-2022
     timeout-minutes: 10
@@ -358,7 +363,7 @@ jobs:
       PYTHONOPTIMIZE: '0'
     steps:
       - name: Reject mixed diagnostics
-        if: ${{ inputs.historical_callback || inputs.syntax_growth_diagnostic }}
+        if: ${{ inputs.historical_callback || inputs.syntax_growth_diagnostic || inputs.i18n_focused_diagnostic }}
         run: throw 'Select only one diagnostic mode.'
       - name: Preserve source bytes
         run: git config --global core.autocrlf false
@@ -402,4 +407,82 @@ jobs:
           name: window-size-diagnostic-${{ github.sha }}
           path: build/window-size-diagnostic-public/measurements.json
           if-no-files-found: warn
+          retention-days: 14
+
+  focused-native-diagnostic:
+    if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：验收七语原生完整流程')) }}
+    name: Diagnose only the full Markdown and seven-language native fixtures
+    runs-on: windows-2022
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONOPTIMIZE: '0'
+    steps:
+      - name: Reject mixed diagnostics
+        if: ${{ inputs.historical_callback || inputs.syntax_growth_diagnostic || inputs.i18n_window_diagnostic }}
+        run: throw 'FOCUSED_NATIVE_MODE_REJECTED=1'
+      - name: Preserve source bytes
+        run: git config --global core.autocrlf false
+      - name: Check out exact application source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Strict case-sensitive event guard
+        run: python -I tools/guard_focused_native_diagnostic.py --guard-only
+      - name: Check out reviewed unchanged Ru compiler
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: uppet/ru-language
+          ref: 85c7821fda35aa79deeaf67b4d430f24ddd7f07f
+          path: .ci/ru-language
+          persist-credentials: false
+      - name: Set up build-time Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install official MinGW toolchain
+        id: msys2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e
+        with:
+          msystem: MINGW64
+          update: true
+          cache: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+      - name: Verify fail-closed focused and isolation controls privately
+        run: |
+          $LogRoot = Join-Path $PWD 'build/focused-native-controls-private'
+          if (Test-Path -LiteralPath $LogRoot) { throw 'FOCUSED_NATIVE_CONTROLS_DIRECTORY_REJECTED=1' }
+          New-Item -ItemType Directory -Path $LogRoot -ErrorAction Stop | Out-Null
+          python -I tools/test_focused_native_diagnostic.py -v *> (Join-Path $LogRoot 'focused.log')
+          if ($LASTEXITCODE -ne 0) { throw 'FOCUSED_NATIVE_CONTROLS_FAILED=1' }
+          python -I tools/test_window_size_workflow.py -v *> (Join-Path $LogRoot 'workflow.log')
+          if ($LASTEXITCODE -ne 0) { throw 'FOCUSED_NATIVE_WORKFLOW_CONTROLS_FAILED=1' }
+          python tools/test_cpp_growth_diagnostic.py *> (Join-Path $LogRoot 'growth.log')
+          if ($LASTEXITCODE -ne 0) { throw 'FOCUSED_NATIVE_GROWTH_CONTROLS_FAILED=1' }
+          Write-Host 'FOCUSED_NATIVE_CONTROLS_PASSED=1'
+      - name: Build fresh dependencies and only two native fixtures then execute both
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          $Log = Join-Path $PWD 'build/focused-native-controls-private/runner.log'
+          python -I tools/run_focused_native_diagnostic.py --ru-root .ci/ru-language --msys-root "$env:MSYS2_ROOT" *> $Log
+          $Result = $LASTEXITCODE
+          $Markers = @(Select-String -LiteralPath $Log -Pattern '^FOCUSED_NATIVE_DIAGNOSTIC code=(?:[0-9]|1[0-2]) markdown=[0-9]{1,16} i18n=[0-9]{1,16}$')
+          if ($Markers.Count -ne 1) { throw 'FOCUSED_NATIVE_RESULT_REJECTED=1' }
+          Write-Host $Markers[0].Line
+          if ($Result -ne 0) { throw 'FOCUSED_NATIVE_EXECUTION_FAILED=1' }
+      - name: Upload only validated numeric and hash measurements
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: focused-native-diagnostic-${{ github.sha }}
+          path: build/focused-native-public/measurements.json
+          if-no-files-found: error
           retention-days: 14

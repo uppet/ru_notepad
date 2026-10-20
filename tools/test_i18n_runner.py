@@ -3,11 +3,13 @@
 
 No native-window claim: synthetic child processes exercise the real bounded
 runner, receipt/publication path and failure cleanup. --ru-root additionally
-checks the exact compiler identity and real production-function extraction.
+checks the exact compiler identity, real production-function extraction and the
+Markdown constructor/native-fixture field predicate in Python and generated C.
 """
 from __future__ import annotations
 
 import argparse
+import ast
 from contextlib import ExitStack, contextmanager, redirect_stdout
 import hashlib
 import importlib.util
@@ -15,6 +17,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -249,6 +252,314 @@ class SourceContracts(unittest.TestCase):
                     parse(text)
 
 
+# Independent approved constructor values, not inferred from the source under test.
+# The policy's two nested arrays are deliberately checked element by element.
+MARKDOWN_INITIAL_STATE = {
+    'alive': True, 'chunk': '', 'chunks': 0, 'document': 'modeled-document',
+    'eof': False, 'feed': 0, 'foldEnabled': True, 'generation': 37,
+    'hwnd': 'synthetic-editor', 'identity': 1, 'inTick': False,
+    'language': 'markdown', 'length': -1, 'lines': 0, 'maxChunkMs': 0,
+    'maxPublish': 0, 'maxRanges': 0, 'maxRead': 0, 'maxTickMs': 0,
+    'pending': True, 'phase': 'prepare',
+    'policy': [0, False, False, [], -1, False, '', 0, '', 0, True, '', 0, '', 0,
+               False, True, False, '', [False, False, False, False, False],
+               False, True, False, 0],
+    'published': 0, 'rangeIndex': 0, 'rangeOffset': 0, 'ranges': [],
+    'readBytes': 0, 'readEnd': 0, 'registered': False, 'restart': 0,
+    'revision': 4, 'thread': 'modeled-thread', 'warning': '',
+    'warningArgs': [], 'warningRecovery': [],
+}
+
+
+def markdown_schema_keys(source):
+    """Review the native fixture's fixed whitelist without deriving its oracle."""
+    match = re.findall(r'^\s*期望键 取 (\[.*\])\.\s*$', source, re.M)
+    if len(match) != 1:
+        raise ValueError('Expected exactly one fixed Markdown field whitelist')
+    keys = ast.literal_eval(match[0])
+    expected = list(MARKDOWN_INITIAL_STATE)
+    if keys != expected or len(keys) != 35 or len(set(keys)) != 35 or keys != sorted(keys):
+        raise ValueError('Markdown field whitelist differs from the reviewed 35-field schema')
+    return keys
+
+
+def markdown_state_probe():
+    """Exercise the native fixture's exact predicate on real constructed states."""
+    names, lines = [], []
+
+    def confirm(expression, name):
+        names.append(name)
+        lines.append(f"确认 ({expression}) '{name}'.")
+
+    def initial_value(expression, value, label):
+        if isinstance(value, list):
+            confirm(f'{expression} 其 量 == {len(value)}', label + ' size')
+            for index, item in enumerate(value):
+                initial_value(f'({expression})[{index}]', item, label + f' item {index}')
+        else:
+            literal = ('真' if value else '假') if type(value) is bool else repr(value)
+            confirm(f'{expression} == {literal}', label)
+
+    lines.append("态 取 _建态 柄 37 4 'modeled-document'.")
+    confirm('扫描字段完整 态', 'complete real constructor schema')
+    for key, value in MARKDOWN_INITIAL_STATE.items():
+        initial_value(f"态['{key}']", value, 'initial ' + key)
+    # Build the same map in reverse insertion order; comparison must sort keys
+    # rather than depending on hash buckets, insertion order or value identity.
+    lines.append('反序 取 {}.')
+    for key in reversed(MARKDOWN_INITIAL_STATE):
+        lines.append(f"反序 其 增 '{key}' 态['{key}'].")
+    confirm('扫描字段完整 反序', 'reverse insertion order is accepted')
+    # Null is a legitimate value after cleanup. The schema is key membership,
+    # not a non-null lookup test, and must never mutate the observed values.
+    lines.append("反序 其 增 'policy' 空.")
+    confirm("(扫描字段完整 反序) 且 反序['policy'] == 空",
+            'null value retains a present key')
+    for key in MARKDOWN_INITIAL_STATE:
+        lines.append(f"原值 取 态['{key}']. 态 其 除 '{key}'.")
+        confirm('非 (扫描字段完整 态)', 'missing key ' + key)
+        lines.append("态 其 增 'unexpectedCapability' 原值.")
+        confirm('态 其 量 == 35 且 非 (扫描字段完整 态)',
+                'same-size foreign-key replacement ' + key)
+        lines.append(f"态 其 增 '{key}' 原值.")
+        confirm('非 (扫描字段完整 态)', 'extra key beside ' + key)
+        lines.append("态 其 除 'unexpectedCapability'.")
+        confirm('扫描字段完整 态', 'restored key ' + key)
+    # Each constructor owns fresh arrays; warning roots must not leak across
+    # revisions, and capability/metric data must not be smuggled into the state.
+    lines.append("另一 取 _建态 柄 37 5 'modeled-document'.")
+    confirm("另一['identity'] == 2 且 另一['revision'] == 5 且 (扫描字段完整 另一)",
+            'second constructor has fresh identity and same exact schema')
+    for key in ('warningArgs', 'warningRecovery', 'ranges', 'policy'):
+        confirm(f"态['{key}'] != 另一['{key}']", 'fresh array ' + key)
+    lines.append("显 'TOTAL PASS: '+(次数[0] 为 句).")
+    return '\n'.join(lines) + '\n', names
+
+
+class MarkdownStateContracts(unittest.TestCase):
+    def test_native_whitelist_is_exact_sorted_and_preserves_original_bounds(self):
+        source = (ROOT / 'tests/markdown_direct_native.ru').read_text(encoding='utf-8')
+        keys = markdown_schema_keys(source)
+        self.assertEqual(keys, list(MARKDOWN_INITIAL_STATE))
+        self.assertIn("且 态['maxRead'] <= 1024 且 态['maxPublish'] <= 64 且 态['maxRanges'] <= 64)",
+                      source)
+        self.assertIn("(扫描字段完整 ((折 其 _编辑们) 其 查 (甲 其 句)))", source)
+
+    def test_every_whitelist_missing_extra_duplicate_replacement_and_reordering_fails(self):
+        source = (ROOT / 'tests/markdown_direct_native.ru').read_text(encoding='utf-8')
+        keys = markdown_schema_keys(source)
+        for index, key in enumerate(keys):
+            for mode in ('missing', 'extra', 'duplicate', 'replacement', 'reordered'):
+                changed = list(keys)
+                if mode == 'missing':
+                    del changed[index]
+                elif mode == 'extra':
+                    changed.insert(index, 'unexpectedCapability')
+                elif mode == 'duplicate':
+                    changed[index] = keys[(index + 1) % len(keys)]
+                elif mode == 'replacement':
+                    changed[index] = 'unexpectedCapability'
+                else:
+                    following = (index + 1) % len(keys)
+                    changed[index], changed[following] = changed[following], changed[index]
+                mutated = re.sub(r'^(\s*期望键 取 )\[.*\](\.\s*)$',
+                                 lambda match: match[1] + repr(changed) + match[2], source, flags=re.M)
+                with self.subTest(key=key, mode=mode), self.assertRaises(ValueError):
+                    markdown_schema_keys(mutated)
+
+    @unittest.skipUnless(ARGS.ru_root, 'pass --ru-root for actual constructor Python/C execution')
+    def test_actual_constructor_and_native_schema_predicate_in_both_backends(self):
+        compiler = ARGS.ru_root.resolve()
+        self.assertEqual(runner.compiler_snapshot(compiler), PIN)
+        inputs = (ROOT / 'src/markdown_syntax.ru', ROOT / 'src/markdown_policy.ru',
+                  ROOT / 'tests/markdown_direct_native.ru', Path(__file__).resolve())
+        before = {str(path): runner.file_sha256(path) for path in inputs}
+        with patch.object(sys, 'path', [str(compiler), *sys.path]):
+            from rulang.frontend import parse
+            constructor = warning.function_source(inputs[0], '_建态', parse)
+            schema = warning.function_source(inputs[2], '扫描字段完整', parse)
+        markdown_schema_keys(schema)
+        probe, names = markdown_state_probe()
+        directory = Path(tempfile.mkdtemp(prefix='markdown-state-private-')).resolve()
+        cleanup_allowed = True
+        passed = False
+        commands = []
+        try:
+            shutil.copyfile(inputs[1], directory / 'markdown_policy.ru')
+            (directory / 'handle_stub.ru').write_text("句 取 'synthetic-editor'.\n",
+                                                    encoding='utf-8', newline='\n')
+            source = directory / 'probe.ru'
+            source.write_text(
+                "策 取 外言 './markdown_policy.ru'.\n柄 取 外言 './handle_stub.ru'.\n"
+                "_身份 取 [0]. 次数 取 [0].\n算 _线程: 得 'modeled-thread'. 法\n"
+                "作 确认 条件 为 事实 文 为 句:\n"
+                "    若 非 条件 则 卒 ('FAIL: '+文). 然\n"
+                "    次数[0] 取 次数[0]+1. 显 'PASS: '+文.\n为\n" +
+                constructor + schema + probe, encoding='utf-8', newline='\n')
+            executable = directory / ('probe.exe' if os.name == 'nt' else 'probe')
+            build = [sys.executable, str(compiler / 'ru'), 'build', '--cc', 'gcc',
+                     str(source), '--emit-c', str(directory / 'probe.c'), '-o', str(executable)]
+            outputs = []
+            outputs.append(runner.checked_run(
+                [sys.executable, str(compiler / 'ru'), 'run', str(source)],
+                directory, 'interpreter', 30, commands))
+            contract = runner.prepare_compile_diagnostics(build, compiler, source)
+            runner.checked_run(build, directory, 'build', 120, commands,
+                               compile_diagnostics=contract)
+            outputs.append(runner.checked_run([str(executable)], directory, 'host-c', 30, commands))
+            for output in outputs:
+                runner.verify_output(output, len(names), names)
+            self.assertEqual(outputs[0].replace(b'\r\n', b'\n'),
+                             outputs[1].replace(b'\r\n', b'\n'))
+            self.assertEqual(before, {str(path): runner.file_sha256(path) for path in inputs})
+            self.assertEqual(runner.compiler_snapshot(compiler), PIN)
+            passed = True
+        except runner.CleanupError:
+            cleanup_allowed = False
+            raise
+        finally:
+            # Retain actual generated source/C and raw execution evidence only in
+            # the private ignored build tree, never a public upload allowlist.
+            evidence = ROOT / 'build/markdown-state-private' / directory.name
+            shutil.copytree(directory, evidence)
+            receipt = {
+                'passed': passed,
+                'compiler': dict(PIN),
+                'source_sha256': {Path(path).relative_to(ROOT).as_posix(): digest
+                                  for path, digest in before.items()},
+                'evidence_sha256': {path.name: runner.file_sha256(path)
+                                    for path in sorted(directory.iterdir()) if path.is_file()},
+                'assertions_per_backend': len(names),
+                'commands': commands,
+                'native_windows_executed': False,
+            }
+            (evidence / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n',
+                                                  encoding='utf-8', newline='\n')
+            if cleanup_allowed:
+                shutil.rmtree(directory)
+
+
+def validate_layout_fixture(source):
+    callback = source.split('算 布局子过程 ', 1)[1].split('\n法', 1)[0]
+    forward = "果 取 窗 其 结果 (_DefSubclassProc 其 调用 [柄,消息,宽,长])."
+    if callback.count(forward) != 1 or callback.index(forward) > callback.index("若 消息 其 数 == 36 则"):
+        raise ValueError('The production window procedure must run first')
+    required = (
+        "(柄 其 句) != ((_布局钩 其 查 'window') 其 句)",
+        "(_IsWindowVisible 其 调用 [柄])",
+        "(矩 其 读 'minTrackX') 其 数 != 640",
+        "(矩 其 读 'minTrackY') 其 数 != 400",
+        "布局上限 ((矩 其 读 'maxTrackX') 其 数) ((矩 其 读 'maxTrackY') 其 数)",
+        "((窗 其 RtlMoveMemory) 其 调用 [指,矩,((窗 其 MINMAXINFO) 其 大小)])",
+        "得 果.",
+    )
+    if any(fragment not in callback for fragment in required):
+        raise ValueError('Missing test-owned hidden-window guard or native forwarding')
+    if re.findall(r"矩 其 写 '([^']+)'", callback) != ['maxTrackX', 'maxTrackY']:
+        raise ValueError('Only maximum tracking dimensions may be changed')
+    install = source.split('作 装布局钩 ', 1)[1].split('\n为', 1)[0]
+    remove = source.split('算 卸布局钩:', 1)[1].split('\n法', 1)[0]
+    if ("(_IsWindowVisible 其 调用 [主])" not in install or
+            install.index("_布局钩 其 增 'callback' 回调") > install.index('_SetWindowSubclass') or
+            "窗 其 成功 (_SetWindowSubclass" not in install or
+            "窗 其 成功 (_RemoveWindowSubclass" not in remove or
+            remove.index('_RemoveWindowSubclass') > remove.index('回调 其 关闭.')):
+        raise ValueError('Missing callback lifetime or installation/removal checks')
+    if any(f'验布局 主 {width} 代码.' not in source for width in (640, 900, 1600)):
+        raise ValueError('Original exact layout widths must remain covered')
+    if "内[2]-内[0] == 宽 且 内[3]-内[1] >= 400" not in source or "若 次数[0] != 1417" not in source:
+        raise ValueError('Native dimensions and assertion count may not be weakened')
+    if "    卸布局钩.\n    确认 (应用 其 关程序)" not in source or "试 卸布局钩. 救 清因" not in source:
+        raise ValueError('Both ordinary and failure cleanup must detach the callback')
+
+
+class LayoutFixtureContracts(unittest.TestCase):
+    def test_fixture_is_hidden_owned_forwarded_and_keeps_all_dimensions(self):
+        validate_layout_fixture((ROOT / 'tests/app_i18n_native.ru').read_text(encoding='utf-8'))
+        production = (ROOT / 'src/main.ru').read_text(encoding='utf-8')
+        self.assertNotIn("矩 其 写 'maxTrackX'", production)
+        self.assertNotIn("矩 其 写 'maxTrackY'", production)
+
+    def test_weakened_scope_fields_lifetime_and_widths_are_rejected(self):
+        source = (ROOT / 'tests/app_i18n_native.ru').read_text(encoding='utf-8')
+        changes = (
+            ("矩 其 写 'maxTrackX' 限[0]", "矩 其 写 'minTrackX' 限[0]"),
+            ("矩 其 写 'maxTrackY' 限[1]", "矩 其 写 'minTrackY' 限[1]"),
+            ("(_IsWindowVisible 其 调用 [柄])", "(_IsWindowVisible 其 调用 [空])"),
+            ("(柄 其 句) != ((_布局钩 其 查 'window') 其 句)", "假"),
+            ("其 数 != 640", "其 数 != 600"),
+            ("其 数 != 400", "其 数 != 300"),
+            ("_布局钩 其 增 'callback' 回调.", "_布局钩 其 增 'other' 回调."),
+            ("窗 其 成功 (_RemoveWindowSubclass", "窗 其 结果 (_RemoveWindowSubclass"),
+            ("验布局 主 1600 代码.", "验布局 主 1000 代码."),
+            ("内[2]-内[0] == 宽", "内[2]-内[0] <= 宽"),
+            ("若 次数[0] != 1417", "若 次数[0] != 182"),
+            ("    卸布局钩.\n    确认 (应用 其 关程序)", "    确认 (应用 其 关程序)"),
+        )
+        for before, after in changes:
+            with self.subTest(before=before), self.assertRaises(ValueError):
+                validate_layout_fixture(source.replace(before, after))
+        forward = "    果 取 窗 其 结果 (_DefSubclassProc 其 调用 [柄,消息,宽,长]).\n"
+        delayed = source.replace(forward, '').replace("    得 果.\n法\n作 装布局钩", forward + "    得 果.\n法\n作 装布局钩")
+        with self.assertRaises(ValueError):
+            validate_layout_fixture(delayed)
+
+    @unittest.skipUnless(ARGS.ru_root, 'pass --ru-root for actual fixture maximum-track policy execution')
+    def test_actual_fixture_maximum_policy_in_both_backends(self):
+        compiler = ARGS.ru_root.resolve()
+        self.assertEqual(runner.compiler_snapshot(compiler), PIN)
+        fixture = ROOT / 'tests/app_i18n_native.ru'
+        before = runner.file_sha256(fixture)
+        with patch.object(sys, 'path', [str(compiler), *sys.path]):
+            from rulang.frontend import parse
+            policy = warning.function_source(fixture, '布局上限', parse)
+        cases = ((1044, 788), (4095, 4095), (4096, 4096), (4097, 4097),
+                 (9000, 16000), (100, 9000), (16000, 100), (0, 0), (-1, 1))
+        lines = ["次数 取 [0].", "作 确认 条件 为 事实 文 为 句:",
+                 "    若 非 条件 则 卒 ('FAIL: '+文). 然",
+                 "    次数[0] 取 次数[0]+1. 显 'PASS: '+文.", "为"]
+        names = []
+        for index, (width, height) in enumerate(cases):
+            name = f'maximum tracking policy case {index}'
+            names.append(name)
+            lines.extend((f'果 取 布局上限 ({width}) ({height}).',
+                          f"确认 (果[0] == {max(width, 4096)} 且 果[1] == {max(height, 4096)}) '{name}'."))
+        lines.append("显 'TOTAL PASS: '+(次数[0] 为 句).")
+        directory = Path(tempfile.mkdtemp(prefix='i18n-layout-private-')).resolve()
+        commands = []
+        passed = False
+        cleanup_allowed = True
+        try:
+            source = directory / 'probe.ru'
+            source.write_text(policy + '\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
+            executable = directory / ('probe.exe' if os.name == 'nt' else 'probe')
+            build = [sys.executable, str(compiler / 'ru'), 'build', '--cc', 'gcc',
+                     str(source), '--emit-c', str(directory / 'probe.c'), '-o', str(executable)]
+            outputs = [runner.checked_run([sys.executable, str(compiler / 'ru'), 'run', str(source)],
+                                          directory, 'interpreter', 30, commands)]
+            contract = runner.prepare_compile_diagnostics(build, compiler, source)
+            runner.checked_run(build, directory, 'build', 120, commands, compile_diagnostics=contract)
+            outputs.append(runner.checked_run([str(executable)], directory, 'host-c', 30, commands))
+            for output in outputs:
+                runner.verify_output(output, len(names), names)
+            self.assertEqual(before, runner.file_sha256(fixture))
+            passed = True
+        except runner.CleanupError:
+            cleanup_allowed = False
+            raise
+        finally:
+            evidence = ROOT / 'build/i18n-layout-private' / directory.name
+            shutil.copytree(directory, evidence)
+            (evidence / 'receipt.json').write_text(json.dumps({
+                'passed': passed, 'assertions_per_backend': len(names),
+                'fixture_sha256': before, 'compiler': dict(PIN), 'commands': commands,
+                'evidence_sha256': {path.name: runner.file_sha256(path) for path in directory.iterdir() if path.is_file()},
+                'native_windows_executed': False,
+            }, indent=2) + '\n', encoding='utf-8', newline='\n')
+            if cleanup_allowed:
+                shutil.rmtree(directory)
+
+
 @contextmanager
 def sandbox():
     """Exercise real orchestration, file writes and receipts with tiny child tools."""
@@ -451,7 +762,8 @@ class PublicationContracts(unittest.TestCase):
 
     def test_workflow_uploads_only_validated_public_receipts_and_assertions(self):
         workflow = (ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
-        for private in ('i18n-policy-private', 'syntax-warning-private', 'syntax-warning-evidence/*.stdout',
+        for private in ('i18n-policy-private', 'syntax-warning-private', 'markdown-state-private',
+                        'syntax-warning-evidence/*.stdout',
                         'syntax-warning-evidence/*.stderr', 'i18n-policy-evidence/catalog_exact.ru'):
             self.assertNotIn(private, workflow)
         for public in ('build/i18n-policy-evidence', 'build/windows-ci/i18n-policy-evidence'):

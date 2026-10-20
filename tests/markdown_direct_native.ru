@@ -180,6 +180,22 @@ _引用型 取 密 其 结构 [['value',窗 其 UP]].
     环
     得 真.
 法
+算 扫描字段完整 态:
+    # Independent, sorted whitelist: 33 original fields plus the two raw i18n
+    # warning fields. Capability tokens and publication metrics stay external.
+    # Compare every key, not only cardinality: a same-size replacement must fail.
+    期望键 取 ['alive','chunk','chunks','document','eof','feed','foldEnabled','generation','hwnd','identity','inTick','language','length','lines','maxChunkMs','maxPublish','maxRanges','maxRead','maxTickMs','pending','phase','policy','published','rangeIndex','rangeOffset','ranges','readBytes','readEnd','registered','restart','revision','thread','warning','warningArgs','warningRecovery'].
+    若 态 其 量 != 期望键 其 量 则 得 假. 然
+    实键 取 [].
+    态 其 逐目 (作 键 值: 实键 其 增 键. 为).
+    实键 取 实键 其 排序.
+    位 取 0.
+    循 期望键 其 量 次
+        若 实键[位] != 期望键[位] 则 得 假. 然
+        位 取 位+1.
+    环
+    得 真.
+法
 作 批指标 路 为 句 态:
     有效 取 0. 若 态['bulkMetricsValid'] 则 有效 取 1. 然
     显 'FOLD_METRICS1 route='+路+' bulkCalls='+(态['bulkCalls'] 为 句)+' bulkLines='+(态['bulkLines'] 为 句)+' fallbackBatches='+(态['fallbackBatches'] 为 句)+' directCalls='+(态['directCalls'] 为 句)+' directLines='+(态['directLines'] 为 句)+' maxPlanBytes='+(态['maxPlanBytes'] 为 句)+' ownedBufferBytes='+(态['ownedBufferBytes'] 为 句)+' bulkUs='+(态['bulkUs'] 为 句)+' metric_valid='+(有效 为 句).
@@ -294,7 +310,7 @@ _引用型 取 密 其 结构 [['value',窗 其 UP]].
     确认 (甲计['pointer'] > 0 且 甲计['fold'] == 0 且 态['published'] == 乙计['fold'] 且 态['published'] > 0 且 (同输出 甲 乙)) 'actual direct publication bypasses2222 while every text byte style fold visible and expanded bit equals fallback'.
     确认 (态['bulkCalls'] > 0 且 态['bulkLines'] == 态['published'] 且 态['directCalls'] == 0 且 态['fallbackBatches'] == 0 且 态['maxPlanBytes'] <= 1056 且 态['ownedBufferBytes'] == 1088 且 态['bulkMetricsValid'] 且 态['bulkUs'] >= 0 且 态['bulkUs']%1 == 0) 'default qualified route really uses bounded bulk calls with exact completed-line and integer timing counters'.
     确认 ((编 其 文本 甲) == 源 且 非 (编 其 已变 甲) 且 (窗 其 发送 甲 2174 0 0) 其 数 == 0 且 (窗 其 发送 甲 2016 0 0) 其 数 == 0 且 (窗 其 发送 甲 2009 0 0) 其 数 == 2 且 (窗 其 发送 甲 2008 0 0) 其 数 == 19) 'direct folds preserve clean savepoint empty undo redo and exact byte selection'.
-    确认 (((折 其 _编辑们) 其 查 (甲 其 句)) 其 量 == 33 且 态['maxRead'] <= 1024 且 态['maxPublish'] <= 64 且 态['maxRanges'] <= 64) 'external capability adds no scan fields and preserves all bounded publication and read limits'.
+    确认 ((扫描字段完整 ((折 其 _编辑们) 其 查 (甲 其 句))) 且 态['maxRead'] <= 1024 且 态['maxPublish'] <= 64 且 态['maxRanges'] <= 64) 'external capability adds no scan fields and preserves all bounded publication and read limits'.
     确认 ((折 其 全折 甲 0) 且 非 (基 其 全显 甲) 且 (折 其 全折 甲 1) 且 (基 其 全显 甲) 且 (基 其 全展开 甲)) 'completed direct folds still support native collapse and expand'.
 
     批指标 'bulk' 态.

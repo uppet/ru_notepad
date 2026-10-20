@@ -18,7 +18,7 @@ _身份 取 [0].
 # Only main's exclusive private document + known file_drop subclass may opt in.
 # Revoke BEFORE adding any other hook, sharing/replacing a document or destroying
 # its HWND. Same-document edits retain this capability but invalidate scan state.
-# Never store a borrowed Scintilla pointer here or in the 33-field scan state.
+# Never store a borrowed Scintilla pointer here or in the 35-field scan state.
 _直属们 取 {}.
 _权序 取 [0].
 _直接策略 取 {'enabled':真,'route':'bulk'}. # Source-only paired fixture control, no UI setting.
@@ -158,7 +158,7 @@ _时存 取 _计数型 其 新建.
     _身份[0] 取 _身份[0]+1.
     得 {'identity':_身份[0],'generation':代,'revision':修,'hwnd':(柄 其 句),'thread':(_线程),'document':文档,'length':-1,'lines':0,'alive':真,'language':'markdown','foldEnabled':真,'registered':假,'warning':'','warningArgs':[],'warningRecovery':[],'pending':真,'inTick':假,'phase':'prepare','policy':(策 其 新状态),'feed':0,'readEnd':0,'chunk':'','ranges':[],'rangeIndex':0,'rangeOffset':0,'eof':假,'chunks':0,'readBytes':0,'published':0,'maxRead':0,'maxPublish':0,'maxRanges':0,'maxTickMs':0,'maxChunkMs':0,'restart':0}.
 法
-# One diagnostic record per live HWND/current identity, outside the 33 scan
+# One diagnostic record per live HWND/current identity, outside the 35 scan
 # fields. ownedBufferBytes is peak per-call owned capacity, not live bytes.
 # Old interrupted cleanup may never remove a replacement's counters.
 算 _统计 柄 态:

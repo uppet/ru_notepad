@@ -20,12 +20,21 @@ seven-language controls fit at a given width. That still requires the actual
 1417-assertion application fixture. The 114-assertion Markdown direct fixture,
 3852 total native assertions, and 42-result product contract are unchanged.
 
-The diagnostic is manual and off by default. A temporary one-shot push entry
-requires the exact wip title `诊断：确认七语验收窗口尺寸约束`. A case-sensitive
-Python guard follows GitHub's case-insensitive expression matching. Its
-concurrency suffix is independent of the product acceptance job; this is not
-a guarantee of independent GitHub machine availability. Retire the temporary
-push exception after the measurement is collected.
+The one-time experiment completed on real Windows in run
+[39384167995](https://github.com/uppet/ru_notepad/actions/runs/39384167995).
+The screen was 1024 by 768 pixels, default maximum tracking size was 1044 by
+788, and DPI was 96. The default-policy 1600-pixel request produced a
+1028-pixel client width; the independent maximum-tracking override produced
+exactly a 1600 by 720 client area. These are Win32 measurements only, not a Ru
+fixture or product acceptance result.
+
+The temporary one-shot push title `诊断：确认七语验收窗口尺寸约束` is retired
+and no longer selects this diagnostic. The `i18n_window_diagnostic` manual
+input remains available and false by default, with a strict case-sensitive
+wip/event guard and rejection of conflicting diagnostic inputs. Its concurrency
+suffix remains independent of product acceptance; this does not guarantee
+independent GitHub runner capacity. The next two-fixture Windows step is
+specified in [the focused diagnostic scope](i18n-focused-native-diagnostic.md).
 
 Only `build/window-size-diagnostic-public/measurements.json` is uploaded. It
 contains validated fixed numeric fields and source/executable SHA-256 hashes.
