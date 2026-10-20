@@ -5,7 +5,7 @@ import itertools
 import ast
 import zipfile
 from pathlib import Path
-from run_cpp_growth_diagnostic import validate_measurements, validate_trigger, ONE_SHOT_TITLE
+from run_cpp_growth_diagnostic import validate_measurements, validate_trigger
 
 ROOT = Path(__file__).resolve().parents[1]
 class Controls(unittest.TestCase):
@@ -33,7 +33,7 @@ class Controls(unittest.TestCase):
     def test_manual_isolation(self):
         workflow = (ROOT/'.github/workflows/windows.yml').read_text()
         job = workflow.split('  cpp-growth-diagnostic:\n', 1)[1]
-        mode = "((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '测量自有折叠增长夹具状态【诊断20261020】'))"
+        mode = "(github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic)"
         self.assertIn('if: ${{ ' + mode + ' }}', job)
         self.assertIn("'-cpp-growth-diagnostic'", workflow)
         self.assertEqual(workflow.count('if: ${{ !(' + mode + ') }}'), 2)
@@ -45,7 +45,7 @@ class Controls(unittest.TestCase):
         self.assertIn('build/cpp-growth-diagnostic/*.log', job)
         self.assertIn('default: false', workflow.split('syntax_growth_diagnostic:',1)[1].split('historical_callback:',1)[0])
 
-    def test_exact_one_shot_trigger_truth_table(self):
+    def test_retired_push_trigger_never_selects_diagnostic(self):
         workflow = (ROOT/'.github/workflows/windows.yml').read_text()
         line = workflow.split('  cpp-growth-diagnostic:\n',1)[1].splitlines()[0].strip()
         expression = line.removeprefix('if: ${{ ').removesuffix(' }}')
@@ -55,13 +55,14 @@ class Controls(unittest.TestCase):
             for name, value in [('github.event.head_commit.message',message),('github.event_name',event),('github.ref',ref),('inputs.syntax_growth_diagnostic',manual)]:
                 text = text.replace(name,repr(value))
             result = eval(text.replace('&&',' and ').replace('||',' or '), {'__builtins__': {}}, {})
-            expected = event == 'workflow_dispatch' and manual or event == 'push' and ref == 'refs/heads/wip' and message == title
+            expected = event == 'workflow_dispatch' and manual
             self.assertEqual(result, expected, (event,ref,message,manual))
 
     def test_strict_trigger_guard(self):
-        validate_trigger('push', 'refs/heads/wip', {'head_commit': {'message': ONE_SHOT_TITLE}})
+        ONE_SHOT_TITLE = '测量自有折叠增长夹具状态【诊断20261020】'
         validate_trigger('workflow_dispatch', 'refs/heads/wip', {'inputs': {'syntax_growth_diagnostic':'true', 'historical_callback':'false'}})
         for event, ref, payload in [
+            ('push','refs/heads/wip',{'head_commit':{'message':ONE_SHOT_TITLE}}),
             ('push','refs/heads/WIP',{'head_commit':{'message':ONE_SHOT_TITLE}}),
             ('push','refs/heads/wip',{'head_commit':{'message':ONE_SHOT_TITLE+'\n'}}),
             ('push','refs/heads/wip',{}),
@@ -70,9 +71,8 @@ class Controls(unittest.TestCase):
             ('workflow_dispatch','refs/heads/wip',{'inputs':{'syntax_growth_diagnostic':'true','historical_callback':'true'}}),
         ]:
             with self.assertRaises(RuntimeError): validate_trigger(event,ref,payload)
-        # GitHub == treats refs case-insensitively; this strict guard must fail
-        # before measurement for a matching-title case-variant branch.
-        self.assertEqual('refs/heads/WIP'.casefold(), 'refs/heads/wip'.casefold())
+        # Every push, including the former diagnostic title and ref variants,
+        # is rejected by this manual-only runner and uses normal acceptance.
 
     def test_lexilla_platform_matches_product_builder(self):
         # Capture the actual runner's literal command, not a second command copy.

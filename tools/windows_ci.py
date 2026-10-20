@@ -50,7 +50,7 @@ NATIVE_CONSOLE_TESTS = (
     ('shortcuts', r'^TOTAL PASS: 42\s*$'),
     ('syntax_policy', r'^TOTAL PASS: 134\s*$'),
     ('status_native', r'^TOTAL PASS: 21\s*$'),
-    ('syntax_native', r'^TOTAL PASS: 138\s*$'),
+    ('syntax_native', r'^TOTAL PASS: 144\s*$'),
     ('app_ru_native', r'^TOTAL PASS: 73\s*$'),
     ('app_ru_timer_native', r'^TOTAL PASS: 8\s*$'),
     ('ru_lexical_policy', r'^TOTAL PASS: 338\s*$'),

@@ -20,12 +20,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-native-${{ github.ref }}${{ ((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '测量自有折叠增长夹具状态【诊断20261020】')) && '-cpp-growth-diagnostic' || '' }}
+  group: windows-native-${{ github.ref }}${{ (github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) && '-cpp-growth-diagnostic' || '' }}
   cancel-in-progress: true
 
 jobs:
   helper-policy:
-    if: ${{ !(((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '测量自有折叠增长夹具状态【诊断20261020】'))) }}
+    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic)) }}
     name: Verify scanner against pure Ru and ASan/UBSan
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -144,7 +144,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
   windows-native:
-    if: ${{ !(((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '测量自有折叠增长夹具状态【诊断20261020】'))) }}
+    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic)) }}
     name: Build and execute on Windows x64
     needs: helper-policy
     runs-on: windows-2022
@@ -240,7 +240,7 @@ jobs:
           retention-days: 14
 
   cpp-growth-diagnostic:
-    if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '测量自有折叠增长夹具状态【诊断20261020】')) }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) }}
     name: Measure owned C++ growth state only
     runs-on: windows-2022
     timeout-minutes: 15

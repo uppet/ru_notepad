@@ -287,27 +287,42 @@
     确认 (非 (编 其 已变 甲)) 'large document undo returns to savepoint'.
     末时 取 (窗 其 结果 ((窗 其 GetTickCount64) 其 调用 [])) 其 数.
     显 'TIMING: large-document select/range/edit/undo '+((末时-始时) 为 句)+' ms (diagnostic, not a speed claim)'.
+    # Native SHOW expands a folded trailing blank line before an append.
+    # Preserve the original 22-byte fixture as a distinct regression.
+    编 其 设文本 甲 删文.
+    语法 其 选择 甲 'cpp'.
+    语法 其 全折 甲 0.
+    确认 ((窗 其 发送 甲 2228 1 0) 其 数 == 0 且 (窗 其 发送 甲 2228 3 0) 其 数 == 0) 'trailing blank EOF is inside the collapsed C++ fold'.
+    窗 其 发文 甲 2282 1 'x'.
+    确认 ((窗 其 发送 甲 2183 0 0) 其 数 == 23 且 (窗 其 发送 甲 2379 0 0) 其 数 == 256) 'append at hidden EOF retains real bytes and styled document options'.
+    确认 ((窗 其 发送 甲 2230 0 0) 其 数 == 1 且 (窗 其 发送 甲 2236 0 0) 其 数 == 1) 'native SHOW automatically expands a hidden EOF before append'.
+    窗 其 发送 甲 2176 0 0.
+    确认 ((编 其 文本 甲) == 删文 且 非 (编 其 已变 甲)) 'hidden-EOF append single undo restores original 22-byte clean text'.
+    确认 ((语法 其 全折 甲 0) 且 (窗 其 发送 甲 2228 1 0) 其 数 == 0) 'folding resumes after hidden-EOF append undo'.
     # Actually grow a styled, folded document beyond 32 MB. One long ASCII
     # padding line avoids fabricating GETLENGTH or millions of fixture lines.
     填文 取 'x'.
     循 20 次 填文 取 填文+填文. 环
-    编 其 设文本 甲 删文.
+    增长文 取 删文+'int padding;'.
+    编 其 设文本 甲 增长文.
     语法 其 选择 甲 'cpp'.
     语法 其 全折 甲 0.
+    确认 ((窗 其 发送 甲 2228 3 0) 其 数 == 1 且 (窗 其 发送 甲 2228 1 0) 其 数 == 0 且 (窗 其 发送 甲 2230 0 0) 其 数 == 0) 'growth starts with visible code at EOF outside the collapsed function'.
     # UTF8 includes a terminator and native buffers are capped at 16 MiB.
     # Real 1 MiB chunks share one Scintilla undo transaction.
     窗 其 发送 甲 2078 0 0.
     循 32 次 窗 其 发文 甲 2282 1048576 填文. 环
     窗 其 发送 甲 2079 0 0.
-    确认 ((窗 其 发送 甲 2183 0 0) 其 数 == 33554454) 'C++ growth fixture contains real 32 MiB padding plus original 22 bytes'.
-    确认 ((窗 其 发送 甲 2379 0 0) 其 数 == 256 且 (窗 其 发送 甲 2228 1 0) 其 数 == 0) 'growth retains styled document and its collapsed header'.
+    确认 ((窗 其 发送 甲 2183 0 0) 其 数 == 33554466) 'C++ growth fixture contains real 32 MiB padding plus original 34 bytes'.
+    显 'GROWTH_STATE options='+(((窗 其 发送 甲 2379 0 0) 其 数) 为 句)+' expanded='+(((窗 其 发送 甲 2230 0 0) 其 数) 为 句)+' header='+(((窗 其 发送 甲 2223 0 0) 其 数) 为 句)+' bodyVisible='+(((窗 其 发送 甲 2228 1 0) 其 数) 为 句)+' length='+(((窗 其 发送 甲 2183 0 0) 其 数) 为 句).
+    确认 ((窗 其 发送 甲 2379 0 0) 其 数 == 256 且 (窗 其 发送 甲 2230 0 0) 其 数 == 0 且 (窗 其 发送 甲 2228 1 0) 其 数 == 0) 'growth retains styled document and its collapsed header'.
     确认 (非 (语法 其 全折 甲 0)) 'grown C++ document refuses another collapse-all above threshold'.
     确认 (语法 其 折叠 甲 0) 'grown C++ document still permits margin expansion'.
     确认 ((窗 其 发送 甲 2236 0 0) 其 数 == 1) 'margin expansion makes all grown-document lines reachable'.
     确认 (非 (语法 其 折叠 甲 0)) 'grown expanded C++ header cannot be collapsed again'.
     确认 (语法 其 全折 甲 1) 'grown C++ document always permits expand-all'.
     窗 其 发送 甲 2176 0 0.
-    确认 ((编 其 文本 甲) == 删文 且 非 (编 其 已变 甲)) 'one undo removes real growth and restores original C++ savepoint'.
+    确认 ((编 其 文本 甲) == 增长文 且 非 (编 其 已变 甲)) 'one undo removes real growth and restores original C++ savepoint'.
     确认 (语法 其 全折 甲 0) 'C++ folding resumes after undo returns below threshold'.
     填文 取 ''.
     # Repeated replacement releases old lexer objects; destruction must not unload

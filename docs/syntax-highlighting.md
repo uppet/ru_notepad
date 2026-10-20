@@ -312,5 +312,22 @@ On Linux, direct native imports are unsupported; `tools/test_growth_buffers.py`
 uses the compiler's test-only POSIX platform adapter for these real memory
 checks, without changing the allocator or buffer cap. This is not Windows ABI
 evidence. On Windows the script uses the unmodified CLI/backends. Windows
-acceptance must still execute all 138 syntax assertions; these allocation
+acceptance must now execute all 144 syntax assertions; these allocation
 controls do not establish Windows folding or undo results.
+
+The third full Windows run passed the real 33,554,454-byte length, but exposed
+an invalid fixture premise: its final empty line belonged to the collapsed fold.
+Scintilla's automatic SHOW expands that hidden EOF line before SCI_APPENDTEXT.
+Dedicated Windows run 39365371547 measured options 256 unchanged and confirmed
+expansion on the first append. With a visible `int padding;` line at EOF, the
+34-byte document remained collapsed after real growth to 33,554,466 bytes;
+margin expansion, all-line visibility, one undo to clean text, and folding
+restoration all worked. The production code does not need changing.
+
+The main threshold-growth fixture now uses that measured visible-EOF setup.
+Five additional assertions retain the original 22-byte hidden-EOF behavior and
+undo, plus one asserts the new fixture's visible-EOF/collapsed-body precondition.
+Syntax acceptance is 144 (previous 138 plus 6), total product assertions 2077
+in 39 groups. State values are printed before the growth assertion. The
+one-shot push diagnostic trigger is removed; a complete Windows regression
+run remains required before packaging. No earlier failed run is relabelled.

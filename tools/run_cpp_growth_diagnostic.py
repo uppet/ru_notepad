@@ -38,12 +38,8 @@ def validate_measurements(stdout, stderr):
         raise RuntimeError('Missing or unexpected measurement fields')
     return values
 
-ONE_SHOT_TITLE = '测量自有折叠增长夹具状态【诊断20261020】'
-
 def validate_trigger(event_name, ref, event):
-    if event_name == 'push':
-        allowed = ref == 'refs/heads/wip' and event.get('head_commit', {}).get('message') == ONE_SHOT_TITLE
-    elif event_name == 'workflow_dispatch':
+    if event_name == 'workflow_dispatch':
         inputs = event.get('inputs', {})
         allowed = inputs.get('syntax_growth_diagnostic') in (True, 'true') and inputs.get('historical_callback', False) in (False, 'false', '')
     else:
