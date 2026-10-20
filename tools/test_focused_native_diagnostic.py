@@ -340,13 +340,23 @@ class PublicationControls(unittest.TestCase):
 
     def test_actual_cli_failure_is_numeric_and_private(self):
         with tempfile.TemporaryDirectory(prefix='private-path-') as tmp:
-            event = Path(tmp) / 'event.json'; event.write_text('{}')
+            event = Path(tmp) / 'event.json'
             env = dict(os.environ, GITHUB_EVENT_PATH=str(event), GITHUB_REF='refs/heads/wip', GITHUB_EVENT_NAME='push')
-            result = subprocess.run([sys.executable, '-I', str(Path(runner.__file__)), '--private-invalid-argument'],
-                                    env=env, capture_output=True, text=True, timeout=10)
-            self.assertEqual(result.stdout, '')
-            self.assertEqual(result.stderr, 'FOCUSED_NATIVE_DIAGNOSTIC code=1 markdown=0 i18n=0\n')
-            self.assertEqual(result.returncode, 1)
+            # Keep this fixed control ID while proving the old push entry fails
+            # at the trigger stage even with valid arguments and a forged input.
+            for payload, args in (
+                    ({}, ['--private-invalid-argument']),
+                    ({'head_commit': {'message': '诊断：验收七语原生完整流程'}},
+                     ['--ru-root', tmp, '--msys-root', tmp]),
+                    ({'head_commit': {'message': '诊断：验收七语原生完整流程'},
+                      'inputs': {'i18n_focused_diagnostic': 'true'}},
+                     ['--ru-root', tmp, '--msys-root', tmp])):
+                event.write_text(json.dumps(payload), encoding='utf-8')
+                result = subprocess.run([sys.executable, '-I', str(Path(runner.__file__)), *args],
+                                        env=env, capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.stdout, '')
+                self.assertEqual(result.stderr, 'FOCUSED_NATIVE_DIAGNOSTIC code=1 markdown=0 i18n=0\n')
+                self.assertEqual(result.returncode, 1)
 
     def test_actual_product_build_entry_accepts_current_parameters(self):
         command = [sys.executable, str(Path(runner.__file__).with_name('build.py')), '--help']

@@ -81,6 +81,11 @@ or incorrectly positioned markers suppress the extra progress record. Success
 requires all 61 stages and all original assertions; older fixture output without
 these stages is intentionally rejected by this updated focused runner.
 
-Fresh focused Windows execution of the corrected production buffer is pending.
-A complete 3,852-assertion / 42-result Windows product
-run and strict preview eligibility remain necessary before shipping a ZIP.
+The corrected production buffer subsequently passed the real seven-language
+fixture's complete 1,417 assertions in
+[focused Windows run 39392432786](https://github.com/uppet/ru_notepad/actions/runs/39392432786).
+Its fresh Markdown-direct fixture also passed all 114 assertions. The exact
+source and independently verified report identity are recorded in
+[the focused diagnostic record](i18n-focused-native-diagnostic.md).
+A complete 3,852-assertion / 42-result Windows product run and strict preview
+eligibility remain necessary before shipping a ZIP.

@@ -10,7 +10,25 @@ Windows acceptance. The current catalog adds one complete seven-language error
 key, for 264 keys / 1,848 values. Earlier local or Windows results are not
 relabeled as acceptance of that changed shared source.
 
-## Current candidate and acceptance boundary
+## Latest focused result and remaining product gate
+
+[Windows run 39392432786](https://github.com/uppet/ru_notepad/actions/runs/39392432786)
+on public `c5297e486afb8a016c1a1ba704c228f095027264`, tree
+`ed1d55d8b99102ad578139ee6fc0942962bcbe45`, completed the fresh 114-assertion
+Markdown-direct and 1,417-assertion seven-language native fixtures. Their complete
+counts and source-bound numeric artifact were independently verified. This
+includes the long Spanish filter buffer, all seven languages at 640/900/1600
+client widths, repeated switching, document/undo preservation and the synthetic
+Unicode filename round trip covered by that fixture.
+
+The temporary focused push selector is now retired; the explicit manual
+diagnostic remains available and disabled by default. The final candidate keeps
+the successful production and native-fixture bytes unchanged while restoring the
+complete ordinary CI selection. Fresh full-product receipts and every required
+3,852 / 42 result are still pending. The focused success does not qualify a
+runtime ZIP or certify the separately listed IME/DPI/manual checks.
+
+## Initial integration provenance and acceptance boundary
 
 The seven-language interface has been integrated locally onto the current C++
 folding application: public commit `cc6e07c0ddb1eb2dd67513819ecd9e77511a4d6f`,

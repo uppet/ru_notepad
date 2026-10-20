@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""Strictly admit the isolated, two-fixture Windows diagnostic only."""
-import argparse
+"""Strictly admit only explicit manual two-fixture Windows diagnostics."""
 import json
 import os
 from pathlib import Path
 import sys
 
-ONE_SHOT_TITLE = '诊断：验收七语原生完整流程'
 ALLOWED_REF = 'refs/heads/wip'
 MAX_EVENT_BYTES = 2 * 1024 * 1024
 
@@ -20,17 +18,13 @@ def disabled(value):
 
 
 def validate_trigger(event_name, ref, event):
+    """Retired push titles never bypass this case-sensitive manual-only guard."""
     allowed = False
-    if ref == ALLOWED_REF and type(event) is dict:
-        if event_name == 'push':
-            head = event.get('head_commit')
-            allowed = (type(head) is dict and head.get('message') == ONE_SHOT_TITLE
-                       and event.get('deleted', False) is False)
-        elif event_name == 'workflow_dispatch':
-            inputs = event.get('inputs')
-            allowed = (type(inputs) is dict and enabled(inputs.get('i18n_focused_diagnostic'))
-                       and all(disabled(inputs.get(key, False)) for key in (
-                           'i18n_window_diagnostic', 'syntax_growth_diagnostic', 'historical_callback')))
+    if event_name == 'workflow_dispatch' and ref == ALLOWED_REF and type(event) is dict:
+        inputs = event.get('inputs')
+        allowed = (type(inputs) is dict and enabled(inputs.get('i18n_focused_diagnostic'))
+                   and all(disabled(inputs.get(key, False)) for key in (
+                       'i18n_window_diagnostic', 'syntax_growth_diagnostic', 'historical_callback')))
     if not allowed:
         raise ValueError('Rejected diagnostic trigger')
 

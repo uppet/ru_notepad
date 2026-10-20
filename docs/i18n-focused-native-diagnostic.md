@@ -1,6 +1,6 @@
 # Focused native fixture diagnostic
 
-This isolated workflow builds and runs exactly two original, complete native
+This isolated workflow builds and runs exactly two complete native
 fixtures on Windows 2022 x64:
 
 - `markdown_direct_native`: 114 assertions, with the existing child-only
@@ -17,13 +17,15 @@ Portable controls and cross-built PE files cannot establish Windows success.
 
 ## Selection and isolation
 
-The `i18n_focused_diagnostic` manual input is false by default. An explicitly
-requested one-time push is admitted only on `refs/heads/wip` with the exact
-whole commit message `诊断：验收七语原生完整流程`. The Python guard is
-case-sensitive and checks the actual event payload before compiler checkout
-or toolchain setup. Extra whitespace, another ref, a deleted push, and mixed
-manual modes are rejected. Retire this push entry after the focused Windows
-result is obtained; the manual input can remain available.
+The `i18n_focused_diagnostic` manual input is false by default. Only an explicit
+`workflow_dispatch` on `refs/heads/wip`, with that input enabled and all other
+diagnostic modes disabled, is admitted. The Python guard checks the actual event
+payload before compiler checkout or toolchain setup. Other refs, all push events,
+and mixed manual modes are rejected.
+
+The temporary push title `诊断：验收七语原生完整流程` has been retired following
+the successful focused Windows run below. Every push, including that former
+title, selects ordinary complete acceptance rather than bypassing it.
 
 The focused run has its own concurrency suffix. Normal acceptance, the retained
 manual window-size experiment, and the retained manual C++ growth diagnostic
@@ -101,3 +103,20 @@ an encoding-less source read under Python isolated mode (which ignores
 path instead of the real builder's resolved compiler path. Both are corrected
 with executable regression and old-behavior negative controls. These host
 reproductions do not claim to identify the unavailable original Windows traceback.
+
+## Observed focused Windows result
+
+[Run 39392432786](https://github.com/uppet/ru_notepad/actions/runs/39392432786),
+public commit `c5297e486afb8a016c1a1ba704c228f095027264`, tree
+`ed1d55d8b99102ad578139ee6fc0942962bcbe45`, built fresh dependencies and both
+fixtures, then passed all 114 Markdown-direct and 1,417 i18n assertions.
+The fixed 19-case control suite passed before those builds. Independent review
+validated the exact numeric report schema, source aggregate, entry hashes,
+compiler identity and successful execution counts.
+
+The sole uploaded `measurements.json` has SHA-256
+`33be6ee6f528a10318eca5936e1f50f93e65b4e015335ffbbf30f9f0c6511652`.
+This verifies the corrected owned filter buffer in the real seven-language
+fixture. It is not the full 3,852-assertion / 42-result product gate or a ZIP
+qualification. Those gates remain required after the temporary push selector
+is retired.

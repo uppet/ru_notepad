@@ -30,12 +30,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-native-${{ github.ref }}${{ ((github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：验收七语原生完整流程')) && '-focused-native-diagnostic' || (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) && '-window-size-diagnostic' || (github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) && '-cpp-growth-diagnostic' || '' }}
+  group: windows-native-${{ github.ref }}${{ (github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) && '-focused-native-diagnostic' || (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) && '-window-size-diagnostic' || (github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) && '-cpp-growth-diagnostic' || '' }}
   cancel-in-progress: true
 
 jobs:
   helper-policy:
-    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) || ((github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：验收七语原生完整流程'))) }}
+    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic)) }}
     name: Verify scanner against pure Ru and ASan/UBSan
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -186,7 +186,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
   windows-native:
-    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) || ((github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：验收七语原生完整流程'))) }}
+    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic)) }}
     name: Build and execute on Windows x64
     needs: helper-policy
     runs-on: windows-2022
@@ -418,7 +418,7 @@ jobs:
           retention-days: 14
 
   focused-native-diagnostic:
-    if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：验收七语原生完整流程')) }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) }}
     name: Diagnose only the full Markdown and seven-language native fixtures
     runs-on: windows-2022
     timeout-minutes: 35
