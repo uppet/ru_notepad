@@ -168,6 +168,103 @@
     验样式 甲 0 14 1 'native multiline comment state spans UTF-8 and newline'.
     验样式 甲 15 3 5 'keyword resumes after multiline comment'.
 
+    # C++ folding shares the production margin/menu API, including packed levels.
+    折文 取 'namespace N {\nint f() {\nconst char *s = "{ }";\nif (true) {\nreturn 1;\n}\n}\n}\n/* comment\nbody\n*/\n#if FLAG\nint x;\n#endif\n'.
+    编 其 设文本 甲 折文.
+    确认 ((语法 其 选择 甲 'cpp') == 'cpp') 'C++ fold fixture selects native lexer'.
+    确认 ((窗 其 发送 甲 2243 2 0) 其 数 == 16) 'C++ fold margin is visible'.
+    确认 ((窗 其 发送 甲 2247 2 0) 其 数 == 1) 'C++ fold margin emits click notifications'.
+    确认 ((窗 其 发送 甲 2664 0 0) 其 数 == 5) 'C++ automatic folding uses show/change without double-click handling'.
+    确认 ((窗 其 发送 甲 2028 0 0) 其 数 == 0) 'C++ fold setup remains lazy'.
+    确认 (语法 其 全折 甲 0) 'C++ collapse-all works before explicit colouring'.
+    确认 ((窗 其 发送 甲 2228 1 0) 其 数 == 0) 'C++ namespace body is hidden'.
+    确认 (语法 其 全折 甲 1) 'C++ expand-all succeeds'.
+    确认 ((窗 其 发送 甲 2228 1 0) 其 数 == 1) 'C++ expand-all restores body'.
+    层 取 (窗 其 发送 甲 2223 0 0) 其 数.
+    确认 ((层 其 位段 13 1) == 1) 'namespace is a fold header'.
+    层 取 (窗 其 发送 甲 2223 1 0) 其 数.
+    确认 ((层 其 位段 13 1) == 1) 'function is a nested fold header'.
+    层 取 (窗 其 发送 甲 2223 3 0) 其 数.
+    确认 ((层 其 位段 13 1) == 1) 'conditional brace is a nested fold header'.
+    层 取 (窗 其 发送 甲 2223 8 0) 其 数.
+    确认 ((层 其 位段 13 1) == 1) 'multiline C++ comment is foldable'.
+    层 取 (窗 其 发送 甲 2223 11 0) 其 数.
+    确认 ((层 其 位段 13 1) == 1) 'preprocessor conditional is foldable without branch evaluation'.
+    普位 取 (窗 其 发送 甲 2167 2 0) 其 数.
+    确认 (非 (语法 其 折叠 甲 普位)) 'packed next-level bits and string braces are not fold headers'.
+    确认 (非 (语法 其 折叠 甲 (-1))) 'negative C++ margin position is rejected'.
+    确认 (非 (语法 其 全折 甲 3)) 'invalid C++ fold action is rejected'.
+    窗 其 发送 甲 2160 3 9.
+    确认 (语法 其 折叠 甲 0) 'C++ margin route collapses namespace'.
+    确认 ((窗 其 发送 甲 2228 1 0) 其 数 == 0) 'C++ margin collapse hides children'.
+    确认 (非 (编 其 已变 甲)) 'C++ folds preserve savepoint'.
+    确认 ((窗 其 发送 甲 2174 0 0) 其 为空) 'C++ folds create no undo record'.
+    确认 ((窗 其 发送 甲 2009 0 0) 其 数 == 3) 'C++ folds preserve selection anchor'.
+    确认 ((窗 其 发送 甲 2008 0 0) 其 数 == 9) 'C++ folds preserve selection caret'.
+    确认 ((编 其 文本 甲) == 折文) 'C++ folds preserve exact source'.
+    确认 ((窗 其 发送 乙 2243 2 0) 其 数 == 0) 'C++ folding does not enable JSON sibling margin'.
+    确认 (非 (语法 其 全折 乙 0)) 'JSON sibling rejects unsupported fold command'.
+    语法 其 全折 甲 1.
+    窗 其 发文 甲 2003 0 '// edit\n'.
+    # Production text notifications invalidate selection tokens; native routing
+    # must still function after an edit instead of depending on that token.
+    语法 其 变化 甲 0 8 1 1.
+    窗 其 发送 甲 4003 0 (-1).
+    确认 (语法 其 全折 甲 0) 'C++ folding remains usable after text-change invalidation'.
+    确认 ((窗 其 发送 甲 2228 2 0) 其 数 == 0) 'C++ edited fold levels move with inserted line'.
+    语法 其 全折 甲 1.
+    窗 其 发送 甲 2176 0 0.
+    窗 其 发送 甲 4003 0 (-1).
+    确认 ((编 其 文本 甲) == 折文) 'C++ fold edit has exactly one undo step'.
+    确认 (非 (编 其 已变 甲)) 'C++ fold edit undo restores savepoint'.
+    语法 其 全折 甲 0.
+    确认 ((语法 其 选择 甲 'json') == 'json') 'collapsed C++ can switch to JSON'.
+    确认 ((窗 其 发送 甲 2228 1 0) 其 数 == 1) 'language switch restores hidden C++ body'.
+    确认 ((窗 其 发送 甲 2243 2 0) 其 数 == 0) 'JSON switch hides C++ fold margin'.
+    语法 其 选择 甲 'cpp'.
+    语法 其 全折 甲 0.
+    确认 ((语法 其 选择 甲 'plain') == 'plain') 'collapsed C++ switches to plain'.
+    确认 ((窗 其 发送 甲 2228 1 0) 其 数 == 1) 'plain switch restores hidden C++ body'.
+    确认 (非 (语法 其 折叠 甲 0)) 'plain text cannot toggle stale native fold levels'.
+
+    # Delete a genuinely collapsed header, then let Lexilla recompute levels.
+    # No SETFOLDLEVEL calls or fabricated fold metadata are used in this fixture.
+    删文 取 'int f() {\nreturn 1;\n}\n'.
+    编 其 设文本 甲 删文.
+    语法 其 选择 甲 'cpp'.
+    语法 其 全折 甲 0.
+    确认 ((窗 其 发送 甲 2228 1 0) 其 数 == 0) 'delete-header fixture starts with a collapsed real C++ body'.
+    窗 其 发送 甲 2645 0 10.
+    语法 其 变化 甲 0 10 (-1) 2.
+    窗 其 发送 甲 4003 0 (-1).
+    确认 ((编 其 文本 甲) == 'return 1;\n}\n') 'deleting collapsed C++ header preserves remaining source'.
+    确认 ((窗 其 发送 甲 2236 0 0) 其 数 == 1) 'deleting C++ header restores every hidden child through native fold maintenance'.
+    层 取 (窗 其 发送 甲 2223 0 0) 其 数.
+    确认 ((层 其 位段 13 1) == 0) 'deleted C++ header is removed by Lexilla recomputation'.
+    窗 其 发送 甲 2176 0 0.
+    窗 其 发送 甲 4003 0 (-1).
+    层 取 (窗 其 发送 甲 2223 0 0) 其 数.
+    确认 ((编 其 文本 甲) == 删文 且 (层 其 位段 13 1) == 1 且 非 (编 其 已变 甲)) 'one undo restores C++ header, native fold level and original savepoint'.
+
+    # Replace the collapsed document using the actual production large-mode
+    # constructor. Its byte count is genuinely small, its STYLES_NONE flag real.
+    语法 其 全折 甲 0.
+    语法 其 遗忘 甲.
+    流 取 编 其 开始载入 甲 32000000.
+    编 其 追加文本 流 删文.
+    编 其 完成载入 流.
+    确认 ((窗 其 发送 甲 2379 0 0) 其 数 == 257) 'C++ replacement document really has TEXT_LARGE and STYLES_NONE'.
+    确认 ((语法 其 选择 甲 'cpp') == 'plain') 'STYLES_NONE refuses C++ even below the byte threshold'.
+    确认 ((窗 其 发送 甲 4002 0 0) 其 数 == 0 且 (窗 其 发送 甲 2243 2 0) 其 数 == 0) 'STYLES_NONE leaves no C++ lexer or fold margin'.
+    确认 ((编 其 文本 甲) == 删文 且 (窗 其 发送 甲 2236 0 0) 其 数 == 1 且 非 (编 其 已变 甲)) 'no-style replacement preserves source and clean savepoint with every line visible'.
+    确认 (非 (语法 其 全折 甲 0) 且 非 (语法 其 折叠 甲 0)) 'no-style replacement rejects stale C++ folding commands'.
+    语法 其 遗忘 甲.
+    流 取 编 其 开始载入 甲 1.
+    编 其 追加文本 流 删文.
+    编 其 完成载入 流.
+    确认 ((语法 其 选择 甲 'cpp') == 'cpp' 且 (语法 其 全折 甲 0)) 'normal styled replacement restores functional C++ folding'.
+    语法 其 全折 甲 1.
+
     # Exact 4 MiB document. Selection is lazy, and edits request a bounded range.
     大文 取 '//x\n'.
     循 20 次 大文 取 大文+大文. 环
@@ -190,6 +287,25 @@
     确认 (非 (编 其 已变 甲)) 'large document undo returns to savepoint'.
     末时 取 (窗 其 结果 ((窗 其 GetTickCount64) 其 调用 [])) 其 数.
     显 'TIMING: large-document select/range/edit/undo '+((末时-始时) 为 句)+' ms (diagnostic, not a speed claim)'.
+    # Actually grow a styled, folded document beyond 32 MB. One long ASCII
+    # padding line avoids fabricating GETLENGTH or millions of fixture lines.
+    填文 取 'x'.
+    循 25 次 填文 取 填文+填文. 环
+    编 其 设文本 甲 删文.
+    语法 其 选择 甲 'cpp'.
+    语法 其 全折 甲 0.
+    窗 其 发文 甲 2282 33554432 填文.
+    确认 ((窗 其 发送 甲 2183 0 0) 其 数 == 33554454) 'C++ growth fixture contains real 32 MiB padding plus original 22 bytes'.
+    确认 ((窗 其 发送 甲 2379 0 0) 其 数 == 256 且 (窗 其 发送 甲 2228 1 0) 其 数 == 0) 'growth retains styled document and its collapsed header'.
+    确认 (非 (语法 其 全折 甲 0)) 'grown C++ document refuses another collapse-all above threshold'.
+    确认 (语法 其 折叠 甲 0) 'grown C++ document still permits margin expansion'.
+    确认 ((窗 其 发送 甲 2236 0 0) 其 数 == 1) 'margin expansion makes all grown-document lines reachable'.
+    确认 (非 (语法 其 折叠 甲 0)) 'grown expanded C++ header cannot be collapsed again'.
+    确认 (语法 其 全折 甲 1) 'grown C++ document always permits expand-all'.
+    窗 其 发送 甲 2176 0 0.
+    确认 ((编 其 文本 甲) == 删文 且 非 (编 其 已变 甲)) 'one undo removes real growth and restores original C++ savepoint'.
+    确认 (语法 其 全折 甲 0) 'C++ folding resumes after undo returns below threshold'.
+    填文 取 ''.
     # Repeated replacement releases old lexer objects; destruction must not unload
     # Lexilla while another editor still owns one of its objects.
     编 其 设文本 甲 'int x = 1;'.

@@ -149,7 +149,7 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
     然
     若 语言 != 'cpp' 且 语言 != 'json' 且 语言 != 'markdown' 则 得 _纯文 态 柄. 然
     若 非 (词法状态 其 查 'ready') 则 得 _纯文 态 柄. 然
-    若 ((_发设 态 柄 2183 0 0) 其 数) >= 32000000 则 得 _纯文 态 柄. 然
+    若 (如语 其 _受限 柄) 则 得 _纯文 态 柄. 然
     _发设 态 柄 2382 0 0.
     名存 取 密 其 UTF8 语言.
     词法器 取 窗 其 结果 (CreateLexer 其 调用 [名存]).
@@ -171,6 +171,11 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
         _发文设 态 柄 4005 0 'alignas alignof and and_eq asm atomic_cancel atomic_commit atomic_noexcept auto bitand bitor bool break case catch char char8_t char16_t char32_t class compl concept const consteval constexpr constinit const_cast continue co_await co_return co_yield decltype default delete do double dynamic_cast else enum explicit export extern false float for friend goto if inline int long mutable namespace new noexcept not not_eq nullptr operator or or_eq private protected public register reinterpret_cast requires return short signed sizeof static static_assert static_cast struct switch template this thread_local throw true try typedef typeid typename union unsigned using virtual void volatile wchar_t while xor xor_eq _Alignas _Alignof _Atomic _Bool _Complex _Generic _Imaginary _Noreturn _Static_assert _Thread_local'.
         _性质 态 柄 'lexer.cpp.track.preprocessor' '0'.
         _性质 态 柄 'lexer.cpp.escape.sequence' '1'.
+        # Lexilla defaults fold to false. Native syntax, comments and conditional
+        # directives supply levels; Scintilla owns incremental fold maintenance.
+        _性质 态 柄 'fold' '1'.
+        _性质 态 柄 'fold.comment' '1'.
+        _性质 态 柄 'fold.preprocessor' '1'.
         色板 取 [[1,3573283],[2,3573283],[3,3573283],[4,12665455],[5,12934144],[6,1381795],[7,1381795],[9,12665455],[10,4473924],[12,3023567],[15,3573283],[17,3573283],[18,3023567],[20,1381795],[23,3573283],[24,3573283],[27,12665455]].
     另 若 语言 == 'json' 则
         _发文设 态 柄 4005 0 'true false null'.
@@ -195,6 +200,10 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
         词法状态 其 增 'warning' ('Syntax highlighting could not be configured for '+语言+'. Your document remains editable as plain text.').
         # The object was already adopted above; SETILEXER(NULL) releases it.
         得 _纯文 态 柄.
+    然
+    若 语言 == 'cpp' 则
+        如语 其 _配折叠 柄.
+        _验选择 态 柄.
     然
     若 语言 == 'markdown' 则
         # CLEARDOCUMENTSTYLE above writes zero styles through EOF. Markdown has
@@ -252,11 +261,38 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
     若 (标语 其 状态 柄) != 空 则 得 标语 其 排空 柄. 然
     得 如语 其 排空 柄.
 法
+# Query the actual lexer, not selection tokens (text edits invalidate those).
+# Margin width also rejects a disabled or partially configured lexer.
+算 _原生折叠 柄:
+    若 非 (如语 其 _存在 柄) 或 非 (如语 其 _同线程 柄) 则 得 假. 然
+    得 ((窗 其 发送 柄 4002 0 0) 其 数 == 3) 且 ((窗 其 发送 柄 2243 2 0) 其 数 > 0).
+法
 算 折叠 柄 位置 为 数:
+    若 _原生折叠 柄 则
+        态 取 _新选择 柄.
+        若 位置 < 0 或 位置 > ((_发设 态 柄 2183 0 0) 其 数) 则 得 假. 然
+        行 取 (_发设 态 柄 2166 位置 0) 其 数.
+        层 取 (_发设 态 柄 2223 行 0) 其 数.
+        # Native levels also pack the NEXT level in the upper 16 bits.
+        若 (层 其 位段 13 1) == 0 则 得 假. 然
+        若 (如语 其 _受限 柄) 且 ((_发设 态 柄 2230 行 0) 其 数 != 0) 则 得 假. 然
+        _发设 态 柄 2231 行 0.
+        得 真.
+    然
     若 (标语 其 状态 柄) != 空 则 得 标语 其 折叠 柄 位置. 然
     得 如语 其 折叠 柄 位置.
 法
 算 全折 柄 动作 为 数:
+    若 _原生折叠 柄 则
+        若 动作 < 0 或 动作 > 2 或 动作 % 1 != 0 则 得 假. 然
+        # Expansion stays available if an edited document grows past 32 MB.
+        若 动作 != 1 且 (如语 其 _受限 柄) 则 得 假. 然
+        态 取 _新选择 柄.
+        # Explicit collapse-all lets Scintilla EnsureStyledTo(EOF) once; normal
+        # selection, painting and text edits keep the existing lazy native path.
+        _发设 态 柄 2662 动作 0.
+        得 真.
+    然
     若 (标语 其 状态 柄) != 空 则 得 标语 其 全折 柄 动作. 然
     得 如语 其 全折 柄 动作.
 法

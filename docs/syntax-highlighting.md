@@ -46,9 +46,14 @@ notifications remain independent. Scintilla completes its internal style/fold,
 layout and undo handling before this parent-notification filter. Native controls
 retain the default full subscription to test the unused-notification path.
 
-The fold margin and View menu operate on Ru folds. Ctrl+Shift+[ / ] collapse/expand
+The fold margin and View menu operate on Ru, Markdown and C/C++ folds.
+C/C++ enables Lexilla brace, multiline-comment and preprocessor folding; the
+application routes margin clicks and collapse/expand commands to the owning
+Scintilla document. Native incremental lexing maintains levels after edits.
+C++ packed next-line levels are not mistaken for header flags. Explicit
+collapse-all may style to EOF, while ordinary selection and edits stay lazy. Ctrl+Shift+[ / ] collapse/expand
 all folds. Re-selecting Ru or switching tabs retains existing folds; changing to
-plain/C++/JSON first restores hidden text. Fold state is in-memory only; sessions
+another language first restores hidden text. Fold state is in-memory only; sessions
 and crash recovery are not implemented.
 
 ## Dependency and source pin
@@ -275,3 +280,13 @@ require different modifier combinations.
 ## Markdown Stage A
 
 Markdown uses Lexilla only for style bytes. `markdown_policy.ru` and `markdown_syntax.ru` implement a separate conservative heading folder. See [editing scope](markdown-editing.md) and the [exact policy subset](markdown-policy-subset.md). Selection uses a token and live-thread/document checks before and after each setup message. Owners must invalidate before changing documents or destroying windows; arbitrary subclasses swapping a document while forwarding the same mutation are outside this contract.
+
+C++ folding regression coverage adds 56 native syntax assertions and eight real
+application command/margin assertions (2,045 assertions across the existing
+39 product groups). These are required tests, not a claim they have passed.
+The separate known Markdown double-undo deadline remains unchanged.
+
+The native fixtures also delete a collapsed C++ header and undo it, replace
+the document with real STYLES_NONE storage, and append an actual 32 MiB ASCII
+string to a collapsed styled document. Above the byte threshold, new collapse
+requests are refused while margin expansion and expand-all remain available.

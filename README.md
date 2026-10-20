@@ -13,6 +13,7 @@ A small Windows text editor written mostly in **Ru**. Open a file, edit it in a 
 - Literal search/replace, case matching, and replace-all as one undo operation
 - Ru lexical tables and structural-folding policy, with a bounded application-owned C scanner for the UTF-8 hot path and incremental background styling
 - C/C++, JSON and Markdown syntax highlighting from native Lexilla; automatic extension detection and a Language menu
+- Native C/C++ folds for brace blocks, multiline comments and preprocessor conditionals
 - Conservative Markdown heading folds, with a per-document on/off command
 - Current-line EOL and Enter insertion mode shown separately, including mixed-EOL files
 - Tab-expanded Unicode columns, reverse tab switching, and zoom reset
@@ -24,6 +25,8 @@ A small Windows text editor written mostly in **Ru**. Open a file, edit it in a 
 There is no fixed 4 MiB file limit. At most 64 documents and 64 queued paths are allowed. Scintilla retains the full document in RAM, so available memory still limits usable sizes. Files of at least 32,000,000 bytes open in labelled plain-text large-file mode with highlighting and wrap disabled; this is a performance mode, not an opening limit. Files over exactly 500,000,000 bytes require consent before body reads. Cancel is checked between bounded I/O chunks; one slow disk call or long-line layout can still block. Embedded NUL and invalid Unicode are rejected rather than silently changed. There is no crash recovery yet. Additional languages, regex parity, plugins, macros, split views, accessibility validation, and broader performance validation remain future work. `.ru` files select the Ru-owned container lexer. Folding tolerates incomplete edits conservatively and is not a full parser or syntax validator.
 
 For Ru files, click the folding margin or use View > Collapse all folds / Expand all folds (Ctrl+Shift+[ / Ctrl+Shift+]). New/opened and successfully saved-as `.ru` paths select Ru automatically; Language > Ru / 如言 enables it manually. Switching tabs retains fold state; switching to plain text restores all hidden lines. The 32 MB plain-text performance mode also disables Ru folding.
+
+For C/C++, the fold margin and the same collapse/expand commands use native Lexilla folding for braces, multiline comments and preprocessor conditionals. Strings and comment contents do not create brace folds. Ordinary editing remains incrementally styled; an explicit collapse-all may scan the full file. The 32 MB plain-text mode disables C/C++ folding.
 
 For Markdown, `.md` and `.markdown` suffixes are recognized case-insensitively. Language > Markdown selects it manually. The same fold margin and collapse/expand commands work with heading sections; View > Toggle Markdown heading folds disables or restores this feature per tab. Folding recognizes a documented conservative subset of ATX/setext headings, excluding fenced code, indented code and selected raw/container contexts. Lexilla's older coloring rules are distinct from this fold policy. See [Markdown editing scope](docs/markdown-editing.md).
 

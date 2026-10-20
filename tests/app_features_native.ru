@@ -9,6 +9,16 @@
     次数[0] 取 次数[0]+1.
     显 'PASS: '+名.
 为
+作 点折叠 柄:
+    # Real Scintilla hit testing generates SCN_MARGINCLICK for the parent.
+    横 取 ((窗 其 发送 柄 2243 0 0) 其 数)+((窗 其 发送 柄 2243 1 0) 其 数)+8.
+    高 取 (窗 其 发送 柄 2279 0 0) 其 数.
+    纵 取 ((窗 其 发送 柄 2165 0 0) 其 数)+高/2.
+    纵 取 纵-纵%1.
+    坐标 取 纵*65536+横.
+    窗 其 发送 柄 513 1 坐标.
+    窗 其 发送 柄 514 0 坐标.
+为
 算 元初 参数 为 句 阵:
     主 取 应用 其 初始化 [] 假.
     状态 取 应用 其 A.
@@ -20,7 +30,7 @@
     窗 其 发送 主 273 701 0.
     确认 (应用 其 脏 (应用 其 当前)) 'plain transition preserves already-dirty state'.
     确认 ((编 其 文本 第一) == 'first') 'dirty language changes preserve exact text'.
-    应用 其 新页 'synthetic.cpp' 'second' 65001 假 ''.
+    应用 其 新页 'synthetic.cpp' 'int f() {\nreturn 1;\n}\n' 65001 假 ''.
     第二 取 应用 其 编辑柄.
     确认 (((应用 其 当前) 其 查 'language') == 'cpp') 'new/open document path selects actual C++ mode'.
     窗 其 发送 主 273 111 0.
@@ -45,11 +55,26 @@
     确认 ((窗 其 发送 第二 4002 0 0) 其 数 == 3) 'language menu installs real CPP lexer'.
     确认 ((窗 其 发送 第一 4002 0 0) 其 数 != 3) 'language selection is document-local'.
     确认 (非 (应用 其 脏 (应用 其 当前))) 'language selection preserves savepoint'.
+    窗 其 发送 主 273 505 0.
+    确认 ((窗 其 发送 第二 2228 1 0) 其 数 == 0) 'C++ WM_COMMAND collapse-all hides function body'.
+    窗 其 发送 主 273 111 0.
+    确认 ((窗 其 发送 第一 2243 2 0) 其 数 == 0) 'C++ folds do not leak to plain tab'.
+    窗 其 发送 主 273 112 0.
+    确认 ((窗 其 发送 第二 2228 1 0) 其 数 == 0) 'C++ collapsed state survives tab switching'.
+    窗 其 发送 主 273 506 0.
+    确认 ((窗 其 发送 第二 2228 1 0) 其 数 == 1) 'C++ WM_COMMAND expand-all restores body'.
+    点折叠 第二.
+    确认 ((窗 其 发送 第二 2228 1 0) 其 数 == 0) 'C++ real margin click dispatch collapses exactly once'.
+    点折叠 第二.
+    确认 ((窗 其 发送 第二 2228 1 0) 其 数 == 1) 'C++ second real margin click expands exactly once'.
+    确认 (非 (应用 其 脏 (应用 其 当前))) 'C++ application folding preserves clean savepoint'.
+    窗 其 发送 主 273 505 0.
     窗 其 发送 主 273 703 0.
     确认 (((应用 其 当前) 其 查 'language') == 'json') 'language menu selects JSON'.
+    确认 ((窗 其 发送 第二 2228 1 0) 其 数 == 1) 'C++ to JSON menu restores hidden body'.
     窗 其 发送 主 273 701 0.
     确认 (((应用 其 当前) 其 查 'language') == 'plain') 'language menu restores plain text'.
-    确认 ((编 其 文本 第二) == 'second') 'language commands preserve exact text'.
+    确认 ((编 其 文本 第二) == 'int f() {\nreturn 1;\n}\n') 'language commands preserve exact text'.
     窗 其 发送 第一 2176 0 0.
     确认 ((编 其 文本 第一) == '') 'styling preserved the original undo history'.
     确认 (应用 其 关程序) 'feature fixture closes normally without dirty prompts'.
