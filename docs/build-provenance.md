@@ -10,7 +10,7 @@ This repository contains the editor’s source and build/test tools. The applica
 - **Unicode classification data:** Python 3.12 / Unicode 15.0.0 identifier predicates are retained as compact generated tables; the exact official Unicode notice ships in both ZIPs. Regeneration is documented in [Ru syntax scope](ru-language-syntax.md).
 - **Application artwork:** original generated artwork and icon export details are documented in [assets/README.md](../assets/README.md).
 
-Dependency archives and extracted source belong under the ignored `vendor/` directories. The application-owned `RuSyntax.dll` is built from reviewed `native/` C inputs; its source/header/table, compiler and binary hashes are validated with every executable receipt. It does not add a third-party source dependency. Each packaged Scintilla/Lexilla DLL must be built from the pinned source and accompanied by its upstream license. The application’s own license is still pending the owner’s choice.
+Dependency archives and extracted source belong under the ignored `vendor/` directories. The application-owned `RuSyntax.dll` is built from reviewed `native/` C inputs; its source/header/table, compiler and binary hashes are validated with every executable receipt. It does not add a third-party source dependency. Each packaged Scintilla/Lexilla DLL must be built from the pinned source and accompanied by its upstream license. Project-owned application code and documentation are covered by the root MIT License; third-party code and data retain their existing licenses and notices.
 
 ## Build tools
 

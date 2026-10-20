@@ -1,6 +1,6 @@
 # Third-party components and artwork
 
-The application has no selected public project license yet. Individual dependency licenses remain applicable; this notice does not choose a new license for their authors or for ru_notepad.
+Project-owned application code and documentation are licensed under the MIT License in `LICENSE` (also included in portable packages). This grant excludes all third-party source, data and components, including Scintilla/Lexilla sources and components under `vendor/`, Unicode-derived data, and compiler/runtime dependencies. Their existing licenses and notices remain applicable. This project does not grant new rights to third-party material, including upstream examples whose historical provenance remains unresolved.
 
 ## Scintilla 5.6.7
 
@@ -18,7 +18,7 @@ The Ru scanner's generated identifier-classification intervals come from Python 
 
 ## Application-owned native helper
 
-RuSyntax.dll is built from this repository's `native/` C sources. It accelerates bounded UTF-8 scanning and style-byte generation, using keyword/tag configuration and folding policy owned by the Ru application. It is not an additional third-party lexer. Its source and binary hashes are part of the same package receipts; the application license remains pending.
+RuSyntax.dll is built from this repository's `native/` C sources. It accelerates bounded UTF-8 scanning and style-byte generation, using keyword/tag configuration and folding policy owned by the Ru application. It is not an additional third-party lexer. Its source and binary hashes are part of the same package receipts; the project-owned implementation is covered by the application MIT License, while Unicode-derived tables retain their separate notice.
 
 ## Compiler and Windows runtime support
 

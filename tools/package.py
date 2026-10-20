@@ -59,6 +59,7 @@ GUI_EVIDENCE_PREFIXES = {'main-gui-smoke': 'main-launcher',
                          'main-gui-ru-syntax': 'main-ru-syntax-launcher'}
 UNICODE_LICENSE_SHA256 = 'e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96'
 RUNTIME_FILES = {
+    'LICENSE': 'LICENSE',
     'VERSION': 'VERSION', 'packaging/README-preview.txt': 'README.txt',
     'packaging/开始前请读.txt': '开始前请读.txt', 'CHANGELOG.md': 'CHANGELOG.md',
     'THIRD_PARTY_NOTICES.md': 'THIRD_PARTY_NOTICES.md',

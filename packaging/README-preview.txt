@@ -138,4 +138,5 @@ C/C++ and JSON syntax: Lexilla 5.5.4. Ru syntax: Ru policy plus the application-
 RuSyntax.dll C scanning/style-buffer helper; structural folding decisions remain Ru.
 Unicode classification data notice is included in licenses/Unicode.txt.
 Icon: original GPT-generated artwork. No Notepad++ branding or source included.
-The application has no selected public project license.
+Project-owned application code and documentation are licensed under MIT; see LICENSE.
+Third-party code and data retain their existing licenses; see THIRD_PARTY_NOTICES.md and licenses/.

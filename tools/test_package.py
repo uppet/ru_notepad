@@ -226,6 +226,7 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(len(build['runtime_binary_sha256']), 4)
             self.assertEqual(build['native_helpers'][package.NATIVE_HELPER_NAME]['dll_sha256'],
                              package.sha(self.binary / package.NATIVE_HELPER_NAME))
+            self.assertEqual(files['LICENSE'], (self.root / 'LICENSE').read_bytes())
             self.assertIn('licenses/Lexilla.txt', files)
             self.assertIn('licenses/Scintilla.txt', files)
             self.assertEqual(files['licenses/Unicode.txt'], (self.root / 'packaging/licenses/Unicode.txt').read_bytes())

@@ -67,7 +67,7 @@ Scintilla and Lexilla share a permissive license allowing use, modification and 
 
 Notepad++ is GPL-licensed. Reusing its implementation, resource files, translations or other assets is a separate licensing decision from using Scintilla. This independent project should implement behavior from requirements and public APIs, avoid casually copying NPP code/assets, and keep provenance. If NPP code is intentionally reused, review the applicable GPL obligations before distributing the combined work. Private local development does not by itself authorize future publication. [Official repository](https://github.com/notepad-plus-plus/notepad-plus-plus), [license](https://github.com/notepad-plus-plus/notepad-plus-plus/blob/master/LICENSE).
 
-The ru_notepad application license is a project-owner decision. Do not silently label the new application GPL merely because Notepad++ is the reference, or call it permissively licensed merely because Scintilla is.
+The project owner has selected MIT for ru_notepad-owned code and documentation; see the root LICENSE. This does not relicense Scintilla, Lexilla, Unicode data or other third-party material. The restrictions on borrowing Notepad++ code or assets remain unchanged.
 
 Use original ru_notepad artwork, including the requested AI-created icon assets. Do not copy the Notepad++ name/logo/chameleon or imply endorsement. Keep source artwork, generation provenance and export sizes with the project. Inspect small-size readability separately from the larger concept image.
 

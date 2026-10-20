@@ -50,6 +50,6 @@ Python is used only to run the Ru compiler and build/test tools. Ru application 
 
 `python tools/build.py --help` lists the explicit compiler and toolchain arguments. Downloaded dependencies, local tool installations, generated C, binaries, and test output are kept out of the source repository.
 
-## License status
+## License
 
-The application license is **pending the project owner’s choice**. No MIT, GPL, or other application license is assigned by this repository yet. Third-party components retain their own licenses, and their required notices must accompany packaged copies.
+The project-owned application code and documentation are licensed under the [MIT License](LICENSE). Third-party source, data and components are excluded from this grant and retain their existing licenses and notices; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Both portable packages include the application license and required third-party notices.
