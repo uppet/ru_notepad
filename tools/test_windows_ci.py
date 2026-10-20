@@ -1415,7 +1415,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertIn('app_ru_native.exe "%TESTDIR%" --measure-ru-timer >>test-results.txt 2>&1\n'
                       'if not "%ERRORLEVEL%"=="0" set "FAILED=1"', runner)
         workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
-        self.assertIn('timeout-minutes: 60', workflow)
+        self.assertIn('timeout-minutes: 90', workflow)
         self.assertIn('-RunAclTests', workflow)
 
     def test_gui_cancel_fixture_has_fixed_byte_budget_and_bounded_writes(self):
@@ -3955,6 +3955,19 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertEqual(sum(msg[1] == 2007 for msg in api.messages), 4)
         self.assertFalse(any(msg[1] in (2009, 2153, 2182, 4003) for msg in api.messages))
         self.assertEqual(path.read_bytes(), original)
+
+    def test_windows_job_budget_covers_fresh_build_without_relaxing_acceptance(self):
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        job = re.search(r'(?ms)^  windows-native:\n(.*?)(?=^  [a-z][a-z-]+:\n|\Z)', workflow)
+        self.assertIsNotNone(job)
+        self.assertEqual(re.findall(r'^    timeout-minutes: (\d+)$', job.group(1), re.M), ['90'])
+        self.assertIn('needs: helper-policy', job.group(1))
+        self.assertNotIn('continue-on-error:', job.group(1))
+        self.assertEqual(ci.GUI_MARKDOWN_TIMEOUT_SECONDS, 30)
+        self.assertEqual(ci.GUI_RU_RESPONSE_TIMEOUT_MS, 5000)
+        source = (ci.ROOT / 'tools/windows_ci.py').read_text(encoding='utf-8')
+        self.assertIn("Markdown GUI open/edit exceeded its original 30-second deadline", source)
+        self.assertIn("Markdown GUI final proof exceeded its original 30-second deadline", source)
 
     def test_markdown_pure_backend_gate_and_fixed_historical_workflow_are_mandatory(self):
         import test_markdown_portable as portable_policy

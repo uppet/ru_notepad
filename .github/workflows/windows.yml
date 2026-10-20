@@ -196,9 +196,10 @@ jobs:
     name: Build and execute on Windows x64
     needs: helper-policy
     runs-on: windows-2022
-    # Include the mandatory full >500 MB native editor case and extra source
-    # checks/builds. Individual execution deadlines and assertions stay strict.
-    timeout-minutes: 60
+    # CI 39410663280 spent about 46 minutes in static checks and fresh builds,
+    # then hit the former 60-minute job cap during the final GUI acceptance.
+    # Allow orchestration headroom; individual deadlines/assertions stay strict.
+    timeout-minutes: 90
     defaults:
       run:
         shell: pwsh
