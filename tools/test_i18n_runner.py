@@ -467,7 +467,7 @@ def validate_layout_fixture(source):
         raise ValueError('Missing callback lifetime or installation/removal checks')
     if any(f'验布局 主 {width} 代码.' not in source for width in (640, 900, 1600)):
         raise ValueError('Original exact layout widths must remain covered')
-    if "内[2]-内[0] == 宽 且 内[3]-内[1] >= 400" not in source or "若 次数[0] != 1417" not in source:
+    if "内[2]-内[0] == 宽 且 内[3]-内[1] >= 400" not in source or "若 次数[0] != 1606" not in source:
         raise ValueError('Native dimensions and assertion count may not be weakened')
     if "    卸布局钩.\n    确认 (应用 其 关程序)" not in source or "试 卸布局钩. 救 清因" not in source:
         raise ValueError('Both ordinary and failure cleanup must detach the callback')
@@ -493,7 +493,7 @@ class LayoutFixtureContracts(unittest.TestCase):
             ("窗 其 成功 (_RemoveWindowSubclass", "窗 其 结果 (_RemoveWindowSubclass"),
             ("验布局 主 1600 代码.", "验布局 主 1000 代码."),
             ("内[2]-内[0] == 宽", "内[2]-内[0] <= 宽"),
-            ("若 次数[0] != 1417", "若 次数[0] != 182"),
+            ("若 次数[0] != 1606", "若 次数[0] != 182"),
             ("    卸布局钩.\n    确认 (应用 其 关程序)", "    确认 (应用 其 关程序)"),
         )
         for before, after in changes:

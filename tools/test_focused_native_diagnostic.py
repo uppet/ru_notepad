@@ -81,7 +81,7 @@ class RuntimeControls(unittest.TestCase):
             (self.logs / (name + '.stdout.log')).write_text(out, encoding='utf-8')
             (self.logs / (name + '.stderr.log')).write_text(err, encoding='utf-8')
 
-    def test_complete_original_counts_and_parsers(self):
+    def test_complete_current_counts_and_parsers(self):
         for i, name in enumerate(runner.TESTS):
             row = runner.validated_result(name, result(i), self.logs)
             self.assertEqual(row['assertions'], runner.COUNTS[i])
@@ -94,7 +94,7 @@ class RuntimeControls(unittest.TestCase):
             runner.validated_result(name, result(1), self.logs)
         for mutation in (
                 lambda text: text.replace('I18N_STAGE stage=0 language=7 width=0 next=1\n', ''),
-                lambda text: text.replace('stage=5 language=4 width=0 next=909', 'stage=5 language=4 width=0 next=908'),
+                lambda text: text.replace('stage=5 language=4 width=0 next=1026', 'stage=5 language=4 width=0 next=1025'),
                 lambda text: text + 'I18N_STAGE private/path\n'):
             (self.logs / (name + '.stdout.log')).write_bytes(mutation(streams(1)[0]).encode('utf-8'))
             with self.assertRaises(ValueError):

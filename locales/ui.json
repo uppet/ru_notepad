@@ -1033,5 +1033,41 @@
     "es": "No se pudo completar la operación.\n\n{0}",
     "ru": "Не удалось завершить операцию.\n\n{0}",
     "it": "Impossibile completare l’operazione.\n\n{0}"
+  },
+  "command.find_previous": {
+    "en": "Find &Previous\tShift+F3",
+    "zh-CN": "查找上一个(&P)\tShift+F3",
+    "ja": "前を検索(&P)\tShift+F3",
+    "ko": "이전 찾기(&P)\tShift+F3",
+    "es": "Buscar anterior(&P)\tShift+F3",
+    "ru": "Найти предыдущее(&P)\tShift+F3",
+    "it": "Trova precedente(&P)\tShift+F3"
+  },
+  "search.previous": {
+    "en": "Previous",
+    "zh-CN": "上一个",
+    "ja": "前へ",
+    "ko": "이전",
+    "es": "Anterior",
+    "ru": "Назад",
+    "it": "Precedente"
+  },
+  "search.whole": {
+    "en": "Whole word",
+    "zh-CN": "整词匹配",
+    "ja": "単語単位",
+    "ko": "단어 단위",
+    "es": "Palabra completa",
+    "ru": "Слово целиком",
+    "it": "Parola intera"
+  },
+  "search.wrap": {
+    "en": "Wrap around",
+    "zh-CN": "循环查找",
+    "ja": "循環検索",
+    "ko": "순환 검색",
+    "es": "Búsqueda circular",
+    "ru": "По кругу",
+    "it": "Ricerca circolare"
   }
 }

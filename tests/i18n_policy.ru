@@ -135,7 +135,9 @@
 确认 ((本地 其 当前语言) == 'en') 'test restores English'.
 # Native GDI measurements are synthetic inputs here; this checks geometry only.
 窗口宽们 取 [480,640,900,1600].
-标签组们 取 [[48,65,74,75,40],[190,100,125,170,100],[440,60,90,120,70]].
+# Eight search controls: three options, previous/next, replace/all and close.
+# Retain short, translated and unusually long-label coverage.
+标签组们 取 [[48,78,84,65,65,74,75,40],[190,155,175,140,100,125,170,100],[440,90,100,110,60,90,120,70]].
 窗位 取 0.
 循 窗口宽们 其 量 次
     宽 取 窗口宽们[窗位].

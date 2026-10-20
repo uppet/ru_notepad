@@ -87,11 +87,11 @@ _布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
 草稿 取 'draft 中😀\r\nline'.
 文件名 取 '保留 {0} файл 日本語 한국어 español 😀.txt'.
 菜单名 取 ['menu.file','menu.edit','menu.search','menu.encoding','menu.language','menu.view','menu.settings','menu.ui_language','menu.help'].
-菜单数 取 [10,6,3,6,5,7,4,8,1].
-命令号 取 [101,102,108,109,103,104,105,111,112,106,201,202,203,204,205,206,301,302,303,401,402,403,404,405,406,701,702,703,704,705,501,502,503,504,505,506,507,801,802,803,804,850,851,852,853,854,855,856,857,601].
-命令键 取 ['command.new','command.open','command.open_windows1252','command.open_gbk','command.save','command.save_as','command.close_tab','command.previous_tab','command.next_tab','command.exit','command.undo','command.redo','command.cut','command.copy','command.paste','command.select_all','command.find','command.replace','command.find_next','command.save_utf8','command.save_utf8_bom','command.save_utf16le','command.save_utf16be','command.save_windows1252','command.save_gbk','command.language_plain','command.language_cpp','command.language_json','command.language_ru','command.language_markdown','command.toggle_wrap','command.zoom_in','command.zoom_out','command.zoom_reset','command.fold_all','command.unfold_all','command.toggle_markdown_folds','command.register_association','command.default_apps','command.unregister_association','command.registration_status','language.system','language.en','language.zh_cn','language.ja','language.ko','language.es','language.ru','language.it','command.about'].
-按钮名 取 ['cancel','case','next','one','all','hide'].
-按钮键 取 ['search.cancel','search.case','search.next','search.replace','search.all','search.close'].
+菜单数 取 [10,6,4,6,5,7,4,8,1].
+命令号 取 [101,102,108,109,103,104,105,111,112,106,201,202,203,204,205,206,301,302,303,308,401,402,403,404,405,406,701,702,703,704,705,501,502,503,504,505,506,507,801,802,803,804,850,851,852,853,854,855,856,857,601].
+命令键 取 ['command.new','command.open','command.open_windows1252','command.open_gbk','command.save','command.save_as','command.close_tab','command.previous_tab','command.next_tab','command.exit','command.undo','command.redo','command.cut','command.copy','command.paste','command.select_all','command.find','command.replace','command.find_next','command.find_previous','command.save_utf8','command.save_utf8_bom','command.save_utf16le','command.save_utf16be','command.save_windows1252','command.save_gbk','command.language_plain','command.language_cpp','command.language_json','command.language_ru','command.language_markdown','command.toggle_wrap','command.zoom_in','command.zoom_out','command.zoom_reset','command.fold_all','command.unfold_all','command.toggle_markdown_folds','command.register_association','command.default_apps','command.unregister_association','command.registration_status','language.system','language.en','language.zh_cn','language.ja','language.ko','language.es','language.ru','language.it','command.about'].
+按钮名 取 ['cancel','case','whole','searchWrap','previous','next','one','all','hide'].
+按钮键 取 ['search.cancel','search.case','search.whole','search.wrap','search.previous','search.next','search.replace','search.all','search.close'].
 # Fixed synthetic progress only. These numeric enums identify a failed native
 # operation before its assertion without publishing labels, paths, or exceptions.
 作 记阶段 阶段 为 数 语言 为 数 宽 为 数:
@@ -199,7 +199,7 @@ _布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
     内 取 客矩 主.
     前 取 代码+' '+(宽 为 句)+'px '.
     确认 (内[2]-内[0] == 宽 且 内[3]-内[1] >= 400 且 (_布局钩 其 查 'calls') > 0 且 (_布局钩 其 查 'maxX') >= 4096 且 (_布局钩 其 查 'maxY') >= 4096) (前+'actual client width and usable height').
-    控们 取 ['find','replace','case','next','one','all','hide'].
+    控们 取 ['find','replace','case','whole','searchWrap','previous','next','one','all','hide'].
     矩们 取 [].
     位 取 0.
     循 控们 其 量 次
@@ -374,7 +374,7 @@ _布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
         确认 ((窗 其 取文 柄) == 文) (代码+' native '+名+' label matches catalog').
         量宽 取 窗 其 测文宽 柄 文.
         留白 取 26.
-        若 名 == 'case' 则 留白 取 44. 然
+        若 名 == 'case' 或 名 == 'whole' 或 名 == 'searchWrap' 则 留白 取 44. 然
         确认 (量宽 > 0 且 (应用 其 按钮宽 名) >= 量宽+留白) (代码+' native font measurement fits '+名+' label').
         位 取 位+1.
     环
@@ -383,6 +383,8 @@ _布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
     确认 ((窗 其 取文 (态 其 查 'find')) == 'English 中😀') (代码+' search input is user text and remains unchanged').
     确认 ((窗 其 取文 (态 其 查 'replace')) == '日本語 한국어 {0}') (代码+' replacement input remains exact Unicode').
     确认 ((窗 其 发送 (态 其 查 'case') 240 0 0) 其 数 == 0) (代码+' match-case choice remains unchanged').
+    确认 ((窗 其 发送 (态 其 查 'whole') 240 0 0) 其 数 == 1) (代码+' whole-word choice remains unchanged').
+    确认 ((窗 其 发送 (态 其 查 'searchWrap') 240 0 0) 其 数 == 0) (代码+' search-wrap choice remains unchanged').
     文们 取 态 其 查 'docs'.
     未位们 取 [0,2].
     位 取 0.
@@ -439,6 +441,8 @@ _布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
     窗 其 标题 (态 其 查 'find') 'English 中😀'.
     窗 其 标题 (态 其 查 'replace') '日本語 한국어 {0}'.
     窗 其 发送 (态 其 查 'case') 241 0 0.
+    窗 其 发送 (态 其 查 'whole') 241 1 0.
+    窗 其 发送 (态 其 查 'searchWrap') 241 0 0.
     旧们 取 [(快照 文们[0]),(快照 文们[1]),(快照 文们[2])].
     位 取 0.
     循 语言们 其 量 次
@@ -537,9 +541,9 @@ _布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
     属性 取 (窗 其 结果 (_GetFileAttributesW 其 调用 [存])) 其 数.
     存 其 关闭.
     确认 (属性 == 4294967295) 'owned synthetic Unicode fixture directory is fully removed'.
-    # 8 setup +7*(1 switch+2 choices+77 menu+26 UI+30 state+4 filter+3*17 layout)
-    # +61 warmed resource/state checks +10 undo/save/shutdown +1 cleanup =1417.
-    若 次数[0] != 1417 则 卒 'FAIL: unexpected app i18n assertion count: '+(次数[0] 为 句). 然
+    # 8 setup +7*(1 switch+2 choices+78 menu+34 UI+30 state+4 filter+3*23 layout)
+    # +61 warmed resource/state checks +10 undo/save/shutdown +1 cleanup =1606.
+    若 次数[0] != 1606 则 卒 'FAIL: unexpected app i18n assertion count: '+(次数[0] 为 句). 然
     显 'TOTAL PASS: '+(次数[0] 为 句).
     得 0.
 法

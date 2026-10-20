@@ -1,3 +1,12 @@
+## Unreleased: literal search options
+
+- Added previous-match search through Shift+F3, the Search menu and search bar.
+- Added whole-word and wrap-around options; existing case-sensitive, wrapping defaults remain.
+- Whole-word applies to single/all replacements; replace-all retains one undo group.
+- Matched fold endpoints are revealed without changing document bytes.
+- Seven-language labels, keyboard policy and native regression fixtures updated.
+- Candidate only: Windows validation is required before preview delivery.
+
 # Unreleased internationalization candidate
 
 - Add seven Ru-owned UI catalogs, stable message keys, English fallback, single-pass placeholders and consistent menu mnemonics.

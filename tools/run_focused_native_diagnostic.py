@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fresh real-Windows 114/1417 diagnostic only; no product acceptance or ZIP.
+"""Fresh real-Windows 114/1606 diagnostic only; no product acceptance or ZIP.
 
 Build/execute only the two full fixtures with unchanged assertion inventories.
 Raw commands, build receipts,
@@ -30,7 +30,7 @@ from guard_focused_native_diagnostic import validate_environment
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = ('markdown_direct_native', 'app_i18n_native')
-COUNTS = (114, 1417)
+COUNTS = (114, 1606)
 RU_COMMIT = '85c7821fda35aa79deeaf67b4d430f24ddd7f07f'
 RU_TREE = 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba'
 PUBLIC_LIMIT = 16384
@@ -191,14 +191,14 @@ def verify_receipts(binary, objdump, cc, compiler, sources):
 
 
 def i18n_stage_sequence():
-    """Fixed original 1417-assertion grouping, independent of private labels."""
+    """Fixed search-enhanced 1606-assertion grouping, independent of private labels."""
     rows = [(0, 7, 0, 1)]
     for language in range(7):
         for stage, width, next_assertion in (
-                (1, 0, 9), (2, 0, 12), (3, 0, 89), (4, 0, 115),
-                (5, 0, 145), (6, 640, 149), (6, 900, 166), (6, 1600, 183)):
-            rows.append((stage, language, width, next_assertion + 191 * language))
-    rows.extend(((7, 7, 0, 1346), (8, 7, 0, 1407), (9, 7, 0, 1415), (10, 7, 0, 1417)))
+                (1, 0, 9), (2, 0, 12), (3, 0, 90), (4, 0, 124),
+                (5, 0, 154), (6, 640, 158), (6, 900, 181), (6, 1600, 204)):
+            rows.append((stage, language, width, next_assertion + 218 * language))
+    rows.extend(((7, 7, 0, 1535), (8, 7, 0, 1596), (9, 7, 0, 1604), (10, 7, 0, 1606)))
     return tuple(rows)
 
 
@@ -454,7 +454,7 @@ def main():
                 print(progress, file=sys.stderr)
         print(f'FOCUSED_NATIVE_DIAGNOSTIC code={stage} markdown={counts[0]} i18n={counts[1]}', file=sys.stderr)
         return 1
-    print('FOCUSED_NATIVE_DIAGNOSTIC code=0 markdown=114 i18n=1417')
+    print('FOCUSED_NATIVE_DIAGNOSTIC code=0 markdown=114 i18n=1606')
     return 0
 
 

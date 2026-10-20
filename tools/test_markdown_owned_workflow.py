@@ -87,8 +87,9 @@ class TriggerControls(unittest.TestCase):
                             trigger("workflow_dispatch", ALLOWED_REF, {
                                 "inputs": {selected: "true", conflict: value}})
 
-    def test_exact_push_and_explicit_manual_are_allowed(self):
-        validate_trigger("push", ALLOWED_REF, {"head_commit": {"message": ONE_SHOT_TITLE}})
+    def test_only_explicit_manual_is_allowed(self):
+        with self.assertRaises(ValueError):
+            validate_trigger("push", ALLOWED_REF, {"head_commit": {"message": ONE_SHOT_TITLE}})
         for value in (True, "true"):
             validate_trigger("workflow_dispatch", ALLOWED_REF, {"inputs": {
                 "markdown_owned_profile": value,
@@ -102,8 +103,6 @@ class TriggerControls(unittest.TestCase):
             (ALLOWED_REF, "refs/heads/WIP", "refs/heads/main", "refs/tags/wip", ALLOWED_REF + "-other"),
             (ONE_SHOT_TITLE, ONE_SHOT_TITLE + "\n", ONE_SHOT_TITLE + " extra", ONE_SHOT_TITLE.lower()),
         ):
-            if event == "push" and ref == ALLOWED_REF and title == ONE_SHOT_TITLE:
-                continue
             with self.subTest(event=event, ref=ref, title=title):
                 with self.assertRaises(ValueError):
                     validate_trigger(event, ref, {"head_commit": {"message": title}})
@@ -135,11 +134,12 @@ class TriggerControls(unittest.TestCase):
     def test_actual_cli_has_only_fixed_markers(self):
         with tempfile.TemporaryDirectory(prefix="private-event-path-") as directory:
             path = Path(directory) / "event.json"
-            env = dict(os.environ, GITHUB_EVENT_NAME="push", GITHUB_REF=ALLOWED_REF,
+            env = dict(os.environ, GITHUB_EVENT_NAME="workflow_dispatch", GITHUB_REF=ALLOWED_REF,
                        GITHUB_EVENT_PATH=str(path))
             command = [sys.executable, "-I", str(ROOT / "tools/guard_markdown_owned_profile.py"), "--guard-only"]
             for payload, accepted in (
-                (json.dumps({"head_commit": {"message": ONE_SHOT_TITLE}}), True),
+                (json.dumps({"inputs": {"markdown_owned_profile": "true"}}), True),
+                (json.dumps({"head_commit": {"message": ONE_SHOT_TITLE}}), False),
                 ('{"private-path":"C:\\\\private\\\\document.md"}', False),
                 ("invalid json", False),
             ):
@@ -185,14 +185,14 @@ class WorkflowControls(unittest.TestCase):
                 with self.subTest(mode=name, conflict=conflict):
                     self.assertTrue(any(evaluate(expression, **case) for expression in conditions))
 
-    def test_default_off_and_exact_one_shot_entry(self):
+    def test_default_off_and_one_shot_entry_retired(self):
         source = WORKFLOW.read_text(encoding="utf-8")
         entry = source.split("      markdown_owned_profile:\n", 1)[1].split("      syntax_growth_diagnostic:\n", 1)[0]
         self.assertIn("type: boolean", entry)
         self.assertIn("default: false", entry)
-        self.assertIn(ONE_SHOT_TITLE, condition("markdown-owned-profile"))
-        self.assertIn(ALLOWED_REF, condition("markdown-owned-profile"))
-        self.assertEqual(source.count(ONE_SHOT_TITLE), 4)
+        self.assertNotIn(ONE_SHOT_TITLE, source)
+        self.assertNotIn("github.event.head_commit.message", condition("markdown-owned-profile"))
+        self.assertEqual(condition("markdown-owned-profile"), "(github.event_name == 'workflow_dispatch' && inputs.markdown_owned_profile)")
 
     def test_complete_selection_matrix_keeps_product_separate(self):
         expressions = {name: condition(name) for name in (
@@ -207,8 +207,7 @@ class WorkflowControls(unittest.TestCase):
             case = dict(event=event, ref=ref, title=title, owned=owned, cpp=cpp, historical=historical,
                         window=window, focused=focused)
             selected = {name: bool(evaluate(expression, **case)) for name, expression in expressions.items()}
-            markdown = (event == "workflow_dispatch" and owned) or (
-                event == "push" and ref.casefold() == ALLOWED_REF and title == ONE_SHOT_TITLE)
+            markdown = event == "workflow_dispatch" and owned
             growth = event == "workflow_dispatch" and cpp
             geometry = event == "workflow_dispatch" and window
             native = event == "workflow_dispatch" and focused
@@ -221,9 +220,9 @@ class WorkflowControls(unittest.TestCase):
 
     def test_case_insensitive_workflow_is_followed_by_strict_guard(self):
         expression = condition("markdown-owned-profile")
-        self.assertTrue(evaluate(expression, ref="refs/heads/WIP", title=ONE_SHOT_TITLE))
+        self.assertTrue(evaluate(expression, event="workflow_dispatch", ref="refs/heads/WIP", owned=True))
         with self.assertRaises(ValueError):
-            validate_trigger("push", "refs/heads/WIP", {"head_commit": {"message": ONE_SHOT_TITLE}})
+            validate_trigger("workflow_dispatch", "refs/heads/WIP", {"inputs": {"markdown_owned_profile": True}})
         body = job("markdown-owned-profile")
         guard = body.index("python -I tools/guard_markdown_owned_profile.py --guard-only")
         self.assertLess(guard, body.index("repository: uppet/ru-language"))
@@ -239,14 +238,14 @@ class WorkflowControls(unittest.TestCase):
         markdown_manual = evaluate(expression, event="workflow_dispatch", owned=True)
         cpp_manual = evaluate(expression, event="workflow_dispatch", cpp=True)
         self.assertEqual(product, "")
-        self.assertEqual(markdown_push, "-markdown-owned-profile")
-        self.assertEqual(markdown_manual, markdown_push)
+        self.assertEqual(markdown_push, product)
+        self.assertEqual(markdown_manual, "-markdown-owned-profile")
         self.assertEqual(cpp_manual, "-cpp-growth-diagnostic")
         window_manual = evaluate(expression, event="workflow_dispatch", window=True)
         focused_manual = evaluate(expression, event="workflow_dispatch", focused=True)
         self.assertEqual(window_manual, "-window-size-diagnostic")
         self.assertEqual(focused_manual, "-focused-native-diagnostic")
-        self.assertEqual(len({product, markdown_push, cpp_manual, window_manual, focused_manual}), 5)
+        self.assertEqual(len({product, markdown_manual, cpp_manual, window_manual, focused_manual}), 5)
         self.assertNotIn("needs:", job("markdown-owned-profile"))
         self.assertNotIn("needs: markdown-owned-profile", source)
 

@@ -11,7 +11,7 @@ on:
         required: false
         default: false
       i18n_focused_diagnostic:
-        description: Run only full 114/1417 native fixtures; never package or certify product acceptance
+        description: Run only full 114/1606 native fixtures; never package or certify product acceptance
         type: boolean
         required: false
         default: false
@@ -36,12 +36,12 @@ permissions:
 
 concurrency:
   # Diagnostic-only invocations never cancel or queue ahead of product acceptance.
-  group: windows-native-${{ github.ref }}${{ ((github.event_name == 'workflow_dispatch' && inputs.markdown_owned_profile) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：测量七语第八版 Markdown 分阶段耗时')) && '-markdown-owned-profile' || (github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) && '-focused-native-diagnostic' || (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) && '-window-size-diagnostic' || (github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) && '-cpp-growth-diagnostic' || '' }}
+  group: windows-native-${{ github.ref }}${{ (github.event_name == 'workflow_dispatch' && inputs.markdown_owned_profile) && '-markdown-owned-profile' || (github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) && '-focused-native-diagnostic' || (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) && '-window-size-diagnostic' || (github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) && '-cpp-growth-diagnostic' || '' }}
   cancel-in-progress: true
 
 jobs:
   helper-policy:
-    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) || ((github.event_name == 'workflow_dispatch' && inputs.markdown_owned_profile) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：测量七语第八版 Markdown 分阶段耗时'))) }}
+    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.markdown_owned_profile)) }}
     name: Verify scanner against pure Ru and ASan/UBSan
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -192,7 +192,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
   windows-native:
-    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) || ((github.event_name == 'workflow_dispatch' && inputs.markdown_owned_profile) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：测量七语第八版 Markdown 分阶段耗时'))) }}
+    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.syntax_growth_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_window_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic) || (github.event_name == 'workflow_dispatch' && inputs.markdown_owned_profile)) }}
     name: Build and execute on Windows x64
     needs: helper-policy
     runs-on: windows-2022
@@ -300,7 +300,7 @@ jobs:
           retention-days: 14
 
   markdown-owned-profile:
-    if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.markdown_owned_profile) || (github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.head_commit.message == '诊断：测量七语第八版 Markdown 分阶段耗时')) }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.markdown_owned_profile) }}
     name: Measure isolated owned Markdown phases only
     runs-on: windows-2022
     timeout-minutes: 30
@@ -575,7 +575,7 @@ jobs:
           $Result = $LASTEXITCODE
           $Markers = @(Select-String -LiteralPath $Log -Pattern '^FOCUSED_NATIVE_DIAGNOSTIC code=(?:[0-9]|1[0-2]) markdown=[0-9]{1,16} i18n=[0-9]{1,16}$')
           if ($Markers.Count -ne 1) { throw 'FOCUSED_NATIVE_RESULT_REJECTED=1' }
-          $Progress = @(Select-String -LiteralPath $Log -Pattern '^FOCUSED_I18N_PROGRESS stage=(?:[0-9]|10) language=[0-7] width=(?:0|640|900|1600) next=(?:[1-9]|[1-9][0-9]{1,2}|1[0-3][0-9]{2}|140[0-9]|141[0-8])$')
+          $Progress = @(Select-String -LiteralPath $Log -Pattern '^FOCUSED_I18N_PROGRESS stage=(?:[0-9]|10) language=[0-7] width=(?:0|640|900|1600) next=(?:[1-9]|[1-9][0-9]{1,2}|1[0-5][0-9]{2}|160[0-7])$')
           if ($Progress.Count -gt 1) { throw 'FOCUSED_NATIVE_PROGRESS_REJECTED=1' }
           if ($Progress.Count -eq 1) {
             if ($Result -eq 0 -or $Markers[0].Line -cnotmatch '^FOCUSED_NATIVE_DIAGNOSTIC code=10 markdown=[0-9]{1,16} i18n=[0-9]{1,16}$') { throw 'FOCUSED_NATIVE_PROGRESS_REJECTED=1' }

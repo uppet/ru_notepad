@@ -14,7 +14,7 @@
 关联 取 外言 'associations.ru'.
 拖放 取 外言 'file_drop.ru'.
 修改头 取 密 其 结构 [['header',窗 其 NMHDR],['position',窗 其 IP],['ch',窗 其 I],['modifiers',窗 其 I],['modificationType',窗 其 I],['text',窗 其 PTR],['length',窗 其 IP],['linesAdded',窗 其 IP],['message',窗 其 I],['wParam',窗 其 UP],['lParam',窗 其 IP],['line',窗 其 IP],['foldLevelNow',窗 其 I],['foldLevelPrev',窗 其 I],['margin',窗 其 I]].
-A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'system','docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
+A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'system','docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'previous':空,'whole':空,'searchWrap':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
 
 # Syntax work is deferred out of Scintilla callbacks, with one shared UI budget.
 # Pure cache update shared by periodic sampling and an already-required final refresh.
@@ -347,7 +347,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'syste
 算 按钮宽 名 为 句:
     柄 取 A 其 查 名.
     宽 取 (窗 其 测文宽 柄 (窗 其 取文 柄))+26.
-    若 名 == 'case' 则 宽 取 宽+18. 然
+    若 名 == 'case' 或 名 == 'whole' 或 名 == 'searchWrap' 则 宽 取 宽+18. 然
     若 宽 < 64 则 宽 取 64. 然
     得 宽.
 法
@@ -360,7 +360,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'syste
     矩 其 关闭.
     寻高 取 0.
     位置 取 空.
-    控们 取 ['case','next','one','all','hide'].
+    控们 取 ['case','whole','searchWrap','previous','next','one','all','hide'].
     若 A 其 查 'search' 则
         宽们 取 [].
         位 取 0.
@@ -393,14 +393,14 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'syste
     得 空.
 法
 算 界面文字:
-    标控们 取 ['cancel','case','next','one','all','hide'].
-    标键们 取 ['search.cancel','search.case','search.next','search.replace','search.all','search.close'].
+    标控们 取 ['cancel','case','whole','searchWrap','previous','next','one','all','hide'].
+    标键们 取 ['search.cancel','search.case','search.whole','search.wrap','search.previous','search.next','search.replace','search.all','search.close'].
     位 取 0.
     循 标控们 其 量 次
         窗 其 标题 (A 其 查 标控们[位]) (本地 其 文本 标键们[位]).
         位 取 位+1.
     环
-    控们 取 ['tabs','status','cancel','find','replace','case','next','one','all','hide'].
+    控们 取 ['tabs','status','cancel','find','replace','case','whole','searchWrap','previous','next','one','all','hide'].
     位 取 0.
     循 控们 其 量 次
         窗 其 界面字体 (A 其 查 控们[位]).
@@ -446,7 +446,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'syste
     A 其 增 'search' 显示.
     模式 取 0.
     若 显示 则 模式 取 5. 然
-    控们 取 ['find','replace','case','next','one','all','hide'].
+    控们 取 ['find','replace','case','whole','searchWrap','previous','next','one','all','hide'].
     位 取 0.
     循 控们 其 量 次
         窗 其 结果 ((窗 其 ShowWindow) 其 调用 (参 其 控件二参 A 控们[位] 模式)).
@@ -929,19 +929,21 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'syste
     若 号 == 206 则 窗 其 发送 编辑柄 2013 0 0. 然
     若 号 == 301 或 号 == 302 则 寻栏 真. 得 空. 然
     若 号 == 307 则 寻栏 假. 得 空. 然
-    若 号 == 303 或 号 == 304 或 号 == 305 则
+    若 号 == 303 或 号 == 304 或 号 == 305 或 号 == 308 则
         词 取 窗 其 取文 (A 其 查 'find').
         新文 取 窗 其 取文 (A 其 查 'replace').
         区分 取 非 ((窗 其 发送 (A 其 查 'case') 240 0 0) 其 为空).
+        整词 取 非 ((窗 其 发送 (A 其 查 'whole') 240 0 0) 其 为空).
+        循环 取 非 ((窗 其 发送 (A 其 查 'searchWrap') 240 0 0) 其 为空).
         若 词 == '' 则 寻栏 真. 得 空. 然
-        若 号 == 303 则
-            若 (编 其 下个 编辑柄 词 区分) == -1 则 提示 (本地 其 文本 'search.no_match'). 然
+        若 号 == 303 或 号 == 308 则
+            若 (编 其 寻找 编辑柄 词 区分 整词 循环 (号 == 308)) == -1 则 提示 (本地 其 文本 'search.no_match'). 然
         然
         若 号 == 304 则
-            若 (编 其 换当前 编辑柄 词 新文 区分) == -1 则 提示 (本地 其 文本 'search.no_further_match'). 然
+            若 (编 其 换当前选项 编辑柄 词 新文 区分 整词 循环) == -1 则 提示 (本地 其 文本 'search.no_further_match'). 然
         然
         若 号 == 305 则
-            次数 取 编 其 全换 编辑柄 词 新文 区分.
+            次数 取 编 其 全换选项 编辑柄 词 新文 区分 整词.
             提示 (本地 其 格式 'search.replacements' ([次数])).
         然
     然
@@ -1014,9 +1016,9 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'syste
 算 菜单:
     # Parallel primitive arrays keep the pinned compiler's ABI analysis bounded.
     组键们 取 ['menu.file', 'menu.edit', 'menu.search', 'menu.encoding', 'menu.language', 'menu.view', 'menu.settings', 'menu.ui_language', 'menu.help'].
-    组量们 取 [10, 6, 3, 6, 5, 7, 4, 8, 1].
-    号们 取 [101, 102, 108, 109, 103, 104, 105, 111, 112, 106, 201, 202, 203, 204, 205, 206, 301, 302, 303, 401, 402, 403, 404, 405, 406, 701, 702, 703, 704, 705, 501, 502, 503, 504, 505, 506, 507, 801, 802, 803, 804, 850, 851, 852, 853, 854, 855, 856, 857, 601].
-    键们 取 ['command.new', 'command.open', 'command.open_windows1252', 'command.open_gbk', 'command.save', 'command.save_as', 'command.close_tab', 'command.previous_tab', 'command.next_tab', 'command.exit', 'command.undo', 'command.redo', 'command.cut', 'command.copy', 'command.paste', 'command.select_all', 'command.find', 'command.replace', 'command.find_next', 'command.save_utf8', 'command.save_utf8_bom', 'command.save_utf16le', 'command.save_utf16be', 'command.save_windows1252', 'command.save_gbk', 'command.language_plain', 'command.language_cpp', 'command.language_json', 'command.language_ru', 'command.language_markdown', 'command.toggle_wrap', 'command.zoom_in', 'command.zoom_out', 'command.zoom_reset', 'command.fold_all', 'command.unfold_all', 'command.toggle_markdown_folds', 'command.register_association', 'command.default_apps', 'command.unregister_association', 'command.registration_status', 'language.system', 'language.en', 'language.zh_cn', 'language.ja', 'language.ko', 'language.es', 'language.ru', 'language.it', 'command.about'].
+    组量们 取 [10, 6, 4, 6, 5, 7, 4, 8, 1].
+    号们 取 [101, 102, 108, 109, 103, 104, 105, 111, 112, 106, 201, 202, 203, 204, 205, 206, 301, 302, 303, 308, 401, 402, 403, 404, 405, 406, 701, 702, 703, 704, 705, 501, 502, 503, 504, 505, 506, 507, 801, 802, 803, 804, 850, 851, 852, 853, 854, 855, 856, 857, 601].
+    键们 取 ['command.new', 'command.open', 'command.open_windows1252', 'command.open_gbk', 'command.save', 'command.save_as', 'command.close_tab', 'command.previous_tab', 'command.next_tab', 'command.exit', 'command.undo', 'command.redo', 'command.cut', 'command.copy', 'command.paste', 'command.select_all', 'command.find', 'command.replace', 'command.find_next', 'command.find_previous', 'command.save_utf8', 'command.save_utf8_bom', 'command.save_utf16le', 'command.save_utf16be', 'command.save_windows1252', 'command.save_gbk', 'command.language_plain', 'command.language_cpp', 'command.language_json', 'command.language_ru', 'command.language_markdown', 'command.toggle_wrap', 'command.zoom_in', 'command.zoom_out', 'command.zoom_reset', 'command.fold_all', 'command.unfold_all', 'command.toggle_markdown_folds', 'command.register_association', 'command.default_apps', 'command.unregister_association', 'command.registration_status', 'language.system', 'language.en', 'language.zh_cn', 'language.ja', 'language.ko', 'language.es', 'language.ru', 'language.it', 'command.about'].
     主 取 窗 其 成功 ((窗 其 CreateMenu) 其 调用 []) 'CreateMenu'.
     子 取 空.
     试
@@ -1222,6 +1224,10 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'syste
     A 其 增 'replace' (窗 其 控制 主窗 实例 'EDIT' '' 1082196096 311).
     A 其 增 'case' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807363 306).
     窗 其 发送 (A 其 查 'case') 241 1 0.
+    A 其 增 'whole' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807363 309).
+    A 其 增 'searchWrap' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807363 312).
+    窗 其 发送 (A 其 查 'searchWrap') 241 1 0.
+    A 其 增 'previous' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 308).
     A 其 增 'next' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 303).
     A 其 增 'one' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 304).
     A 其 增 'all' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 305).

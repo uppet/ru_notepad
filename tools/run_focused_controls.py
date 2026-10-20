@@ -24,7 +24,7 @@ CASES = (
     'ReceiptControls.test_missing_receipt_and_added_exe_rejected',
     'ReceiptControls.test_receipt_fields_cannot_be_changed_or_omitted',
     'RuntimeControls.test_actual_console_child_gc_environment_exit_and_timeout',
-    'RuntimeControls.test_complete_original_counts_and_parsers',
+    'RuntimeControls.test_complete_current_counts_and_parsers',
     'RuntimeControls.test_gc_and_routes_must_be_current_real_logs',
     'RuntimeControls.test_missing_oversize_and_invalid_utf8_logs',
     'RuntimeControls.test_timeout_exit_cleanup_unexecuted_and_receipt_counts',

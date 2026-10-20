@@ -57,9 +57,9 @@ NATIVE_CONSOLE_TESTS = (
     ('document_policy', r'^TOTAL PASS: 23\s*$'),
     ('ui_arguments', r'^TOTAL PASS: 19\s*$'),
     ('file_codec_flags', r'^TOTAL PASS: 80\s*$'),
-    ('editor_native', r'^TOTAL PASS: 27\s*$'),
+    ('editor_native', r'^TOTAL PASS: 102\s*$'),
     ('app_native', r'^TOTAL PASS: 23\s*$'),
-    ('app_features_native', r'^TOTAL PASS: 31\s*$'),
+    ('app_features_native', r'^TOTAL PASS: 59\s*$'),
     ('app_streaming_native', r'^APP_STREAMING_TESTS_PASS=63\s*$'),
     ('file_codec_tests', r'^FILE_CODEC_TESTS_PASS=73\s*$'),
     ('file_streaming_native', r'^FILE_STREAMING_TESTS_PASS=99\s*$'),
@@ -84,7 +84,7 @@ NATIVE_CONSOLE_TESTS = (
     ('markdown_direct_native', r'^TOTAL PASS: 114\s*$'),
     ('i18n_policy', r'^TOTAL PASS: 289\s*$'),
     ('i18n_settings_native', r'^TOTAL PASS: 69\s*$'),
-    ('app_i18n_native', r'^TOTAL PASS: 1417\s*$'),
+    ('app_i18n_native', r'^TOTAL PASS: 1606\s*$'),
 )
 SYNTAX_FALLBACK_TESTS = (
     ('syntax_missing_lexilla', '--expect-missing', False),

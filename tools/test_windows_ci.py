@@ -396,9 +396,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'document_policy': r'^TOTAL PASS: 23\s*$',
             'ui_arguments': r'^TOTAL PASS: 19\s*$',
             'file_codec_flags': r'^TOTAL PASS: 80\s*$',
-            'editor_native': r'^TOTAL PASS: 27\s*$',
+            'editor_native': r'^TOTAL PASS: 102\s*$',
             'app_native': r'^TOTAL PASS: 23\s*$',
-            'app_features_native': r'^TOTAL PASS: 31\s*$',
+            'app_features_native': r'^TOTAL PASS: 59\s*$',
             'app_streaming_native': r'^APP_STREAMING_TESTS_PASS=63\s*$',
             'shortcuts': r'^TOTAL PASS: 42\s*$',
             'syntax_policy': r'^TOTAL PASS: 134\s*$',
@@ -416,7 +416,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'markdown_direct_native': r'^TOTAL PASS: 114\s*$',
             'i18n_policy': r'^TOTAL PASS: 289\s*$',
             'i18n_settings_native': r'^TOTAL PASS: 69\s*$',
-            'app_i18n_native': r'^TOTAL PASS: 1417\s*$',
+            'app_i18n_native': r'^TOTAL PASS: 1606\s*$',
             'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=73\s*$',
             'file_streaming_native': r'^FILE_STREAMING_TESTS_PASS=99\s*$',
             'editor_streaming_native': r'^EDITOR_STREAMING_TESTS_PASS=21\s*$',
@@ -1309,7 +1309,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}
         prior = [test for test in summary['tests'] if test['name'] not in new]
         self.assertEqual(len(prior), 23)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 835 + 16 + 90 + 6)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 835 + 16 + 90 + 6 + 103)
 
     def test_acceptance_preserves_original_33_groups_1487_assertions_and_adds_markdown(self):
         summary = self.acceptance()
@@ -1320,12 +1320,12 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                  'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}
         prior = [test for test in summary['tests'] if test['name'] not in added]
         self.assertEqual(len(prior), 33)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487 + 90 + 6)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487 + 90 + 6 + 103)
         baseline = [test for test in summary['tests'] if test['name'] not in
                     {'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
         self.assertEqual(len(baseline), 39)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in baseline), 2077)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 2077 + 289 + 69 + 1417)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in baseline), 2077 + 103)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 2077 + 103 + 289 + 69 + 1606)
 
     def test_direct_style_fixture_is_built_packaged_and_required(self):
         name = 'ru_direct_styling_native'
@@ -3138,7 +3138,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         prior = [t for t in summary['tests'] if t['name'] not in
                  {'markdown_direct_native', 'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
         self.assertEqual(len(prior), 38)
-        self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1867 + 90 + 6)
+        self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1867 + 90 + 6 + 103)
         self.assertEqual(direct['assertions_passed'], 114)
         self.assertEqual(ci.console_command('markdown_direct_native', self.root, self.root),
                          [str(self.root / 'markdown_direct_native.exe')])
@@ -4082,7 +4082,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
 
 
     def test_i18n_gates_are_built_packaged_and_fail_closed(self):
-        expected = {'i18n_policy': 289, 'i18n_settings_native': 69, 'app_i18n_native': 1417}
+        expected = {'i18n_policy': 289, 'i18n_settings_native': 69, 'app_i18n_native': 1606}
         self.assertEqual({name: ci.expected_assertions(name) for name in expected}, expected)
         script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
         runner = (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8')

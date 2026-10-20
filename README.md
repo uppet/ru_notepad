@@ -2,11 +2,13 @@
 
 A small Windows text editor written mostly in **Ru**. Open a file, edit it in a native Scintilla control, and keep several documents in tabs. Ru handles the menus, document state, encoding choices, save policy, and search commands.
 
-**Status: 0.1.8 preview candidate for Windows x64.** This candidate adds Markdown file detection, native syntax coloring and bounded Ru heading-folding. Its full Windows acceptance is pending. Markdown Enter continuation and rendered preview are not implemented. The last independently accepted product baseline is the [0.1.6 run](https://github.com/uppet/ru_notepad/actions/runs/38984124830), with 1,487 assertions / 33 results. Its limited same-machine direct-publication comparison improved the measured sample; it did not establish Notepad++ parity. The inherited 0.1.7 policy has completed its [same-route experiment](https://github.com/uppet/ru_notepad/actions/runs/38998372873), but its complete product acceptance remains separate. Use copies while testing.
+**Status: 0.1.8 Windows x64 preview.** The separately delivered seven-language/MIT baseline passed [Windows acceptance](https://github.com/uppet/ru_notepad/actions/runs/39395780914): 3,852 assertions / 42 result groups. Its 100,000-line Markdown double-Undo case took about 20.7 seconds, so interactive performance is still inadequate. Use copies while testing.
 
-## Interface-language candidate
+This new candidate adds previous-match search (Shift+F3), whole-word matching and an optional wrap-around setting. Its Windows acceptance is pending; the earlier baseline result does not validate these additions. See [literal search behavior](docs/literal-search.md).
 
-This independent work-in-progress adds seven application interface languages: English, Simplified Chinese, Japanese, Korean, Spanish, Russian and Italian. UI language is separate from syntax language. Its Windows/IME and visual acceptance are still pending; see [interface language behavior and acceptance](docs/internationalization.md).
+## Interface languages
+
+English, Simplified Chinese, Japanese, Korean, Spanish, Russian and Italian are included. UI language is separate from syntax language. Automated baseline acceptance passed; actual IME and different-DPI experience still needs manual validation. See [interface language behavior and acceptance](docs/internationalization.md).
 
 ## What is included
 
@@ -14,7 +16,7 @@ This independent work-in-progress adds seven application interface languages: En
 - Tabs, undo/redo, and prompts before closing unsaved documents
 - UTF-8, UTF-8 BOM, UTF-16 LE/BE, explicit Windows-1252, and GBK
 - Save-conflict checks and lossless-encoding checks
-- Literal search/replace, case matching, and replace-all as one undo operation
+- Literal search/replace with forward/backward, case/whole-word and wrap options; replace-all as one undo operation
 - Ru lexical tables and structural-folding policy, with a bounded application-owned C scanner for the UTF-8 hot path and incremental background styling
 - C/C++, JSON and Markdown syntax highlighting from native Lexilla; automatic extension detection and a Language menu
 - Native C/C++ folds for brace blocks, multiline comments and preprocessor conditionals

@@ -13,10 +13,10 @@ import run_focused_native_diagnostic as runner
 def expected():
     rows = [(0, 7, 0, 1)]
     for language in range(7):
-        for stage, width, offset in ((1, 0, 9), (2, 0, 12), (3, 0, 89),
-                (4, 0, 115), (5, 0, 145), (6, 640, 149), (6, 900, 166), (6, 1600, 183)):
-            rows.append((stage, language, width, offset + language * 191))
-    return rows + [(7, 7, 0, 1346), (8, 7, 0, 1407), (9, 7, 0, 1415), (10, 7, 0, 1417)]
+        for stage, width, offset in ((1, 0, 9), (2, 0, 12), (3, 0, 90),
+                (4, 0, 124), (5, 0, 154), (6, 640, 158), (6, 900, 181), (6, 1600, 204)):
+            rows.append((stage, language, width, offset + language * 218))
+    return rows + [(7, 7, 0, 1535), (8, 7, 0, 1596), (9, 7, 0, 1604), (10, 7, 0, 1606)]
 
 
 def marker(row):
@@ -38,13 +38,13 @@ class StageProgressControls(unittest.TestCase):
         with self.assertRaises(ValueError):
             runner.parse_i18n_progress(output, complete=complete)
 
-    def test_exact_61_stage_original_assertion_contract(self):
+    def test_exact_61_stage_search_enhanced_assertion_contract(self):
         self.assertEqual(len(expected()), 61)
         self.assertEqual(tuple(expected()), runner.I18N_STAGE_SEQUENCE)
         for ending in (b'\n', b'\r\n'):
-            raw = (stream(tail=1) + b'TOTAL PASS: 1417\n').replace(b'\n', ending)
+            raw = (stream(tail=1) + b'TOTAL PASS: 1606\n').replace(b'\n', ending)
             self.assertEqual(runner.parse_i18n_progress(raw, complete=True),
-                             dict(stage=10, language=7, width=0, next=1417))
+                             dict(stage=10, language=7, width=0, next=1606))
 
     def test_every_prefix_can_report_only_its_last_stage(self):
         rows = expected()
@@ -56,15 +56,30 @@ class StageProgressControls(unittest.TestCase):
                 if count < len(rows):
                     self.reject(stream(rows[:count]), complete=True)
 
-    def test_spanish_failure_at_908_never_exposes_private_strings(self):
+    def test_spanish_filter_stage_failure_never_exposes_private_strings(self):
         rows = expected()
-        end = rows.index((5, 4, 0, 909)) + 1
+        end = rows.index((5, 4, 0, 1026)) + 1
         raw = stream(rows[:end]) + 'runtime error C:\\private\\用户文档.txt\n'.encode('utf-8')
         with tempfile.TemporaryDirectory() as tmp:
             logs = Path(tmp)
             (logs / 'app_i18n_native.stdout.log').write_bytes(raw)
             self.assertEqual(runner.failure_progress(logs),
-                             'FOCUSED_I18N_PROGRESS stage=5 language=4 width=0 next=909')
+                             'FOCUSED_I18N_PROGRESS stage=5 language=4 width=0 next=1026')
+
+    def test_historical_1417_contract_cannot_certify_current_fixture(self):
+        # October 20's prior fixture stopped at 908, before Spanish filter
+        # assertion 909. Preserve that historical count; do not relabel old
+        # evidence as the new 1606-assertion search-enhanced contract.
+        old_rows = [(0, 7, 0, 1)]
+        for language in range(7):
+            for stage, width, offset in ((1, 0, 9), (2, 0, 12), (3, 0, 89),
+                    (4, 0, 115), (5, 0, 145), (6, 640, 149), (6, 900, 166), (6, 1600, 183)):
+                old_rows.append((stage, language, width, offset + language * 191))
+        old_rows.extend(((7, 7, 0, 1346), (8, 7, 0, 1407),
+                         (9, 7, 0, 1415), (10, 7, 0, 1417)))
+        spanish_end = old_rows.index((5, 4, 0, 909)) + 1
+        self.reject(stream(old_rows[:spanish_end]))
+        self.reject(stream(old_rows, tail=1) + b'TOTAL PASS: 1417\n', complete=True)
 
     def test_duplicate_missing_reordered_and_extra_markers_fail_closed(self):
         good = stream(tail=1)
@@ -77,8 +92,8 @@ class StageProgressControls(unittest.TestCase):
 
     def test_missing_middle_marker_cannot_borrow_later_pass_lines(self):
         rows = expected()
-        partial = stream(rows[:3], tail=77)
-        # The menu stage cannot consume more than 77 PASS records before text.
+        partial = stream(rows[:3], tail=78)
+        # The menu stage cannot consume more than 78 PASS records before text.
         self.assertEqual(runner.parse_i18n_progress(partial)['stage'], 2)
         self.reject(partial + b'PASS: unannounced later assertion\n')
 
@@ -90,7 +105,7 @@ class StageProgressControls(unittest.TestCase):
                 b'I18N_STAGE stage=0 language=0 width=0 next=1\n',
                 b'I18N_STAGE stage=0 language=7 width=640 next=1\n',
                 b'I18N_STAGE stage=0 language=7 width=0 next=0\n',
-                b'I18N_STAGE stage=0 language=7 width=0 next=1419\n',
+                b'I18N_STAGE stage=0 language=7 width=0 next=1608\n',
                 first.replace(b'stage=0', b'stage=00'),
                 first.replace(b'next=1', b'next=01'),
                 first.replace(b'next=1', b'next=1.0'),
@@ -109,11 +124,11 @@ class StageProgressControls(unittest.TestCase):
         good = stream(tail=1)
         for bad in (b'PASS: unexpected\n' + good,
                     good.replace(b'PASS: synthetic private label\n', b'', 1),
-                    good.replace(b'next=909', b'next=908', 1),
+                    good.replace(b'next=1026', b'next=1025', 1),
                     good + b'PASS: extra\n'):
             self.reject(bad)
         self.reject(stream(), complete=True)
-        self.reject(stream(expected()[:2], tail=1418))
+        self.reject(stream(expected()[:2], tail=1607))
 
     def test_any_corrupt_marker_prevents_fallback_to_earlier_valid_one(self):
         good = stream(expected()[:2])
@@ -139,11 +154,13 @@ class StageProgressControls(unittest.TestCase):
         match = re.search(r"\$Progress = @\(Select-String -LiteralPath \$Log -Pattern '([^']+)'\)", body)
         self.assertIsNotNone(match)
         pattern = match.group(1)
-        self.assertRegex('FOCUSED_I18N_PROGRESS stage=5 language=4 width=0 next=909', pattern)
-        for invalid in ('FOCUSED_I18N_PROGRESS stage=11 language=4 width=0 next=909',
-                        'FOCUSED_I18N_PROGRESS stage=5 language=8 width=0 next=909',
-                        'FOCUSED_I18N_PROGRESS stage=5 language=4 width=0 next=1419',
-                        'FOCUSED_I18N_PROGRESS stage=5 language=4 width=0 next=909 C:\\private'):
+        self.assertRegex('FOCUSED_I18N_PROGRESS stage=5 language=4 width=0 next=1026', pattern)
+        self.assertRegex('FOCUSED_I18N_PROGRESS stage=10 language=7 width=0 next=1606', pattern)
+        self.assertRegex('FOCUSED_I18N_PROGRESS stage=10 language=7 width=0 next=1607', pattern)
+        for invalid in ('FOCUSED_I18N_PROGRESS stage=11 language=4 width=0 next=1026',
+                        'FOCUSED_I18N_PROGRESS stage=5 language=8 width=0 next=1026',
+                        'FOCUSED_I18N_PROGRESS stage=5 language=4 width=0 next=1608',
+                        'FOCUSED_I18N_PROGRESS stage=5 language=4 width=0 next=1026 C:\\private'):
             self.assertNotRegex(invalid, pattern)
         self.assertIn('$Progress.Count -gt 1', body)
         self.assertIn('$Result -eq 0 -or $Markers[0].Line -cnotmatch', body)

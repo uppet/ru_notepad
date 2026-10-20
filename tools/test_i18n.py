@@ -41,7 +41,7 @@ MENU_GROUPS = {
                   ('new', 'open', 'open_windows1252', 'open_gbk', 'save', 'save_as',
                    'close_tab', 'previous_tab', 'next_tab', 'exit')),
     'edit': tuple('command.' + key for key in ('undo', 'redo', 'cut', 'copy', 'paste', 'select_all')),
-    'search': ('command.find', 'command.replace', 'command.find_next'),
+    'search': ('command.find', 'command.replace', 'command.find_next', 'command.find_previous'),
     'encoding': tuple('command.' + key for key in
                       ('save_utf8', 'save_utf8_bom', 'save_utf16le', 'save_utf16be', 'save_windows1252', 'save_gbk')),
     'syntax': tuple('command.language_' + key for key in ('plain', 'cpp', 'json', 'ru', 'markdown')),
@@ -57,7 +57,7 @@ SHORTCUTS = {
     'close_tab': 'Ctrl+W', 'previous_tab': 'Ctrl+Shift+Tab', 'next_tab': 'Ctrl+Tab',
     'undo': 'Ctrl+Z', 'redo': 'Ctrl+Y', 'cut': 'Ctrl+X', 'copy': 'Ctrl+C',
     'paste': 'Ctrl+V', 'select_all': 'Ctrl+A', 'find': 'Ctrl+F',
-    'replace': 'Ctrl+H', 'find_next': 'F3', 'zoom_in': 'Ctrl++',
+    'replace': 'Ctrl+H', 'find_next': 'F3', 'find_previous': 'Shift+F3', 'zoom_in': 'Ctrl++',
     'zoom_out': 'Ctrl+-', 'zoom_reset': 'Ctrl+0',
     'fold_all': 'Ctrl+Shift+[', 'unfold_all': 'Ctrl+Shift+]',
 }

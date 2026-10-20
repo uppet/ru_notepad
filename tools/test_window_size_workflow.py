@@ -235,12 +235,12 @@ class WorkflowControls(unittest.TestCase):
         self.assertNotIn('Get-Content', body)
         self.assertNotIn('$_', body)
 
-    def test_existing_native_contract_unchanged(self):
+    def test_current_native_contract_preserves_original_dimensions(self):
         text = (ROOT / 'tools/windows_ci.py').read_text(encoding='utf-8')
         assignments = {n.targets[0].id: n.value for n in ast.parse(text).body if isinstance(n, ast.Assign)
                        and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)}
         contracts = dict(ast.literal_eval(assignments['NATIVE_CONSOLE_TESTS']))
-        self.assertEqual(contracts['app_i18n_native'], r'^TOTAL PASS: 1417\s*$')
+        self.assertEqual(contracts['app_i18n_native'], r'^TOTAL PASS: 1606\s*$')
         self.assertEqual(contracts['markdown_direct_native'], r'^TOTAL PASS: 114\s*$')
         self.assertEqual(contracts['i18n_policy'], r'^TOTAL PASS: 289\s*$')
 

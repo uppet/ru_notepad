@@ -26,14 +26,7 @@ def validate_trigger(event_name, ref, event):
     if ref != ALLOWED_REF or type(event) is not dict:
         raise ValueError("Rejected diagnostic trigger")
     allowed = False
-    if event_name == "push":
-        head = event.get("head_commit")
-        allowed = (
-            type(head) is dict
-            and head.get("message") == ONE_SHOT_TITLE
-            and event.get("deleted", False) is False
-        )
-    elif event_name == "workflow_dispatch":
+    if event_name == "workflow_dispatch":
         inputs = event.get("inputs")
         allowed = (
             type(inputs) is dict

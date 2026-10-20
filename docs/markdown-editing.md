@@ -1,6 +1,6 @@
 # Markdown editing: Stage A, 0.1.8 preview candidate
 
-This stage provides `.md` / `.markdown` detection, Language > Markdown, native Lexilla syntax colors and heading-section folding. It does not implement Enter continuation, a renderer, HTML preview, or a full CommonMark parser. Windows acceptance of this reconstructed candidate is pending.
+This stage provides `.md` / `.markdown` detection, Language > Markdown, native Lexilla syntax colors and heading-section folding. It does not implement Enter continuation, a renderer, HTML preview, or a full CommonMark parser. The delivered seven-language baseline passed Windows acceptance in run 39395780914. Its 100,000-line double-Undo case still took about 20.7 seconds; further performance work remains separate. The later sections retain the historical investigation record.
 
 ## Editing controls
 

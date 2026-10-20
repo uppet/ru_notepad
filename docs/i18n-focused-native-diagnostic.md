@@ -6,14 +6,16 @@ fixtures on Windows 2022 x64:
 - `markdown_direct_native`: 114 assertions, with the existing child-only
   `RU_GC_THRESHOLD=64` and `RU_GC_STATS=1` stress settings and the original
   GC/three-route metric parsers
-- `app_i18n_native`: 1417 assertions, using a newly created disposable Unicode
+- `app_i18n_native`: 1606 assertions, using a newly created disposable Unicode
   fixture directory and the test-owned hidden-window maximum tracking guard
 
 A successful diagnostic proves only these two fixture executions. It does not
-satisfy the ordinary 3852-assertion, 42-result product acceptance contract, run
+satisfy the ordinary 4144-assertion, 42-result product acceptance contract, run
 the complete GUI/ACL/large-file suite, or create a runtime/test/preview ZIP.
 The normal build, package, and acceptance drivers and thresholds are unchanged.
 Portable controls and cross-built PE files cannot establish Windows success.
+
+The search-enhanced fixture adds 189 assertions to the previously accepted 1417-assertion baseline. Its Windows result remains pending; historical runs below validate only their original sources.
 
 ## Selection and isolation
 
