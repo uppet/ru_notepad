@@ -179,7 +179,7 @@ class ReceiptControls(unittest.TestCase):
         for name in runner.package.NATIVE_COMPILE_SOURCES:
             inputs = runner.build.native_build_inputs(str(self.cc), name)
             receipt = dict(schema=1, name=name, build_inputs=inputs, build_key=runner.package.native_build_key(inputs),
-                dll_sha256=runner.sha(self.binary / name), compiler_command=[str(self.cc), *runner.package.NATIVE_CFLAGS,
+                dll_sha256=runner.sha(self.binary / name), compiler_command=[inputs['compiler_path'], *runner.package.NATIVE_CFLAGS,
                     *runner.package.NATIVE_COMPILE_SOURCES[name], '-o', str(self.root / 'build/native-helper' / (Path(name).stem + '.pending.dll')),
                     *('-l' + lib for lib in runner.package.NATIVE_LINK_LIBRARIES)])
             (self.binary / (Path(name).stem + '.native-build.json')).write_bytes(runner.canonical(receipt))
@@ -341,7 +341,7 @@ class PublicationControls(unittest.TestCase):
         command = runner.build_command(Path('ru'), Path('mingw/bin'), runner.TESTS[0], Path('output.exe'))
         for flag in ('--cc', '--cxx', '--windres', '--ar', '--ranlib', '--skip-scintilla', '--skip-lexilla', '--console'):
             self.assertIn(flag, command)
-        source = Path(runner.__file__).read_text()
+        source = Path(runner.__file__).read_text(encoding='utf-8')
         self.assertIn('ci.run_native_console(', source)
         self.assertIn('ci.parse_markdown_direct_gc(', source)
         self.assertIn('ci.parse_markdown_route_metrics(', source)

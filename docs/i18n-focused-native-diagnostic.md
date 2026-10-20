@@ -80,3 +80,24 @@ missing/oversized/invalid logs, stderr, nonzero exits, timeout cleanup, forced G
 route metrics, source/PE/C/compiler changes, receipt mutations, arbitrary public
 path fields, no-replace races, and publication failures. These controls are
 validation of the diagnostic, not native product execution evidence.
+
+## Control failure identification
+
+The fixed 19-case control suite now reports only numeric case IDs, status,
+exception category, and bounded event counts. IDs are the immutable `CASES`
+sequence in `tools/run_focused_controls.py`; changing the test inventory without
+updating this sequence fails closed. Status 0 is pass, 1 assertion failure,
+2 error, and 3 skip. Category 0 is none, 1 assertion, 2 value, 3 runtime,
+4 operating-system error, 5 Unicode, 6 timeout, 7 other, and 8 mixed categories.
+Raw test names, subtest parameters, paths, and exception messages remain private.
+Only fully anchored bounded numeric lines are copied to the public workflow log.
+Unknown, duplicate, incomplete, or malformed inventories return protocol code 2.
+
+The Windows host-control failure in run 39386581890 occurred before either native
+fixture was built or run; its original public log lacks individual case details.
+Host reproduction identified two concrete portability defects in the controls:
+an encoding-less source read under Python isolated mode (which ignores
+`PYTHONUTF8`), and a simulated helper command that used a noncanonical temporary
+path instead of the real builder's resolved compiler path. Both are corrected
+with executable regression and old-behavior negative controls. These host
+reproductions do not claim to identify the unavailable original Windows traceback.

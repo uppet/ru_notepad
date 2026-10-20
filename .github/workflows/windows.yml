@@ -460,8 +460,19 @@ jobs:
           $LogRoot = Join-Path $PWD 'build/focused-native-controls-private'
           if (Test-Path -LiteralPath $LogRoot) { throw 'FOCUSED_NATIVE_CONTROLS_DIRECTORY_REJECTED=1' }
           New-Item -ItemType Directory -Path $LogRoot -ErrorAction Stop | Out-Null
-          python -I tools/test_focused_native_diagnostic.py -v *> (Join-Path $LogRoot 'focused.log')
-          if ($LASTEXITCODE -ne 0) { throw 'FOCUSED_NATIVE_CONTROLS_FAILED=1' }
+          $FocusedLog = Join-Path $LogRoot 'focused.log'
+          python -I tools/run_focused_controls.py *> $FocusedLog
+          $FocusedResult = $LASTEXITCODE
+          $Cases = @(Select-String -LiteralPath $FocusedLog -Pattern '^FOCUSED_CONTROL id=(?:[1-9]|1[0-9]) status=[0-3] category=[0-8] events=[0-9]{1,5}$')
+          $Summary = @(Select-String -LiteralPath $FocusedLog -Pattern '^FOCUSED_CONTROLS_RESULT code=[0-2] cases=(?:0|19) passed=(?:[0-9]|1[0-9]) failed=(?:[0-9]|1[0-9]) errors=(?:[0-9]|1[0-9]) skipped=(?:[0-9]|1[0-9])$')
+          if ($Summary.Count -ne 1 -or ($Cases.Count -ne 19 -and $Cases.Count -ne 0)) { throw 'FOCUSED_NATIVE_CONTROL_REPORT_REJECTED=1' }
+          foreach ($Case in $Cases) { Write-Host $Case.Line }
+          Write-Host $Summary[0].Line
+          if ($FocusedResult -ne 0) { throw 'FOCUSED_NATIVE_CONTROLS_FAILED=1' }
+          python -I tools/test_focused_control_reporting.py -v *> (Join-Path $LogRoot 'reporting.log')
+          if ($LASTEXITCODE -ne 0) { throw 'FOCUSED_NATIVE_REPORTING_CONTROLS_FAILED=1' }
+          python -I tools/test_focused_control_portability.py -v *> (Join-Path $LogRoot 'portability.log')
+          if ($LASTEXITCODE -ne 0) { throw 'FOCUSED_NATIVE_PORTABILITY_CONTROLS_FAILED=1' }
           python -I tools/test_window_size_workflow.py -v *> (Join-Path $LogRoot 'workflow.log')
           if ($LASTEXITCODE -ne 0) { throw 'FOCUSED_NATIVE_WORKFLOW_CONTROLS_FAILED=1' }
           python tools/test_cpp_growth_diagnostic.py *> (Join-Path $LogRoot 'growth.log')

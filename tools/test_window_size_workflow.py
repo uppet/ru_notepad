@@ -201,7 +201,7 @@ class WorkflowControls(unittest.TestCase):
 
     def test_controls_and_execution_keep_raw_streams_private(self):
         body = job('focused-native-diagnostic')
-        self.assertIn('tools/test_focused_native_diagnostic.py -v *> ', body)
+        self.assertIn('tools/run_focused_controls.py *> $FocusedLog', body)
         self.assertIn('tools/test_window_size_workflow.py -v *> ', body)
         self.assertIn('--msys-root "$env:MSYS2_ROOT" *> $Log', body)
         self.assertIn("'^FOCUSED_NATIVE_DIAGNOSTIC code=(?:[0-9]|1[0-2]) markdown=[0-9]{1,16} i18n=[0-9]{1,16}$'", body)
