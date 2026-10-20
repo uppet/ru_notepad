@@ -517,7 +517,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
         self.assertIn(f"-ne '{commit}'", script)
         self.assertIn(f"-ne '{tree}'", script)
-        self.assertEqual(workflow.count(f'ref: {commit}'), 2)
+        self.assertEqual(workflow.count(f'ref: {commit}'), 3)  # two acceptance jobs plus manual growth diagnostic
 
     def test_new_feature_documentation_links_resolve(self):
         readme = (ci.ROOT / 'README.md').read_text(encoding='utf-8')
