@@ -290,11 +290,15 @@
     # Actually grow a styled, folded document beyond 32 MB. One long ASCII
     # padding line avoids fabricating GETLENGTH or millions of fixture lines.
     填文 取 'x'.
-    循 25 次 填文 取 填文+填文. 环
+    循 20 次 填文 取 填文+填文. 环
     编 其 设文本 甲 删文.
     语法 其 选择 甲 'cpp'.
     语法 其 全折 甲 0.
-    窗 其 发文 甲 2282 33554432 填文.
+    # UTF8 includes a terminator and native buffers are capped at 16 MiB.
+    # Real 1 MiB chunks share one Scintilla undo transaction.
+    窗 其 发送 甲 2078 0 0.
+    循 32 次 窗 其 发文 甲 2282 1048576 填文. 环
+    窗 其 发送 甲 2079 0 0.
     确认 ((窗 其 发送 甲 2183 0 0) 其 数 == 33554454) 'C++ growth fixture contains real 32 MiB padding plus original 22 bytes'.
     确认 ((窗 其 发送 甲 2379 0 0) 其 数 == 256 且 (窗 其 发送 甲 2228 1 0) 其 数 == 0) 'growth retains styled document and its collapsed header'.
     确认 (非 (语法 其 全折 甲 0)) 'grown C++ document refuses another collapse-all above threshold'.

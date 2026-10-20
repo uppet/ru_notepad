@@ -300,3 +300,17 @@ signed levels, boundaries and invalid numeric values. An unchanged failing
 expression is retained as a negative control on both backends. These additions
 do not replace the 138 native syntax and 31 application feature assertions or
 the required Windows acceptance run.
+
+The second Windows run passed application features, then the growth fixture
+failed after 126 syntax assertions: one 32 MiB UTF8 allocation exceeded the
+runtime's 16 MiB buffer cap. The fixture now appends 32 actual 1 MiB chunks
+inside one Scintilla undo action (2078/2079). Its exact 33,554,454-byte length,
+visibility, savepoint, single-undo and restored-folding assertions remain intact.
+Independent buffer controls allocate, round-trip and close all 32 buffers on
+both runtimes and retain the oversized allocation as a failing negative control.
+On Linux, direct native imports are unsupported; `tools/test_growth_buffers.py`
+uses the compiler's test-only POSIX platform adapter for these real memory
+checks, without changing the allocator or buffer cap. This is not Windows ABI
+evidence. On Windows the script uses the unmodified CLI/backends. Windows
+acceptance must still execute all 138 syntax assertions; these allocation
+controls do not establish Windows folding or undo results.
