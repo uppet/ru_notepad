@@ -23,7 +23,9 @@ def source_snapshot():
     # Imported test helpers are build inputs too. Every executable is tied to
     # one common source/test snapshot, including helpers without an entry point.
     return {p.relative_to(ROOT).as_posix(): sha(p)
-            for folder in ('src', 'tests') for p in sorted((ROOT / folder).glob('*.ru'))} | native_source_snapshot(ROOT)
+            for folder in ('src', 'tests') for p in sorted((ROOT / folder).glob('*.ru'))} | {
+                p.relative_to(ROOT).as_posix(): sha(p) for p in sorted((ROOT / 'locales').glob('*.json'))
+            } | {'tools/generate_i18n.py': sha(ROOT / 'tools/generate_i18n.py')} | native_source_snapshot(ROOT)
 
 def build_input_paths(console):
     # Native console fixtures must use the same common-controls v6 activation
@@ -121,6 +123,7 @@ def main():
         raise SystemExit(f'Toolchain tree mismatch: {tree}; expected {args.allow_toolchain_tree}')
     if git(ru,'status','--porcelain'):
         raise SystemExit('Toolchain contains uncommitted changes; use a reviewed pinned snapshot.')
+    run([sys.executable, ROOT / 'tools/generate_i18n.py', '--check'])
     audit=subprocess.run([sys.executable,str(ROOT/'tools/check_native_arguments.py'),'--ru-root',str(ru)],text=True,stdout=subprocess.PIPE)
     if audit.returncode:
         print(audit.stdout);raise SystemExit('Native argument audit failed; refusing build.')

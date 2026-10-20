@@ -46,7 +46,8 @@ TEST_NAMES = ('document_policy.exe', 'ui_arguments.exe', 'file_codec_flags.exe',
               'associations_policy.exe', 'associations_native.exe', 'file_drop_native.exe', 'app_streaming_native.exe',
               'ru_lexical_policy.exe', 'ru_syntax_native.exe', 'app_ru_native.exe',
               'ru_direct_styling_native.exe', 'markdown_policy.exe', 'markdown_selection_policy.exe',
-              'markdown_native.exe', 'app_markdown_native.exe', 'markdown_direct_native.exe')
+              'markdown_native.exe', 'app_markdown_native.exe', 'markdown_direct_native.exe',
+              'i18n_policy.exe', 'i18n_settings_native.exe', 'app_i18n_native.exe')
 TEST_SUPPORT_DLL_NAMES = (NATIVE_WRONG_ABI_NAME,)
 SCANNER_PREFLIGHT_NAME = 'ru-scanner-preflight'
 BINARY_NAMES = (*RUNTIME_NAMES, *TEST_NAMES, *TEST_SUPPORT_DLL_NAMES)
@@ -62,10 +63,14 @@ GUI_EVIDENCE_PREFIXES = {'main-gui-smoke': 'main-launcher',
                          'main-gui-markdown': 'main-markdown-launcher'}
 UNICODE_LICENSE_SHA256 = 'e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96'
 RUNTIME_FILES = {
+    'LICENSE': 'LICENSE',
+    'packaging/licenses/ru-language-MIT.txt': 'licenses/ru-language-MIT.txt',
     'VERSION': 'VERSION', 'packaging/README-preview.txt': 'README.txt',
     'packaging/开始前请读.txt': '开始前请读.txt', 'CHANGELOG.md': 'CHANGELOG.md',
     'THIRD_PARTY_NOTICES.md': 'THIRD_PARTY_NOTICES.md',
     'docs/markdown-editing.md': 'docs/markdown-editing.md',
+    'docs/internationalization.md': 'docs/internationalization.md',
+    'docs/i18n_candidate_validation.md': 'docs/i18n_candidate_validation.md',
     'docs/markdown-policy-subset.md': 'docs/markdown-policy-subset.md',
     'assets/README.md': 'licenses/Artwork-provenance.md',
     'packaging/licenses/Unicode.txt': 'licenses/Unicode.txt',

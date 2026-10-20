@@ -38,6 +38,11 @@ def validate_measurements(stdout, stderr):
         raise RuntimeError('Missing or unexpected measurement fields')
     return values
 
+def publish_measurements(path, report):
+    pending = path.with_suffix('.json.pending')
+    pending.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
+    pending.replace(path)
+
 def validate_trigger(event_name, ref, event):
     if event_name == 'workflow_dispatch':
         inputs = event.get('inputs', {})
@@ -103,7 +108,7 @@ def main():
     stderr = (output / 'native.stderr.log').read_text(encoding='utf-8')
     values = validate_measurements(stdout, stderr)
     report = {'schema': 1, 'kind': 'measurement_only_not_acceptance', 'exe_sha256': sha(exe), 'entry_sha256': sha(ROOT / source), 'values': values}
-    (output / 'measurements.json').write_text(json.dumps(report, indent=2) + '\n')
+    publish_measurements(output / 'measurements.json', report)
     print('Owned C++ growth measurements recorded; full acceptance remains required.')
 
 if __name__ == '__main__':

@@ -48,3 +48,13 @@ adds separate assertions for the original hidden-EOF automatic expansion.
 The one-shot push predicate has been removed from both workflow and runner.
 All push/PR events, including the former diagnostic title, run normal acceptance.
 Only the explicit manual input can run this optional measurement job now.
+
+## Public evidence boundary
+
+The artifact upload has one literal allowlisted path: `measurements.json`. That
+file is atomically published from a non-uploaded pending file only after the exact numeric-field parser accepts every record
+and rejects stderr, missing/duplicate/extra fields, and raw output. It contains
+fixed-case measurements and entry/executable hashes, not local compiler paths.
+Raw build/runtime streams and build receipts remain in the disposable runner's
+workspace and are not uploaded by this optional diagnostic job. If collection
+fails, no public measurement is produced and the job remains failed.

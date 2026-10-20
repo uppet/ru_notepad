@@ -36,7 +36,8 @@ MD_NAME = 'main-gui-markdown'
 DEADLINES = {'Markdown GUI open/edit exceeded its original 30-second deadline',
              'Markdown GUI final proof exceeded its original 30-second deadline'}
 RUN_ERROR = 'Native acceptance test did not pass normally: main-gui-markdown'
-FIXED_FILES = {'VERSION': 'VERSION', 'THIRD_PARTY_NOTICES.md': 'THIRD_PARTY_NOTICES.md',
+FIXED_FILES = {'LICENSE': 'LICENSE', 'VERSION': 'VERSION', 'THIRD_PARTY_NOTICES.md': 'THIRD_PARTY_NOTICES.md',
+    'packaging/licenses/ru-language-MIT.txt': 'licenses/ru-language-MIT.txt',
     'packaging/licenses/Unicode.txt': 'licenses/Unicode.txt',
     'assets/README.md': 'licenses/Artwork-provenance.md'}
 PREEXISTING_EVIDENCE = {'msys2-packages.log', 'source-archives.json', 'markdown-bulk-helper-controls.json'}

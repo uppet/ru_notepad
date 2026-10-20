@@ -464,7 +464,9 @@ memcmp 取 比较库 其 绑定 'memcmp' (密 其 签名 (窗 其 I) ([(窗 其 
     终
     确认 (初始化故障[1] 且 (初始化故障[0])['references'] == 0 且 (初始化故障[0])['native'] == 空 且 (原桥 其 存活上下文) == 活前) 'initial checkpoint failure releases the already-created native context exactly once'.
     确认 (失败初态['lexical'] == 空 且 (失败初态['points'] 其 量) == 0) 'failed initialization returns no released context or checkpoint to the plain fallback'.
-    确认 ((失败初态['warning'] 其 含 'Ru scanner initialization failed:') 且 (失败初态['warning'] 其 含 'injected initial checkpoint copy failure') 且 (失败初态['warning'] 其 含 'editable as plain text')) 'initial checkpoint failure keeps its specific visible warning outside rescue scope'.
+    # Internal warning is now a stable key; assert the real lazy UI projection.
+    初警告 取 如语 其 _警告 失败初态.
+    确认 ((初警告 其 含 'Ru scanner initialization failed:') 且 (初警告 其 含 'injected initial checkpoint copy failure') 且 (初警告 其 含 'editable as plain text')) 'initial checkpoint failure keeps its specific visible warning outside rescue scope'.
     初始化故障[0] 取 空.
     原文 取 "算 示范:\n    若 真 则\n        得 '甲😀'.\n    另\n        得 42.\n    然\n法\n".
     编 其 设文本 甲 原文.

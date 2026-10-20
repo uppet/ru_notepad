@@ -28,6 +28,27 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import package as portable
 
 ROOT = Path(__file__).resolve().parents[1]
+# Read reviewed source catalogs once, before launching/timing the GUI. Pending
+# work and failures must not become false-success when Windows UI is non-English.
+_STATUS_KEYS = ('status.opening', 'status.styling_ru', 'status.folding_markdown',
+                'status.heading_folds_off', 'error.syntax.markdown_disabled')
+_STATUS_CATALOG = {}
+for _catalog_name in ('ui', 'errors'):
+    _STATUS_CATALOG.update(json.loads((ROOT / 'locales' / (_catalog_name + '.json')).read_text(encoding='utf-8')))
+_STATUS_PREFIXES = {key: tuple(dict.fromkeys(value.split('{0}', 1)[0].rstrip('. ')
+                                          for value in _STATUS_CATALOG[key].values()))
+                    for key in _STATUS_KEYS}
+del _STATUS_CATALOG
+
+
+def status_contains(text, key):
+    return any(fragment in text for fragment in _STATUS_PREFIXES[key])
+
+
+def status_startswith(text, key):
+    return text.lstrip().startswith(_STATUS_PREFIXES[key])
+
+
 MAX_LOG_BYTES = 1024 * 1024
 MAIN_CLASS = 'RuNotepad.Main.0.1'
 BINARY_NAMES = list(portable.BINARY_NAMES)
@@ -61,6 +82,9 @@ NATIVE_CONSOLE_TESTS = (
     ('markdown_native', r'^TOTAL PASS: 58\s*$'),
     ('app_markdown_native', r'^TOTAL PASS: 70\s*$'),
     ('markdown_direct_native', r'^TOTAL PASS: 114\s*$'),
+    ('i18n_policy', r'^TOTAL PASS: 289\s*$'),
+    ('i18n_settings_native', r'^TOTAL PASS: 69\s*$'),
+    ('app_i18n_native', r'^TOTAL PASS: 1417\s*$'),
 )
 SYNTAX_FALLBACK_TESTS = (
     ('syntax_missing_lexilla', '--expect-missing', False),
@@ -83,11 +107,11 @@ CONSOLE_EXECUTABLES = {'editor_largefile_native': 'editor_streaming_native',
                        'app_ru_timer_native': 'app_ru_native'}
 FIXTURE_ARGUMENT_TESTS = {'file_codec_tests', 'file_streaming_native', 'app_streaming_native',
                         'editor_streaming_native', 'editor_largefile_native', 'app_ru_native',
-                        'app_ru_timer_native', 'app_markdown_native'}
+                        'app_ru_timer_native', 'app_markdown_native', 'app_i18n_native'}
 CONSOLE_TIMEOUT_SECONDS = {'file_streaming_native': 300, 'app_streaming_native': 180,
                            'editor_streaming_native': 300,
                            'editor_largefile_native': 900, 'app_ru_native': 180,
-                           'app_ru_timer_native': 60, 'ru_direct_styling_native': 120, 'app_markdown_native': 240, 'markdown_direct_native': 180}
+                           'app_ru_timer_native': 60, 'ru_direct_styling_native': 120, 'app_markdown_native': 240, 'markdown_direct_native': 180, 'app_i18n_native': 240}
 LARGE_FILE_MIN_FREE_BYTES = 2 * 1024 * 1024 * 1024
 GUI_FILE_CHECKS = ('cli_unicode_paths', 'cli_exact_text', 'drop_unicode_paths',
                    'drop_exact_text', 'child_drop_routed', 'busy_observed', 'busy_responsive',
@@ -812,6 +836,11 @@ def helper_policy_inputs(root):
                      'tests/app_ru_native.ru', 'tools/test_ru_timer_corpus.py',
                      'tools/test_syntax_diagnostics.py', 'src/ru_native_syntax.ru',
                      'tools/ru_cli_diagnostics.py', 'tools/test_ru_cli_diagnostics.py',
+                     'tools/test_i18n.py', 'tools/test_i18n_runner.py', 'tools/test_i18n_models.py',
+                     'tests/syntax_warning_portable.py', 'tools/generate_i18n.py',
+                     'src/i18n.ru', 'src/i18n_catalog.ru', 'src/i18n_layout.ru',
+                     'src/syntax.ru', 'src/markdown_syntax.ru', 'src/markdown_policy.ru',
+                     'locales/ui.json', 'locales/errors.json', 'tests/i18n_policy.ru',
                      'tests/ru_event_bulk_portable.py', *POLICY_PREFIX_SOURCES)}}
 
 
@@ -1267,7 +1296,7 @@ def run_gui_file_entry(api, binary_dir, fixtures, evidence):
         checks = {}
         tab_count = lambda: api.scalar(api.control(hwnd, 10), 0x1304)
         status = lambda: api.text(api.control(hwnd, 11))
-        busy = lambda: status().lstrip().startswith('Opening:')
+        busy = lambda: status_startswith(status(), 'status.opening')
         wait_gui(api, process, lambda: tab_count() == 3 and not busy(),
                  'Unicode command-line files did not finish opening')
         verify_gui_documents(api, hwnd, {path.name: expected[path.name] for path in cli})
@@ -1670,7 +1699,7 @@ def validate_gui_ru_timer(record, *, require_windows_clock=False):
             type(last['length']) is not int or last['length'] != len(data) or
             type(last['end_styled']) is not int or not 0 <= last['end_styled'] <= len(data) or
             not isinstance(last['status'], str) or not last['status'].strip() or len(last['status']) > 512 or
-            'Styling Ru' in last['status'] or last['status'].lstrip().startswith('Opening:') or
+            status_contains(last['status'], 'status.styling_ru') or status_startswith(last['status'], 'status.opening') or
             not isinstance(last['style_matches'], dict) or set(last['style_matches']) != set(probes) or
             any(value is not True for value in last['style_matches'].values())):
         raise RuntimeError('GUI Ru timer final bounded diagnostic probe is incomplete or malformed')
@@ -1837,7 +1866,7 @@ def run_gui_ru_edits(api, process, hwnd, source, record):
     source_sha = hashlib.sha256(original).hexdigest()
     def status_done():
         status = api.text(api.control(hwnd, 11))
-        return bool(status.strip()) and 'Styling Ru' not in status and not status.lstrip().startswith('Opening:')
+        return bool(status.strip()) and not status_contains(status, 'status.styling_ru') and not status_startswith(status, 'status.opening')
     def expected_data(operation):
         position = operation['position']
         inserted = operation['operation'] == 'insert'
@@ -2075,7 +2104,7 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
             if not clean:
                 raise RuntimeError('GUI timer styling made the 1 MB document dirty')
             status = api.text(status_handle)
-            status_done = bool(status.strip()) and 'Styling Ru' not in status and not status.lstrip().startswith('Opening:')
+            status_done = bool(status.strip()) and not status_contains(status, 'status.styling_ru') and not status_startswith(status, 'status.opening')
             matched = {}
             if length == len(timer_data):
                 for label, probe in timer_probes.items():
@@ -2092,7 +2121,7 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
                     timer_record['first_head_style_ms'] = round((clock() - started) * 1000, 3)
             last.update(status=status[:512], style_matches=matched)
             needs_responsiveness = (not timer_record['responsiveness'] and length == len(timer_data) and
-                'Styling Ru' in status and not all(matched[name] for name in matched if name.startswith('tail')))
+                status_contains(status, 'status.styling_ru') and not all(matched[name] for name in matched if name.startswith('tail')))
             if not (length == len(timer_data) and clean and all(matched.values()) and status_done):
                 return False
             # The immutable <=30s success point follows all 16 fresh style
@@ -2103,7 +2132,7 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
             last.update(length=length, clean=clean, status=status[:512])
             api.verify_owned_handles(process.pid, active, status_handle)
             return (length == len(timer_data) and clean and bool(status.strip()) and
-                    'Styling Ru' not in status and not status.lstrip().startswith('Opening:'))
+                    not status_contains(status, 'status.styling_ru') and not status_startswith(status, 'status.opening'))
 
         try:
             with GuiRuObserver(api, timer_record['observer'], started, clock) as observer:
@@ -2133,7 +2162,7 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
                         needs_responsiveness = False
                         diagnostics.request('pending')
                         def still_styling():
-                            return ('Styling Ru' in api.text(status_handle) and
+                            return (status_contains(api.text(status_handle), 'status.styling_ru') and
                                 not all(api.scalar(active, 2010, position) == probe['style']
                                     for label, probe in timer_probes.items() if label.startswith('tail')
                                     for position in range(probe['offset'], probe['offset'] + probe['length'])))
@@ -2437,10 +2466,10 @@ def markdown_status_complete(status):
     # The production failure status still contains the language name and may
     # coexist with already-published headers and completed native colours.
     # It must never be accepted as a completed heading-fold scan.
-    if 'Markdown folding was disabled:' in status:
+    if status_contains(status, 'error.syntax.markdown_disabled'):
         raise RuntimeError('Markdown GUI reported a production folding failure')
-    return ('Markdown' in status and GUI_MARKDOWN_PENDING not in status and
-            'Heading folds off' not in status and not status.lstrip().startswith('Opening:'))
+    return ('Markdown' in status and not status_contains(status, 'status.folding_markdown') and
+            not status_contains(status, 'status.heading_folds_off') and not status_startswith(status, 'status.opening'))
 
 
 def validate_gui_markdown_responsiveness(record, wall_ms):
@@ -2572,9 +2601,9 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
                 length = api.scalar(editor, 2006)
                 dirty = bool(api.scalar(editor, 2159))
                 status = api.markdown_status(status_handle)
-                pending = GUI_MARKDOWN_PENDING in status
-                state = ('failure' if 'Markdown folding was disabled:' in status else
-                         'opening' if status.lstrip().startswith('Opening:') else
+                pending = status_contains(status, 'status.folding_markdown')
+                state = ('failure' if status_contains(status, 'error.syntax.markdown_disabled') else
+                         'opening' if status_startswith(status, 'status.opening') else
                          'folding' if pending else 'complete' if markdown_status_complete(status) else 'unknown')
                 stage['last_progress'] = {'opened': True, 'length': length, 'dirty': dirty,
                     'status': state, 'tail_requested': tail_requested, 'diagnostic': None}
@@ -2667,7 +2696,7 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
                         if len(response['navigation']) == 1:
                             # The return key records its own observed state;
                             # completion of RIGHT need not remain pending.
-                            left_pending = GUI_MARKDOWN_PENDING in api.text(status_handle)
+                            left_pending = status_contains(api.text(status_handle), 'status.folding_markdown')
                             input_started = clock()
                             api.post_navigation(editor, 'LEFT')
                             navigation_pending.append({'key': 'LEFT', 'before': navigation_before + 1,
@@ -2730,7 +2759,7 @@ def run_gui_markdown(api, binary_dir, fixtures, evidence):
         checks['collapse_expand'] = True
         api.command(hwnd, 505)
         api.command(hwnd, 507)
-        wait_gui(api, process, lambda: api.scalar(editor, 2228, 1) and 'Heading folds off' in api.text(api.control(hwnd, 11)),
+        wait_gui(api, process, lambda: api.scalar(editor, 2228, 1) and status_contains(api.text(api.control(hwnd, 11)), 'status.heading_folds_off'),
                  'Markdown fold option did not expand and disable')
         api.command(hwnd, 507)
         wait_gui(api, process, ready, 'Markdown fold option did not restore headings')

@@ -1,6 +1,6 @@
 # Third-party components and artwork
 
-The application has no selected public project license yet. Individual dependency licenses remain applicable; this notice does not choose a new license for their authors or for ru_notepad.
+Project-owned application code and documentation are licensed under the MIT License in `LICENSE` (also included in portable packages). This grant excludes all third-party source, data and components, including the unchanged Scintilla/Lexilla archives and accompanying notices in `third_party/source_archives/`, their extracted copies under `vendor/`, Unicode-derived data, and compiler/runtime dependencies. Their existing licenses and notices remain applicable. This project does not grant new rights to third-party material, including upstream examples whose historical provenance remains unresolved.
 
 ## Scintilla 5.6.7
 
@@ -18,13 +18,25 @@ The Ru scanner's generated identifier-classification intervals come from Python 
 
 ## Application-owned native helper
 
-RuSyntax.dll is built from this repository's `native/` C sources. It accelerates bounded UTF-8 scanning and style-byte generation, using keyword/tag configuration and folding policy owned by the Ru application. It is not an additional third-party lexer. Its source and binary hashes are part of the same package receipts; the application license remains pending.
+RuSyntax.dll is built from this repository's `native/` C sources. It accelerates bounded UTF-8 scanning and style-byte generation, using keyword/tag configuration and folding policy owned by the Ru application. It is not an additional third-party lexer. Its source and binary hashes are part of the same package receipts; the project-owned implementation is covered by the application MIT License, while Unicode-derived tables retain their separate notice.
 
 ## Source-only build archives
 
-The unchanged pinned Scintilla/Lexilla source ZIPs are retained in `third_party/source_archives` for offline reproducible builds. The source repository’s `third_party/source_archives/README.md` preserves upstream notices and adds applicable Catch2/Boost, Mako, Nix example and Unicode data notices. These source archives are not included in the portable runtime/tests ZIPs; required binary notices remain. This inventory does not select an application license.
+The unchanged pinned Scintilla/Lexilla source ZIPs are retained in `third_party/source_archives` for offline reproducible builds. The source repository’s `third_party/source_archives/README.md` preserves upstream notices and adds applicable Catch2/Boost, Mako, Nix example and Unicode data notices. These source archives are not included in the portable runtime/tests ZIPs; required binary notices remain. This inventory does not relicense any upstream source or example.
 
 ## Compiler and Windows runtime support
+
+The generated executable contains Ru runtime code compiled from the unchanged
+source pin `85c7821fda35aa79deeaf67b4d430f24ddd7f07f`. The project owner's MIT
+declaration is recorded separately at [Ru commit
+`52526172d31ba902241c69dc8020996e6038f24a`](https://github.com/uppet/ru-language/commit/52526172d31ba902241c69dc8020996e6038f24a).
+The two complete repository trees differ only in `LICENSE`, `README.md`,
+`docs/third-party-notices.md` and `rulang/thirdparty/如见/README.md`; compiler and
+runtime code bytes are unchanged. The declaration's exact LICENSE bytes are
+retained independently as `licenses/ru-language-MIT.txt` in both ordinary and
+manual-preview packages, with Copyright (c) 2026 uppet. The compiler pin has not
+been changed to the declaration commit. Ru third-party exclusions continue to
+apply; this notice does not relicense dependencies or their upstream material.
 
 Ru application source is compiled by the pinned Ru toolchain listed in `docs/build-provenance.md`. Python runs the build tools, not the distributed editor. Native executable/DLL builds use GCC/MinGW-w64; GCC runtime exception and MinGW-w64 notices must accompany statically linked support code. Package builders copy those notices from the actual toolchain distribution and retain their upstream terms unchanged.
 

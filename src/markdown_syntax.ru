@@ -7,6 +7,7 @@
 # stop/error visibility recovery cannot promise a hard 8 ms latency bound.
 # OWNER CONTRACT: call 遗忘 before SETDOCPOINTER/DestroyWindow. A production
 # subclass must not swap documents while forwarding a mutating Scintilla message.
+本地 取 外言 'i18n.ru'.
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
 策 取 外言 'markdown_policy.ru'.
@@ -155,7 +156,7 @@ _时存 取 _计数型 其 新建.
 法
 算 _建态 柄 代 为 数 修 为 数 文档 为 句:
     _身份[0] 取 _身份[0]+1.
-    得 {'identity':_身份[0],'generation':代,'revision':修,'hwnd':(柄 其 句),'thread':(_线程),'document':文档,'length':-1,'lines':0,'alive':真,'language':'markdown','foldEnabled':真,'registered':假,'warning':'','pending':真,'inTick':假,'phase':'prepare','policy':(策 其 新状态),'feed':0,'readEnd':0,'chunk':'','ranges':[],'rangeIndex':0,'rangeOffset':0,'eof':假,'chunks':0,'readBytes':0,'published':0,'maxRead':0,'maxPublish':0,'maxRanges':0,'maxTickMs':0,'maxChunkMs':0,'restart':0}.
+    得 {'identity':_身份[0],'generation':代,'revision':修,'hwnd':(柄 其 句),'thread':(_线程),'document':文档,'length':-1,'lines':0,'alive':真,'language':'markdown','foldEnabled':真,'registered':假,'warning':'','warningArgs':[],'warningRecovery':[],'pending':真,'inTick':假,'phase':'prepare','policy':(策 其 新状态),'feed':0,'readEnd':0,'chunk':'','ranges':[],'rangeIndex':0,'rangeOffset':0,'eof':假,'chunks':0,'readBytes':0,'published':0,'maxRead':0,'maxPublish':0,'maxRanges':0,'maxTickMs':0,'maxChunkMs':0,'restart':0}.
 法
 # One diagnostic record per live HWND/current identity, outside the 33 scan
 # fields. ownedBufferBytes is peak per-call owned capacity, not live bytes.
@@ -243,10 +244,22 @@ _时存 取 _计数型 其 新建.
         _讯 柄 态 2242 2 0.
     救 原因
         # No cleanup retry: a callback may have installed another state.
-        若 _本态 柄 态 则 态 其 增 'warning' (原因 为 句). 然
+        若 _本态 柄 态 则 态 其 增 'warningRecovery' ([(原因 为 句)]). 然
     终
     _丢弃 柄 态.
     得 空.
+法
+# Keep every diagnostic layer as a raw reason; translate the complete warning
+# only when status is projected, without restarting policy work or native folds.
+算 _警告 态:
+    文 取 ''.
+    若 态['warning'] != '' 则 文 取 本地 其 格式 (态['warning']) (态['warningArgs']). 然
+    位 取 0.
+    循 (态['warningRecovery']) 其 量 次
+        文 取 本地 其 格式 'error.syntax.visibility_recovery' ([文,(态['warningRecovery'])[位]]).
+        位 取 位+1.
+    环
+    得 文.
 法
 算 _失败 柄 态 原因 为 句:
     若 非 (_本态 柄 态) 则 得 空. 然
@@ -257,7 +270,9 @@ _时存 取 _计数型 其 新建.
     态 其 增 'phase' 'visibility'.
     若 非 态['registered'] 则 态 其 增 'language' 'plain'. 然
     态 其 增 'foldEnabled' 假.
-    态 其 增 'warning' ('Markdown folding was disabled: '+原因+' The text, selection and undo history are unchanged.').
+    态 其 增 'warning' 'error.syntax.markdown_disabled'.
+    态 其 增 'warningArgs' ([原因]).
+    态 其 增 'warningRecovery' ([]).
     态 其 增 'policy' 空.
     态 其 增 'ranges' ([]).
     态 其 增 'chunk' ''.
@@ -270,7 +285,7 @@ _时存 取 _计数型 其 新建.
         若 _本态 柄 态 则
             态 其 增 'pending' 假.
             态 其 增 'phase' 'disabled'.
-            态 其 增 'warning' (态['warning']+' Visibility recovery: '+(清理原因 为 句)).
+            态 其 增 'warningRecovery' ([(清理原因 为 句)]).
         然
     终
     得 空.
@@ -365,6 +380,8 @@ _时存 取 _计数型 其 新建.
     态 取 _建态 柄 旧['generation'] (旧['revision']+1) 旧['document'].
     态 其 增 'registered' 旧['registered'].
     态 其 增 'warning' 旧['warning'].
+    态 其 增 'warningArgs' 旧['warningArgs'].
+    态 其 增 'warningRecovery' 旧['warningRecovery'].
     态 其 增 'foldEnabled' 旧['foldEnabled'].
     若 非 旧['foldEnabled'] 则
         态 其 增 'policy' 空.
@@ -792,7 +809,7 @@ _时存 取 _计数型 其 新建.
     若 态['phase'] == 'scan' 则 阶段 取 1. 若 (态['ranges']) 其 量 > 0 则 阶段 取 2. 然 然
     若 态['phase'] == 'visibility' 则 阶段 取 3. 然
     若 非 态['pending'] 则 阶段 取 4. 然
-    得 {'phaseCode':阶段,'enabled':(态['language'] == 'markdown'),'foldEnabled':态['foldEnabled'],'language':态['language'],'warning':态['warning'],'pending':态['pending'],'generation':态['generation'],'revision':态['revision'],'identity':态['identity'],'feed':态['feed'],'bytes':态['feed'],'length':态['length'],'chunks':态['chunks'],'readBytes':态['readBytes'],'published':态['published'],'maxRead':态['maxRead'],'maxPublish':态['maxPublish'],'maxRanges':态['maxRanges'],'maxTickMs':态['maxTickMs'],'maxChunkMs':态['maxChunkMs'],'restart':0,'points':0,'eof':态['eof'],'queuedRanges':((态['ranges']) 其 量),'rangeIndex':态['rangeIndex'],'rangeOffset':态['rangeOffset'],'bulkCalls':计['bulkCalls'],'bulkLines':计['bulkLines'],'fallbackBatches':计['fallbackBatches'],'directCalls':计['directCalls'],'directLines':计['directLines'],'maxPlanBytes':计['maxPlanBytes'],'bulkUs':计['bulkUs'],'ownedBufferBytes':计['ownedBufferBytes'],'bulkMetricsValid':计['bulkMetricsValid']}.
+    得 {'phaseCode':阶段,'enabled':(态['language'] == 'markdown'),'foldEnabled':态['foldEnabled'],'language':态['language'],'warning':(_警告 态),'pending':态['pending'],'generation':态['generation'],'revision':态['revision'],'identity':态['identity'],'feed':态['feed'],'bytes':态['feed'],'length':态['length'],'chunks':态['chunks'],'readBytes':态['readBytes'],'published':态['published'],'maxRead':态['maxRead'],'maxPublish':态['maxPublish'],'maxRanges':态['maxRanges'],'maxTickMs':态['maxTickMs'],'maxChunkMs':态['maxChunkMs'],'restart':0,'points':0,'eof':态['eof'],'queuedRanges':((态['ranges']) 其 量),'rangeIndex':态['rangeIndex'],'rangeOffset':态['rangeOffset'],'bulkCalls':计['bulkCalls'],'bulkLines':计['bulkLines'],'fallbackBatches':计['fallbackBatches'],'directCalls':计['directCalls'],'directLines':计['directLines'],'maxPlanBytes':计['maxPlanBytes'],'bulkUs':计['bulkUs'],'ownedBufferBytes':计['ownedBufferBytes'],'bulkMetricsValid':计['bulkMetricsValid']}.
 法
 算 排空 柄:
     # Acceptance-test helper only; production admits one tick per timer.

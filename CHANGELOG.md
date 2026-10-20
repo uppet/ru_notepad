@@ -1,3 +1,13 @@
+# Unreleased internationalization candidate
+
+- Add seven Ru-owned UI catalogs, stable message keys, English fallback, single-pass placeholders and consistent menu mnemonics.
+- Add immediate interface switching and explicit per-user language persistence, keeping syntax/document encoding independent.
+- Localize known file/encoding failures without discarding API/system codes; retain technical diagnostics.
+- Add UTF-16 dialog filters, measured/wrapping search controls and portable/native acceptance fixtures.
+- Integrate the current C++ folding, Markdown bulk/direct publication, safe32 scalar policy, natural-paint and bounded MDP2 diagnostic repairs without reducing their 2,071-assertion / 39-result baseline; add 1,775 internationalization assertions across three mandatory native fixtures.
+- Retain the reviewed public Ru 0.22.1 compiler with its unchanged 200,000-step analysis budget. Preserve exact source-derived nonfatal compiler style hints without allowing unexpected compile or runtime diagnostics.
+- Windows native, visual, accessibility and CJK IME acceptance remain pending. This independent integrated candidate has not been published.
+
 # Changelog
 
 ## 0.1.8-preview — candidate

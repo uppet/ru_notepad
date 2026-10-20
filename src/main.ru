@@ -1,5 +1,8 @@
 # ru_notepad 0.1.8 preview. Application behavior is compiled from Ru.
 密 取 外言 '如:密'.
+本地 取 外言 'i18n.ru'.
+偏好 取 外言 'i18n_settings.ru'.
+布局策 取 外言 'i18n_layout.ru'.
 窗 取 外言 'win32.ru'.
 编 取 外言 'editor.ru'.
 件编 取 外言 'file_codec.ru'.
@@ -11,7 +14,7 @@
 关联 取 外言 'associations.ru'.
 拖放 取 外言 'file_drop.ru'.
 修改头 取 密 其 结构 [['header',窗 其 NMHDR],['position',窗 其 IP],['ch',窗 其 I],['modifiers',窗 其 I],['modificationType',窗 其 I],['text',窗 其 PTR],['length',窗 其 IP],['linesAdded',窗 其 IP],['message',窗 其 I],['wParam',窗 其 UP],['lParam',窗 其 IP],['line',窗 其 IP],['foldLevelNow',窗 其 I],['foldLevelPrev',窗 其 I],['margin',窗 其 I]].
-A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
+A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'system','docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
 
 # Syntax work is deferred out of Scintilla callbacks, with one shared UI budget.
 # Pure cache update shared by periodic sampling and an already-required final refresh.
@@ -246,7 +249,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
 法
 算 错误提示 文 为 句:
     (A 其 查 'errors') 其 增 文.
-    若 A 其 查 'visible' 则 得 窗 其 弹窗 (A 其 查 'window') 文 'ru_notepad · could not finish' 16. 然
+    若 A 其 查 'visible' 则 得 窗 其 弹窗 (A 其 查 'window') (本地 其 格式 'error.body' ([文])) (本地 其 文本 'error.title') 16. 然
     显 '[operation] rejected: '+文.
     得 0.
 法
@@ -283,7 +286,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
 法
 算 关机会话:
     若 (A 其 查 'busy') 或 任一已改 则
-        文 取 密 其 UTF16 'ru_notepad has unsaved documents. Save or close them before signing out.'.
+        文 取 密 其 UTF16 (本地 其 文本 'notice.shutdown_blocked').
         窗 其 结果 ((窗 其 ShutdownBlockReasonCreate) 其 调用 (参 其 窗口二参 A 文)).
         文 其 关闭.
         A 其 增 'shutdownBlocked' 真.
@@ -315,17 +318,17 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     编文 取 编码名 (文档 其 查 'encoding').
     若 文档 其 查 'bom' 则 编文 取 编文+' BOM'. 然
     模式文 取 ''.
-    若 文档 其 查 'large' 则 模式文 取 '    Large file · plain text'. 然
+    若 文档 其 查 'large' 则 模式文 取 '    '+(本地 其 文本 'status.large_file'). 然
     语言名 取 语 其 名称 (文档 其 查 'language').
     语态 取 语 其 状态 (文档 其 查 'editor').
     若 语态 != 空 则
         若 非 语态['enabled'] 则 语言名 取 语 其 名称 'plain'. 然
         若 语态['warning'] != '' 则 模式文 取 模式文+'    '+语态['warning']. 然
         若 语态['pending'] 则
-            若 (文档 其 查 'language') == 'markdown' 则 模式文 取 模式文+'    Folding Markdown...'.
-            另 模式文 取 模式文+'    Styling Ru...'. 然
+            若 (文档 其 查 'language') == 'markdown' 则 模式文 取 模式文+'    '+(本地 其 文本 'status.folding_markdown').
+            另 模式文 取 模式文+'    '+(本地 其 文本 'status.styling_ru'). 然
         然
-        若 (文档 其 查 'language') == 'markdown' 且 非 (文档 其 查 'markdownFolds') 则 模式文 取 模式文+'    Heading folds off'. 然
+        若 (文档 其 查 'language') == 'markdown' 且 非 (文档 其 查 'markdownFolds') 则 模式文 取 模式文+'    '+(本地 其 文本 'status.heading_folds_off'). 然
     然
     基文 取 '  '+(态 其 文本 (文档 其 查 'editor'))+'    '+编文+'    '+语言名+模式文.
     A 其 增 'statusBase' 基文.
@@ -341,6 +344,13 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     窗 其 结果 ((窗 其 MoveWindow) 其 调用 [柄,横,纵,宽,高,1]).
     得 空.
 法
+算 按钮宽 名 为 句:
+    柄 取 A 其 查 名.
+    宽 取 (窗 其 测文宽 柄 (窗 其 取文 柄))+26.
+    若 名 == 'case' 则 宽 取 宽+18. 然
+    若 宽 < 64 则 宽 取 64. 然
+    得 宽.
+法
 算 布局:
     若 非 (A 其 查 'ready') 则 得 空. 然
     矩 取 (窗 其 RECT) 其 新建.
@@ -349,26 +359,87 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     高 取 (矩 其 读 'bottom') 其 数.
     矩 其 关闭.
     寻高 取 0.
-    若 A 其 查 'search' 则 寻高 取 38. 然
+    位置 取 空.
+    控们 取 ['case','next','one','all','hide'].
+    若 A 其 查 'search' 则
+        宽们 取 [].
+        位 取 0.
+        循 控们 其 量 次
+            宽们 其 增 (按钮宽 控们[位]).
+            位 取 位+1.
+        环
+        位置 取 布局策 其 寻栏布局 宽 宽们.
+        寻高 取 位置['height'].
+    然
     移控 (A 其 查 'tabs') 0 0 宽 30.
     状态宽 取 宽.
-    若 A 其 查 'busy' 则 状态宽 取 宽-110. 然
+    取消宽 取 按钮宽 'cancel'.
+    若 A 其 查 'busy' 则 状态宽 取 宽-取消宽-4. 然
     移控 (A 其 查 'status') 0 (高-25) 状态宽 25.
-    移控 (A 其 查 'cancel') (宽-108) (高-25) 106 25.
+    移控 (A 其 查 'cancel') (宽-取消宽-2) (高-25) 取消宽 25.
     若 (A 其 查 'active') >= 0 则 移控 编辑柄 0 32 宽 (高-57-寻高). 然
-    栏纵 取 高-25-38.
-    输入宽 取 (宽-390)/2.
-    若 输入宽 < 80 则 输入宽 取 80. 然
-    # Window dimensions must be integer machine values.
-    输入宽 取 输入宽-输入宽%1.
+    若 位置 == 空 则 得 空. 然
+    栏纵 取 高-25-寻高.
+    输入宽 取 位置['inputWidth'].
     移控 (A 其 查 'find') 8 (栏纵+5) 输入宽 26.
     移控 (A 其 查 'replace') (16+输入宽) (栏纵+5) 输入宽 26.
-    起 取 24+输入宽*2.
-    移控 (A 其 查 'case') 起 (栏纵+5) 48 26.
-    移控 (A 其 查 'next') (起+50) (栏纵+5) 65 26.
-    移控 (A 其 查 'one') (起+120) (栏纵+5) 74 26.
-    移控 (A 其 查 'all') (起+199) (栏纵+5) 75 26.
-    移控 (A 其 查 'hide') (起+279) (栏纵+5) 40 26.
+    按们 取 位置['buttons'].
+    位 取 0.
+    循 控们 其 量 次
+        定位 取 按们[位].
+        移控 (A 其 查 控们[位]) 定位[0] (栏纵+定位[1]) 定位[2] 定位[3].
+        位 取 位+1.
+    环
+    得 空.
+法
+算 界面文字:
+    标控们 取 ['cancel','case','next','one','all','hide'].
+    标键们 取 ['search.cancel','search.case','search.next','search.replace','search.all','search.close'].
+    位 取 0.
+    循 标控们 其 量 次
+        窗 其 标题 (A 其 查 标控们[位]) (本地 其 文本 标键们[位]).
+        位 取 位+1.
+    环
+    控们 取 ['tabs','status','cancel','find','replace','case','next','one','all','hide'].
+    位 取 0.
+    循 控们 其 量 次
+        窗 其 界面字体 (A 其 查 控们[位]).
+        位 取 位+1.
+    环
+    窗 其 输入提示 (A 其 查 'find') (本地 其 文本 'search.find').
+    窗 其 输入提示 (A 其 查 'replace') (本地 其 文本 'search.replace_with').
+    得 空.
+法
+算 切界面 代码 为 句, 持久 为 事实:
+    若 代码 != 'system' 且 非 (本地 其 有语言 代码) 则 代码 取 'en'. 然
+    A 其 增 'uiPreference' 代码.
+    本地 其 设置 (偏好 其 决定 代码 (偏好 其 系统语言)).
+    界面文字.
+    菜单.
+    文们 取 A 其 查 'docs'.
+    位 取 0.
+    循 文们 其 量 次
+        文档 取 文们[位].
+        若 (文档 其 查 'path') == '' 则
+            文档 其 增 'name' (本地 其 格式 'document.untitled' ([(文档 其 查 'untitledNumber')])).
+            # Update every tab without activating it or changing editor state.
+            存 取 密 其 UTF16 (页标题 文档).
+            项 取 (窗 其 TCITEM) 其 新建.
+            项 其 写 'mask' 1.
+            项 其 写 'text' (存 其 地址).
+            窗 其 发指 (A 其 查 'tabs') 4925 位 项.
+            项 其 关闭.
+            存 其 关闭.
+            文档 其 增 'label' ''.
+        然
+        位 取 位+1.
+    环
+    布局.
+    刷新.
+    若 持久 则
+        错 取 偏好 其 保存偏好 代码.
+        若 错 != 0 则 错误提示 (本地 其 格式 'settings.persistence' ([错])). 然
+    然
     得 空.
 法
 算 寻栏 显示 为 事实:
@@ -419,14 +490,14 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
 # Tab ownership is committed only after initialization and native insertion succeed.
 算 登记页 柄, 路 为 句, 编码, BOM, 戳 为 句, 身份 为 句, 大型 为 事实:
     文们 取 A 其 查 'docs'.
-    若 (文们 其 量) >= 64 则 卒 'Up to 64 documents can be open. Close a tab and retry the remaining files.'. 然
+    若 (文们 其 量) >= 64 则 卒 (本地 其 文本 'error.main.document_limit_remaining'). 然
     序 取 (A 其 查 'counter')+1.
     A 其 增 'counter' 序.
     名 取 短名 路.
-    若 路 == '' 则 名 取 'Untitled '+(序 为 句). 然
+    若 路 == '' 则 名 取 本地 其 格式 'document.untitled' ([序]). 然
     语言 取 'plain'.
     若 非 大型 则 语言 取 选择语法 柄 (语 其 识别 路). 然
-    文档 取 {'editor':柄,'path':路,'name':名,'encoding':编码,'bom':BOM,'stamp':戳,'fileIdentity':身份,'encodingDirty':假,'label':'','wrap':假,'language':语言,'markdownFolds':真,'large':大型,'revision':0}.
+    文档 取 {'editor':柄,'path':路,'untitledNumber':序,'name':名,'encoding':编码,'bom':BOM,'stamp':戳,'fileIdentity':身份,'encodingDirty':假,'label':'','wrap':假,'language':语言,'markdownFolds':真,'large':大型,'revision':0}.
     项 取 (窗 其 TCITEM) 其 新建.
     存 取 空.
     试
@@ -434,7 +505,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         项 其 写 'mask' 1.
         项 其 写 'text' (存 其 地址).
         插位 取 (窗 其 发指 (A 其 查 'tabs') 4926 (文们 其 量) 项) 其 数.
-        若 插位 == -1 则 卒 'Windows could not create the document tab.'. 然
+        若 插位 == -1 则 卒 (本地 其 文本 'error.main.tab_create'). 然
     救 原因
         若 存 != 空 则 存 其 关闭. 然
         项 其 关闭.
@@ -454,8 +525,8 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     得 空.
 法
 算 新页 路 为 句, 文 为 句, 编码, BOM, 戳 为 句:
-    若 A 其 查 'busy' 则 卒 'Finish or cancel the current file operation first.'. 然
-    若 ((A 其 查 'docs') 其 量) >= 64 则 卒 'Up to 64 documents can be open. Close a tab and retry.'. 然
+    若 A 其 查 'busy' 则 卒 (本地 其 文本 'error.main.operation_busy'). 然
+    若 ((A 其 查 'docs') 其 量) >= 64 则 卒 (本地 其 文本 'error.main.document_limit'). 然
     编 其 验文本 文.
     柄 取 编 其 创建 (A 其 查 'window') (A 其 查 'instance') (1001+(A 其 查 'counter')).
     试
@@ -473,7 +544,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
 法
 算 询大文件 大小 为 数:
     若 非 (A 其 查 'visible') 则 得 假. 然
-    得 (窗 其 弹窗 (A 其 查 'window') ('This file is '+(大小 为 句)+' bytes, over 500 MB (500,000,000 bytes). Opening it may require several times its size in memory. It will use plain-text large-file mode. Continue?\n\nCancel stops between I/O chunks; a slow individual disk operation may still take time.') 'ru_notepad · large file' 292) == 6.
+    得 (窗 其 弹窗 (A 其 查 'window') (本地 其 格式 'dialog.large_file' ([大小])) (本地 其 文本 'dialog.large_file.title') 292) == 6.
 法
 算 锁界面:
     文们 取 A 其 查 'docs'.
@@ -493,7 +564,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     得 空.
 法
 算 开始工作:
-    若 A 其 查 'busy' 则 卒 'Finish or cancel the current file operation first.'. 然
+    若 A 其 查 'busy' 则 卒 (本地 其 文本 'error.main.operation_busy'). 然
     A 其 增 'busy' 真.
     A 其 增 'cancelRequested' 假.
     A 其 增 'locks' ([]).
@@ -557,20 +628,20 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     得 空.
 法
 算 入队 路们 为 句 阵, 代码页 为 数:
-    若 A 其 查 'busy' 则 卒 'A file operation is already running. Finish or cancel it, then drop or open the files again.'. 然
-    若 (路们 其 量) > 64 则 卒 'Select at most 64 paths at a time. No paths from this batch were opened.'. 然
+    若 A 其 查 'busy' 则 卒 (本地 其 文本 'error.main.open_busy'). 然
+    若 (路们 其 量) > 64 则 卒 (本地 其 文本 'error.main.batch_count'). 然
     队 取 [].
     总 取 0.
     位 取 0.
     循 路们 其 量 次
         路 取 路们[位].
         若 路 != '' 则
-            若 (路 其 量) > 32000 则 卒 'A selected path exceeds32000 characters. No files from this batch were opened.'. 然
+            若 (路 其 量) > 32000 则 卒 (本地 其 文本 'error.main.batch_path_length'). 然
             存 取 密 其 UTF16 路.
             长 取 ((存 其 大小)/2)-1.
             存 其 关闭.
             总 取 总+长+1.
-            若 长 > 32000 或 总 > 2097152 则 卒 'The selected paths exceed the bounded path queue. No files from this batch were opened.'. 然
+            若 长 > 32000 或 总 > 2097152 则 卒 (本地 其 文本 'error.main.batch_queue'). 然
             队 其 增 [路,代码页].
         然
         位 取 位+1.
@@ -610,7 +681,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         然
         位 取 位+1.
     环
-    若 (文们 其 量) >= 64 则 卒 'Up to 64 documents can be open. Close tabs and retry the remaining files.'. 然
+    若 (文们 其 量) >= 64 则 卒 (本地 其 文本 'error.main.document_limit_tabs'). 然
     确认 取 A 其 查 'confirmLarge'.
     若 非 (件编 其 确认读取 读态 确认) 则
         A 其 增 'operation' 空.
@@ -626,7 +697,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     得 空.
 法
 算 保存到 路 为 句, 戳 为 句, 后续 为 句:
-    若 A 其 查 'busy' 则 卒 'Finish or cancel the current file operation first.'. 然
+    若 A 其 查 'busy' 则 卒 (本地 其 文本 'error.main.operation_busy'). 然
     文档 取 当前.
     A 其 增 'lastOutcome' 'running'.
     开始工作.
@@ -674,7 +745,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         文 取 件编 其 读取一步 读态.
         若 文 != 空 则
             编 其 追加文本 操['load'] 文.
-            窗 其 标题 (A 其 查 'status') ('  Opening: '+(读态['position'] 为 句)+' / '+(读态['size'] 为 句)+' bytes · Cancel between chunks').
+            窗 其 标题 (A 其 查 'status') ('  '+(本地 其 格式 'status.opening' ([(读态['position']),(读态['size'])]))).
             得 空.
         然
         编 其 完成载入 操['load'].
@@ -692,12 +763,12 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         得 空.
     然
     文档 取 操['doc'].
-    若 (文档 其 查 'revision') != 操['revision'] 则 卒 'The document changed during saving. The staged save was cancelled.'. 然
+    若 (文档 其 查 'revision') != 操['revision'] 则 卒 (本地 其 文本 'error.main.save_changed'). 然
     文 取 编 其 取文一步 操['source'].
     写态 取 操['writer'].
     若 文 != 空 则
         件编 其 写入一段 写态 文.
-        窗 其 标题 (A 其 查 'status') ('  Saving: '+(操['source']['position'] 为 句)+' / '+(操['source']['bytes'] 为 句)+' UTF-8 bytes · Cancel between chunks').
+        窗 其 标题 (A 其 查 'status') ('  '+(本地 其 格式 'status.saving' ([(操['source']['position']),(操['source']['bytes'])]))).
         得 空.
     然
     # No message pumping occurs across the conflict check / atomic commit phase.
@@ -754,7 +825,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     得 空.
 法
 算 询问关闭 文档:
-    得 窗 其 弹窗 (A 其 查 'window') ('Save changes to '+(文档 其 查 'name')+'?') 'ru_notepad · unsaved changes' 35.
+    得 窗 其 弹窗 (A 其 查 'window') (本地 其 格式 'dialog.unsaved' ([(文档 其 查 'name')])) (本地 其 文本 'dialog.unsaved.title') 35.
 法
 算 删除当前页:
     # Invalidate before forgetting or destroying a document with queued work.
@@ -826,6 +897,10 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         得 空.
     然
     若 A 其 查 'busy' 则 得 空. 然
+    若 号 >= 850 且 号 <= 857 则
+        切界面 (['system','en','zh-CN','ja','ko','es','ru','it'][号-850]) 真.
+        得 空.
+    然
     若 号 == 101 则 新页 '' '' 65001 假 ''. 得 空. 然
     若 号 == 102 或 号 == 108 或 号 == 109 则
         代码页 取 0.
@@ -860,14 +935,14 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         区分 取 非 ((窗 其 发送 (A 其 查 'case') 240 0 0) 其 为空).
         若 词 == '' 则 寻栏 真. 得 空. 然
         若 号 == 303 则
-            若 (编 其 下个 编辑柄 词 区分) == -1 则 提示 'No match found.'. 然
+            若 (编 其 下个 编辑柄 词 区分) == -1 则 提示 (本地 其 文本 'search.no_match'). 然
         然
         若 号 == 304 则
-            若 (编 其 换当前 编辑柄 词 新文 区分) == -1 则 提示 'No further match found.'. 然
+            若 (编 其 换当前 编辑柄 词 新文 区分) == -1 则 提示 (本地 其 文本 'search.no_further_match'). 然
         然
         若 号 == 305 则
             次数 取 编 其 全换 编辑柄 词 新文 区分.
-            提示 ((次数 为 句)+' replacements. Undo restores the entire operation.').
+            提示 (本地 其 格式 'search.replacements' ([次数])).
         然
     然
     若 号 >= 401 且 号 <= 405 则
@@ -882,7 +957,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     若 号 == 406 则
         模 其 改编码 当前 936 假.
     然
-    若 (号 == 501 或 (号 >= 702 且 号 <= 705)) 且 (当前 其 查 'large') 则 提示 'Large-file mode keeps wrapping and syntax colouring disabled to bound memory and layout cost.'. 得 空. 然
+    若 (号 == 501 或 (号 >= 702 且 号 <= 705)) 且 (当前 其 查 'large') 则 提示 (本地 其 文本 'notice.large_file_mode'). 得 空. 然
     若 号 >= 701 且 号 <= 705 则
         语言 取 'plain'.
         若 号 == 702 则 语言 取 'cpp'. 然
@@ -901,7 +976,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     然
     若 号 == 505 或 号 == 506 则
         若 ((当前 其 查 'language') == 'ru' 或 (当前 其 查 'language') == 'markdown' 或 (当前 其 查 'language') == 'cpp') 且 非 (当前 其 查 'large') 则
-            若 语 其 待办 编辑柄 则 提示 'Syntax folds are still being updated. Wait for the current scan to finish.'. 得 空. 然
+            若 语 其 待办 编辑柄 则 提示 (本地 其 文本 'notice.folds_pending'). 得 空. 然
             动作 取 0.
             若 号 == 506 则 动作 取 1. 然
             语 其 全折 编辑柄 动作.
@@ -922,52 +997,72 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     若 号 == 503 则 窗 其 发送 编辑柄 2334 0 0. 然
     若 号 == 504 则 窗 其 发送 编辑柄 2373 0 0. 然
     若 号 == 801 则
-        若 (窗 其 弹窗 (A 其 查 'window') 'Register this portable copy as an Open With / Default Apps candidate for this Windows user? Windows will still ask you to choose defaults. Unregister at the old location before moving, then register the new copy.' 'ru_notepad · register candidate' 292) == 6 则
+        若 (窗 其 弹窗 (A 其 查 'window') (本地 其 文本 'dialog.register') (本地 其 文本 'dialog.register.title') 292) == 6 则
             关联 其 注册.
-            提示 'Registered this copy. Open Settings > Default apps to choose the file types you want. Before moving the portable folder, unregister this copy; register again at the new location.'.
+            提示 (本地 其 文本 'association.registered').
         然
     然
     若 号 == 802 则 关联 其 打开设置 (A 其 查 'window'). 然
     若 号 == 803 则
-        若 (窗 其 弹窗 (A 其 查 'window') 'Remove this copy from Open With / Default Apps candidates? Your Windows default choices will not be overwritten.' 'ru_notepad · unregister candidate' 292) == 6 则 关联 其 注销. 提示 'Candidate entries owned by this copy were removed.'. 然
+        若 (窗 其 弹窗 (A 其 查 'window') (本地 其 文本 'dialog.unregister') (本地 其 文本 'dialog.unregister.title') 292) == 6 则 关联 其 注销. 提示 (本地 其 文本 'association.unregistered'). 然
     然
-    若 号 == 804 则 提示 ('Registration status: '+(关联 其 查询状态)+'\nregistered = this copy; none = not registered; partial = incomplete; otherowner = another portable location. Unregister at the old location before moving, then register the new copy.'). 然
-    若 号 == 601 则 提示 'ru_notepad 0.1.8 preview\n\nWindows x64 · application logic compiled from Ru\nScintilla + Lexilla native editor components\n\nTabs, safe text saves, undo/redo, literal find/replace.\nBounded streaming, 64 tabs; over 500 MB asks first. Not full Notepad++ parity yet.\nNo Python runtime. No telemetry. No network features.'. 然
+    若 号 == 804 则 提示 (本地 其 格式 'association.status' ([(本地 其 文本 ('association.state.'+(关联 其 查询状态)))])). 然
+    若 号 == 601 则 提示 (本地 其 格式 'about.body' (['0.1.8'])). 然
     刷新.
     得 空.
 法
 算 菜单:
+    # Parallel primitive arrays keep the pinned compiler's ABI analysis bounded.
+    组键们 取 ['menu.file', 'menu.edit', 'menu.search', 'menu.encoding', 'menu.language', 'menu.view', 'menu.settings', 'menu.ui_language', 'menu.help'].
+    组量们 取 [10, 6, 3, 6, 5, 7, 4, 8, 1].
+    号们 取 [101, 102, 108, 109, 103, 104, 105, 111, 112, 106, 201, 202, 203, 204, 205, 206, 301, 302, 303, 401, 402, 403, 404, 405, 406, 701, 702, 703, 704, 705, 501, 502, 503, 504, 505, 506, 507, 801, 802, 803, 804, 850, 851, 852, 853, 854, 855, 856, 857, 601].
+    键们 取 ['command.new', 'command.open', 'command.open_windows1252', 'command.open_gbk', 'command.save', 'command.save_as', 'command.close_tab', 'command.previous_tab', 'command.next_tab', 'command.exit', 'command.undo', 'command.redo', 'command.cut', 'command.copy', 'command.paste', 'command.select_all', 'command.find', 'command.replace', 'command.find_next', 'command.save_utf8', 'command.save_utf8_bom', 'command.save_utf16le', 'command.save_utf16be', 'command.save_windows1252', 'command.save_gbk', 'command.language_plain', 'command.language_cpp', 'command.language_json', 'command.language_ru', 'command.language_markdown', 'command.toggle_wrap', 'command.zoom_in', 'command.zoom_out', 'command.zoom_reset', 'command.fold_all', 'command.unfold_all', 'command.toggle_markdown_folds', 'command.register_association', 'command.default_apps', 'command.unregister_association', 'command.registration_status', 'language.system', 'language.en', 'language.zh_cn', 'language.ja', 'language.ko', 'language.es', 'language.ru', 'language.it', 'command.about'].
     主 取 窗 其 成功 ((窗 其 CreateMenu) 其 调用 []) 'CreateMenu'.
-    组们 取 [
-        ['&File',[[101,'&New\tCtrl+N'],[102,'&Open...\tCtrl+O'],[108,'Open as Windows-1252...'],[109,'Open as GBK (CP936)...'],[103,'&Save\tCtrl+S'],[104,'Save &As...\tCtrl+Shift+S'],[105,'&Close tab\tCtrl+W'],[111,'Previous tab\tCtrl+Shift+Tab'],[112,'Next tab\tCtrl+Tab'],[106,'E&xit']]],
-        ['&Edit',[[201,'&Undo\tCtrl+Z'],[202,'&Redo\tCtrl+Y'],[203,'Cu&t\tCtrl+X'],[204,'&Copy\tCtrl+C'],[205,'&Paste\tCtrl+V'],[206,'Select &All\tCtrl+A']]],
-        ['&Search',[[301,'&Find...\tCtrl+F'],[302,'&Replace...\tCtrl+H'],[303,'Find &Next\tF3']]],
-        ['E&ncoding',[[401,'Save as UTF-8'],[402,'Save as UTF-8 with BOM'],[403,'Save as UTF-16 LE'],[404,'Save as UTF-16 BE'],[405,'Save as Windows-1252'],[406,'Save as GBK (CP936)']]],
-        ['&Language',[[701,'Plain text'],[702,'C / C++'],[703,'JSON'],[704,'Ru / 如言'],[705,'Markdown']]],
-        ['&View',[[501,'Toggle word &wrap'],[502,'Zoom &in\tCtrl++'],[503,'Zoom &out\tCtrl+-'],[504,'Reset zoom\tCtrl+0'],[505,'Collapse all folds\tCtrl+Shift+['],[506,'Expand all folds\tCtrl+Shift+]'],[507,'Toggle Markdown heading folds']]],
-        ['&Settings',[[801,'Register Open With candidate...'],[802,'Choose defaults in Windows Settings...'],[803,'Unregister this copy...'],[804,'Registration status']]],
-        ['&Help',[[601,'&About ru_notepad']]]
-    ].
-    组位 取 0.
-    循 组们 其 量 次
-        组 取 组们[组位].
-        子 取 窗 其 成功 ((窗 其 CreatePopupMenu) 其 调用 []) 'CreatePopupMenu'.
-        项位 取 0.
-        项们 取 组[1].
-        循 项们 其 量 次
-            项 取 项们[项位].
-            窗 其 菜单项 子 0 项[0] 项[1].
-            项位 取 项位+1.
+    子 取 空.
+    试
+        组位 取 0.
+        位 取 0.
+        循 组键们 其 量 次
+            子 取 窗 其 成功 ((窗 其 CreatePopupMenu) 其 调用 []) 'CreatePopupMenu'.
+            循 组量们[组位] 次
+                号 取 号们[位].
+                标记 取 0.
+                若 号 >= 850 且 号 <= 857 则
+                    选项 取 ['system','en','zh-CN','ja','ko','es','ru','it'][号-850].
+                    若 选项 == (A 其 查 'uiPreference') 则 标记 取 8. 然
+                然
+                窗 其 菜单项 子 标记 号 (本地 其 文本 键们[位]).
+                位 取 位+1.
+            环
+            窗 其 菜单项 主 16 ((窗 其 UP) 其 重释 子) (本地 其 文本 组键们[组位]).
+            # The root now owns this submenu; cleanup must not free it twice.
+            子 取 空.
+            组位 取 组位+1.
         环
-        窗 其 菜单项 主 16 ((窗 其 UP) 其 重释 子) 组[0].
-        组位 取 组位+1.
-    环
-    窗 其 成功 ((窗 其 SetMenu) 其 调用 (参 其 菜单参数 A 主)) 'SetMenu'.
+        旧 取 窗 其 结果 ((窗 其 GetMenu) 其 调用 [(A 其 查 'window')]).
+        窗 其 成功 ((窗 其 SetMenu) 其 调用 (参 其 菜单参数 A 主)) 'SetMenu'.
+    救 原因
+        若 子 != 空 则 窗 其 结果 ((窗 其 DestroyMenu) 其 调用 [子]). 然
+        窗 其 结果 ((窗 其 DestroyMenu) 其 调用 [主]).
+        卒 原因.
+    终
+    若 非 (旧 其 为空) 则 窗 其 结果 ((窗 其 DestroyMenu) 其 调用 [旧]). 然
+    窗 其 结果 ((窗 其 DrawMenuBar) 其 调用 [(A 其 查 'window')]).
     得 空.
 法
 算 消息处理 柄, 号值, 宽参, 长参:
     号 取 号值 其 数.
     若 号 == 129 则 A 其 增 'window' 柄. 然
+    若 号 == 36 则
+        矩 取 (窗 其 MINMAXINFO) 其 新建.
+        指 取 (窗 其 PTR) 其 重释 长参.
+        窗 其 结果 ((窗 其 RtlMoveMemory) 其 调用 [矩,指,((窗 其 MINMAXINFO) 其 大小)]).
+        矩 其 写 'minTrackX' 640.
+        矩 其 写 'minTrackY' 400.
+        窗 其 结果 ((窗 其 RtlMoveMemory) 其 调用 [指,矩,((窗 其 MINMAXINFO) 其 大小)]).
+        矩 其 关闭.
+        得 0.
+    然
     若 号 == 2 则
         A 其 增 'ready' 假.
         停止语法.
@@ -1072,6 +1167,11 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
 
 算 初始化 参数 为 句 阵, 显示 为 事实:
     # Every dependency is loaded before WNDPROC can run.
+    设 取 偏好 其 载入偏好.
+    A 其 增 'uiPreference' 设['value'].
+    若 设['value'] == '' 则 A 其 增 'uiPreference' 'system'. 然
+    若 设['value'] != '' 且 设['value'] != 'system' 且 非 (本地 其 有语言 设['value']) 则 A 其 增 'uiPreference' 'en'. 然
+    本地 其 设置 (偏好 其 决定 设['value'] (偏好 其 系统语言)).
     A 其 增 'visible' 显示.
     A 其 增 'confirmLarge' (算 询大文件).
     A 其 增 'confirmClose' (算 询问关闭).
@@ -1083,7 +1183,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     路径存 其 关闭.
     预载 取 预载成果 其 值.
     若 预载 其 为空 则
-        卒 ('Cannot load Scintilla.dll (Windows error '+((预载成果 其 错误码) 为 句)+'). Extract the complete Windows x64 package and keep its DLL beside ru_notepad.exe.').
+        卒 (本地 其 格式 'error.main.scintilla_missing' ([((预载成果 其 错误码) 为 句)])).
     然
     原生编辑库 取 密 其 动态库 库路径.
     显 '[startup] Scintilla loaded'.
@@ -1117,16 +1217,17 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
     显 '[startup] main window created'.
     A 其 增 'tabs' (窗 其 控制 主窗 实例 'SysTabControl32' '' 1342242816 10).
     A 其 增 'status' (窗 其 控制 主窗 实例 'STATIC' '' 1342177280 11).
-    A 其 增 'cancel' (窗 其 控制 主窗 实例 'BUTTON' 'Cancel (Esc)' 1073807360 901).
+    A 其 增 'cancel' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 901).
     A 其 增 'find' (窗 其 控制 主窗 实例 'EDIT' '' 1082196096 310).
     A 其 增 'replace' (窗 其 控制 主窗 实例 'EDIT' '' 1082196096 311).
-    A 其 增 'case' (窗 其 控制 主窗 实例 'BUTTON' 'Aa' 1073807363 306).
+    A 其 增 'case' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807363 306).
     窗 其 发送 (A 其 查 'case') 241 1 0.
-    A 其 增 'next' (窗 其 控制 主窗 实例 'BUTTON' 'Next' 1073807360 303).
-    A 其 增 'one' (窗 其 控制 主窗 实例 'BUTTON' 'Replace' 1073807360 304).
-    A 其 增 'all' (窗 其 控制 主窗 实例 'BUTTON' 'All' 1073807360 305).
-    A 其 增 'hide' (窗 其 控制 主窗 实例 'BUTTON' 'X' 1073807360 307).
+    A 其 增 'next' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 303).
+    A 其 增 'one' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 304).
+    A 其 增 'all' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 305).
+    A 其 增 'hide' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 307).
     显 '[startup] controls created'.
+    界面文字.
     菜单.
     显 '[startup] menu installed'.
     A 其 增 'ready' 真.
@@ -1138,6 +1239,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         窗 其 结果 ((窗 其 UpdateWindow) 其 调用 [主窗]).
         显 '[startup] main window shown'.
         报语法警告.
+        若 设['error'] != 0 则 错误提示 (本地 其 格式 'settings.read_failure' ([设['error']])). 然
     然
     # Unicode argv, dialogs and HDROP all enter the same bounded queue.
     若 (参数 其 量) > 0 则
@@ -1159,7 +1261,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         初始化 参数 真.
     救 原因
         显 '[startup] initialization failed'.
-        窗 其 弹窗 空 原因 'ru_notepad · startup failed' 16.
+        窗 其 弹窗 空 (本地 其 格式 'error.body' ([原因])) (本地 其 文本 'startup.title') 16.
         得 1.
     终
     消息 取 (窗 其 MSG) 其 新建.
@@ -1168,10 +1270,10 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         循
             成果 取 (窗 其 GetMessageW) 其 调用 [消息,空,0,0].
             码 取 (窗 其 结果 成果) 其 数.
-            若 码 == -1 则 卒 'GetMessageW failed.'. 然
+            若 码 == -1 则 卒 (本地 其 格式 'error.native' (['GetMessageW',((成果 其 错误码) 为 句)])). 然
             若 码 == 0 则
                 退出码 取 (消息 其 读 'wParam') 其 数.
-                若 退出码 != 0 则 卒 'The native callback failure handler stopped the event loop.'. 然
+                若 退出码 != 0 则 卒 (本地 其 文本 'error.main.callback_stopped'). 然
                 破.
             然
             若 非 (快捷 消息) 则
@@ -1187,7 +1289,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'docs':[],'active':-1
         # A native callback failure is contained, but application state cannot
         # be assumed resumable. Never silently overwrite files during recovery.
         A 其 增 'ready' 假.
-        窗 其 弹窗 空 ('A fatal internal error stopped ru_notepad. Unsaved changes may be lost; this preview has no crash recovery. No emergency save will be attempted. If this happened during Save, check the target and any temporary/recovery files.\n\n'+原因) 'ru_notepad · fatal error' 16.
+        窗 其 弹窗 空 (本地 其 格式 'fatal.body' ([原因])) (本地 其 文本 'fatal.title') 16.
         得 1.
     终
     得 退出码.

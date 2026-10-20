@@ -4,6 +4,10 @@ A small Windows text editor written mostly in **Ru**. Open a file, edit it in a 
 
 **Status: 0.1.8 preview candidate for Windows x64.** This candidate adds Markdown file detection, native syntax coloring and bounded Ru heading-folding. Its full Windows acceptance is pending. Markdown Enter continuation and rendered preview are not implemented. The last independently accepted product baseline is the [0.1.6 run](https://github.com/uppet/ru_notepad/actions/runs/38984124830), with 1,487 assertions / 33 results. Its limited same-machine direct-publication comparison improved the measured sample; it did not establish Notepad++ parity. The inherited 0.1.7 policy has completed its [same-route experiment](https://github.com/uppet/ru_notepad/actions/runs/38998372873), but its complete product acceptance remains separate. Use copies while testing.
 
+## Interface-language candidate
+
+This independent work-in-progress adds seven application interface languages: English, Simplified Chinese, Japanese, Korean, Spanish, Russian and Italian. UI language is separate from syntax language. Its Windows/IME and visual acceptance are still pending; see [interface language behavior and acceptance](docs/internationalization.md).
+
 ## What is included
 
 - A standalone Windows x64 app with Scintilla, Lexilla and the application-owned RuSyntax DLL; Python is not needed to run them
@@ -22,7 +26,7 @@ A small Windows text editor written mostly in **Ru**. Open a file, edit it in a 
 - Bounded streaming open/save, with a cancellable warning before reading files over 500,000,000 bytes
 - An original AI-generated icon
 
-There is no fixed 4 MiB file limit. At most 64 documents and 64 queued paths are allowed. Scintilla retains the full document in RAM, so available memory still limits usable sizes. Files of at least 32,000,000 bytes open in labelled plain-text large-file mode with highlighting and wrap disabled; this is a performance mode, not an opening limit. Files over exactly 500,000,000 bytes require consent before body reads. Cancel is checked between bounded I/O chunks; one slow disk call or long-line layout can still block. Embedded NUL and invalid Unicode are rejected rather than silently changed. There is no crash recovery yet. Additional languages, regex parity, plugins, macros, split views, accessibility validation, and broader performance validation remain future work. `.ru` files select the Ru-owned container lexer. Folding tolerates incomplete edits conservatively and is not a full parser or syntax validator.
+There is no fixed 4 MiB file limit. At most 64 documents and 64 queued paths are allowed. Scintilla retains the full document in RAM, so available memory still limits usable sizes. Files of at least 32,000,000 bytes open in labelled plain-text large-file mode with highlighting and wrap disabled; this is a performance mode, not an opening limit. Files over exactly 500,000,000 bytes require consent before body reads. Cancel is checked between bounded I/O chunks; one slow disk call or long-line layout can still block. Embedded NUL and invalid Unicode are rejected rather than silently changed. There is no crash recovery yet. Additional syntax languages, regex parity, plugins, macros, split views, accessibility validation, and broader performance validation remain future work. `.ru` files select the Ru-owned container lexer. Folding tolerates incomplete edits conservatively and is not a full parser or syntax validator.
 
 For Ru files, click the folding margin or use View > Collapse all folds / Expand all folds (Ctrl+Shift+[ / Ctrl+Shift+]). New/opened and successfully saved-as `.ru` paths select Ru automatically; Language > Ru / 如言 enables it manually. Switching tabs retains fold state; switching to plain text restores all hidden lines. The 32 MB plain-text performance mode also disables Ru folding.
 
@@ -56,6 +60,6 @@ Python is used only to run the Ru compiler and build/test tools. Ru application 
 
 `python tools/build.py --help` lists the explicit compiler and toolchain arguments. The two reviewed upstream source ZIPs and notices are tracked as fixed build inputs. Extracted dependencies, local tools, generated C, binaries and test output stay out of the source repository; source ZIPs are excluded from user packages.
 
-## License status
+## License
 
-The application license is **pending the project owner’s choice**. No MIT, GPL, or other application license is assigned by this repository yet. Third-party components retain their own licenses, and their required notices must accompany packaged copies.
+The project-owned application code and documentation are licensed under the [MIT License](LICENSE). Third-party source, data and components are excluded from this grant and retain their existing licenses and notices; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Both portable packages include the application license and required third-party notices.

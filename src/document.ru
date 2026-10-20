@@ -1,4 +1,5 @@
 # Portable application state policy. No OS, FFI, file writes or editor widget.
+本地 取 外言 'i18n.ru'.
 算 短名 路 为 句:
     位 取 路 其 量.
     循
@@ -20,8 +21,8 @@
     得 文本改 或 (文档 其 查 'encodingDirty').
 法
 算 改编码 文档, 编码 为 数, BOM 为 事实:
-    若 编码 != 65001 且 编码 != 1200 且 编码 != 1201 且 编码 != 1252 且 编码 != 936 则 卒 'Unsupported encoding.'. 然
-    若 BOM 且 (编码 == 1252 或 编码 == 936) 则 卒 'Legacy encodings have no BOM.'. 然
+    若 编码 != 65001 且 编码 != 1200 且 编码 != 1201 且 编码 != 1252 且 编码 != 936 则 卒 (本地 其 文本 'error.document.unsupported_encoding'). 然
+    若 BOM 且 (编码 == 1252 或 编码 == 936) 则 卒 (本地 其 文本 'error.document.legacy_bom'). 然
     若 编码 != (文档 其 查 'encoding') 或 BOM != (文档 其 查 'bom') 则
         文档 其 增 'encoding' 编码.
         文档 其 增 'bom' BOM.

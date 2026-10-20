@@ -4,8 +4,10 @@ import unittest
 import itertools
 import ast
 import zipfile
+import tempfile
+from unittest.mock import patch
 from pathlib import Path
-from run_cpp_growth_diagnostic import validate_measurements, validate_trigger
+from run_cpp_growth_diagnostic import validate_measurements, validate_trigger, publish_measurements
 
 ROOT = Path(__file__).resolve().parents[1]
 class Controls(unittest.TestCase):
@@ -42,7 +44,11 @@ class Controls(unittest.TestCase):
         self.assertNotIn('*.zip', job)
         self.assertNotIn('package.py', job)
         self.assertIn('if: always()', job)
-        self.assertIn('build/cpp-growth-diagnostic/*.log', job)
+        self.assertIn('path: build/cpp-growth-diagnostic/measurements.json', job)
+        self.assertNotIn('build/cpp-growth-diagnostic/*', job)
+        self.assertNotIn('.stdout.log', job)
+        self.assertNotIn('.stderr.log', job)
+        self.assertNotIn('.build.json', job)
         self.assertIn('default: false', workflow.split('syntax_growth_diagnostic:',1)[1].split('historical_callback:',1)[0])
 
     def test_retired_push_trigger_never_selects_diagnostic(self):
@@ -99,5 +105,19 @@ class Controls(unittest.TestCase):
             require_windows_target([x for x in constants if x != 'windir=C:/Windows'])
         with self.assertRaises(ValueError):
             require_windows_target([x.replace('windir=', 'WINDIR=') for x in constants])
+
+    def test_public_measurements_reject_raw_path_output(self):
+        with self.assertRaises(RuntimeError):
+            validate_measurements('compiler_path=C:\\runner\\gcc.exe\n'+self.text, '')
+        with self.assertRaises(RuntimeError):
+            validate_measurements(self.text, 'C:\\runner\\fixture.ru: runtime error')
+
+    def test_failed_publication_has_no_allowlisted_final_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)/'measurements.json'
+            with patch.object(Path, 'replace', side_effect=OSError('publication failed')):
+                with self.assertRaises(OSError): publish_measurements(target, {'kind':'measurement_only_not_acceptance'})
+            self.assertFalse(target.exists())
+            self.assertTrue(target.with_suffix('.json.pending').exists())
 
 if __name__ == '__main__': unittest.main()

@@ -155,7 +155,7 @@ class ManualPreviewTests(unittest.TestCase):
         result = self.build()
         self.assertEqual(result['formal_acceptance'], 'passed')
         self.assertEqual(result['manual_acceptance'], 'not_run')
-        self.assertEqual(result['required_test_groups'], 39)
+        self.assertEqual(result['required_test_groups'], 42)
         self.check_packages(result)
 
     def test_pending_timeout_preserves_failure_and_original_bytes(self):
@@ -179,6 +179,9 @@ class ManualPreviewTests(unittest.TestCase):
             with zipfile.ZipFile(path) as archive:
                 files = {n.removeprefix(path.stem + '/'): archive.read(n) for n in archive.namelist()}
             preview.verify_archive(path, files)
+            self.assertEqual(files['LICENSE'], (self.root / 'LICENSE').read_bytes())
+            self.assertEqual(files['licenses/ru-language-MIT.txt'],
+                             (self.root / 'packaging/licenses/ru-language-MIT.txt').read_bytes())
             records[kind] = files
             self.assertEqual(files[preview.SAMPLE_NAME], ci.gui_markdown_fixture('unclosed-fence')[0])
             self.assertEqual(len(files[preview.SAMPLE_NAME]), 1000000)

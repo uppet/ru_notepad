@@ -1,6 +1,7 @@
 # Ru's own incremental container styler. Scintilla owns all text/undo/selection.
 # No Lexilla dependency and no whole-document extraction. Feed <=1024 UTF-8 bytes;
 # independent lexical snapshots every 32 KiB bound restart distance below 64 KiB.
+本地 取 外言 'i18n.ru'.
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
 词 取 外言 'ru_native_syntax.ru'.
@@ -129,10 +130,19 @@ _时存 取 _计数型 其 新建. # UI-thread-only QPC call never invokes appli
     _全显 柄.
     得 空.
 法
+# Store stable keys/raw reasons. Reading status after a UI-language change must
+# not rebuild the scanner or touch its document, checkpoints or generation.
+算 _警告 态:
+    若 态['warningHelper'] 则 得 词 其 初始化. 然
+    若 态['warning'] == '' 则 得 ''. 然
+    得 本地 其 格式 (态['warning']) (态['warningArgs']).
+法
 算 _失败 柄 态 原因 为 句:
     态 其 增 'pending' 假.
     态 其 增 'language' 'plain'.
-    态 其 增 'warning' ('Ru syntax highlighting was disabled: '+原因+' Your document remains editable as plain text.').
+    态 其 增 'warning' 'error.syntax.ru_disabled'.
+    态 其 增 'warningArgs' ([原因]).
+    态 其 增 'warningHelper' 假.
     _放态 态.
     _全显 柄.
     窗 其 发送 柄 4033 0 0.
@@ -163,7 +173,9 @@ _时存 取 _计数型 其 新建. # UI-thread-only QPC call never invokes appli
     词 其 释放 初['lexical'].
     初 其 增 'lexical' 空.
     初 其 增 'points' ([]).
-    初 其 增 'warning' ('Ru scanner initialization failed: '+原因+'. Your document remains editable as plain text.').
+    初 其 增 'warning' 'error.syntax.ru_initialization'.
+    初 其 增 'warningArgs' ([原因]).
+    初 其 增 'warningHelper' 假.
     得 空.
 法
 算 选择 柄:
@@ -173,21 +185,24 @@ _时存 取 _计数型 其 新建. # UI-thread-only QPC call never invokes appli
     窗 其 发送 柄 2005 0 0.
     窗 其 发送 柄 2692 0 0. # Our timer owns bounded work even while wrapping.
     _序号[0] 取 _序号[0]+1.
-    初 取 {'lexical':空,'points':[],'warning':(词 其 初始化)}.
+    初 取 {'lexical':空,'points':[],'warning':'','warningArgs':[],'warningHelper':真}.
     若 词 其 可用 则
         试
             初 其 增 'lexical' (词 其 新状态).
             (初['points']) 其 增 [0,(词 其 复制状态 初['lexical']),假].
+            初 其 增 'warningHelper' 假.
         救 原因
             _初始化失败 初 (原因 为 句).
         终
     然
-    态 取 {'document':(窗 其 发送 柄 2357 0 0) 其 句,'direct':空,'generation':_序号[0], 'revision':0,'language':'ru','warning':'','feed':0,'readEnd':0,'bytes':0,'lexical':初['lexical'],'points':初['points'],'pending':真,'inTick':假,'requested':0,'chunks':0,'readBytes':0,'restart':0,'maxRead':0,'maxTickMs':0,'maxChunkMs':0,'candidates':[],'candidateIndex':0,'delta':0,'lineDelta':0,'dirtyEnd':0,'reuseComplete':假,'reusedBytes':0,'editReadBytes':0,'converged':假}.
+    态 取 {'document':(窗 其 发送 柄 2357 0 0) 其 句,'direct':空,'generation':_序号[0], 'revision':0,'language':'ru','warning':'','warningArgs':[],'warningHelper':假,'feed':0,'readEnd':0,'bytes':0,'lexical':初['lexical'],'points':初['points'],'pending':真,'inTick':假,'requested':0,'chunks':0,'readBytes':0,'restart':0,'maxRead':0,'maxTickMs':0,'maxChunkMs':0,'candidates':[],'candidateIndex':0,'delta':0,'lineDelta':0,'dirtyEnd':0,'reuseComplete':假,'reusedBytes':0,'editReadBytes':0,'converged':假}.
     _编辑们 其 增 (柄 其 句) 态.
     若 初['lexical'] == 空 则
         态 其 增 'pending' 假.
         态 其 增 'language' 'plain'.
         态 其 增 'warning' 初['warning'].
+        态 其 增 'warningArgs' 初['warningArgs'].
+        态 其 增 'warningHelper' 初['warningHelper'].
         得 'plain'.
     然
     _配折叠 柄.
@@ -546,7 +561,7 @@ _时存 取 _计数型 其 新建. # UI-thread-only QPC call never invokes appli
     态 取 _状态 柄.
     若 态 == 空 则 得 空. 然
     # Diagnostic projection: never expose the mutable scanner/checkpoint objects.
-    得 {'enabled':(态['language'] == 'ru'),'language':态['language'],'warning':态['warning'],'pending':态['pending'],'generation':态['generation'],'revision':态['revision'],'feed':态['feed'],'bytes':态['bytes'],'points':(态['points'] 其 量),'chunks':态['chunks'],'readBytes':态['readBytes'],'restart':态['restart'],'maxRead':态['maxRead'],'maxTickMs':态['maxTickMs'],'maxChunkMs':态['maxChunkMs'],'editReadBytes':态['editReadBytes'],'reusedBytes':态['reusedBytes'],'converged':态['converged']}.
+    得 {'enabled':(态['language'] == 'ru'),'language':态['language'],'warning':(_警告 态),'pending':态['pending'],'generation':态['generation'],'revision':态['revision'],'feed':态['feed'],'bytes':态['bytes'],'points':(态['points'] 其 量),'chunks':态['chunks'],'readBytes':态['readBytes'],'restart':态['restart'],'maxRead':态['maxRead'],'maxTickMs':态['maxTickMs'],'maxChunkMs':态['maxChunkMs'],'editReadBytes':态['editReadBytes'],'reusedBytes':态['reusedBytes'],'converged':态['converged']}.
 法
 算 排空 柄:
     # Test hook only. Production calls 推进 once per timer message.

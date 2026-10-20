@@ -162,3 +162,7 @@ measurements exclude Windows native ABI decoding, Scintilla publication,
 rendering, timers and GUI responsiveness. Windows evaluation must compare the
 baseline and candidate in the same run with the same direct-style route; older
 message-route timings are not a valid baseline.
+
+## Current toolchain note
+
+The measurements and compiler identifiers above are historical Ru 0.21.6 evidence. Current product build and policy-proof scripts and the product workflow pin reviewed Ru 0.22.1 as documented in [build provenance](build-provenance.md). Run the current scripts with that exact current pin; do not treat old measurements as results from the new compiler. The three manual historical replay workflows retain their original Ru 0.21.6 pin because they check out frozen historical application sources. The policy baseline and corpus identities remain unchanged.

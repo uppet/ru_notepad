@@ -1,6 +1,7 @@
 # Pure Ru language-selection policy, shared by production and portable tests.
 # Ru's builtin 含 is string containment, not array membership. Compare whole
 # string elements explicitly so suffixes and CLI flags never match substrings.
+本地 取 外言 'i18n.ru'.
 算 含词 列 为 句 阵, 词 为 句:
     位 取 0.
     循 列 其 量 次
@@ -14,7 +15,7 @@
     若 语言 == 'ru' 则 得 'Ru / 如言'. 然
     若 语言 == 'cpp' 则 得 'C / C++'. 然
     若 语言 == 'json' 则 得 'JSON'. 然
-    得 'Plain text'.
+    得 本地 其 文本 'syntax.plain'.
 法
 算 识别 路 为 句:
     位 取 路 其 量.

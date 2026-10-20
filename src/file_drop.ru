@@ -1,5 +1,6 @@
 # Windows x64 shell file drops. 接收 takes ownership of one real HDROP.
 # Decode the complete list before the caller opens files or shows any dialog.
+本地 取 外言 'i18n.ru'.
 密 取 外言 '如:密'.
 _PTR 取 密 其 指针.
 _U32 取 密 其 u32.
@@ -36,7 +37,7 @@ _子回调 取 [空].
         若 (实父 其 为空) 或 (实父 其 句) != (父 其 句) 则
             # Ownership never transfers to an unverified/reparented window.
             _DragFinish 其 调用 [(_PTR 其 重释 宽)].
-            卒 '编辑器拖放目标已失效。'.
+            卒 (本地 其 文本 'error.drop.expired').
         然
         # The same-thread parent consumes the HDROP synchronously exactly once.
         # Never finish it here after dispatch, even if the parent reports error.
@@ -63,20 +64,20 @@ _子回调[0] 其 失败时 _PostQuitMessage ([1]).
 
 算 启用编辑器 编辑器, 父窗口:
     实父 取 (_GetParent 其 调用 [编辑器]) 其 值.
-    若 (实父 其 为空) 或 (实父 其 句) != (父窗口 其 句) 则 卒 '编辑器拖放必须使用实际父窗口。'. 然
+    若 (实父 其 为空) 或 (实父 其 句) != (父窗口 其 句) 则 卒 (本地 其 文本 'error.drop.parent'). 然
     本线程 取 ((_GetCurrentThreadId 其 调用 []) 其 值) 其 数.
     子线程 取 ((_GetWindowThreadProcessId 其 调用 [编辑器,空]) 其 值) 其 数.
     父线程 取 ((_GetWindowThreadProcessId 其 调用 [父窗口,空]) 其 值) 其 数.
-    若 子线程 != 本线程 或 父线程 != 本线程 则 卒 '编辑器拖放只能在所属窗口线程启用。'. 然
+    若 子线程 != 本线程 或 父线程 != 本线程 则 卒 (本地 其 文本 'error.drop.thread'). 然
     果 取 _SetWindowSubclass 其 调用 [编辑器,(_子回调[0] 其 地址),_子类编号,(_UP 其 重释 父窗口)].
-    若 (果 其 值) 其 为空 则 卒 '无法安装编辑器文件拖放路由。'. 然
+    若 (果 其 值) 其 为空 则 卒 (本地 其 文本 'error.drop.install'). 然
     # Scintilla registers an OLE text-only target. Revoke it so Explorer's OLE
     # CF_HDROP source can use the documented legacy WM_DROPFILES fallback.
     # External OLE text drops into the editor are intentionally unavailable.
     码 取 ((_RevokeDragDrop 其 调用 [编辑器]) 其 值) 其 数.
     若 码 != 0 且 码 != -2147221248 则
         _RemoveWindowSubclass 其 调用 [编辑器,(_子回调[0] 其 地址),_子类编号].
-        卒 '无法启用编辑区文件拖放（HRESULT '+(码 为 句)+'）。'.
+        卒 (本地 其 格式 'error.drop.enable' ([(码 为 句)])).
     然
     _DragAcceptFiles 其 调用 [编辑器,1].
     得 码.
@@ -84,23 +85,23 @@ _子回调[0] 其 失败时 _PostQuitMessage ([1]).
 
 算 _解码 拖柄:
     数量 取 ((_DragQueryFileW 其 调用 [拖柄,4294967295,空,0]) 其 值) 其 数.
-    若 数量 > 64 则 卒 '一次最多拖入 64 个文件，请分批打开。'. 然
+    若 数量 > 64 则 卒 (本地 其 文本 'error.drop.count'). 然
     路径们 取 [].
     位 取 0.
     总长 取 0.
     循 数量 次
         长 取 ((_DragQueryFileW 其 调用 [拖柄,位,空,0]) 其 值) 其 数.
-        若 长 == 0 或 长 > 32000 则 卒 '拖入文件的路径为空或超过 32000 个 UTF-16 单元。'. 然
+        若 长 == 0 或 长 > 32000 则 卒 (本地 其 文本 'error.drop.path_length'). 然
         总长 取 总长+长+1.
-        若 总长 > 2097152 则 卒 '拖入文件的路径总长度过大，请分批打开。'. 然
+        若 总长 > 2097152 则 卒 (本地 其 文本 'error.drop.total_length'). 然
         存 取 密 其 缓冲 ((长+1)*2).
         试
             实长 取 ((_DragQueryFileW 其 调用 [拖柄,位,存,长+1]) 其 值) 其 数.
-            若 实长 != 长 则 卒 '拖入文件的路径读取不完整。'. 然
+            若 实长 != 长 则 卒 (本地 其 文本 'error.drop.path_incomplete'). 然
             # Strict Win32 validation precedes the native decoder, whose invalid
             # UTF-16 failure is not a catchable Ru exception in this runtime.
             验 取 (_WideCharToMultiByte 其 调用 [65001,128,存,长,空,0,空,空]) 其 值.
-            若 验 其 为空 则 卒 '拖入路径包含无效的 UTF-16 文本。'. 然
+            若 验 其 为空 则 卒 (本地 其 文本 'error.drop.path_utf16'). 然
             路 取 存 其 解UTF16.
             路径们 其 增 路.
         救 原因

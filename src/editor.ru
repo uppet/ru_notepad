@@ -1,5 +1,6 @@
 # Scintilla owns its native text buffer, rendering, selection and undo history.
 # This Ru module owns editor policy and search/replace command behavior.
+本地 取 外言 'i18n.ru'.
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
 _范围型 取 密 其 结构 [['start',窗 其 IP],['end',窗 其 IP],['text',窗 其 PTR]].
@@ -34,7 +35,7 @@ _块长 取 65536.
 法
 算 检查状态 柄:
     码 取 (窗 其 发送 柄 2383 0 0) 其 数.
-    若 码 != 0 则 卒 ('Scintilla reported an editor error ('+(码 为 句)+'). Your document is still open.'). 然
+    若 码 != 0 则 卒 (本地 其 格式 'error.editor.status' ([(码 为 句)])). 然
     得 空.
 法
 算 _新文档 柄 大文件 为 事实:
@@ -42,11 +43,11 @@ _块长 取 65536.
     若 大文件 则 选项 取 257. 然 # additionally STYLES_NONE
     窗 其 发送 柄 2382 0 0.
     文档 取 窗 其 发送 柄 2375 0 选项.
-    若 文档 其 为空 则 卒 'Not enough memory to create an editor document.'. 然
+    若 文档 其 为空 则 卒 (本地 其 文本 'error.editor.memory'). 然
     试
         窗 其 发送 柄 2358 0 文档.
         检查状态 柄.
-        若 (窗 其 发送 柄 2357 0 0) 其 句 != 文档 其 句 则 卒 'The editor could not attach the pending document.'. 然
+        若 (窗 其 发送 柄 2357 0 0) 其 句 != 文档 其 句 则 卒 (本地 其 文本 'error.editor.attach'). 然
     救 原因
         窗 其 发送 柄 2377 0 文档.
         卒 原因.
@@ -76,13 +77,13 @@ _块长 取 65536.
         范围 其 写 'text' (存 其 地址).
         窗 其 发送 柄 2382 0 0.
         实长 取 (窗 其 发指 柄 2039 0 范围) 其 数.
-        若 实长 != 长 则 卒 'The editor returned incomplete text. Nothing was saved.'. 然
+        若 实长 != 长 则 卒 (本地 其 文本 'error.editor.incomplete_text'). 然
         检查状态 柄.
         零长 取 (窗 其 结果 ((窗 其 lstrlenA) 其 调用 [存])) 其 数.
-        若 零长 != 长 则 卒 'This document contains NUL bytes. Saving would lose text, so it was cancelled.'. 然
+        若 零长 != 长 则 卒 (本地 其 文本 'error.editor.nul'). 然
         若 长 > 0 则
             验 取 窗 其 结果 ((窗 其 MultiByteToWideChar) 其 调用 [65001,8,存,长,空,0]).
-            若 验 其 为空 则 卒 'This document contains invalid UTF-8. Nothing was saved.'. 然
+            若 验 其 为空 则 卒 (本地 其 文本 'error.editor.invalid_utf8'). 然
         然
         文 取 存 其 解UTF8.
     救 原因
@@ -101,7 +102,7 @@ _块长 取 65536.
     若 文 == '' 则 得 空. 然
     柄 取 流态['editor'].
     旧长 取 流态['bytes'].
-    若 (窗 其 发送 柄 2183 0 0) 其 数 != 旧长 则 卒 'The pending document changed during loading.'. 然
+    若 (窗 其 发送 柄 2183 0 0) 其 数 != 旧长 则 卒 (本地 其 文本 'error.editor.load_changed'). 然
     存 取 密 其 UTF8 文.
     长 取 (存 其 大小)-1.
     试
@@ -113,8 +114,8 @@ _块长 取 65536.
         卒 原因.
     终
     存 其 关闭.
-    若 (窗 其 发送 柄 2183 0 0) 其 数 != 旧长+长 则 卒 'The editor could not load the complete document.'. 然
-    若 (_范围文本 柄 旧长 (旧长+长)) != 文 则 卒 'The editor content did not match the opened file.'. 然
+    若 (窗 其 发送 柄 2183 0 0) 其 数 != 旧长+长 则 卒 (本地 其 文本 'error.editor.load_incomplete'). 然
+    若 (_范围文本 柄 旧长 (旧长+长)) != 文 则 卒 (本地 其 文本 'error.editor.load_mismatch'). 然
     流态 其 增 'bytes' (旧长+长).
     若 (文 其 含 '\r\n') 或 (流态['tailCR'] 且 文[0] == '\n') 则 流态 其 增 'crlf' 真. 然
     若 文 其 含 '\n' 则 流态 其 增 'lf' 真. 然
@@ -127,7 +128,7 @@ _块长 取 65536.
     若 流态['done'] 则 得 流态. 然
     柄 取 流态['editor'].
     检查状态 柄.
-    若 (窗 其 发送 柄 2183 0 0) 其 数 != 流态['bytes'] 则 卒 'The pending document changed before commit.'. 然
+    若 (窗 其 发送 柄 2183 0 0) 其 数 != 流态['bytes'] 则 卒 (本地 其 文本 'error.editor.commit_changed'). 然
     模式 取 0.
     若 非 流态['crlf'] 则
         若 流态['lf'] 则 模式 取 2. 另
@@ -153,7 +154,7 @@ _块长 取 65536.
     若 流态['done'] 则 得 空. 然
     柄 取 流态['editor'].
     长 取 流态['bytes'].
-    若 (窗 其 发送 柄 2183 0 0) 其 数 != 长 或 (窗 其 发送 柄 2357 0 0) 其 句 != 流态['document'] 则 卒 'The document changed during saving. Nothing was replaced.'. 然
+    若 (窗 其 发送 柄 2183 0 0) 其 数 != 长 或 (窗 其 发送 柄 2357 0 0) 其 句 != 流态['document'] 则 卒 (本地 其 文本 'error.editor.save_changed'). 然
     始 取 流态['position'].
     若 始 == 长 则 流态 其 增 'done' 真. 得 空. 然
     末 取 始+_块长.
@@ -234,7 +235,7 @@ _块长 取 65536.
     得 空.
 法
 算 搜区 柄, 词 为 句, 始 为 数, 末 为 数, 区分 为 事实:
-    若 词 == '' 则 卒 'Enter text to find.'. 然
+    若 词 == '' 则 卒 (本地 其 文本 'error.editor.find_empty'). 然
     存 取 密 其 UTF8 词.
     窗 其 发送 柄 2382 0 0.
     标记 取 0.
@@ -270,14 +271,14 @@ _块长 取 65536.
         预换 取 (存 其 大小)-1.
         存 其 关闭.
         检查状态 柄.
-        若 已换 != 预换 则 卒 'Replacement was incomplete. Inspect the document or use Undo.'. 然
+        若 已换 != 预换 则 卒 (本地 其 文本 'error.editor.replace_incomplete'). 然
         新末 取 (窗 其 发送 柄 2193 0 0) 其 数.
         窗 其 发送 柄 2160 新末 新末.
     然
     得 下个 柄 词 区分.
 法
 算 全换 柄, 词 为 句, 新文 为 句, 区分 为 事实:
-    若 词 == '' 则 卒 'Enter text to find.'. 然
+    若 词 == '' 则 卒 (本地 其 文本 'error.editor.find_empty'). 然
     存 取 密 其 UTF8 新文.
     # Native allocation errors remain checked; there is no document-size cap.
     次数 取 0.
@@ -291,14 +292,14 @@ _块长 取 65536.
             若 位 == -1 则 破. 然
             已换 取 (窗 其 发指 柄 2194 ((存 其 大小)-1) 存) 其 数.
             检查状态 柄.
-            若 已换 != (存 其 大小)-1 则 卒 'The editor returned an incomplete replacement.'. 然
+            若 已换 != (存 其 大小)-1 则 卒 (本地 其 文本 'error.editor.replace_result'). 然
             始 取 (窗 其 发送 柄 2193 0 0) 其 数.
             次数 取 次数+1.
         环
     救 原因
         窗 其 发送 柄 2079 0 0.
         存 其 关闭.
-        卒 (原因+' Some changes may have completed. Use Undo to restore the replace-all operation.').
+        卒 (本地 其 格式 'error.editor.replace_partial' ([原因])).
     终
     窗 其 发送 柄 2079 0 0.
     存 其 关闭.

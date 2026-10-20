@@ -60,6 +60,15 @@ if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo markdown_direct_native.exe: guarded direct fold equivalence, acquisition invalidation and actual GC stress.
 cmd /d /c "set RU_GC_THRESHOLD=64&&set RU_GC_STATS=1&&markdown_direct_native.exe" >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo i18n_policy.exe: seven interface languages, fallback, placeholders, and wrapping layout policy.
+i18n_policy.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo i18n_settings_native.exe: isolated synthetic HKCU language preference roundtrip and malformed values; no production preference writes.
+i18n_settings_native.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo app_i18n_native.exe: actual localized menus, labels, measured layout and unchanged Unicode documents; session-only language switches.
+app_i18n_native.exe "%TESTDIR%" >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo shortcuts.exe: keyboard shortcut routing and modifier combinations.
 shortcuts.exe >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"

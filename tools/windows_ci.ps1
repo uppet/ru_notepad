@@ -181,6 +181,10 @@ try {
                 Set-Content -LiteralPath (Join-Path $Evidence 'markdown-callback-summary.json') -Encoding utf8
         }
     }
+    Invoke-Checked $Python @('-I','tools/test_i18n_runner.py','--ru-root',$RuRoot,'-v')
+    Invoke-Checked $Python @('tools/test_i18n_models.py')
+    Invoke-Checked $Python @('tools/test_i18n.py','--ru-root',$RuRoot,
+        '--cc',(Join-Path $Bin 'gcc.exe'),'--output',(Join-Path $Ci 'i18n-policy-evidence'))
     Invoke-Checked $Python @('tools/test_markdown_portable.py','--ru-root',$RuRoot,
         '--cc',(Join-Path $Bin 'gcc.exe'))
 
@@ -224,7 +228,7 @@ try {
     Invoke-Checked $Python @('-I','tools/test_markdown_fold_helper.py',
         '--cc',(Join-Path $Bin 'gcc.exe'),'--runtime-dir',$Output,
         '--output',(Join-Path $Evidence 'markdown-bulk-helper-controls.json'))
-    foreach ($test in @('document_policy','ui_arguments','file_codec_flags','editor_native','app_native','app_features_native','file_codec_tests','file_codec_security_probe','syntax_native','syntax_policy','shortcuts','status_native','file_streaming_native','editor_streaming_native','associations_policy','associations_native','file_drop_native','app_streaming_native','ru_lexical_policy','ru_syntax_native','app_ru_native','ru_direct_styling_native','markdown_policy','markdown_selection_policy','markdown_native','app_markdown_native','markdown_direct_native')) {
+    foreach ($test in @('document_policy','ui_arguments','file_codec_flags','editor_native','app_native','app_features_native','file_codec_tests','file_codec_security_probe','syntax_native','syntax_policy','shortcuts','status_native','file_streaming_native','editor_streaming_native','associations_policy','associations_native','file_drop_native','app_streaming_native','ru_lexical_policy','ru_syntax_native','app_ru_native','ru_direct_styling_native','markdown_policy','markdown_selection_policy','markdown_native','app_markdown_native','markdown_direct_native','i18n_policy','i18n_settings_native','app_i18n_native')) {
         Invoke-Checked $Python ($BuildArgs + @('--console','--source',"tests/$test.ru",'--output',(Join-Path $Output "$test.exe")))
     }
     $AcceptArgs = @('tools/windows_ci.py','--bin-dir',$Output,'--evidence-dir',$Evidence,

@@ -1,10 +1,11 @@
 # Bounded UTF-8 primitive scanner. Ru owns keyword configuration and all folding.
 # The helper retains no pointers; buffers and snapshot copies are caller-owned.
+本地 取 外言 'i18n.ru'.
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
 策 取 外言 'ru_lexical.ru'.
 _存活数 取 [0].
-_库态 取 {'ready':假,'warning':'','library':空,'config':空,'stateSize':0}.
+_库态 取 {'ready':假,'warning':'','warningArgs':[],'library':空,'config':空,'stateSize':0}.
 _事件型 取 密 其 结构 [['head',密 其 u64],['tail',密 其 u64]].
 _事件名 取 [].
 _事件域 取 [].
@@ -26,10 +27,12 @@ _GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名
 法
 _路径 取 (窗 其 目录)+'RuSyntax.dll'.
 _路径存 取 密 其 UTF16 _路径.
-_预载 取 窗 其 结果 ((窗 其 LoadLibraryExW) 其 调用 [_路径存,空,2304]).
+_预载成果 取 (窗 其 LoadLibraryExW) 其 调用 [_路径存,空,2304].
+_预载 取 窗 其 结果 _预载成果.
 _路径存 其 关闭.
 若 _预载 其 为空 则
-    _库态 其 增 'warning' 'Ru highlighting is unavailable: RuSyntax.dll could not be loaded. Extract the complete package. Your documents remain editable as plain text.'.
+    _库态 其 增 'warning' 'error.syntax.ru_missing'.
+    _库态 其 增 'warningArgs' ([((_预载成果 其 错误码) 为 句)]).
 另
     试
         若 非 (_有导出 _预载 'ru_scan_abi') 则 卒 'RuSyntax.dll does not export the required scanner API.'. 然
@@ -62,12 +65,14 @@ _路径存 其 关闭.
         _库态 其 增 'stateSize' _态长.
         _库态 其 增 'ready' 真.
     救 原因
-        _库态 其 增 'warning' ('Ru highlighting is unavailable: '+(原因 为 句)+' Restore RuSyntax.dll from the complete package. Your documents remain editable as plain text.').
+        _库态 其 增 'warning' 'error.syntax.ru_unavailable'.
+        _库态 其 增 'warningArgs' ([(原因 为 句)]).
     终
     窗 其 结果 ((窗 其 FreeLibrary) 其 调用 [_预载]).
 然
 算 初始化:
-    得 _库态['warning'].
+    若 _库态['warning'] == '' 则 得 ''. 然
+    得 本地 其 格式 (_库态['warning']) (_库态['warningArgs']).
 法
 算 可用:
     得 _库态['ready'].
@@ -78,7 +83,7 @@ _路径存 其 关闭.
     得 {'references':1,'processed':0,'received':0,'line':0,'native':存,'policy':折态,'input':空,'inputLength':0,'offset':0,'eof':假,'styles':空,'events':空,'result':空}.
 法
 算 新状态:
-    若 非 _库态['ready'] 则 卒 _库态['warning']. 然
+    若 非 _库态['ready'] 则 卒 初始化. 然
     存 取 密 其 缓冲 _库态['stateSize'].
     若 (窗 其 结果 (_StateInit 其 调用 [存,_库态['stateSize']])) 其 数 != 0 则 存 其 关闭. 卒 'The Ru scanner could not initialize its bounded state.'. 然
     得 _容器 存 (策 其 新状态).

@@ -65,6 +65,15 @@ jobs:
         run: python -I tools/test_source_archives.py
       - name: Require exact compiler diagnostic contracts with real CLI controls
         run: python -I tools/test_ru_cli_diagnostics.py --ru-root .ci/ru-language -v
+      - name: Preserve every menu command and lexer palette during data flattening
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.historical_callback) }}
+        run: python -I tools/test_i18n_models.py
+      - name: Require private bounded i18n runner negative controls
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.historical_callback) }}
+        run: python -I tools/test_i18n_runner.py --ru-root .ci/ru-language -v
+      - name: Verify all seven interface catalogs in interpreter and generated C
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.historical_callback) }}
+        run: python -I tools/test_i18n.py --ru-root .ci/ru-language --output build/i18n-policy-evidence
       - name: Require pure Markdown policy and selection in interpreter and generated C
         run: python -I tools/test_markdown_portable.py --ru-root .ci/ru-language
       - name: Verify bounded Markdown fold batches under ASan and UBSan
@@ -77,6 +86,9 @@ jobs:
           python -I tools/test_cleanup_paths.py --ru-root .ci/ru-language
           > build/logs/014/ru-scan/cleanup-control.stdout.log
           2> build/logs/014/ru-scan/cleanup-control.stderr.log
+      - name: Verify syntax warnings follow interface changes without restarting scans
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.historical_callback) }}
+        run: python -I tests/syntax_warning_portable.py --ru-root .ci/ru-language
       - name: Verify ordinary Ru initialization recovery without platform overrides
         run: >-
           python -I tests/ru_syntax_failure_portable.py --ru-root .ci/ru-language -v
@@ -141,6 +153,18 @@ jobs:
         with:
           name: markdown-bulk-helper-${{ github.sha }}
           path: build/markdown-fold-helper-evidence/markdown-bulk-helper-controls.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload bounded internationalization proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: i18n-policy-evidence-${{ github.sha }}
+          path: |
+            build/i18n-policy-evidence/report.json
+            build/i18n-policy-evidence/*.log
+            build/syntax-warning-evidence/report.json
+            build/syntax-warning-evidence/*.log
           if-no-files-found: warn
           retention-days: 14
   windows-native:
@@ -215,6 +239,18 @@ jobs:
           path: |
             build/windows-ci/evidence/*.json
             build/windows-ci/evidence/*.log
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Retain validated locale policy outputs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: locale-style-evidence-windows-${{ github.sha }}
+          path: |
+            build/markdown-policy-evidence/report.json
+            build/markdown-policy-evidence/*.log
+            build/windows-ci/i18n-policy-evidence/report.json
+            build/windows-ci/i18n-policy-evidence/*.log
           if-no-files-found: warn
           retention-days: 14
       - name: Upload separate native-tested runtime and tests ZIPs
@@ -296,8 +332,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: cpp-growth-diagnostic-${{ github.sha }}
-          path: |
-            build/cpp-growth-diagnostic/*.json
-            build/cpp-growth-diagnostic/*.log
+          path: build/cpp-growth-diagnostic/measurements.json
           if-no-files-found: warn
           retention-days: 14

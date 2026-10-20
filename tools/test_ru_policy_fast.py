@@ -73,6 +73,27 @@ def public_plan():
     return plan
 
 
+# Reviewed localization changes do not alter the isolated lexical-policy proof.
+# Keep both old and new bridge identities pinned rather than deleting the
+# original unchanged-source guard or accepting arbitrary future bridge edits.
+LOCALIZED_BRIDGE_SHA256 = {
+    'src/ru_native_syntax.ru': (
+        '99836515a3e79affd95182346d295818155da73e4cbe5e3b6ed373845bab68d7',
+        '7a46ce9621d658b5fbec64e2540d1a418d7aa6808eed18563656a80afce5ae38'),
+    'src/ru_syntax.ru': (
+        '8f23bb79ad9d8f36823272ff9bf1d55300aa3dce9e89ce82ff5a319111d812bf',
+        '484061b2994db7e20c914bc61654eee726b632c620c8babce51bf73e20985442'),
+}
+
+
+def verify_shared_inputs(baseline, candidate):
+    for path in ('native/ru_scan.c', 'native/ru_scan.h', 'tests/ru_lexical_policy.ru'):
+        assert (baseline / path).read_bytes() == (candidate / path).read_bytes(), path
+    for path, (before, after) in LOCALIZED_BRIDGE_SHA256.items():
+        assert sha((baseline / path).read_bytes()) == before, 'baseline bridge: ' + path
+        assert sha((candidate / path).read_bytes()) == after, 'localized bridge: ' + path
+
+
 def verify_sources(baseline, ru_root):
     assert git(baseline, 'rev-parse', 'HEAD') == BASE_COMMIT
     assert git(baseline, 'rev-parse', 'HEAD^{tree}') == BASE_TREE
@@ -85,9 +106,7 @@ def verify_sources(baseline, ru_root):
     assert not git(ru_root, 'status', '--porcelain'), 'toolchain must remain clean'
     before = (baseline / 'src/ru_lexical.ru').read_text(encoding='utf-8')
     after = (ROOT / 'src/ru_lexical.ru').read_text(encoding='utf-8')
-    for path in ('native/ru_scan.c', 'native/ru_scan.h', 'src/ru_native_syntax.ru',
-                 'src/ru_syntax.ru', 'tests/ru_lexical_policy.ru'):
-        assert (baseline / path).read_bytes() == (ROOT / path).read_bytes(), path
+    verify_shared_inputs(baseline, ROOT)
     verify_transition(before, after)
     verify_guard_rejections(before, after)
     return before, after

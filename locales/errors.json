@@ -1,0 +1,1334 @@
+{
+  "error.codec.unsupported_encoding": {
+    "en": "Unsupported encoding; choose UTF-8, UTF-16LE, UTF-16BE, Windows-1252 or GBK (CP936).",
+    "zh-CN": "不支持的编码；请选择 UTF-8、UTF-16LE、UTF-16BE、Windows-1252 或 GBK (CP936)。",
+    "ja": "未対応の文字コードです。UTF-8、UTF-16LE、UTF-16BE、Windows-1252、GBK (CP936) のいずれかを選んでください。",
+    "ko": "지원하지 않는 인코딩입니다. UTF-8, UTF-16LE, UTF-16BE, Windows-1252 또는 GBK (CP936)를 선택하세요.",
+    "es": "Codificación no compatible; elija UTF-8, UTF-16LE, UTF-16BE, Windows-1252 o GBK (CP936).",
+    "ru": "Неподдерживаемая кодировка. Выберите UTF-8, UTF-16LE, UTF-16BE, Windows-1252 или GBK (CP936).",
+    "it": "Codifica non supportata; scegliere UTF-8, UTF-16LE, UTF-16BE, Windows-1252 o GBK (CP936)."
+  },
+  "error.path.trailing_character": {
+    "en": "Path components ending in a space or period are not supported in this version.",
+    "zh-CN": "本版不支持以空格或句点结尾的路径段。",
+    "ja": "このバージョンでは、末尾が空白またはピリオドのパス要素は使用できません。",
+    "ko": "이 버전은 공백이나 마침표로 끝나는 경로 구성 요소를 지원하지 않습니다.",
+    "es": "Esta versión no admite componentes de ruta que terminen en un espacio o punto.",
+    "ru": "В этой версии не поддерживаются части пути, оканчивающиеся пробелом или точкой.",
+    "it": "Questa versione non supporta componenti del percorso che terminano con uno spazio o un punto."
+  },
+  "error.path.reserved_device": {
+    "en": "A file path cannot use a reserved DOS device name.",
+    "zh-CN": "不能使用 DOS 保留设备名称作为文件路径。",
+    "ja": "ファイルパスに DOS の予約済みデバイス名は使用できません。",
+    "ko": "파일 경로에 DOS 예약 장치 이름을 사용할 수 없습니다.",
+    "es": "La ruta no puede usar un nombre de dispositivo reservado de DOS.",
+    "ru": "В пути к файлу нельзя использовать зарезервированное имя устройства DOS.",
+    "it": "Il percorso non può usare un nome di dispositivo riservato di DOS."
+  },
+  "error.path.empty_or_long": {
+    "en": "The file path is empty or too long.",
+    "zh-CN": "文件路径为空或过长。",
+    "ja": "ファイルパスが空か、長すぎます。",
+    "ko": "파일 경로가 비어 있거나 너무 깁니다.",
+    "es": "La ruta del archivo está vacía o es demasiado larga.",
+    "ru": "Путь к файлу пуст или слишком длинный.",
+    "it": "Il percorso del file è vuoto o troppo lungo."
+  },
+  "error.path.device_namespace": {
+    "en": "Device paths and extended namespace paths are not supported in this version.",
+    "zh-CN": "本版不支持设备路径或扩展命名空间路径。",
+    "ja": "このバージョンでは、デバイスパスや拡張名前空間のパスは使用できません。",
+    "ko": "이 버전은 장치 경로나 확장 네임스페이스 경로를 지원하지 않습니다.",
+    "es": "Esta versión no admite rutas de dispositivos ni de espacios de nombres extendidos.",
+    "ru": "В этой версии не поддерживаются пути устройств и расширенных пространств имён.",
+    "it": "Questa versione non supporta percorsi di dispositivo o di spazi dei nomi estesi."
+  },
+  "error.path.control_character": {
+    "en": "The file path contains a control character.",
+    "zh-CN": "文件路径包含控制字符。",
+    "ja": "ファイルパスに制御文字が含まれています。",
+    "ko": "파일 경로에 제어 문자가 포함되어 있습니다.",
+    "es": "La ruta del archivo contiene un carácter de control.",
+    "ru": "Путь к файлу содержит управляющий символ.",
+    "it": "Il percorso del file contiene un carattere di controllo."
+  },
+  "error.path.unsupported_character": {
+    "en": "The file path contains an unsupported character.",
+    "zh-CN": "文件路径包含不支持的字符。",
+    "ja": "ファイルパスに使用できない文字が含まれています。",
+    "ko": "파일 경로에 지원하지 않는 문자가 포함되어 있습니다.",
+    "es": "La ruta del archivo contiene un carácter no compatible.",
+    "ru": "Путь к файлу содержит неподдерживаемый символ.",
+    "it": "Il percorso del file contiene un carattere non supportato."
+  },
+  "error.path.alternate_stream": {
+    "en": "Alternate data stream paths are not supported in this version.",
+    "zh-CN": "本版不支持备用数据流路径。",
+    "ja": "このバージョンでは、代替データストリームのパスは使用できません。",
+    "ko": "이 버전은 대체 데이터 스트림 경로를 지원하지 않습니다.",
+    "es": "Esta versión no admite rutas de flujos de datos alternativos.",
+    "ru": "В этой версии не поддерживаются пути альтернативных потоков данных.",
+    "it": "Questa versione non supporta percorsi di flussi di dati alternativi."
+  },
+  "error.path.resolve": {
+    "en": "Cannot resolve the file path",
+    "zh-CN": "无法解析文件路径",
+    "ja": "ファイルパスを解決できません",
+    "ko": "파일 경로를 확인할 수 없습니다",
+    "es": "No se puede resolver la ruta del archivo",
+    "ru": "Не удалось определить путь к файлу",
+    "it": "Impossibile risolvere il percorso del file"
+  },
+  "error.path.invalid_utf16": {
+    "en": "The normalized path contains invalid UTF-16; choose a valid Unicode path.",
+    "zh-CN": "规范化文件路径包含无效 UTF-16；请选择有效的 Unicode 路径。",
+    "ja": "正規化後のパスに無効な UTF-16 が含まれています。有効な Unicode パスを選んでください。",
+    "ko": "정규화된 경로에 잘못된 UTF-16이 포함되어 있습니다. 유효한 Unicode 경로를 선택하세요.",
+    "es": "La ruta normalizada contiene UTF-16 no válido; elija una ruta Unicode válida.",
+    "ru": "Нормализованный путь содержит недопустимый UTF-16. Выберите допустимый путь Unicode.",
+    "it": "Il percorso normalizzato contiene UTF-16 non valido; scegliere un percorso Unicode valido."
+  },
+  "error.path.regular_file": {
+    "en": "Choose a regular file path.",
+    "zh-CN": "请选择普通文件路径。",
+    "ja": "通常のファイルのパスを選んでください。",
+    "ko": "일반 파일 경로를 선택하세요.",
+    "es": "Elija la ruta de un archivo normal.",
+    "ru": "Выберите путь к обычному файлу.",
+    "it": "Scegliere il percorso di un file normale."
+  },
+  "error.path.normalized_namespace": {
+    "en": "The normalized path resolves to an unsupported device namespace.",
+    "zh-CN": "不支持规范化后形成的设备命名空间。",
+    "ja": "正規化後のパスが未対応のデバイス名前空間を指しています。",
+    "ko": "정규화된 경로가 지원하지 않는 장치 네임스페이스를 가리킵니다.",
+    "es": "La ruta normalizada apunta a un espacio de nombres de dispositivo no compatible.",
+    "ru": "Нормализованный путь указывает на неподдерживаемое пространство имён устройств.",
+    "it": "Il percorso normalizzato punta a uno spazio dei nomi di dispositivo non supportato."
+  },
+  "error.file.access": {
+    "en": "Cannot access the file",
+    "zh-CN": "无法访问文件",
+    "ja": "ファイルにアクセスできません",
+    "ko": "파일에 접근할 수 없습니다",
+    "es": "No se puede acceder al archivo",
+    "ru": "Не удалось получить доступ к файлу",
+    "it": "Impossibile accedere al file"
+  },
+  "error.file.directory": {
+    "en": "Choose a file; folders cannot be opened.",
+    "zh-CN": "请选择文件，不能打开文件夹。",
+    "ja": "ファイルを選んでください。フォルダーは開けません。",
+    "ko": "파일을 선택하세요. 폴더는 열 수 없습니다.",
+    "es": "Elija un archivo; no se pueden abrir carpetas.",
+    "ru": "Выберите файл: папки открыть нельзя.",
+    "it": "Scegliere un file; non è possibile aprire cartelle."
+  },
+  "error.file.reparse_point": {
+    "en": "This version does not overwrite reparse points or symbolic links; select the target file directly.",
+    "zh-CN": "本版不覆盖重解析点或符号链接；请直接选择目标文件。",
+    "ja": "このバージョンでは、再解析ポイントやシンボリックリンクは上書きしません。リンク先のファイルを直接選んでください。",
+    "ko": "이 버전은 재분석 지점이나 심볼릭 링크를 덮어쓰지 않습니다. 대상 파일을 직접 선택하세요.",
+    "es": "Esta versión no sobrescribe puntos de reanálisis ni enlaces simbólicos; seleccione directamente el archivo de destino.",
+    "ru": "Эта версия не перезаписывает точки повторной обработки и символические ссылки. Выберите целевой файл напрямую.",
+    "it": "Questa versione non sovrascrive punti di reparse o collegamenti simbolici; selezionare direttamente il file di destinazione."
+  },
+  "error.file.disk_only": {
+    "en": "Only regular disk files are supported.",
+    "zh-CN": "仅支持普通磁盘文件。",
+    "ja": "通常のディスク上のファイルのみ対応しています。",
+    "ko": "일반 디스크 파일만 지원합니다.",
+    "es": "Solo se admiten archivos normales del disco.",
+    "ru": "Поддерживаются только обычные файлы на диске.",
+    "it": "Sono supportati solo file normali su disco."
+  },
+  "error.file.status": {
+    "en": "Cannot read the file status",
+    "zh-CN": "无法读取文件状态",
+    "ja": "ファイルの状態を読み取れません",
+    "ko": "파일 상태를 읽을 수 없습니다",
+    "es": "No se puede leer el estado del archivo",
+    "ru": "Не удалось прочитать состояние файла",
+    "it": "Impossibile leggere lo stato del file"
+  },
+  "error.file.regular_only": {
+    "en": "Choose a regular file.",
+    "zh-CN": "请选择普通文件。",
+    "ja": "通常のファイルを選んでください。",
+    "ko": "일반 파일을 선택하세요.",
+    "es": "Elija un archivo normal.",
+    "ru": "Выберите обычный файл.",
+    "it": "Scegliere un file normale."
+  },
+  "error.file.open": {
+    "en": "Cannot open the file (it may be in use)",
+    "zh-CN": "无法打开文件（可能被占用）",
+    "ja": "ファイルを開けません（使用中の可能性があります）",
+    "ko": "파일을 열 수 없습니다(사용 중일 수 있습니다)",
+    "es": "No se puede abrir el archivo (puede estar en uso)",
+    "ru": "Не удалось открыть файл (возможно, он занят)",
+    "it": "Impossibile aprire il file (potrebbe essere in uso)"
+  },
+  "error.codec.nul": {
+    "en": "The file contains NUL bytes and cannot be opened as text.",
+    "zh-CN": "文件包含 NUL，不能作为文本打开。",
+    "ja": "ファイルに NUL バイトが含まれているため、テキストとして開けません。",
+    "ko": "파일에 NUL 바이트가 있어 텍스트로 열 수 없습니다.",
+    "es": "El archivo contiene bytes NUL y no se puede abrir como texto.",
+    "ru": "Файл содержит байты NUL и не может быть открыт как текст.",
+    "it": "Il file contiene byte NUL e non può essere aperto come testo."
+  },
+  "error.codec.invalid_utf16": {
+    "en": "The file contains an invalid UTF-16 sequence.",
+    "zh-CN": "文件包含无效 UTF-16 序列。",
+    "ja": "ファイルに無効な UTF-16 シーケンスが含まれています。",
+    "ko": "파일에 잘못된 UTF-16 시퀀스가 포함되어 있습니다.",
+    "es": "El archivo contiene una secuencia UTF-16 no válida.",
+    "ru": "Файл содержит недопустимую последовательность UTF-16.",
+    "it": "Il file contiene una sequenza UTF-16 non valida."
+  },
+  "error.codec.utf16_length": {
+    "en": "A UTF-16 file must contain an even number of bytes.",
+    "zh-CN": "UTF-16 文件的字节数必须为偶数。",
+    "ja": "UTF-16 ファイルのバイト数は偶数でなければなりません。",
+    "ko": "UTF-16 파일의 바이트 수는 짝수여야 합니다.",
+    "es": "Un archivo UTF-16 debe contener un número par de bytes.",
+    "ru": "Число байтов в файле UTF-16 должно быть чётным.",
+    "it": "Un file UTF-16 deve contenere un numero pari di byte."
+  },
+  "error.codec.utf16be_swap": {
+    "en": "UTF-16BE byte swapping failed",
+    "zh-CN": "UTF-16BE 字节交换失败",
+    "ja": "UTF-16BE のバイト順変換に失敗しました",
+    "ko": "UTF-16BE 바이트 순서 변환에 실패했습니다",
+    "es": "Falló el intercambio de bytes UTF-16BE",
+    "ru": "Не удалось изменить порядок байтов UTF-16BE",
+    "it": "Scambio dei byte UTF-16BE non riuscito"
+  },
+  "error.codec.invalid_utf8": {
+    "en": "This is not valid UTF-8; explicitly choose Windows-1252 or GBK (CP936) to reopen it.",
+    "zh-CN": "不是有效 UTF-8；请明确选择 Windows-1252 或 GBK (CP936) 重新打开。",
+    "ja": "有効な UTF-8 ではありません。Windows-1252 または GBK (CP936) を指定して開き直してください。",
+    "ko": "올바른 UTF-8이 아닙니다. Windows-1252 또는 GBK (CP936)를 명시적으로 선택하여 다시 여세요.",
+    "es": "No es UTF-8 válido; seleccione Windows-1252 o GBK (CP936) explícitamente para volver a abrirlo.",
+    "ru": "Это не допустимый UTF-8. Для повторного открытия явно выберите Windows-1252 или GBK (CP936).",
+    "it": "Il testo non è UTF-8 valido; scegliere esplicitamente Windows-1252 o GBK (CP936) per riaprirlo."
+  },
+  "error.codec.invalid_selected": {
+    "en": "The file is not valid text in the selected encoding",
+    "zh-CN": "文件不是所选编码的有效文本",
+    "ja": "選択した文字コードでは有効なテキストとして読めません",
+    "ko": "선택한 인코딩에서 유효한 텍스트 파일이 아닙니다",
+    "es": "El archivo no es texto válido en la codificación seleccionada",
+    "ru": "Файл не является допустимым текстом в выбранной кодировке",
+    "it": "Il file non è testo valido nella codifica selezionata"
+  },
+  "error.codec.decode": {
+    "en": "Text decoding failed",
+    "zh-CN": "文本解码失败",
+    "ja": "テキストのデコードに失敗しました",
+    "ko": "텍스트 디코딩에 실패했습니다",
+    "es": "Falló la decodificación del texto",
+    "ru": "Не удалось декодировать текст",
+    "it": "Decodifica del testo non riuscita"
+  },
+  "error.file.size_read": {
+    "en": "Cannot read the file size",
+    "zh-CN": "无法读取文件大小",
+    "ja": "ファイルサイズを読み取れません",
+    "ko": "파일 크기를 읽을 수 없습니다",
+    "es": "No se puede leer el tamaño del archivo",
+    "ru": "Не удалось прочитать размер файла",
+    "it": "Impossibile leggere la dimensione del file"
+  },
+  "error.file.size_range": {
+    "en": "The file size exceeds this platform's exact addressing range; the existing editor content is unchanged.",
+    "zh-CN": "文件大小超出本平台可精确寻址范围；原编辑内容未改变。",
+    "ja": "ファイルサイズがこのプラットフォームで正確に扱える範囲を超えています。編集中の内容は変更されていません。",
+    "ko": "파일 크기가 이 플랫폼의 정확한 주소 지정 범위를 초과합니다. 기존 편집 내용은 변경되지 않았습니다.",
+    "es": "El tamaño del archivo supera el rango de direccionamiento exacto de esta plataforma; el contenido del editor no ha cambiado.",
+    "ru": "Размер файла превышает диапазон точной адресации платформы. Содержимое редактора не изменено.",
+    "it": "La dimensione del file supera l'intervallo di indirizzamento esatto della piattaforma; il contenuto dell'editor è invariato."
+  },
+  "error.file.size_changed": {
+    "en": "The file size changed during the initial check; retry.",
+    "zh-CN": "文件大小在预检期间已改变；请重试。",
+    "ja": "事前確認中にファイルサイズが変わりました。再試行してください。",
+    "ko": "사전 검사 중 파일 크기가 변경되었습니다. 다시 시도하세요.",
+    "es": "El tamaño del archivo cambió durante la comprobación inicial; vuelva a intentarlo.",
+    "ru": "Размер файла изменился во время предварительной проверки. Повторите попытку.",
+    "it": "La dimensione del file è cambiata durante il controllo iniziale; riprovare."
+  },
+  "error.file.read_closed": {
+    "en": "The file reader is closed.",
+    "zh-CN": "文件读取已关闭。",
+    "ja": "ファイルの読み取りは終了しています。",
+    "ko": "파일 읽기가 종료되었습니다.",
+    "es": "La lectura del archivo está cerrada.",
+    "ru": "Чтение файла уже закрыто.",
+    "it": "La lettura del file è già chiusa."
+  },
+  "error.file.read": {
+    "en": "Failed to read the file",
+    "zh-CN": "读取文件失败",
+    "ja": "ファイルの読み取りに失敗しました",
+    "ko": "파일을 읽지 못했습니다",
+    "es": "No se pudo leer el archivo",
+    "ru": "Не удалось прочитать файл",
+    "it": "Lettura del file non riuscita"
+  },
+  "error.file.header_incomplete": {
+    "en": "The file header was not read completely.",
+    "zh-CN": "文件头读取不完整。",
+    "ja": "ファイルヘッダーを完全に読み取れませんでした。",
+    "ko": "파일 헤더를 완전히 읽지 못했습니다.",
+    "es": "La cabecera del archivo no se leyó por completo.",
+    "ru": "Заголовок файла прочитан не полностью.",
+    "it": "L'intestazione del file non è stata letta completamente."
+  },
+  "error.codec.utf32": {
+    "en": "This version does not support UTF-32; convert the file to UTF-8 or UTF-16 first.",
+    "zh-CN": "本版不支持 UTF-32；请先转换为 UTF-8 或 UTF-16。",
+    "ja": "このバージョンは UTF-32 に対応していません。先に UTF-8 または UTF-16 に変換してください。",
+    "ko": "이 버전은 UTF-32를 지원하지 않습니다. 먼저 UTF-8 또는 UTF-16으로 변환하세요.",
+    "es": "Esta versión no admite UTF-32; convierta el archivo a UTF-8 o UTF-16 primero.",
+    "ru": "Эта версия не поддерживает UTF-32. Сначала преобразуйте файл в UTF-8 или UTF-16.",
+    "it": "Questa versione non supporta UTF-32; convertire prima il file in UTF-8 o UTF-16."
+  },
+  "error.file.seek_body": {
+    "en": "Cannot seek to the file content",
+    "zh-CN": "无法定位文件正文",
+    "ja": "ファイル本文の位置に移動できません",
+    "ko": "파일 내용의 시작 위치로 이동할 수 없습니다",
+    "es": "No se puede localizar el contenido del archivo",
+    "ru": "Не удалось перейти к содержимому файла",
+    "it": "Impossibile raggiungere il contenuto del file"
+  },
+  "error.file.read_unavailable": {
+    "en": "File reading has not been approved or is already closed.",
+    "zh-CN": "文件读取尚未获准或已经关闭。",
+    "ja": "ファイルの読み取りが許可されていないか、すでに終了しています。",
+    "ko": "파일 읽기가 승인되지 않았거나 이미 종료되었습니다.",
+    "es": "La lectura del archivo no se ha autorizado o ya está cerrada.",
+    "ru": "Чтение файла ещё не разрешено или уже закрыто.",
+    "it": "La lettura del file non è stata autorizzata o è già chiusa."
+  },
+  "error.file.grew_during_read": {
+    "en": "The file grew while being read; the existing editor content is unchanged.",
+    "zh-CN": "文件在读取期间增长；原编辑内容未改变。",
+    "ja": "読み取り中にファイルサイズが増えました。編集中の内容は変更されていません。",
+    "ko": "읽는 동안 파일 크기가 늘어났습니다. 기존 편집 내용은 변경되지 않았습니다.",
+    "es": "El archivo creció durante la lectura; el contenido del editor no ha cambiado.",
+    "ru": "Файл увеличился во время чтения. Содержимое редактора не изменено.",
+    "it": "Il file è cresciuto durante la lettura; il contenuto dell'editor è invariato."
+  },
+  "error.file.changed_during_read": {
+    "en": "The file changed while being read; retry.",
+    "zh-CN": "文件在读取期间已改变；请重试。",
+    "ja": "読み取り中にファイルが変更されました。再試行してください。",
+    "ko": "읽는 동안 파일이 변경되었습니다. 다시 시도하세요.",
+    "es": "El archivo cambió durante la lectura; vuelva a intentarlo.",
+    "ru": "Файл изменился во время чтения. Повторите попытку.",
+    "it": "Il file è cambiato durante la lettura; riprovare."
+  },
+  "error.file.read_incomplete": {
+    "en": "The file was not read completely; the existing editor content is unchanged.",
+    "zh-CN": "文件读取不完整；原编辑内容未改变。",
+    "ja": "ファイルを完全に読み取れませんでした。編集中の内容は変更されていません。",
+    "ko": "파일을 완전히 읽지 못했습니다. 기존 편집 내용은 변경되지 않았습니다.",
+    "es": "El archivo no se leyó por completo; el contenido del editor no ha cambiado.",
+    "ru": "Файл прочитан не полностью. Содержимое редактора не изменено.",
+    "it": "Il file non è stato letto completamente; il contenuto dell'editor è invariato."
+  },
+  "error.file.seek_chunk": {
+    "en": "Cannot preserve a character spanning file chunks",
+    "zh-CN": "无法保留跨块字符",
+    "ja": "読み取りブロックをまたぐ文字を保持できません",
+    "ko": "파일 블록 경계에 걸친 문자를 보존할 수 없습니다",
+    "es": "No se puede conservar un carácter entre bloques de archivo",
+    "ru": "Не удалось сохранить символ на границе блоков файла",
+    "it": "Impossibile preservare un carattere tra blocchi del file"
+  },
+  "error.codec.legacy_bom": {
+    "en": "Windows-1252 and GBK do not use a BOM.",
+    "zh-CN": "Windows-1252 与 GBK 不使用 BOM。",
+    "ja": "Windows-1252 と GBK では BOM を使用しません。",
+    "ko": "Windows-1252와 GBK는 BOM을 사용하지 않습니다.",
+    "es": "Windows-1252 y GBK no utilizan BOM.",
+    "ru": "В Windows-1252 и GBK не используется BOM.",
+    "it": "Windows-1252 e GBK non usano il BOM."
+  },
+  "error.codec.encode": {
+    "en": "Text encoding failed",
+    "zh-CN": "文本编码失败",
+    "ja": "テキストのエンコードに失敗しました",
+    "ko": "텍스트 인코딩에 실패했습니다",
+    "es": "Falló la codificación del texto",
+    "ru": "Не удалось закодировать текст",
+    "it": "Codifica del testo non riuscita"
+  },
+  "error.codec.lossless_required": {
+    "en": "The selected legacy encoding cannot save these characters without loss; choose a Unicode encoding.",
+    "zh-CN": "所选旧编码不能无损保存这些字符；请选择 Unicode 编码。",
+    "ja": "選択した従来の文字コードでは、文字を失わずに保存できません。Unicode の文字コードを選んでください。",
+    "ko": "선택한 기존 인코딩으로는 이 문자를 손실 없이 저장할 수 없습니다. Unicode 인코딩을 선택하세요.",
+    "es": "La codificación antigua seleccionada no puede guardar estos caracteres sin pérdida; elija una codificación Unicode.",
+    "ru": "Выбранная устаревшая кодировка не сохраняет эти символы без потерь. Выберите кодировку Unicode.",
+    "it": "La codifica legacy selezionata non può salvare questi caratteri senza perdita; scegliere una codifica Unicode."
+  },
+  "error.codec.loss_cancelled": {
+    "en": "The legacy encoding would lose characters. Saving was cancelled.",
+    "zh-CN": "旧编码会丢失字符，已取消保存。",
+    "ja": "従来の文字コードでは文字が失われるため、保存を中止しました。",
+    "ko": "기존 인코딩을 사용하면 문자가 손실되므로 저장이 취소되었습니다.",
+    "es": "La codificación antigua perdería caracteres. Se canceló el guardado.",
+    "ru": "Устаревшая кодировка привела бы к потере символов. Сохранение отменено.",
+    "it": "La codifica legacy causerebbe la perdita di caratteri. Salvataggio annullato."
+  },
+  "error.codec.roundtrip_cancelled": {
+    "en": "The legacy encoding round-trip check failed. Saving was cancelled.",
+    "zh-CN": "旧编码往返校验失败，已取消保存。",
+    "ja": "従来の文字コードの往復変換チェックに失敗したため、保存を中止しました。",
+    "ko": "기존 인코딩의 왕복 변환 검증에 실패하여 저장이 취소되었습니다.",
+    "es": "Falló la comprobación de ida y vuelta de la codificación antigua. Se canceló el guardado.",
+    "ru": "Проверка обратного преобразования устаревшей кодировки не пройдена. Сохранение отменено.",
+    "it": "Verifica di conversione inversa della codifica legacy non riuscita. Salvataggio annullato."
+  },
+  "error.file.temp_write": {
+    "en": "Failed to write the temporary file",
+    "zh-CN": "写入临时文件失败",
+    "ja": "一時ファイルへの書き込みに失敗しました",
+    "ko": "임시 파일에 쓰지 못했습니다",
+    "es": "No se pudo escribir el archivo temporal",
+    "ru": "Не удалось записать временный файл",
+    "it": "Scrittura del file temporaneo non riuscita"
+  },
+  "error.file.temp_incomplete": {
+    "en": "The temporary file was not written completely; the original file was not replaced.",
+    "zh-CN": "临时文件写入不完整；原文件未替换。",
+    "ja": "一時ファイルへの書き込みが不完全です。元のファイルは置き換えていません。",
+    "ko": "임시 파일이 완전히 기록되지 않았습니다. 원본 파일은 교체되지 않았습니다.",
+    "es": "El archivo temporal no se escribió por completo; el archivo original no se reemplazó.",
+    "ru": "Временный файл записан не полностью. Исходный файл не заменён.",
+    "it": "Il file temporaneo non è stato scritto completamente; il file originale non è stato sostituito."
+  },
+  "error.file.efs": {
+    "en": "This version does not overwrite EFS-encrypted files, to avoid creating unencrypted temporary content.",
+    "zh-CN": "本版不覆盖 EFS 加密文件，以避免产生未加密的暂存内容。",
+    "ja": "暗号化されていない一時データを作らないよう、このバージョンでは EFS 暗号化ファイルを上書きしません。",
+    "ko": "암호화되지 않은 임시 내용이 생성되지 않도록 이 버전은 EFS 암호화 파일을 덮어쓰지 않습니다.",
+    "es": "Esta versión no sobrescribe archivos cifrados con EFS para evitar crear contenido temporal sin cifrar.",
+    "ru": "Эта версия не перезаписывает файлы с шифрованием EFS, чтобы не создавать незашифрованные временные данные.",
+    "it": "Questa versione non sovrascrive file crittografati con EFS per evitare contenuti temporanei non crittografati."
+  },
+  "error.file.read_only": {
+    "en": "The file is read-only and was not replaced; choose Save As.",
+    "zh-CN": "文件为只读，未进行替换；请选择另存为。",
+    "ja": "ファイルは読み取り専用のため、置き換えていません。「名前を付けて保存」を選んでください。",
+    "ko": "읽기 전용 파일이므로 교체되지 않았습니다. 다른 이름으로 저장을 선택하세요.",
+    "es": "El archivo es de solo lectura y no se reemplazó; elija Guardar como.",
+    "ru": "Файл доступен только для чтения и не заменён. Выберите «Сохранить как».",
+    "it": "Il file è di sola lettura e non è stato sostituito; scegliere Salva con nome."
+  },
+  "error.file.hard_links": {
+    "en": "This version does not overwrite files with multiple hard links; choose Save As.",
+    "zh-CN": "本版不覆盖具有多个硬链接的文件；请选择另存为。",
+    "ja": "このバージョンでは、ハードリンクが複数あるファイルを上書きしません。「名前を付けて保存」を選んでください。",
+    "ko": "이 버전은 하드 링크가 여러 개인 파일을 덮어쓰지 않습니다. 다른 이름으로 저장을 선택하세요.",
+    "es": "Esta versión no sobrescribe archivos con varios enlaces físicos; elija Guardar como.",
+    "ru": "Эта версия не перезаписывает файлы с несколькими жёсткими ссылками. Выберите «Сохранить как».",
+    "it": "Questa versione non sovrascrive file con più collegamenti fisici; scegliere Salva con nome."
+  },
+  "error.file.conflict": {
+    "en": "Another program changed the file. Reopen it or use Save As to avoid overwriting those changes.",
+    "zh-CN": "文件已被其他程序修改；请重新打开或另存为，避免覆盖。",
+    "ja": "別のプログラムがファイルを変更しました。変更を上書きしないよう、開き直すか「名前を付けて保存」を使ってください。",
+    "ko": "다른 프로그램이 파일을 변경했습니다. 변경 내용을 덮어쓰지 않도록 다시 열거나 다른 이름으로 저장하세요.",
+    "es": "Otro programa cambió el archivo. Vuelva a abrirlo o use Guardar como para no sobrescribir esos cambios.",
+    "ru": "Файл изменён другой программой. Откройте его заново или выберите «Сохранить как», чтобы не перезаписать изменения.",
+    "it": "Un altro programma ha modificato il file. Riaprirlo o usare Salva con nome per non sovrascrivere le modifiche."
+  },
+  "error.security.descriptor_limit": {
+    "en": "The file security descriptor exceeds the managed-memory limit; nothing was written.",
+    "zh-CN": "文件安全描述符超过受管理内存限制；未写入。",
+    "ja": "ファイルのセキュリティ記述子が管理メモリの上限を超えています。書き込みは行っていません。",
+    "ko": "파일 보안 설명자가 관리 메모리 한도를 초과합니다. 아무것도 기록되지 않았습니다.",
+    "es": "El descriptor de seguridad del archivo supera el límite de memoria administrada; no se escribió nada.",
+    "ru": "Дескриптор безопасности файла превышает лимит управляемой памяти. Запись не выполнена.",
+    "it": "Il descrittore di sicurezza del file supera il limite di memoria gestita; nessuna scrittura eseguita."
+  },
+  "error.security.dacl_size": {
+    "en": "Cannot obtain the original file's DACL size; secure staging was cancelled",
+    "zh-CN": "无法取得原文件 DACL 大小；已取消安全暂存",
+    "ja": "元のファイルの DACL サイズを取得できません。安全な一時保存を中止しました",
+    "ko": "원본 파일의 DACL 크기를 가져올 수 없습니다. 보안 임시 저장이 취소되었습니다",
+    "es": "No se puede obtener el tamaño de la DACL original; se canceló el almacenamiento temporal seguro",
+    "ru": "Не удалось получить размер DACL исходного файла. Безопасная временная запись отменена",
+    "it": "Impossibile ottenere la dimensione della DACL originale; salvataggio temporaneo sicuro annullato"
+  },
+  "error.security.descriptor_size": {
+    "en": "The original file's security descriptor size is invalid; nothing was written.",
+    "zh-CN": "原文件安全描述符大小无效；未写入。",
+    "ja": "元のファイルのセキュリティ記述子のサイズが無効です。書き込みは行っていません。",
+    "ko": "원본 파일의 보안 설명자 크기가 잘못되었습니다. 아무것도 기록되지 않았습니다.",
+    "es": "El tamaño del descriptor de seguridad original no es válido; no se escribió nada.",
+    "ru": "Размер дескриптора безопасности исходного файла недопустим. Запись не выполнена.",
+    "it": "La dimensione del descrittore di sicurezza originale non è valida; nessuna scrittura eseguita."
+  },
+  "error.security.dacl_read": {
+    "en": "Cannot read the original file's DACL; secure staging was cancelled",
+    "zh-CN": "无法读取原文件 DACL；已取消安全暂存",
+    "ja": "元のファイルの DACL を読み取れません。安全な一時保存を中止しました",
+    "ko": "원본 파일의 DACL을 읽을 수 없습니다. 보안 임시 저장이 취소되었습니다",
+    "es": "No se puede leer la DACL original; se canceló el almacenamiento temporal seguro",
+    "ru": "Не удалось прочитать DACL исходного файла. Безопасная временная запись отменена",
+    "it": "Impossibile leggere la DACL originale; salvataggio temporaneo sicuro annullato"
+  },
+  "error.security.original_invalid": {
+    "en": "The original file's security descriptor is invalid; nothing was written",
+    "zh-CN": "原文件安全描述符无效；未写入",
+    "ja": "元のファイルのセキュリティ記述子が無効です。書き込みは行っていません",
+    "ko": "원본 파일의 보안 설명자가 잘못되었습니다. 아무것도 기록되지 않았습니다",
+    "es": "El descriptor de seguridad original no es válido; no se escribió nada",
+    "ru": "Дескриптор безопасности исходного файла недопустим. Запись не выполнена",
+    "it": "Il descrittore di sicurezza originale non è valido; nessuna scrittura eseguita"
+  },
+  "error.security.layout_compute": {
+    "en": "Cannot calculate the security descriptor layout; nothing was written",
+    "zh-CN": "无法计算安全描述符布局；未写入",
+    "ja": "セキュリティ記述子の配置を計算できません。書き込みは行っていません",
+    "ko": "보안 설명자 배치를 계산할 수 없습니다. 아무것도 기록되지 않았습니다",
+    "es": "No se puede calcular la disposición del descriptor de seguridad; no se escribió nada",
+    "ru": "Не удалось вычислить структуру дескриптора безопасности. Запись не выполнена",
+    "it": "Impossibile calcolare la struttura del descrittore di sicurezza; nessuna scrittura eseguita"
+  },
+  "error.security.layout_empty": {
+    "en": "The security descriptor layout is empty; nothing was written.",
+    "zh-CN": "安全描述符布局为空；未写入。",
+    "ja": "セキュリティ記述子の配置が空です。書き込みは行っていません。",
+    "ko": "보안 설명자 배치가 비어 있습니다. 아무것도 기록되지 않았습니다.",
+    "es": "La disposición del descriptor de seguridad está vacía; no se escribió nada.",
+    "ru": "Структура дескриптора безопасности пуста. Запись не выполнена.",
+    "it": "La struttura del descrittore di sicurezza è vuota; nessuna scrittura eseguita."
+  },
+  "error.security.convert": {
+    "en": "Security descriptor conversion failed; nothing was written",
+    "zh-CN": "转换安全描述符失败；未写入",
+    "ja": "セキュリティ記述子の変換に失敗しました。書き込みは行っていません",
+    "ko": "보안 설명자 변환에 실패했습니다. 아무것도 기록되지 않았습니다",
+    "es": "Falló la conversión del descriptor de seguridad; no se escribió nada",
+    "ru": "Не удалось преобразовать дескриптор безопасности. Запись не выполнена",
+    "it": "Conversione del descrittore di sicurezza non riuscita; nessuna scrittura eseguita"
+  },
+  "error.security.inheritance": {
+    "en": "Cannot protect the temporary DACL inheritance boundary; nothing was written",
+    "zh-CN": "无法保护暂存 DACL 的继承边界；未写入",
+    "ja": "一時 DACL の継承境界を保護できません。書き込みは行っていません",
+    "ko": "임시 DACL의 상속 경계를 보호할 수 없습니다. 아무것도 기록되지 않았습니다",
+    "es": "No se puede proteger el límite de herencia de la DACL temporal; no se escribió nada",
+    "ru": "Не удалось защитить границу наследования временной DACL. Запись не выполнена",
+    "it": "Impossibile proteggere il limite di ereditarietà della DACL temporanea; nessuna scrittura eseguita"
+  },
+  "error.security.temporary_invalid": {
+    "en": "The temporary security descriptor is invalid; nothing was written",
+    "zh-CN": "暂存安全描述符无效；未写入",
+    "ja": "一時セキュリティ記述子が無効です。書き込みは行っていません",
+    "ko": "임시 보안 설명자가 잘못되었습니다. 아무것도 기록되지 않았습니다",
+    "es": "El descriptor de seguridad temporal no es válido; no se escribió nada",
+    "ru": "Временный дескриптор безопасности недопустим. Запись не выполнена",
+    "it": "Il descrittore di sicurezza temporaneo non è valido; nessuna scrittura eseguita"
+  },
+  "error.file.temp_create": {
+    "en": "Cannot create a temporary file in the original directory",
+    "zh-CN": "无法在原目录创建临时文件",
+    "ja": "元のフォルダーに一時ファイルを作成できません",
+    "ko": "원래 폴더에 임시 파일을 만들 수 없습니다",
+    "es": "No se puede crear un archivo temporal en la carpeta original",
+    "ru": "Не удалось создать временный файл в исходной папке",
+    "it": "Impossibile creare un file temporaneo nella cartella originale"
+  },
+  "error.file.temp_unique": {
+    "en": "Cannot create a unique temporary file; retry later.",
+    "zh-CN": "无法创建唯一临时文件；请稍后重试。",
+    "ja": "一意な一時ファイルを作成できません。しばらくしてから再試行してください。",
+    "ko": "고유한 임시 파일을 만들 수 없습니다. 나중에 다시 시도하세요.",
+    "es": "No se puede crear un archivo temporal único; inténtelo más tarde.",
+    "ru": "Не удалось создать уникальный временный файл. Повторите попытку позже.",
+    "it": "Impossibile creare un file temporaneo univoco; riprovare più tardi."
+  },
+  "error.file.save_closed": {
+    "en": "The save stream is already closed.",
+    "zh-CN": "保存流已经关闭。",
+    "ja": "保存ストリームはすでに閉じています。",
+    "ko": "저장 스트림이 이미 닫혔습니다.",
+    "es": "El flujo de guardado ya está cerrado.",
+    "ru": "Поток сохранения уже закрыт.",
+    "it": "Il flusso di salvataggio è già chiuso."
+  },
+  "error.file.temp_flush": {
+    "en": "Failed to flush the temporary file; the original file was not replaced",
+    "zh-CN": "临时文件刷新失败；原文件未替换",
+    "ja": "一時ファイルの書き出しに失敗しました。元のファイルは置き換えていません",
+    "ko": "임시 파일의 버퍼를 비우지 못했습니다. 원본 파일은 교체되지 않았습니다",
+    "es": "No se pudo vaciar el búfer del archivo temporal; el original no se reemplazó",
+    "ru": "Не удалось сбросить буфер временного файла. Исходный файл не заменён",
+    "it": "Impossibile svuotare il buffer del file temporaneo; l'originale non è stato sostituito"
+  },
+  "error.file.temp_close": {
+    "en": "Failed to close the temporary file; the original file was not replaced",
+    "zh-CN": "关闭临时文件失败；原文件未替换",
+    "ja": "一時ファイルを閉じられませんでした。元のファイルは置き換えていません",
+    "ko": "임시 파일을 닫지 못했습니다. 원본 파일은 교체되지 않았습니다",
+    "es": "No se pudo cerrar el archivo temporal; el original no se reemplazó",
+    "ru": "Не удалось закрыть временный файл. Исходный файл не заменён",
+    "it": "Impossibile chiudere il file temporaneo; l'originale non è stato sostituito"
+  },
+  "error.file.backup_reserve": {
+    "en": "Cannot reserve a recovery backup file",
+    "zh-CN": "无法预留恢复备份文件",
+    "ja": "復旧用バックアップファイルを確保できません",
+    "ko": "복구 백업 파일을 예약할 수 없습니다",
+    "es": "No se puede reservar un archivo de copia de recuperación",
+    "ru": "Не удалось зарезервировать файл резервной копии для восстановления",
+    "it": "Impossibile riservare un file di backup per il recupero"
+  },
+  "error.file.backup_unique": {
+    "en": "Cannot reserve a unique recovery backup file.",
+    "zh-CN": "无法预留唯一恢复备份文件。",
+    "ja": "一意な復旧用バックアップファイルを確保できません。",
+    "ko": "고유한 복구 백업 파일을 예약할 수 없습니다.",
+    "es": "No se puede reservar una copia de recuperación única.",
+    "ru": "Не удалось зарезервировать уникальный файл резервной копии для восстановления.",
+    "it": "Impossibile riservare un file di backup univoco per il recupero."
+  },
+  "error.file.replace_recovery": {
+    "en": "Replacement failed and the original file may have moved; check the target and keep the recovery files",
+    "zh-CN": "替换失败，原文件位置可能已改变；请检查目标并保留恢复文件",
+    "ja": "置き換えに失敗し、元のファイルの場所が変わった可能性があります。保存先を確認し、復旧用ファイルを保管してください",
+    "ko": "교체에 실패했으며 원본 파일 위치가 변경되었을 수 있습니다. 대상을 확인하고 복구 파일을 보관하세요",
+    "es": "Falló el reemplazo y el archivo original puede haberse movido; revise el destino y conserve los archivos de recuperación",
+    "ru": "Замена не удалась; исходный файл мог переместиться. Проверьте целевой путь и сохраните файлы восстановления",
+    "it": "Sostituzione non riuscita; il file originale potrebbe essere stato spostato. Controllare la destinazione e conservare i file di recupero"
+  },
+  "error.file.target_created": {
+    "en": "Another program just created the target file. It was not overwritten; choose Save As again.",
+    "zh-CN": "目标文件刚被其他程序创建；未覆盖，请重新选择另存为。",
+    "ja": "別のプログラムが保存先のファイルを作成しました。上書きはしていません。もう一度「名前を付けて保存」を選んでください。",
+    "ko": "다른 프로그램이 대상 파일을 방금 만들었습니다. 덮어쓰지 않았습니다. 다른 이름으로 저장을 다시 선택하세요.",
+    "es": "Otro programa acaba de crear el archivo de destino. No se sobrescribió; vuelva a elegir Guardar como.",
+    "ru": "Другая программа только что создала целевой файл. Он не перезаписан. Снова выберите «Сохранить как».",
+    "it": "Un altro programma ha appena creato il file di destinazione. Non è stato sovrascritto; scegliere di nuovo Salva con nome."
+  },
+  "error.file.target_create": {
+    "en": "Failed to create the target file; a newly created file was not overwritten",
+    "zh-CN": "创建目标文件失败；未覆盖后来出现的文件",
+    "ja": "保存先ファイルの作成に失敗しました。後から作成されたファイルは上書きしていません",
+    "ko": "대상 파일을 만들지 못했습니다. 새로 생긴 파일은 덮어쓰지 않았습니다",
+    "es": "No se pudo crear el archivo de destino; no se sobrescribió un archivo recién creado",
+    "ru": "Не удалось создать целевой файл. Вновь появившийся файл не перезаписан",
+    "it": "Impossibile creare il file di destinazione; un file appena creato non è stato sovrascritto"
+  },
+  "error.file.backup_cleanup": {
+    "en": "The file was written, but the recovery backup could not be removed. Inspect it and manually keep or delete it.",
+    "zh-CN": "文件已写入，但无法清理恢复备份；请检查并手动保留或删除备份。",
+    "ja": "ファイルは書き込まれましたが、復旧用バックアップを削除できませんでした。確認して、手動で保管または削除してください。",
+    "ko": "파일은 기록되었지만 복구 백업을 삭제하지 못했습니다. 확인한 뒤 직접 보관하거나 삭제하세요.",
+    "es": "El archivo se escribió, pero no se pudo eliminar la copia de recuperación. Revísela y consérvela o elimínela manualmente.",
+    "ru": "Файл записан, но резервную копию для восстановления удалить не удалось. Проверьте её и сохраните или удалите вручную.",
+    "it": "Il file è stato scritto, ma non è stato possibile rimuovere il backup di recupero. Controllarlo e conservarlo o eliminarlo manualmente."
+  },
+  "error.document.unsupported_encoding": {
+    "en": "Unsupported encoding.",
+    "zh-CN": "不支持的编码。",
+    "ja": "未対応の文字コードです。",
+    "ko": "지원하지 않는 인코딩입니다.",
+    "es": "Codificación no compatible.",
+    "ru": "Неподдерживаемая кодировка.",
+    "it": "Codifica non supportata."
+  },
+  "error.document.legacy_bom": {
+    "en": "Legacy encodings have no BOM.",
+    "zh-CN": "旧式编码没有 BOM。",
+    "ja": "従来の文字コードに BOM はありません。",
+    "ko": "기존 인코딩에는 BOM이 없습니다.",
+    "es": "Las codificaciones antiguas no tienen BOM.",
+    "ru": "В устаревших кодировках нет BOM.",
+    "it": "Le codifiche legacy non hanno BOM."
+  },
+  "error.editor.memory": {
+    "en": "Not enough memory to create an editor document.",
+    "zh-CN": "内存不足，无法创建编辑器文档。",
+    "ja": "メモリ不足のため、エディターの文書を作成できません。",
+    "ko": "메모리가 부족하여 편집기 문서를 만들 수 없습니다.",
+    "es": "No hay memoria suficiente para crear un documento del editor.",
+    "ru": "Недостаточно памяти для создания документа в редакторе.",
+    "it": "Memoria insufficiente per creare un documento nell'editor."
+  },
+  "error.editor.attach": {
+    "en": "The editor could not attach the pending document.",
+    "zh-CN": "编辑器无法接入待载入的文档。",
+    "ja": "エディターに読み込み待ちの文書を接続できませんでした。",
+    "ko": "편집기에 대기 중인 문서를 연결하지 못했습니다.",
+    "es": "El editor no pudo conectar el documento pendiente.",
+    "ru": "Редактору не удалось подключить ожидающий документ.",
+    "it": "L'editor non ha potuto collegare il documento in attesa."
+  },
+  "error.editor.incomplete_text": {
+    "en": "The editor returned incomplete text. Nothing was saved.",
+    "zh-CN": "编辑器返回的文本不完整，未保存任何内容。",
+    "ja": "エディターが返したテキストが不完全です。何も保存していません。",
+    "ko": "편집기가 불완전한 텍스트를 반환했습니다. 아무것도 저장되지 않았습니다.",
+    "es": "El editor devolvió texto incompleto. No se guardó nada.",
+    "ru": "Редактор вернул неполный текст. Ничего не сохранено.",
+    "it": "L'editor ha restituito testo incompleto. Nulla è stato salvato."
+  },
+  "error.editor.nul": {
+    "en": "This document contains NUL bytes. Saving would lose text, so it was cancelled.",
+    "zh-CN": "文档包含 NUL 字节。保存会丢失文本，因此已取消保存。",
+    "ja": "文書に NUL バイトが含まれています。テキストが失われるため、保存を中止しました。",
+    "ko": "문서에 NUL 바이트가 있습니다. 저장하면 텍스트가 손실되므로 취소되었습니다.",
+    "es": "Este documento contiene bytes NUL. Se canceló el guardado para evitar perder texto.",
+    "ru": "Документ содержит байты NUL. Сохранение отменено во избежание потери текста.",
+    "it": "Il documento contiene byte NUL. Il salvataggio è stato annullato per evitare la perdita di testo."
+  },
+  "error.editor.invalid_utf8": {
+    "en": "This document contains invalid UTF-8. Nothing was saved.",
+    "zh-CN": "文档包含无效 UTF-8，未保存任何内容。",
+    "ja": "文書に無効な UTF-8 が含まれています。何も保存していません。",
+    "ko": "문서에 잘못된 UTF-8이 있습니다. 아무것도 저장되지 않았습니다.",
+    "es": "Este documento contiene UTF-8 no válido. No se guardó nada.",
+    "ru": "Документ содержит недопустимый UTF-8. Ничего не сохранено.",
+    "it": "Il documento contiene UTF-8 non valido. Nulla è stato salvato."
+  },
+  "error.editor.load_changed": {
+    "en": "The pending document changed during loading.",
+    "zh-CN": "待载入的文档在加载期间发生了变化。",
+    "ja": "読み込み中に文書が変更されました。",
+    "ko": "로드 중 대기 문서가 변경되었습니다.",
+    "es": "El documento pendiente cambió durante la carga.",
+    "ru": "Ожидающий документ изменился во время загрузки.",
+    "it": "Il documento in attesa è cambiato durante il caricamento."
+  },
+  "error.editor.load_incomplete": {
+    "en": "The editor could not load the complete document.",
+    "zh-CN": "编辑器未能完整载入文档。",
+    "ja": "エディターは文書全体を読み込めませんでした。",
+    "ko": "편집기가 문서를 완전히 로드하지 못했습니다.",
+    "es": "El editor no pudo cargar el documento completo.",
+    "ru": "Редактору не удалось загрузить документ полностью.",
+    "it": "L'editor non ha potuto caricare l'intero documento."
+  },
+  "error.editor.load_mismatch": {
+    "en": "The editor content did not match the opened file.",
+    "zh-CN": "编辑器内容与打开的文件不一致。",
+    "ja": "エディターの内容が開いたファイルと一致しませんでした。",
+    "ko": "편집기 내용이 연 파일과 일치하지 않습니다.",
+    "es": "El contenido del editor no coincidió con el archivo abierto.",
+    "ru": "Содержимое редактора не совпадает с открытым файлом.",
+    "it": "Il contenuto dell'editor non corrisponde al file aperto."
+  },
+  "error.editor.commit_changed": {
+    "en": "The pending document changed before commit.",
+    "zh-CN": "待载入文档在提交前发生了变化。",
+    "ja": "読み込んだ文書が確定前に変更されました。",
+    "ko": "대기 문서가 확정 전에 변경되었습니다.",
+    "es": "El documento pendiente cambió antes de confirmarse.",
+    "ru": "Ожидающий документ изменился перед фиксацией.",
+    "it": "Il documento in attesa è cambiato prima della conferma."
+  },
+  "error.editor.save_changed": {
+    "en": "The document changed during saving. Nothing was replaced.",
+    "zh-CN": "文档在保存期间发生了变化，未替换任何文件。",
+    "ja": "保存中に文書が変更されました。ファイルは置き換えていません。",
+    "ko": "저장 중 문서가 변경되었습니다. 아무것도 교체되지 않았습니다.",
+    "es": "El documento cambió durante el guardado. No se reemplazó nada.",
+    "ru": "Документ изменился во время сохранения. Ничего не заменено.",
+    "it": "Il documento è cambiato durante il salvataggio. Nulla è stato sostituito."
+  },
+  "error.editor.find_empty": {
+    "en": "Enter text to find.",
+    "zh-CN": "请输入要查找的文本。",
+    "ja": "検索するテキストを入力してください。",
+    "ko": "찾을 텍스트를 입력하세요.",
+    "es": "Introduzca el texto que desea buscar.",
+    "ru": "Введите текст для поиска.",
+    "it": "Inserire il testo da cercare."
+  },
+  "error.editor.replace_incomplete": {
+    "en": "Replacement was incomplete. Inspect the document or use Undo.",
+    "zh-CN": "替换未完成，请检查文档或使用撤销。",
+    "ja": "置換が完了しませんでした。文書を確認するか、元に戻してください。",
+    "ko": "바꾸기가 완료되지 않았습니다. 문서를 확인하거나 실행 취소를 사용하세요.",
+    "es": "El reemplazo quedó incompleto. Revise el documento o use Deshacer.",
+    "ru": "Замена выполнена не полностью. Проверьте документ или воспользуйтесь отменой.",
+    "it": "Sostituzione incompleta. Controllare il documento o usare Annulla."
+  },
+  "error.editor.replace_result": {
+    "en": "The editor returned an incomplete replacement.",
+    "zh-CN": "编辑器返回的替换结果不完整。",
+    "ja": "エディターが返した置換結果が不完全です。",
+    "ko": "편집기가 불완전한 바꾸기 결과를 반환했습니다.",
+    "es": "El editor devolvió un reemplazo incompleto.",
+    "ru": "Редактор вернул неполный результат замены.",
+    "it": "L'editor ha restituito una sostituzione incompleta."
+  },
+  "error.win32.external_too_long": {
+    "en": "External text is too long.",
+    "zh-CN": "外部文本过长。",
+    "ja": "外部テキストが長すぎます。",
+    "ko": "외부 텍스트가 너무 깁니다.",
+    "es": "El texto externo es demasiado largo.",
+    "ru": "Внешний текст слишком длинный.",
+    "it": "Il testo esterno è troppo lungo."
+  },
+  "error.win32.external_nul": {
+    "en": "External text has an incomplete or embedded-NUL representation.",
+    "zh-CN": "外部文本不完整或含嵌入的 NUL。",
+    "ja": "外部テキストが不完全か、NUL が埋め込まれています。",
+    "ko": "외부 텍스트가 불완전하거나 NUL이 포함되어 있습니다.",
+    "es": "El texto externo está incompleto o contiene NUL incrustados.",
+    "ru": "Внешний текст неполон или содержит встроенный NUL.",
+    "it": "Il testo esterno è incompleto o contiene NUL incorporati."
+  },
+  "error.win32.external_utf16": {
+    "en": "External text contains invalid UTF-16. The operation was cancelled.",
+    "zh-CN": "外部文本包含无效 UTF-16，已取消操作。",
+    "ja": "外部テキストに無効な UTF-16 が含まれています。操作を中止しました。",
+    "ko": "외부 텍스트에 잘못된 UTF-16이 있습니다. 작업이 취소되었습니다.",
+    "es": "El texto externo contiene UTF-16 no válido. Se canceló la operación.",
+    "ru": "Внешний текст содержит недопустимый UTF-16. Операция отменена.",
+    "it": "Il testo esterno contiene UTF-16 non valido. Operazione annullata."
+  },
+  "error.win32.input_too_long": {
+    "en": "Input text is too long.",
+    "zh-CN": "输入文本过长。",
+    "ja": "入力テキストが長すぎます。",
+    "ko": "입력 텍스트가 너무 깁니다.",
+    "es": "El texto de entrada es demasiado largo.",
+    "ru": "Вводимый текст слишком длинный.",
+    "it": "Il testo inserito è troppo lungo."
+  },
+  "error.win32.app_directory": {
+    "en": "Cannot locate application directory.",
+    "zh-CN": "无法定位应用程序目录。",
+    "ja": "アプリケーションのフォルダーを特定できません。",
+    "ko": "애플리케이션 폴더를 찾을 수 없습니다.",
+    "es": "No se puede localizar la carpeta de la aplicación.",
+    "ru": "Не удалось найти папку приложения.",
+    "it": "Impossibile individuare la cartella dell'applicazione."
+  },
+  "error.win32.no_directory": {
+    "en": "Application path has no directory.",
+    "zh-CN": "应用程序路径没有目录。",
+    "ja": "アプリケーションのパスにフォルダーがありません。",
+    "ko": "애플리케이션 경로에 폴더가 없습니다.",
+    "es": "La ruta de la aplicación no tiene carpeta.",
+    "ru": "В пути приложения отсутствует папка.",
+    "it": "Il percorso dell'applicazione non contiene una cartella."
+  },
+  "error.win32.path_too_long": {
+    "en": "Path is too long.",
+    "zh-CN": "路径过长。",
+    "ja": "パスが長すぎます。",
+    "ko": "경로가 너무 깁니다.",
+    "es": "La ruta es demasiado larga.",
+    "ru": "Путь слишком длинный.",
+    "it": "Il percorso è troppo lungo."
+  },
+  "error.drop.expired": {
+    "en": "The editor's drop target is no longer available.",
+    "zh-CN": "编辑器拖放目标已失效。",
+    "ja": "エディターのドロップ先は使用できなくなりました。",
+    "ko": "편집기의 놓기 대상이 더 이상 유효하지 않습니다.",
+    "es": "El destino de arrastre del editor ya no está disponible.",
+    "ru": "Цель перетаскивания редактора больше недоступна.",
+    "it": "La destinazione di trascinamento dell'editor non è più disponibile."
+  },
+  "error.drop.parent": {
+    "en": "Editor drag and drop requires the actual parent window.",
+    "zh-CN": "编辑器拖放必须使用实际父窗口。",
+    "ja": "エディターのドラッグ＆ドロップには実際の親ウィンドウが必要です。",
+    "ko": "편집기의 끌어서 놓기는 실제 부모 창을 사용해야 합니다.",
+    "es": "El arrastre del editor requiere su ventana principal real.",
+    "ru": "Для перетаскивания в редакторе требуется его фактическое родительское окно.",
+    "it": "Il trascinamento nell'editor richiede la finestra padre effettiva."
+  },
+  "error.drop.thread": {
+    "en": "Editor drag and drop can only be enabled on the owning window thread.",
+    "zh-CN": "编辑器拖放只能在所属窗口线程启用。",
+    "ja": "エディターのドラッグ＆ドロップは、ウィンドウを所有するスレッドでのみ有効にできます。",
+    "ko": "편집기의 끌어서 놓기는 창 소유 스레드에서만 활성화할 수 있습니다.",
+    "es": "El arrastre del editor solo puede activarse en el hilo propietario de la ventana.",
+    "ru": "Перетаскивание в редакторе можно включить только в потоке-владельце окна.",
+    "it": "Il trascinamento nell'editor può essere attivato solo nel thread proprietario della finestra."
+  },
+  "error.drop.install": {
+    "en": "Cannot install the editor's file-drop routing.",
+    "zh-CN": "无法安装编辑器文件拖放路由。",
+    "ja": "エディターのファイルドロップ経路を設定できません。",
+    "ko": "편집기의 파일 끌어서 놓기 경로를 설치할 수 없습니다.",
+    "es": "No se puede instalar la ruta de arrastre de archivos del editor.",
+    "ru": "Не удалось настроить маршрутизацию перетаскивания файлов в редактор.",
+    "it": "Impossibile installare l'instradamento del trascinamento dei file nell'editor."
+  },
+  "error.drop.count": {
+    "en": "Drop at most 64 files at a time; open them in smaller batches.",
+    "zh-CN": "一次最多拖入 64 个文件，请分批打开。",
+    "ja": "一度にドロップできるファイルは 64 個までです。分けて開いてください。",
+    "ko": "한 번에 최대 64개 파일을 놓을 수 있습니다. 나눠서 여세요.",
+    "es": "Arrastre como máximo 64 archivos a la vez; ábralos en grupos más pequeños.",
+    "ru": "Перетаскивайте не более 64 файлов за раз. Открывайте их меньшими группами.",
+    "it": "Trascinare al massimo 64 file per volta; aprirli in gruppi più piccoli."
+  },
+  "error.drop.path_length": {
+    "en": "A dropped file path is empty or exceeds 32000 UTF-16 units.",
+    "zh-CN": "拖入文件的路径为空或超过 32000 个 UTF-16 单元。",
+    "ja": "ドロップされたファイルのパスが空か、32000 UTF-16 単位を超えています。",
+    "ko": "놓은 파일 경로가 비어 있거나 UTF-16 단위 32000개를 초과합니다.",
+    "es": "La ruta de un archivo arrastrado está vacía o supera las 32000 unidades UTF-16.",
+    "ru": "Путь перетаскиваемого файла пуст или превышает 32000 единиц UTF-16.",
+    "it": "Il percorso di un file trascinato è vuoto o supera 32000 unità UTF-16."
+  },
+  "error.drop.total_length": {
+    "en": "The combined dropped paths are too long; open the files in smaller batches.",
+    "zh-CN": "拖入文件的路径总长度过大，请分批打开。",
+    "ja": "ドロップされたパスの合計が長すぎます。ファイルを分けて開いてください。",
+    "ko": "놓은 파일 경로의 총 길이가 너무 깁니다. 나눠서 여세요.",
+    "es": "La longitud total de las rutas arrastradas es excesiva; abra los archivos en grupos más pequeños.",
+    "ru": "Суммарная длина перетаскиваемых путей слишком велика. Открывайте файлы меньшими группами.",
+    "it": "La lunghezza totale dei percorsi trascinati è eccessiva; aprire i file in gruppi più piccoli."
+  },
+  "error.drop.path_incomplete": {
+    "en": "A dropped file path was not read completely.",
+    "zh-CN": "拖入文件的路径读取不完整。",
+    "ja": "ドロップされたファイルのパスを完全に読み取れませんでした。",
+    "ko": "놓은 파일 경로를 완전히 읽지 못했습니다.",
+    "es": "La ruta de un archivo arrastrado no se leyó por completo.",
+    "ru": "Путь перетаскиваемого файла прочитан не полностью.",
+    "it": "Il percorso di un file trascinato non è stato letto completamente."
+  },
+  "error.drop.path_utf16": {
+    "en": "A dropped path contains invalid UTF-16 text.",
+    "zh-CN": "拖入路径包含无效的 UTF-16 文本。",
+    "ja": "ドロップされたパスに無効な UTF-16 テキストが含まれています。",
+    "ko": "놓은 경로에 잘못된 UTF-16 텍스트가 있습니다.",
+    "es": "Una ruta arrastrada contiene texto UTF-16 no válido.",
+    "ru": "Перетаскиваемый путь содержит недопустимый текст UTF-16.",
+    "it": "Un percorso trascinato contiene testo UTF-16 non valido."
+  },
+  "error.association.app_path": {
+    "en": "Cannot obtain the current application's full path.",
+    "zh-CN": "无法取得当前程序的完整路径。",
+    "ja": "現在のアプリケーションの完全なパスを取得できません。",
+    "ko": "현재 애플리케이션의 전체 경로를 가져올 수 없습니다.",
+    "es": "No se puede obtener la ruta completa de la aplicación actual.",
+    "ru": "Не удалось получить полный путь текущего приложения.",
+    "it": "Impossibile ottenere il percorso completo dell'applicazione corrente."
+  },
+  "error.association.invalid_path": {
+    "en": "The current application's path is invalid or too long.",
+    "zh-CN": "当前程序路径无效或过长。",
+    "ja": "現在のアプリケーションのパスが無効か、長すぎます。",
+    "ko": "현재 애플리케이션 경로가 잘못되었거나 너무 깁니다.",
+    "es": "La ruta de la aplicación actual no es válida o es demasiado larga.",
+    "ru": "Путь текущего приложения недопустим или слишком длинный.",
+    "it": "Il percorso dell'applicazione corrente non è valido o è troppo lungo."
+  },
+  "error.association.long_path": {
+    "en": "The current application's path is too long.",
+    "zh-CN": "当前程序路径过长。",
+    "ja": "現在のアプリケーションのパスが長すぎます。",
+    "ko": "현재 애플리케이션 경로가 너무 깁니다.",
+    "es": "La ruta de la aplicación actual es demasiado larga.",
+    "ru": "Путь текущего приложения слишком длинный.",
+    "it": "Il percorso dell'applicazione corrente è troppo lungo."
+  },
+  "error.association.occupied": {
+    "en": "These candidates belong to an application at another location or to user settings and were not overwritten. Unregister them from the original application first.",
+    "zh-CN": "已有其他位置的程序或用户设置占用这些候选项；未覆盖。请先在原程序中移除注册。",
+    "ja": "これらの候補は別の場所のアプリケーションまたはユーザー設定が使用しています。上書きはしていません。先に元のアプリケーションで登録を解除してください。",
+    "ko": "이 후보는 다른 위치의 애플리케이션이나 사용자 설정에서 사용 중이므로 덮어쓰지 않았습니다. 먼저 원래 애플리케이션에서 등록을 해제하세요.",
+    "es": "Estas opciones pertenecen a una aplicación en otra ubicación o a ajustes del usuario y no se sobrescribieron. Anule primero el registro desde la aplicación original.",
+    "ru": "Эти варианты заняты приложением из другого расположения или настройками пользователя и не перезаписаны. Сначала отмените регистрацию в исходном приложении.",
+    "it": "Queste opzioni appartengono a un'applicazione in un'altra posizione o alle impostazioni utente e non sono state sovrascritte. Annullare prima la registrazione dall'applicazione originale."
+  },
+  "error.association.changed": {
+    "en": "The Open With candidates changed. They were not overwritten, to protect the existing settings.",
+    "zh-CN": "打开方式候选项已被修改；为保护现有设置，本次没有覆盖。",
+    "ja": "「プログラムから開く」の候補が変更されました。既存の設定を保護するため、上書きはしていません。",
+    "ko": "연결 프로그램 후보가 변경되었습니다. 기존 설정을 보호하기 위해 덮어쓰지 않았습니다.",
+    "es": "Las opciones de Abrir con cambiaron. No se sobrescribieron para proteger los ajustes existentes.",
+    "ru": "Варианты «Открыть с помощью» изменены. Для защиты текущих настроек они не перезаписаны.",
+    "it": "Le opzioni di Apri con sono cambiate. Non sono state sovrascritte per proteggere le impostazioni esistenti."
+  },
+  "error.association.not_owned": {
+    "en": "The candidates do not belong to this application's location. Other applications' or users' settings were not deleted.",
+    "zh-CN": "候选项不属于当前程序位置；未删除其他程序或用户的设置。",
+    "ja": "候補は現在のアプリケーションの場所に属していません。他のアプリケーションやユーザーの設定は削除していません。",
+    "ko": "후보가 현재 애플리케이션 위치에 속하지 않습니다. 다른 애플리케이션이나 사용자의 설정은 삭제하지 않았습니다.",
+    "es": "Las opciones no pertenecen a la ubicación de esta aplicación. No se eliminaron ajustes de otras aplicaciones o usuarios.",
+    "ru": "Варианты не принадлежат текущему расположению приложения. Настройки других приложений или пользователей не удалены.",
+    "it": "Le opzioni non appartengono alla posizione di questa applicazione. Le impostazioni di altre applicazioni o utenti non sono state eliminate."
+  },
+  "error.association.settings": {
+    "en": "Cannot open Windows Default Apps. Open system settings and choose defaults manually. (ShellExecuteW: {0})",
+    "zh-CN": "无法打开 Windows 默认应用设置，请从系统设置中手动选择。 (ShellExecuteW: {0})",
+    "ja": "Windows の既定のアプリ設定を開けません。システム設定から手動で選んでください。 (ShellExecuteW: {0})",
+    "ko": "Windows 기본 앱 설정을 열 수 없습니다. 시스템 설정에서 직접 선택하세요. (ShellExecuteW: {0})",
+    "es": "No se puede abrir Aplicaciones predeterminadas de Windows. Elija las opciones manualmente en la configuración del sistema. (ShellExecuteW: {0})",
+    "ru": "Не удалось открыть настройки приложений по умолчанию Windows. Выберите их вручную в системных параметрах. (ShellExecuteW: {0})",
+    "it": "Impossibile aprire le app predefinite di Windows. Selezionarle manualmente nelle impostazioni di sistema. (ShellExecuteW: {0})"
+  },
+  "error.association.absolute_path": {
+    "en": "The application path must be an absolute path.",
+    "zh-CN": "应用程序路径必须为完整路径。",
+    "ja": "アプリケーションのパスには絶対パスが必要です。",
+    "ko": "애플리케이션 경로는 절대 경로여야 합니다.",
+    "es": "La ruta de la aplicación debe ser absoluta.",
+    "ru": "Путь приложения должен быть абсолютным.",
+    "it": "Il percorso dell'applicazione deve essere assoluto."
+  },
+  "error.association.path_characters": {
+    "en": "The application path contains unsupported characters.",
+    "zh-CN": "应用程序路径包含不支持的字符。",
+    "ja": "アプリケーションのパスに使用できない文字が含まれています。",
+    "ko": "애플리케이션 경로에 지원하지 않는 문자가 포함되어 있습니다.",
+    "es": "La ruta de la aplicación contiene caracteres no compatibles.",
+    "ru": "Путь приложения содержит неподдерживаемые символы.",
+    "it": "Il percorso dell'applicazione contiene caratteri non supportati."
+  },
+  "error.operation_detail": {
+    "en": "The operation could not be completed. Details: {0}",
+    "zh-CN": "操作未能完成。详细信息：{0}",
+    "ja": "操作を完了できませんでした。詳細: {0}",
+    "ko": "작업을 완료할 수 없습니다. 세부 정보: {0}",
+    "es": "No se pudo completar la operación. Detalles: {0}",
+    "ru": "Не удалось завершить операцию. Подробности: {0}",
+    "it": "Impossibile completare l'operazione. Dettagli: {0}"
+  },
+  "error.windows_operation": {
+    "en": "{0} (Windows error {1})",
+    "zh-CN": "{0}（Windows 错误 {1}）",
+    "ja": "{0}（Windows エラー {1}）",
+    "ko": "{0}(Windows 오류 {1})",
+    "es": "{0} (error de Windows {1})",
+    "ru": "{0} (ошибка Windows {1})",
+    "it": "{0} (errore di Windows {1})"
+  },
+  "error.win32.api": {
+    "en": "{0} failed. Windows error {1}",
+    "zh-CN": "{0} 失败。Windows 错误 {1}",
+    "ja": "{0} に失敗しました。Windows エラー {1}",
+    "ko": "{0} 실패. Windows 오류 {1}",
+    "es": "Falló {0}. Error de Windows {1}",
+    "ru": "Сбой {0}. Ошибка Windows {1}",
+    "it": "{0} non riuscito. Errore di Windows {1}"
+  },
+  "error.win32.callback": {
+    "en": "Native callback: {0}",
+    "zh-CN": "本机回调出错：{0}",
+    "ja": "ネイティブコールバック: {0}",
+    "ko": "네이티브 콜백: {0}",
+    "es": "Devolución de llamada nativa: {0}",
+    "ru": "Нативный обратный вызов: {0}",
+    "it": "Callback nativo: {0}"
+  },
+  "error.win32.file_dialog": {
+    "en": "File dialog failed: {0}",
+    "zh-CN": "文件对话框失败：{0}",
+    "ja": "ファイルダイアログに失敗しました: {0}",
+    "ko": "파일 대화상자 실패: {0}",
+    "es": "Falló el diálogo de archivos: {0}",
+    "ru": "Сбой диалога выбора файла: {0}",
+    "it": "Finestra di dialogo file non riuscita: {0}"
+  },
+  "error.editor.status": {
+    "en": "Scintilla reported an editor error ({0}). Your document is still open.",
+    "zh-CN": "Scintilla 报告编辑器错误（{0}）。文档仍保持打开。",
+    "ja": "Scintilla がエディターエラー（{0}）を報告しました。文書は開いたままです。",
+    "ko": "Scintilla가 편집기 오류({0})를 보고했습니다. 문서는 계속 열려 있습니다.",
+    "es": "Scintilla informó de un error del editor ({0}). El documento sigue abierto.",
+    "ru": "Scintilla сообщил об ошибке редактора ({0}). Документ остаётся открытым.",
+    "it": "Scintilla ha segnalato un errore dell'editor ({0}). Il documento è ancora aperto."
+  },
+  "error.editor.replace_partial": {
+    "en": "{0} Some changes may have completed. Use Undo to restore the replace-all operation.",
+    "zh-CN": "{0} 部分更改可能已完成。可使用撤销恢复全部替换前的状态。",
+    "ja": "{0} 一部の変更は完了している可能性があります。「元に戻す」で全置換前の状態に戻せます。",
+    "ko": "{0} 일부 변경이 완료되었을 수 있습니다. 실행 취소로 모두 바꾸기 이전 상태를 복원하세요.",
+    "es": "{0} Algunos cambios pueden haberse completado. Use Deshacer para revertir Reemplazar todo.",
+    "ru": "{0} Часть изменений могла быть выполнена. Воспользуйтесь отменой, чтобы отменить операцию «Заменить всё».",
+    "it": "{0} Alcune modifiche potrebbero essere state completate. Usare Annulla per ripristinare lo stato precedente a Sostituisci tutto."
+  },
+  "error.file.saved_status": {
+    "en": "The file was written, but its status could not be read again. Reopen it before saving again. {0}",
+    "zh-CN": "文件已写入，但无法重新取得状态；请重新打开再继续保存。{0}",
+    "ja": "ファイルは書き込まれましたが、状態を再取得できませんでした。次に保存する前に開き直してください。{0}",
+    "ko": "파일은 기록되었지만 상태를 다시 읽을 수 없습니다. 다시 저장하기 전에 파일을 다시 여세요. {0}",
+    "es": "El archivo se escribió, pero no se pudo volver a leer su estado. Ábralo de nuevo antes de guardar. {0}",
+    "ru": "Файл записан, но повторно получить его состояние не удалось. Перед дальнейшим сохранением откройте его заново. {0}",
+    "it": "Il file è stato scritto, ma non è stato possibile rileggerne lo stato. Riaprirlo prima di salvare di nuovo. {0}"
+  },
+  "error.file.pending_path": {
+    "en": "{0}; content awaiting save: {1}",
+    "zh-CN": "{0}；待保存内容：{1}",
+    "ja": "{0}；保存待ちの内容: {1}",
+    "ko": "{0}; 저장 대기 중인 내용: {1}",
+    "es": "{0}; contenido pendiente de guardar: {1}",
+    "ru": "{0}; содержимое, ожидающее сохранения: {1}",
+    "it": "{0}; contenuto in attesa di salvataggio: {1}"
+  },
+  "error.file.recovery_path": {
+    "en": "{0}; backup path (it may still be an empty placeholder; also check the original path): {1}",
+    "zh-CN": "{0}；备份路径（可能仍为空占位文件，请同时检查原路径）：{1}",
+    "ja": "{0}；バックアップのパス（まだ空の仮ファイルの可能性があります。元のパスも確認してください）: {1}",
+    "ko": "{0}; 백업 경로(아직 빈 자리 표시자 파일일 수 있으므로 원래 경로도 확인하세요): {1}",
+    "es": "{0}; ruta de la copia (puede seguir siendo un archivo vacío; compruebe también la ruta original): {1}",
+    "ru": "{0}; путь резервной копии (это может быть пустой файл-заполнитель; также проверьте исходный путь): {1}",
+    "it": "{0}; percorso del backup (potrebbe essere ancora un segnaposto vuoto; controllare anche il percorso originale): {1}"
+  },
+  "error.file.temp_cleanup": {
+    "en": "{0}; could not remove the temporary file: {1}",
+    "zh-CN": "{0}；未能清理临时文件：{1}",
+    "ja": "{0}；一時ファイルを削除できませんでした: {1}",
+    "ko": "{0}; 임시 파일을 삭제하지 못했습니다: {1}",
+    "es": "{0}; no se pudo eliminar el archivo temporal: {1}",
+    "ru": "{0}; не удалось удалить временный файл: {1}",
+    "it": "{0}; impossibile rimuovere il file temporaneo: {1}"
+  },
+  "error.file.reserved_cleanup": {
+    "en": "{0}; could not remove the reserved backup: {1}",
+    "zh-CN": "{0}；未能清理预留备份：{1}",
+    "ja": "{0}；予約したバックアップを削除できませんでした: {1}",
+    "ko": "{0}; 예약된 백업을 삭제하지 못했습니다: {1}",
+    "es": "{0}; no se pudo eliminar la copia reservada: {1}",
+    "ru": "{0}; не удалось удалить зарезервированную копию: {1}",
+    "it": "{0}; impossibile rimuovere il backup riservato: {1}"
+  },
+  "error.drop.enable": {
+    "en": "Cannot enable file drops in the editor (HRESULT {0}).",
+    "zh-CN": "无法启用编辑区文件拖放（HRESULT {0}）。",
+    "ja": "エディターでファイルドロップを有効にできません（HRESULT {0}）。",
+    "ko": "편집기에서 파일 끌어서 놓기를 활성화할 수 없습니다(HRESULT {0}).",
+    "es": "No se puede activar el arrastre de archivos en el editor (HRESULT {0}).",
+    "ru": "Не удалось включить перетаскивание файлов в редактор (HRESULT {0}).",
+    "it": "Impossibile attivare il trascinamento dei file nell'editor (HRESULT {0})."
+  },
+  "error.association.update": {
+    "en": "Cannot update the Open With candidates (Windows error {0}).",
+    "zh-CN": "无法更新打开方式候选项（Windows 错误 {0}）。",
+    "ja": "「プログラムから開く」の候補を更新できません（Windows エラー {0}）。",
+    "ko": "연결 프로그램 후보를 업데이트할 수 없습니다(Windows 오류 {0}).",
+    "es": "No se pueden actualizar las opciones de Abrir con (error de Windows {0}).",
+    "ru": "Не удалось обновить варианты «Открыть с помощью» (ошибка Windows {0}).",
+    "it": "Impossibile aggiornare le opzioni di Apri con (errore di Windows {0})."
+  },
+  "error.syntax.ru_disabled": {
+    "en": "Ru syntax highlighting was disabled: {0} Your document remains editable as plain text.",
+    "zh-CN": "Ru 语法高亮已停用：{0} 文档仍可作为纯文本编辑。",
+    "ja": "Ru の構文強調表示を無効にしました: {0} 文書は引き続きプレーンテキストとして編集できます。",
+    "ko": "Ru 구문 강조가 비활성화되었습니다: {0} 문서는 일반 텍스트로 계속 편집할 수 있습니다.",
+    "es": "Se desactivó el resaltado de sintaxis Ru: {0} El documento sigue siendo editable como texto sin formato.",
+    "ru": "Подсветка синтаксиса Ru отключена: {0} Документ по-прежнему можно редактировать как обычный текст.",
+    "it": "Evidenziazione della sintassi Ru disattivata: {0} Il documento resta modificabile come testo semplice."
+  },
+  "error.syntax.ru_initialization": {
+    "en": "Ru scanner initialization failed: {0}. Your document remains editable as plain text.",
+    "zh-CN": "Ru 扫描器初始化失败：{0}。文档仍可作为纯文本编辑。",
+    "ja": "Ru スキャナーの初期化に失敗しました: {0}。文書は引き続きプレーンテキストとして編集できます。",
+    "ko": "Ru 스캐너 초기화에 실패했습니다: {0}. 문서는 일반 텍스트로 계속 편집할 수 있습니다.",
+    "es": "Falló la inicialización del analizador Ru: {0}. El documento sigue siendo editable como texto sin formato.",
+    "ru": "Не удалось инициализировать сканер Ru: {0}. Документ по-прежнему можно редактировать как обычный текст.",
+    "it": "Inizializzazione dello scanner Ru non riuscita: {0}. Il documento resta modificabile come testo semplice."
+  },
+  "error.syntax.markdown_disabled": {
+    "en": "Markdown folding was disabled: {0} The text, selection and undo history are unchanged.",
+    "zh-CN": "Markdown 折叠已停用：{0} 文本、选区和撤销历史均未改变。",
+    "ja": "Markdown の折りたたみを無効にしました: {0} テキスト、選択範囲、元に戻す履歴は変わっていません。",
+    "ko": "Markdown 접기가 비활성화되었습니다: {0} 텍스트, 선택 영역 및 실행 취소 기록은 변경되지 않았습니다.",
+    "es": "Se desactivó el plegado Markdown: {0} El texto, la selección y el historial de deshacer no han cambiado.",
+    "ru": "Сворачивание Markdown отключено: {0} Текст, выделение и история отмены не изменены.",
+    "it": "Ripiegamento Markdown disattivato: {0} Testo, selezione e cronologia di annullamento sono invariati."
+  },
+  "error.syntax.visibility_recovery": {
+    "en": "{0} Visibility recovery: {1}",
+    "zh-CN": "{0} 可见性恢复：{1}",
+    "ja": "{0} 表示の復元: {1}",
+    "ko": "{0} 표시 상태 복구: {1}",
+    "es": "{0} Recuperación de visibilidad: {1}",
+    "ru": "{0} Восстановление видимости: {1}",
+    "it": "{0} Ripristino della visibilità: {1}"
+  },
+  "error.syntax.ru_missing": {
+    "en": "Ru highlighting is unavailable: RuSyntax.dll could not be loaded. Extract the complete package. Your documents remain editable as plain text. (Windows error {0})",
+    "zh-CN": "Ru 高亮不可用：无法加载 RuSyntax.dll。请解压完整安装包。文档仍可作为纯文本编辑。 (Windows 错误 {0})",
+    "ja": "Ru の強調表示を使用できません。RuSyntax.dll を読み込めませんでした。パッケージ全体を展開してください。文書は引き続きプレーンテキストとして編集できます。 (Windows エラー {0})",
+    "ko": "Ru 강조를 사용할 수 없습니다. RuSyntax.dll을 로드하지 못했습니다. 전체 패키지를 압축 해제하세요. 문서는 일반 텍스트로 계속 편집할 수 있습니다. (Windows 오류 {0})",
+    "es": "El resaltado Ru no está disponible: no se pudo cargar RuSyntax.dll. Extraiga el paquete completo. Los documentos siguen siendo editables como texto sin formato. (error de Windows {0})",
+    "ru": "Подсветка Ru недоступна: не удалось загрузить RuSyntax.dll. Распакуйте полный пакет. Документы по-прежнему можно редактировать как обычный текст. (ошибка Windows {0})",
+    "it": "Evidenziazione Ru non disponibile: impossibile caricare RuSyntax.dll. Estrarre il pacchetto completo. I documenti restano modificabili come testo semplice. (errore di Windows {0})"
+  },
+  "error.syntax.ru_unavailable": {
+    "en": "Ru highlighting is unavailable: {0} Restore RuSyntax.dll from the complete package. Your documents remain editable as plain text.",
+    "zh-CN": "Ru 高亮不可用：{0} 请从完整安装包恢复 RuSyntax.dll。文档仍可作为纯文本编辑。",
+    "ja": "Ru の強調表示を使用できません: {0} 完全なパッケージから RuSyntax.dll を復元してください。文書は引き続きプレーンテキストとして編集できます。",
+    "ko": "Ru 강조를 사용할 수 없습니다: {0} 전체 패키지에서 RuSyntax.dll을 복원하세요. 문서는 일반 텍스트로 계속 편집할 수 있습니다.",
+    "es": "El resaltado Ru no está disponible: {0} Restaure RuSyntax.dll desde el paquete completo. Los documentos siguen siendo editables como texto sin formato.",
+    "ru": "Подсветка Ru недоступна: {0} Восстановите RuSyntax.dll из полного пакета. Документы по-прежнему можно редактировать как обычный текст.",
+    "it": "Evidenziazione Ru non disponibile: {0} Ripristinare RuSyntax.dll dal pacchetto completo. I documenti restano modificabili come testo semplice."
+  },
+  "error.syntax.lexilla_missing": {
+    "en": "C/C++, JSON and Markdown syntax highlighting is unavailable: Lexilla.dll could not be loaded (Windows error {0}). Those formats remain editable as plain text; Ru highlighting uses its separate RuSyntax.dll helper. Extract the complete Windows x64 package and keep Lexilla.dll beside ru_notepad.exe.",
+    "zh-CN": "C/C++、JSON 和 Markdown 语法高亮不可用：无法加载 Lexilla.dll（Windows 错误 {0}）。这些格式仍可作为纯文本编辑；Ru 高亮使用独立的 RuSyntax.dll。请解压完整的 Windows x64 包，并将 Lexilla.dll 放在 ru_notepad.exe 旁。",
+    "ja": "C/C++、JSON、Markdown の構文強調表示を使用できません。Lexilla.dll を読み込めませんでした（Windows エラー {0}）。これらの形式は引き続きプレーンテキストとして編集できます。Ru の強調表示には別の RuSyntax.dll を使用します。Windows x64 パッケージ全体を展開し、Lexilla.dll を ru_notepad.exe と同じフォルダーに置いてください。",
+    "ko": "C/C++, JSON 및 Markdown 구문 강조를 사용할 수 없습니다. Lexilla.dll을 로드하지 못했습니다(Windows 오류 {0}). 이 형식들은 일반 텍스트로 계속 편집할 수 있습니다. Ru 강조는 별도의 RuSyntax.dll을 사용합니다. 전체 Windows x64 패키지를 압축 해제하고 Lexilla.dll을 ru_notepad.exe 옆에 두세요.",
+    "es": "El resaltado de C/C++, JSON y Markdown no está disponible: no se pudo cargar Lexilla.dll (error de Windows {0}). Esos formatos siguen siendo editables como texto sin formato; Ru usa su propio RuSyntax.dll. Extraiga el paquete Windows x64 completo y deje Lexilla.dll junto a ru_notepad.exe.",
+    "ru": "Подсветка C/C++, JSON и Markdown недоступна: не удалось загрузить Lexilla.dll (ошибка Windows {0}). Эти форматы можно редактировать как обычный текст; для подсветки Ru используется отдельная RuSyntax.dll. Распакуйте полный пакет Windows x64 и поместите Lexilla.dll рядом с ru_notepad.exe.",
+    "it": "Evidenziazione di C/C++, JSON e Markdown non disponibile: impossibile caricare Lexilla.dll (errore di Windows {0}). Questi formati restano modificabili come testo semplice; Ru usa la propria RuSyntax.dll. Estrarre il pacchetto Windows x64 completo e tenere Lexilla.dll accanto a ru_notepad.exe."
+  },
+  "error.syntax.lexilla_export": {
+    "en": "C/C++, JSON and Markdown syntax highlighting is unavailable: Lexilla.dll does not export CreateLexer. Those formats remain editable as plain text; Ru highlighting uses its separate RuSyntax.dll helper. Restore Lexilla.dll from the complete Windows x64 package.",
+    "zh-CN": "C/C++、JSON 和 Markdown 语法高亮不可用：Lexilla.dll 未导出 CreateLexer。这些格式仍可作为纯文本编辑；Ru 高亮使用独立的 RuSyntax.dll。请从完整的 Windows x64 包恢复 Lexilla.dll。",
+    "ja": "C/C++、JSON、Markdown の構文強調表示を使用できません。Lexilla.dll に CreateLexer がありません。これらの形式は引き続きプレーンテキストとして編集できます。Ru の強調表示には別の RuSyntax.dll を使用します。完全な Windows x64 パッケージから Lexilla.dll を復元してください。",
+    "ko": "C/C++, JSON 및 Markdown 구문 강조를 사용할 수 없습니다. Lexilla.dll이 CreateLexer를 내보내지 않습니다. 이 형식들은 일반 텍스트로 계속 편집할 수 있습니다. Ru 강조는 별도의 RuSyntax.dll을 사용합니다. 전체 Windows x64 패키지에서 Lexilla.dll을 복원하세요.",
+    "es": "El resaltado de C/C++, JSON y Markdown no está disponible: Lexilla.dll no exporta CreateLexer. Esos formatos siguen siendo editables como texto sin formato; Ru usa su propio RuSyntax.dll. Restaure Lexilla.dll desde el paquete Windows x64 completo.",
+    "ru": "Подсветка C/C++, JSON и Markdown недоступна: Lexilla.dll не экспортирует CreateLexer. Эти форматы можно редактировать как обычный текст; для подсветки Ru используется отдельная RuSyntax.dll. Восстановите Lexilla.dll из полного пакета Windows x64.",
+    "it": "Evidenziazione di C/C++, JSON e Markdown non disponibile: Lexilla.dll non esporta CreateLexer. Questi formati restano modificabili come testo semplice; Ru usa la propria RuSyntax.dll. Ripristinare Lexilla.dll dal pacchetto Windows x64 completo."
+  },
+  "error.syntax.language_unavailable": {
+    "en": "Syntax highlighting is unavailable for {0}. Your document remains editable as plain text. Restore Lexilla.dll from the complete Windows x64 package.",
+    "zh-CN": "{0} 语法高亮不可用。文档仍可作为纯文本编辑。请从完整的 Windows x64 包恢复 Lexilla.dll。",
+    "ja": "{0} の構文強調表示を使用できません。文書は引き続きプレーンテキストとして編集できます。完全な Windows x64 パッケージから Lexilla.dll を復元してください。",
+    "ko": "{0} 구문 강조를 사용할 수 없습니다. 문서는 일반 텍스트로 계속 편집할 수 있습니다. 전체 Windows x64 패키지에서 Lexilla.dll을 복원하세요.",
+    "es": "El resaltado de sintaxis de {0} no está disponible. El documento sigue siendo editable como texto sin formato. Restaure Lexilla.dll desde el paquete Windows x64 completo.",
+    "ru": "Подсветка синтаксиса {0} недоступна. Документ можно редактировать как обычный текст. Восстановите Lexilla.dll из полного пакета Windows x64.",
+    "it": "Evidenziazione della sintassi {0} non disponibile. Il documento resta modificabile come testo semplice. Ripristinare Lexilla.dll dal pacchetto Windows x64 completo."
+  },
+  "error.syntax.language_configuration": {
+    "en": "Syntax highlighting could not be configured for {0}. Your document remains editable as plain text.",
+    "zh-CN": "无法配置 {0} 语法高亮。文档仍可作为纯文本编辑。",
+    "ja": "{0} の構文強調表示を設定できませんでした。文書は引き続きプレーンテキストとして編集できます。",
+    "ko": "{0} 구문 강조를 구성하지 못했습니다. 문서는 일반 텍스트로 계속 편집할 수 있습니다.",
+    "es": "No se pudo configurar el resaltado de sintaxis de {0}. El documento sigue siendo editable como texto sin formato.",
+    "ru": "Не удалось настроить подсветку синтаксиса {0}. Документ можно редактировать как обычный текст.",
+    "it": "Impossibile configurare l'evidenziazione della sintassi {0}. Il documento resta modificabile come testo semplice."
+  },
+  "error.main.document_limit_remaining": {
+    "en": "Up to 64 documents can be open. Close a tab and retry the remaining files.",
+    "zh-CN": "最多可打开 64 个文档。请关闭一个标签页后重试其余文件。",
+    "ja": "開ける文書は 64 個までです。タブを閉じて、残りのファイルを再試行してください。",
+    "ko": "최대 64개 문서를 열 수 있습니다. 탭을 닫고 나머지 파일을 다시 여세요.",
+    "es": "Se pueden abrir hasta 64 documentos. Cierre una pestaña y vuelva a intentar los archivos restantes.",
+    "ru": "Можно открыть до 64 документов. Закройте вкладку и повторите открытие оставшихся файлов.",
+    "it": "È possibile aprire fino a 64 documenti. Chiudere una scheda e riprovare con i file rimanenti."
+  },
+  "error.main.tab_create": {
+    "en": "Windows could not create the document tab.",
+    "zh-CN": "Windows 无法创建文档标签页。",
+    "ja": "Windows で文書タブを作成できませんでした。",
+    "ko": "Windows가 문서 탭을 만들지 못했습니다.",
+    "es": "Windows no pudo crear la pestaña del documento.",
+    "ru": "Windows не удалось создать вкладку документа.",
+    "it": "Windows non ha potuto creare la scheda del documento."
+  },
+  "error.main.operation_busy": {
+    "en": "Finish or cancel the current file operation first.",
+    "zh-CN": "请先完成或取消当前文件操作。",
+    "ja": "まず現在のファイル操作を完了するか、中止してください。",
+    "ko": "먼저 현재 파일 작업을 완료하거나 취소하세요.",
+    "es": "Primero termine o cancele la operación de archivo actual.",
+    "ru": "Сначала завершите или отмените текущую файловую операцию.",
+    "it": "Terminare o annullare prima l'operazione sul file in corso."
+  },
+  "error.main.document_limit": {
+    "en": "Up to 64 documents can be open. Close a tab and retry.",
+    "zh-CN": "最多可打开 64 个文档。请关闭一个标签页后重试。",
+    "ja": "開ける文書は 64 個までです。タブを閉じて再試行してください。",
+    "ko": "최대 64개 문서를 열 수 있습니다. 탭을 닫고 다시 시도하세요.",
+    "es": "Se pueden abrir hasta 64 documentos. Cierre una pestaña y vuelva a intentarlo.",
+    "ru": "Можно открыть до 64 документов. Закройте вкладку и повторите попытку.",
+    "it": "È possibile aprire fino a 64 documenti. Chiudere una scheda e riprovare."
+  },
+  "error.main.open_busy": {
+    "en": "A file operation is already running. Finish or cancel it, then drop or open the files again.",
+    "zh-CN": "已有文件操作正在进行。请先完成或取消，再重新拖入或打开文件。",
+    "ja": "ファイル操作が進行中です。完了または中止してから、ファイルを再度ドロップするか開いてください。",
+    "ko": "파일 작업이 이미 진행 중입니다. 완료하거나 취소한 뒤 파일을 다시 놓거나 여세요.",
+    "es": "Ya hay una operación de archivo en curso. Termínela o cancélela y vuelva a arrastrar o abrir los archivos.",
+    "ru": "Файловая операция уже выполняется. Завершите или отмените её, затем снова перетащите или откройте файлы.",
+    "it": "Un'operazione sul file è già in corso. Terminarla o annullarla, quindi trascinare o aprire nuovamente i file."
+  },
+  "error.main.batch_count": {
+    "en": "Select at most 64 paths at a time. No paths from this batch were opened.",
+    "zh-CN": "一次最多选择 64 个路径。本批次未打开任何路径。",
+    "ja": "一度に選べるパスは 64 個までです。このグループのファイルは開いていません。",
+    "ko": "한 번에 최대 64개 경로를 선택하세요. 이 묶음의 경로는 열리지 않았습니다.",
+    "es": "Seleccione como máximo 64 rutas a la vez. No se abrió ninguna ruta de este grupo.",
+    "ru": "Выбирайте не более 64 путей за раз. Ни один путь из этой группы не открыт.",
+    "it": "Selezionare al massimo 64 percorsi alla volta. Nessun percorso del gruppo è stato aperto."
+  },
+  "error.main.batch_path_length": {
+    "en": "A selected path exceeds 32000 characters. No files from this batch were opened.",
+    "zh-CN": "所选路径超过 32000 个字符。本批次未打开任何文件。",
+    "ja": "選択したパスが 32000 文字を超えています。このグループのファイルは開いていません。",
+    "ko": "선택한 경로가 32000자를 초과합니다. 이 묶음의 파일은 열리지 않았습니다.",
+    "es": "Una ruta seleccionada supera los 32000 caracteres. No se abrió ningún archivo de este grupo.",
+    "ru": "Выбранный путь превышает 32000 символов. Ни один файл из этой группы не открыт.",
+    "it": "Un percorso selezionato supera 32000 caratteri. Nessun file del gruppo è stato aperto."
+  },
+  "error.main.batch_queue": {
+    "en": "The selected paths exceed the bounded path queue. No files from this batch were opened.",
+    "zh-CN": "所选路径超出路径队列限制。本批次未打开任何文件。",
+    "ja": "選択したパスがキューの上限を超えています。このグループのファイルは開いていません。",
+    "ko": "선택한 경로가 경로 대기열 한도를 초과합니다. 이 묶음의 파일은 열리지 않았습니다.",
+    "es": "Las rutas seleccionadas superan el límite de la cola. No se abrió ningún archivo de este grupo.",
+    "ru": "Выбранные пути превышают предел очереди. Ни один файл из этой группы не открыт.",
+    "it": "I percorsi selezionati superano il limite della coda. Nessun file del gruppo è stato aperto."
+  },
+  "error.main.document_limit_tabs": {
+    "en": "Up to 64 documents can be open. Close tabs and retry the remaining files.",
+    "zh-CN": "最多可打开 64 个文档。请关闭一些标签页后重试其余文件。",
+    "ja": "開ける文書は 64 個までです。タブをいくつか閉じて、残りのファイルを再試行してください。",
+    "ko": "최대 64개 문서를 열 수 있습니다. 탭을 닫고 나머지 파일을 다시 여세요.",
+    "es": "Se pueden abrir hasta 64 documentos. Cierre pestañas y vuelva a intentar los archivos restantes.",
+    "ru": "Можно открыть до 64 документов. Закройте вкладки и повторите открытие оставшихся файлов.",
+    "it": "È possibile aprire fino a 64 documenti. Chiudere alcune schede e riprovare con i file rimanenti."
+  },
+  "error.main.save_changed": {
+    "en": "The document changed during saving. The staged save was cancelled.",
+    "zh-CN": "文档在保存期间发生了变化。已取消暂存保存。",
+    "ja": "保存中に文書が変更されました。一時保存を中止しました。",
+    "ko": "저장 중 문서가 변경되었습니다. 임시 저장이 취소되었습니다.",
+    "es": "El documento cambió durante el guardado. Se canceló el guardado provisional.",
+    "ru": "Документ изменился во время сохранения. Временное сохранение отменено.",
+    "it": "Il documento è cambiato durante il salvataggio. Il salvataggio temporaneo è stato annullato."
+  },
+  "error.main.get_message": {
+    "en": "GetMessageW failed.",
+    "zh-CN": "GetMessageW 失败。",
+    "ja": "GetMessageW に失敗しました。",
+    "ko": "GetMessageW가 실패했습니다.",
+    "es": "Falló GetMessageW.",
+    "ru": "Сбой GetMessageW.",
+    "it": "GetMessageW non riuscito."
+  },
+  "error.main.callback_stopped": {
+    "en": "The native callback failure handler stopped the event loop.",
+    "zh-CN": "本机回调故障处理程序已停止事件循环。",
+    "ja": "ネイティブコールバックの障害処理がイベントループを停止しました。",
+    "ko": "네이티브 콜백 오류 처리기가 이벤트 루프를 중지했습니다.",
+    "es": "El controlador de fallos de la devolución de llamada nativa detuvo el bucle de eventos.",
+    "ru": "Обработчик сбоя нативного обратного вызова остановил цикл событий.",
+    "it": "Il gestore degli errori del callback nativo ha arrestato il ciclo degli eventi."
+  },
+  "error.main.scintilla_missing": {
+    "en": "Cannot load Scintilla.dll (Windows error {0}). Extract the complete Windows x64 package and keep its DLL beside ru_notepad.exe.",
+    "zh-CN": "无法加载 Scintilla.dll（Windows 错误 {0}）。请解压完整的 Windows x64 包，并将 DLL 放在 ru_notepad.exe 旁。",
+    "ja": "Scintilla.dll を読み込めません（Windows エラー {0}）。Windows x64 パッケージ全体を展開し、DLL を ru_notepad.exe と同じフォルダーに置いてください。",
+    "ko": "Scintilla.dll을 로드할 수 없습니다(Windows 오류 {0}). 전체 Windows x64 패키지를 압축 해제하고 DLL을 ru_notepad.exe 옆에 두세요.",
+    "es": "No se puede cargar Scintilla.dll (error de Windows {0}). Extraiga el paquete Windows x64 completo y deje la DLL junto a ru_notepad.exe.",
+    "ru": "Не удалось загрузить Scintilla.dll (ошибка Windows {0}). Распакуйте полный пакет Windows x64 и поместите DLL рядом с ru_notepad.exe.",
+    "it": "Impossibile caricare Scintilla.dll (errore di Windows {0}). Estrarre il pacchetto Windows x64 completo e tenere la DLL accanto a ru_notepad.exe."
+  }
+}

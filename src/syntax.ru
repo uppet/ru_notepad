@@ -1,6 +1,7 @@
 # Ru-owned guarded selection; Lexilla colours C/C++, JSON and Markdown.
 # Markdown folds use a separate bounded Ru policy, never lexer style heuristics.
 # Import/initialise this module before registering any native window callback.
+本地 取 外言 'i18n.ru'.
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
 策 取 外言 'syntax_policy.ru'.
@@ -8,7 +9,7 @@
 标语 取 外言 'markdown_syntax.ru'.
 _选择们 取 {}.
 _选择序 取 [0].
-词法状态 取 {'ready':假,'library':空,'warning':''}.
+词法状态 取 {'ready':假,'library':空,'warning':'','warningArgs':[]}.
 GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 (窗 其 PTR) ([(窗 其 PTR),(窗 其 PTR)]) 'win64').
 
 # Preflight both loading and the export with ordinary Win32 result values. Missing
@@ -19,13 +20,15 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
 路径存 其 关闭.
 预载 取 窗 其 结果 预载成果.
 若 预载 其 为空 则
-    词法状态 其 增 'warning' ('C/C++, JSON and Markdown syntax highlighting is unavailable: Lexilla.dll could not be loaded (Windows error '+((预载成果 其 错误码) 为 句)+'). Those formats remain editable as plain text; Ru highlighting uses its separate RuSyntax.dll helper. Extract the complete Windows x64 package and keep Lexilla.dll beside ru_notepad.exe.').
+    词法状态 其 增 'warning' 'error.syntax.lexilla_missing'.
+    词法状态 其 增 'warningArgs' ([((预载成果 其 错误码) 为 句)]).
 另
     导出名 取 密 其 UTF8 'CreateLexer'.
     导出 取 窗 其 结果 (GetProcAddress 其 调用 [预载,导出名]).
     导出名 其 关闭.
     若 导出 其 为空 则
-        词法状态 其 增 'warning' 'C/C++, JSON and Markdown syntax highlighting is unavailable: Lexilla.dll does not export CreateLexer. Those formats remain editable as plain text; Ru highlighting uses its separate RuSyntax.dll helper. Restore Lexilla.dll from the complete Windows x64 package.'.
+        词法状态 其 增 'warning' 'error.syntax.lexilla_export'.
+        词法状态 其 增 'warningArgs' ([]).
     另
         词法库 取 密 其 动态库 库路径.
         CreateLexer 取 词法库 其 绑定 'CreateLexer' (密 其 签名 (窗 其 PTR) ([(窗 其 PTR)]) 'win64').
@@ -38,7 +41,8 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
 然
 
 算 初始化:
-    文 取 词法状态 其 查 'warning'.
+    文 取 ''.
+    若 词法状态['warning'] != '' 则 文 取 本地 其 格式 (词法状态['warning']) (词法状态['warningArgs']). 然
     如警告 取 如语 其 初始化.
     若 如警告 != '' 则
         若 文 != '' 则 文 取 文+'\n\n'. 然
@@ -155,7 +159,8 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
     词法器 取 窗 其 结果 (CreateLexer 其 调用 [名存]).
     若 词法器 其 为空 则
         名存 其 关闭.
-        词法状态 其 增 'warning' ('Syntax highlighting is unavailable for '+语言+'. Your document remains editable as plain text. Restore Lexilla.dll from the complete Windows x64 package.').
+        词法状态 其 增 'warning' 'error.syntax.language_unavailable'.
+        词法状态 其 增 'warningArgs' ([语言]).
         得 _纯文 态 柄.
     然
     # Transfer ownership immediately: do not free or reuse this pointer. Each
@@ -166,7 +171,8 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
     _清样式 态 柄.
     # Native incremental lexing handles edits. Never COLOURISE(0,-1) on each edit.
     _发设 态 柄 2692 1 0. # SC_IDLESTYLING_TOVISIBLE
-    色板 取 [].
+    色号们 取 [].
+    色值们 取 [].
     若 语言 == 'cpp' 则
         _发文设 态 柄 4005 0 'alignas alignof and and_eq asm atomic_cancel atomic_commit atomic_noexcept auto bitand bitor bool break case catch char char8_t char16_t char32_t class compl concept const consteval constexpr constinit const_cast continue co_await co_return co_yield decltype default delete do double dynamic_cast else enum explicit export extern false float for friend goto if inline int long mutable namespace new noexcept not not_eq nullptr operator or or_eq private protected public register reinterpret_cast requires return short signed sizeof static static_assert static_cast struct switch template this thread_local throw true try typedef typeid typename union unsigned using virtual void volatile wchar_t while xor xor_eq _Alignas _Alignof _Atomic _Bool _Complex _Generic _Imaginary _Noreturn _Static_assert _Thread_local'.
         _性质 态 柄 'lexer.cpp.track.preprocessor' '0'.
@@ -176,28 +182,31 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
         _性质 态 柄 'fold' '1'.
         _性质 态 柄 'fold.comment' '1'.
         _性质 态 柄 'fold.preprocessor' '1'.
-        色板 取 [[1,3573283],[2,3573283],[3,3573283],[4,12665455],[5,12934144],[6,1381795],[7,1381795],[9,12665455],[10,4473924],[12,3023567],[15,3573283],[17,3573283],[18,3023567],[20,1381795],[23,3573283],[24,3573283],[27,12665455]].
+        色号们 取 [1, 2, 3, 4, 5, 6, 7, 9, 10, 12, 15, 17, 18, 20, 23, 24, 27].
+        色值们 取 [3573283, 3573283, 3573283, 12665455, 12934144, 1381795, 1381795, 12665455, 4473924, 3023567, 3573283, 3573283, 3023567, 1381795, 3573283, 3573283, 12665455].
     另 若 语言 == 'json' 则
         _发文设 态 柄 4005 0 'true false null'.
         _性质 态 柄 'lexer.json.allow.comments' '0'.
         _性质 态 柄 'lexer.json.escape.sequence' '1'.
-        色板 取 [[1,12665455],[2,1381795],[3,3023567],[4,2514553],[5,12665455],[8,4473924],[9,1381795],[10,1381795],[11,12934144],[12,12934144],[13,3023567]].
+        色号们 取 [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13].
+        色值们 取 [12665455, 1381795, 3023567, 2514553, 12665455, 4473924, 1381795, 1381795, 12934144, 12934144, 3023567].
     另
-        色板 取 [[2,12934144],[3,12934144],[4,12665455],[5,12665455],[6,12934144],[7,12934144],[8,12934144],[9,12934144],[10,12934144],[11,12934144],[13,2514553],[14,2514553],[15,3573283],[16,8421504],[17,4473924],[18,12665455],[19,1381795],[20,1381795],[21,1381795]].
+        色号们 取 [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21].
+        色值们 取 [12934144, 12934144, 12665455, 12665455, 12934144, 12934144, 12934144, 12934144, 12934144, 12934144, 2514553, 2514553, 3573283, 8421504, 4473924, 12665455, 1381795, 1381795, 1381795].
     然 然
-    # Apply one literal palette through a shared loop rather than specializing
-    # the native wrapper separately for every style/colour combination.
+    # Parallel primitive palettes preserve the exact style/colour pairs and
+    # avoid nested-array dependency growth in the pinned native ABI analyzer.
     位 取 0.
-    循 色板 其 量 次
-        项 取 色板[位].
-        _配色 态 柄 项[0] 项[1].
+    循 色号们 其 量 次
+        _配色 态 柄 色号们[位] 色值们[位].
         位 取 位+1.
     环
     预期 取 3.
     若 语言 == 'json' 则 预期 取 120. 然
     若 语言 == 'markdown' 则 预期 取 98. 然
     若 ((_发设 态 柄 2383 0 0) 其 数) != 0 或 ((_发设 态 柄 4002 0 0) 其 数) != 预期 则
-        词法状态 其 增 'warning' ('Syntax highlighting could not be configured for '+语言+'. Your document remains editable as plain text.').
+        词法状态 其 增 'warning' 'error.syntax.language_configuration'.
+        词法状态 其 增 'warningArgs' ([语言]).
         # The object was already adopted above; SETILEXER(NULL) releases it.
         得 _纯文 态 柄.
     然

@@ -414,6 +414,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'markdown_native': r'^TOTAL PASS: 58\s*$',
             'app_markdown_native': r'^TOTAL PASS: 70\s*$',
             'markdown_direct_native': r'^TOTAL PASS: 114\s*$',
+            'i18n_policy': r'^TOTAL PASS: 289\s*$',
+            'i18n_settings_native': r'^TOTAL PASS: 69\s*$',
+            'app_i18n_native': r'^TOTAL PASS: 1417\s*$',
             'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=73\s*$',
             'file_streaming_native': r'^FILE_STREAMING_TESTS_PASS=99\s*$',
             'editor_streaming_native': r'^EDITOR_STREAMING_TESTS_PASS=21\s*$',
@@ -423,9 +426,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'file_drop_native': r'^TOTAL PASS: 38\s*$',
         }
         self.assertEqual(dict(ci.NATIVE_CONSOLE_TESTS), expected)
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 28)
-        # The original 38 gates remain, with one new direct-fold native console.
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 39)
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 31)
+        # All 39 current gates remain, plus three independent i18n native consoles.
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 42)
 
     def test_console_and_gui_receipts_share_all_manifest_resource_inputs(self):
         common = {'packaging/app.rc', 'packaging/app.manifest', 'assets/app-icon.ico', 'VERSION'}
@@ -519,6 +522,75 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertIn(f"-ne '{tree}'", script)
         self.assertEqual(workflow.count(f'ref: {commit}'), 3)  # two acceptance jobs plus manual growth diagnostic
 
+    def test_historical_replays_retain_their_exact_compiler_pin(self):
+        historical = 'a2f6faa0f914781dea74cb6f0a7574f1dd6808ce'
+        sources = {
+            'policy-prefix-benchmark.yml': 'f91d9e8d008c48b00f98b5a19000639c18a61518',
+            'direct-style-benchmark.yml': 'a5f5fd825767cd5af662cba792f5ce352991c21e',
+            'ru-syntax-profile.yml': 'e3256f0453b3b11dd26b671f38628cf411ab24e8',
+        }
+        for name, source in sources.items():
+            workflow = (ci.ROOT / '.github/workflows' / name).read_text(encoding='utf-8')
+            self.assertIn(f'ref: {source}', workflow)
+            self.assertEqual(workflow.count(f'ref: {historical}'), 1)
+            self.assertNotIn(f'ref: {ci.HELPER_POLICY_COMMIT}', workflow)
+
+    def test_prefix_proof_locks_reviewed_bridge_pair_and_unchanged_scanner(self):
+        import test_ru_policy_fast as proof
+        self.assertEqual(set(proof.LOCALIZED_BRIDGE_SHA256),
+                         {'src/ru_native_syntax.ru', 'src/ru_syntax.ru'})
+        baseline = self.root / 'proof-baseline'
+        candidate = self.root / 'proof-candidate'
+        shared = ('native/ru_scan.c', 'native/ru_scan.h', 'tests/ru_lexical_policy.ru')
+        for root in (baseline, candidate):
+            for name in (*shared, *proof.LOCALIZED_BRIDGE_SHA256):
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ci.ROOT / name).read_bytes())
+        # Historical bytes are represented by their reviewed digests here; the
+        # real integration proof reads the exact public baseline checkout.
+        real_sha = proof.sha
+        digests = {b'historical:' + (candidate / name).read_bytes(): before
+                   for name, (before, after) in proof.LOCALIZED_BRIDGE_SHA256.items()}
+        for name in proof.LOCALIZED_BRIDGE_SHA256:
+            (baseline / name).write_bytes(b'historical:' + (baseline / name).read_bytes())
+        def fixture_sha(data):
+            return digests.get(data, real_sha(data))
+        with patch.object(proof, 'sha', side_effect=fixture_sha):
+            proof.verify_shared_inputs(baseline, candidate)
+            for root in (baseline, candidate):
+                for name in (*shared, *proof.LOCALIZED_BRIDGE_SHA256):
+                    path = root / name
+                    original = path.read_bytes()
+                    path.write_bytes(original + b'changed')
+                    with self.assertRaises(AssertionError, msg=str(path)):
+                        proof.verify_shared_inputs(baseline, candidate)
+                    path.write_bytes(original)
+
+    def test_style_diagnostic_controls_are_mandatory_on_both_hosts(self):
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        self.assertIn('python -I tools/test_ru_cli_diagnostics.py --ru-root .ci/ru-language -v', workflow)
+        self.assertIn("@('-I','tools/test_ru_cli_diagnostics.py','--ru-root',$RuRoot,'-v')", script)
+        for directory in ('build/i18n-policy-evidence', 'build/windows-ci/i18n-policy-evidence'):
+            self.assertIn(directory + '/report.json', workflow)
+            self.assertIn(directory + '/*.log', workflow)
+            self.assertNotIn(directory + '/*.stdout', workflow)
+            self.assertNotIn(directory + '/*.stderr', workflow)
+        for private in ('build/ru-cli-diagnostics-evidence', 'build/i18n-policy-private',
+                        'build/diagnostic-control/build.log', 'build/bulk-candidate/portable/build.log'):
+            self.assertNotIn(private, workflow)
+        import inspect
+        inputs = inspect.getsource(ci.helper_policy_inputs)
+        self.assertIn("'tools/ru_cli_diagnostics.py'", inputs)
+        self.assertIn("'tools/test_ru_cli_diagnostics.py'", inputs)
+        self.assertIn('python -I tools/test_i18n_runner.py --ru-root .ci/ru-language -v', workflow)
+        self.assertIn("@('-I','tools/test_i18n_runner.py','--ru-root',$RuRoot,'-v')", script)
+        for source in ('tools/test_i18n_runner.py', 'tools/test_i18n.py',
+                       'tests/syntax_warning_portable.py', 'src/i18n_catalog.ru',
+                       'locales/ui.json', 'locales/errors.json'):
+            self.assertIn(repr(source), inputs)
+
     def test_new_feature_documentation_links_resolve(self):
         readme = (ci.ROOT / 'README.md').read_text(encoding='utf-8')
         for relative in ('docs/windows_file_entry.md', 'docs/file_streaming_tests.md'):
@@ -531,7 +603,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertNotIn('if errorlevel 1', runner.lower())
         lines = runner.split('\n:syntax_fallback\n', 1)[0].splitlines()
         commands = [index for index, line in enumerate(lines)
-                    if (re.match(r'^[a-z_]+\.exe(?: |$)|^call :syntax_fallback ', line) or
+                    if (re.match(r'^[a-z0-9_]+\.exe(?: |$)|^call :syntax_fallback ', line) or
                         line == 'cmd /d /c "set RU_GC_THRESHOLD=64&&set RU_GC_STATS=1&&markdown_direct_native.exe" >>test-results.txt 2>&1')]
         self.assertEqual(len(commands), len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS))
         for index in commands:
@@ -1233,7 +1305,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         new = {'ru_lexical_policy', 'ru_syntax_native', 'app_ru_native', 'app_ru_timer_native',
                'ru_direct_styling_native', 'markdown_policy', 'markdown_selection_policy',
                'markdown_native', 'app_markdown_native', 'markdown_direct_native', 'main-gui-markdown',
-               'ru_syntax_missing_lexilla', 'main-gui-ru-syntax', *ci.HELPER_FALLBACK_LAYOUTS}
+               'ru_syntax_missing_lexilla', 'main-gui-ru-syntax', *ci.HELPER_FALLBACK_LAYOUTS,
+               'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}
         prior = [test for test in summary['tests'] if test['name'] not in new]
         self.assertEqual(len(prior), 23)
         self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 835 + 16 + 90 + 6)
@@ -1241,13 +1314,18 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
     def test_acceptance_preserves_original_33_groups_1487_assertions_and_adds_markdown(self):
         summary = self.acceptance()
         ci.validate_acceptance(summary)
-        self.assertEqual(len(summary['tests']), 39)
+        self.assertEqual(len(summary['tests']), 42)
         added = {'markdown_policy', 'markdown_selection_policy', 'markdown_native',
-                 'app_markdown_native', 'markdown_direct_native', 'main-gui-markdown'}
+                 'app_markdown_native', 'markdown_direct_native', 'main-gui-markdown',
+                 'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}
         prior = [test for test in summary['tests'] if test['name'] not in added]
         self.assertEqual(len(prior), 33)
         self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487 + 90 + 6)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 2077)
+        baseline = [test for test in summary['tests'] if test['name'] not in
+                    {'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
+        self.assertEqual(len(baseline), 39)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in baseline), 2077)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 2077 + 289 + 69 + 1417)
 
     def test_direct_style_fixture_is_built_packaged_and_required(self):
         name = 'ru_direct_styling_native'
@@ -2713,16 +2791,20 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         build = (ci.ROOT / 'tools/build.py').read_text(encoding='utf-8')
         self.assertNotIn('str(p.relative_to(ROOT))', build)
         self.assertNotIn('str(source.relative_to(ROOT))', build)
-        self.assertEqual(build.count('p.relative_to(ROOT).as_posix()'), 1)
+        self.assertEqual(build.count('p.relative_to(ROOT).as_posix()'), 2)
         self.assertIn('source.relative_to(ROOT).as_posix()', build)
 
     def test_build_snapshot_includes_imported_test_helpers(self):
-        for folder in ('src', 'tests'):
+        for folder in ('src', 'tests', 'locales', 'tools'):
             (self.root / folder).mkdir()
         (self.root / 'src/main.ru').write_text('main source')
         (self.root / 'tests/entry.ru').write_text('test entry')
         helper = self.root / 'tests/imported_helper.ru'
         helper.write_text('helper source')
+        catalog = self.root / 'locales/ui.json'
+        catalog.write_text('catalog source')
+        generator = self.root / 'tools/generate_i18n.py'
+        generator.write_text('generator source')
         for relative in ('native/ru_scan.c', 'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h',
                          'native/ru_markdown_fold.c', 'native/ru_markdown_fold.h'):
             target = self.root / relative
@@ -2732,10 +2814,14 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             before = builder.source_snapshot()
             self.assertEqual(set(before), {'src/main.ru', 'tests/entry.ru', 'tests/imported_helper.ru',
                 'native/ru_scan.c', 'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h',
-                'native/ru_markdown_fold.c', 'native/ru_markdown_fold.h'})
+                'native/ru_markdown_fold.c', 'native/ru_markdown_fold.h',
+                'locales/ui.json', 'tools/generate_i18n.py'})
             helper.write_text('changed helper source')
+            catalog.write_text('changed catalog source')
+            generator.write_text('changed generator source')
             after = builder.source_snapshot()
-        self.assertNotEqual(before['tests/imported_helper.ru'], after['tests/imported_helper.ru'])
+        for name in ('tests/imported_helper.ru', 'locales/ui.json', 'tools/generate_i18n.py'):
+            self.assertNotEqual(before[name], after[name])
         self.assertTrue(all('\\' not in name and ':' not in name for name in after))
 
     def test_acceptance_rejects_each_missing_or_duplicated_required_group(self):
@@ -3049,7 +3135,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
     def test_markdown_direct_gate_retains_original_inventory_and_requires_gc(self):
         summary = self.acceptance()
         direct = next(t for t in summary['tests'] if t['name'] == 'markdown_direct_native')
-        prior = [t for t in summary['tests'] if t['name'] != 'markdown_direct_native']
+        prior = [t for t in summary['tests'] if t['name'] not in
+                 {'markdown_direct_native', 'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
         self.assertEqual(len(prior), 38)
         self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1867 + 90 + 6)
         self.assertEqual(direct['assertions_passed'], 114)
@@ -3282,6 +3369,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             self.assertEqual(len(functions), 1, name)
             code = '\n'.join(line.strip() for line in functions[0].splitlines()
                              if line.strip() and not line.lstrip().startswith('#'))
+            if name == '状态':
+                self.assertEqual(code.count("'warning':(_警告 态)"), 1)
+                code = code.replace("'warning':(_警告 态)", "'warning':态['warning']")
             self.assertEqual(hashlib.sha256(code.encode('utf-8')).hexdigest(), digest, name)
         binding_blocks = {'_批库态 取': ('_批统计们 取', '01bd6f4bd7eedd46d287845b9dc2a7731e85e5f8a1ff7d089ddce2a6940d75ab'), '_批路径 取': ('_范围型 取', '70872c2451f22776d2d6d58756ceffa041ece2eaadfbc81709762b7a78637f03')}
         for begin, (end, digest) in binding_blocks.items():
@@ -3964,6 +4054,57 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         with patch.object(gate.os, 'name', 'nt'), patch.object(gate.subprocess, 'run',
                 return_value=SimpleNamespace(returncode=1)):
             with self.assertRaisesRegex(RuntimeError, 'cleanup failed'): gate.stop_process_tree(process)
+
+    def test_localized_gui_status_never_accepts_pending_or_failure(self):
+        # Catalog text is varied in every supported language, with the real
+        # production status predicate, not a mock reimplementation.
+        catalogs = {}
+        for name in ('ui', 'errors'):
+            catalogs.update(json.loads((ci.ROOT / 'locales' / (name + '.json')).read_text(encoding='utf-8')))
+        self.assertEqual(set(catalogs['status.opening']), {'en', 'zh-CN', 'ja', 'ko', 'es', 'ru', 'it'})
+        for language in catalogs['status.opening']:
+            with self.subTest(language=language):
+                opening = '  ' + catalogs['status.opening'][language].format(1, 100)
+                styling = 'UTF-8 Ru    ' + catalogs['status.styling_ru'][language]
+                folding = 'UTF-8 Markdown    ' + catalogs['status.folding_markdown'][language]
+                off = 'UTF-8 Markdown    ' + catalogs['status.heading_folds_off'][language]
+                failure = 'UTF-8 Markdown    ' + catalogs['error.syntax.markdown_disabled'][language].format('API error 5')
+                self.assertTrue(ci.status_startswith(opening, 'status.opening'))
+                self.assertTrue(ci.status_contains(styling, 'status.styling_ru'))
+                self.assertFalse(ci.markdown_status_complete(opening + ' Markdown'))
+                self.assertFalse(ci.markdown_status_complete(folding))
+                self.assertFalse(ci.markdown_status_complete(off))
+                with self.assertRaisesRegex(RuntimeError, 'production folding failure'):
+                    ci.markdown_status_complete(failure)
+                self.assertTrue(ci.markdown_status_complete('UTF-8    Markdown'))
+        self.assertFalse(ci.markdown_status_complete(''))
+        self.assertFalse(ci.markdown_status_complete('UTF-8    Ru'))
+
+
+    def test_i18n_gates_are_built_packaged_and_fail_closed(self):
+        expected = {'i18n_policy': 289, 'i18n_settings_native': 69, 'app_i18n_native': 1417}
+        self.assertEqual({name: ci.expected_assertions(name) for name in expected}, expected)
+        script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        runner = (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8')
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        self.assertIn('python -I tools/test_i18n.py --ru-root .ci/ru-language', workflow)
+        self.assertIn('python -I tests/syntax_warning_portable.py --ru-root .ci/ru-language', workflow)
+        self.assertIn("'tools/test_i18n.py'", script)
+        self.assertIn("'tools/test_i18n_models.py'", script)
+        self.assertIn('python -I tools/test_i18n_models.py', workflow)
+        for name in expected:
+            self.assertIn(name + '.exe', ci.portable.TEST_NAMES)
+            self.assertIn("'" + name + "'", script)
+            self.assertIn(name + '.exe', runner)
+            summary = self.acceptance()
+            summary['tests'] = [case for case in summary['tests'] if case['name'] != name]
+            with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, 'inventory'):
+                ci.validate_acceptance(summary)
+        self.assertEqual(ci.console_command('app_i18n_native', self.root, self.root),
+                         [str(self.root / 'app_i18n_native.exe'), str(self.root)])
+        self.assertEqual(ci.CONSOLE_TIMEOUT_SECONDS['app_i18n_native'], 240)
+
+
 
 
 

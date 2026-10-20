@@ -21,6 +21,7 @@
 为
 算 元初 参数 为 句 阵:
     主 取 应用 其 初始化 [] 假.
+    应用 其 切界面 'en' 假. # Stable synthetic expectation; never writes preferences.
     状态 取 应用 其 A.
     确认 ((窗 其 取文 (状态 其 查 'status')) 其 含 'Line EOL: None (EOF)') 'status bar reports untitled line EOL'.
     第一 取 应用 其 编辑柄.
