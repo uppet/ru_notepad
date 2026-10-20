@@ -92,6 +92,11 @@ _布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
 命令键 取 ['command.new','command.open','command.open_windows1252','command.open_gbk','command.save','command.save_as','command.close_tab','command.previous_tab','command.next_tab','command.exit','command.undo','command.redo','command.cut','command.copy','command.paste','command.select_all','command.find','command.replace','command.find_next','command.save_utf8','command.save_utf8_bom','command.save_utf16le','command.save_utf16be','command.save_windows1252','command.save_gbk','command.language_plain','command.language_cpp','command.language_json','command.language_ru','command.language_markdown','command.toggle_wrap','command.zoom_in','command.zoom_out','command.zoom_reset','command.fold_all','command.unfold_all','command.toggle_markdown_folds','command.register_association','command.default_apps','command.unregister_association','command.registration_status','language.system','language.en','language.zh_cn','language.ja','language.ko','language.es','language.ru','language.it','command.about'].
 按钮名 取 ['cancel','case','next','one','all','hide'].
 按钮键 取 ['search.cancel','search.case','search.next','search.replace','search.all','search.close'].
+# Fixed synthetic progress only. These numeric enums identify a failed native
+# operation before its assertion without publishing labels, paths, or exceptions.
+作 记阶段 阶段 为 数 语言 为 数 宽 为 数:
+    显 'I18N_STAGE stage='+(阶段 为 句)+' language='+(语言 为 句)+' width='+(宽 为 句)+' next='+((次数[0]+1) 为 句).
+为
 作 确认 条件 为 事实 名 为 句:
     若 非 条件 则 卒 'FAIL: '+名. 然
     次数[0] 取 次数[0]+1.
@@ -303,26 +308,48 @@ _布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
         位 取 位+1.
     环
 为
+# Independent fixture-only reader: bounded nested blocks avoid mirroring the
+# former production WCHAR-per-field structure limit. No production buffer write.
+算 过滤读型 数量 为 数:
+    若 数量 < 2 或 数量 > 8192 则 卒 'Filter fixture reader bounds.'. 然
+    块们 取 []. 起位 取 0. 块位 取 0.
+    循
+        若 起位 >= 数量 则 破. 然
+        字段们 取 []. 位 取 0.
+        循
+            若 位 >= 64 或 起位+位 >= 数量 则 破. 然
+            字段们 其 增 [('u'+(位 为 句)),(窗 其 W)].
+            位 取 位+1.
+        环
+        块们 其 增 [('b'+(块位 为 句)),(密 其 结构 字段们)].
+        起位 取 起位+位. 块位 取 块位+1.
+    环
+    得 密 其 结构 块们.
+法
+算 过滤读字 存 位 为 数:
+    块位 取 (位-位%64)/64.
+    块 取 存 其 读 ('b'+(块位 为 句)).
+    值 取 (块 其 读 ('u'+((位%64) 为 句))) 其 数.
+    块 其 关闭.
+    得 值.
+法
 作 验过滤 代码 为 句:
     滤 取 窗 其 文件过滤.
     文字 取 (词 代码 'file.filter.all')+'|*.*|'+(词 代码 'file.filter.text')+'|*.txt|'+(词 代码 'file.filter.ru')+'|*.ru|'+(词 代码 'file.filter.markdown')+'|*.md;*.markdown|'.
     存 取 密 其 UTF16 文字.
     数量 取 (存 其 大小)/2.
-    字段们 取 [].
-    位 取 0.
-    循 数量 次 字段们 其 增 [('u'+(位 为 句)),(窗 其 W)]. 位 取 位+1. 环
-    型 取 密 其 结构 字段们.
-    预期 取 型 其 新建.
+    型 取 过滤读型 数量.
+    预期 取 型 其 新建. 实存 取 型 其 新建.
     试
         窗 其 结果 ((窗 其 RtlMoveMemory) 其 调用 [预期,存,(存 其 大小)]).
-        确认 ((滤 其 大小) == (存 其 大小)) (代码+' filter allocation has the exact UTF16 size').
+        确认 ((滤 其 大小) == (存 其 大小) 且 (型 其 大小) == (存 其 大小)) (代码+' filter allocation has the exact UTF16 size').
+        窗 其 结果 ((窗 其 RtlMoveMemory) 其 调用 [实存,滤,(滤 其 大小)]).
         相同 取 真. 零数 取 0. 段数 取 0. 段长 取 0.
         位 取 0.
         循 数量 次
-            名 取 'u'+(位 为 句).
-            应 取 (预期 其 读 名) 其 数.
+            应 取 过滤读字 预期 位.
             若 应 == 124 则 应 取 0. 然
-            实 取 (滤 其 读 名) 其 数.
+            实 取 过滤读字 实存 位.
             若 实 != 应 则 相同 取 假. 然
             若 实 == 0 则
                 零数 取 零数+1.
@@ -333,9 +360,9 @@ _布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
         环
         确认 相同 (代码+' filter WCHAR fields exactly match localized labels and invariant wildcards').
         确认 (零数 == 9 且 段数 == 8 且 段长 == 0) (代码+' filter has four nonempty label-pattern pairs and no extra fields').
-        确认 (((滤 其 读 ('u'+((数量-2) 为 句))) 其 数) == 0 且 ((滤 其 读 ('u'+((数量-1) 为 句))) 其 数) == 0) (代码+' filter ends with exactly the required double NUL').
-    救 原因 预期 其 关闭. 存 其 关闭. 滤 其 关闭. 卒 原因. 终
-    预期 其 关闭. 存 其 关闭. 滤 其 关闭.
+        确认 ((过滤读字 实存 (数量-2)) == 0 且 (过滤读字 实存 (数量-1)) == 0) (代码+' filter ends with exactly the required double NUL').
+    救 原因 实存 其 关闭. 预期 其 关闭. 存 其 关闭. 滤 其 关闭. 卒 原因. 终
+    实存 其 关闭. 预期 其 关闭. 存 其 关闭. 滤 其 关闭.
 为
 作 验文字 主 代码 为 句:
     态 取 应用 其 A.
@@ -384,6 +411,7 @@ _布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
     确认 ((窗 其 取文 (态 其 查 'status')) == '  '+位置文+'    '+编码文+'    '+(词 代码 'syntax.plain')) (代码+' native status is translated with exact position encoding and syntax').
 为
 作 检验 根 为 句 入路 为 句 出路 为 句:
+    记阶段 0 7 0.
     件编 其 写文件 入路 源 1200 真 ''.
     主 取 应用 其 初始化 [入路] 假.
     态 取 应用 其 A.
@@ -416,19 +444,21 @@ _布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
     循 语言们 其 量 次
         代码 取 语言们[位].
         活 取 位%3.
+        记阶段 1 位 0.
         应用 其 切页 活.
         切换 主 代码.
         确认 ((本地 其 当前语言) == 代码) (代码+' active catalog matches explicit nonpersistent choice').
         确认 ((态 其 查 'uiPreference') == 代码) (代码+' in-memory language preference matches choice').
-        验菜单 主 代码.
-        验文字 主 代码.
-        验全部文档 旧们 活 代码.
-        验过滤 代码.
-        验布局 主 640 代码.
-        验布局 主 900 代码.
-        验布局 主 1600 代码.
+        记阶段 2 位 0. 验菜单 主 代码.
+        记阶段 3 位 0. 验文字 主 代码.
+        记阶段 4 位 0. 验全部文档 旧们 活 代码.
+        记阶段 5 位 0. 验过滤 代码.
+        记阶段 6 位 640. 验布局 主 640 代码.
+        记阶段 6 位 900. 验布局 主 900 代码.
+        记阶段 6 位 1600. 验布局 主 1600 代码.
         位 取 位+1.
     环
+    记阶段 7 7 0.
     # Every language and font has been warmed before bounded resource comparison.
     进程 取 窗 其 结果 (_GetCurrentProcess 其 调用 []).
     用户前 取 (窗 其 结果 (_GetGuiResources 其 调用 [进程,1])) 其 数.
@@ -441,6 +471,7 @@ _布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
     确认 ((窗 其 结果 (_GetGuiResources 其 调用 [进程,1])) 其 数 <= 用户前) 'twenty-eight repeated switches do not grow USER object count'.
     确认 ((窗 其 结果 (_GetGuiResources 其 调用 [进程,0])) 其 数 <= 图形前) 'twenty-eight repeated switches release measurement DC and GDI objects'.
     验全部文档 旧们 0 'repeated switches'.
+    记阶段 8 7 0.
     # Verify real undo/redo behavior after every UI rebuild, not only CANUNDO.
     窗 其 发送 柄 2176 0 0.
     确认 ((编 其 文本 柄) == 源 且 非 (应用 其 脏 页)) 'one named-document undo restores exact original text and savepoint'.
@@ -459,6 +490,7 @@ _布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
     确认 (读回['text'] == 源 且 读回['encoding'] == 1200 且 读回['bom']) 'saved Unicode filename round-trips exact multilingual UTF16LE text and BOM'.
     确认 ((页 其 查 'path') == 出路 且 非 (应用 其 脏 页)) 'successful Unicode Save As keeps the named document clean'.
     确认 (((态 其 查 'errors') 其 量) == 0) 'real language switches and file operations report no application errors'.
+    记阶段 9 7 0.
     卸布局钩.
     确认 (应用 其 关程序) 'all clean localized documents close without prompting'.
     确认 (关闭询问[0] == 0 且 非 (态 其 查 'ready')) 'shutdown requires no dirty prompt and releases the real window'.
@@ -499,6 +531,7 @@ _布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
         删除拥有 入路 假. 删除拥有 出路 假. 删除目录 根 假.
         卒 原因.
     终
+    记阶段 10 7 0.
     删除拥有 入路 真. 删除拥有 出路 真. 删除目录 根 真.
     存 取 密 其 UTF16 根.
     属性 取 (窗 其 结果 (_GetFileAttributesW 其 调用 [存])) 其 数.

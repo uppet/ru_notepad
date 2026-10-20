@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Fresh real-Windows 114/1417 diagnostic only; no product acceptance or ZIP.
 
-Build/execute only the two unchanged full fixtures. Raw commands, build receipts,
+Build/execute only the two full fixtures with unchanged assertion inventories.
+Raw commands, build receipts,
 fixture paths and child streams remain private. Reuse production build parameters,
 PE/helper/source validators and native console runner; this subset is deliberately
 not a call to the full product acceptance validator.
@@ -36,7 +37,8 @@ PUBLIC_LIMIT = 16384
 DRIVERS = ('tools/build.py', 'tools/package.py', 'tools/windows_ci.py',
            'tools/check_native_arguments.py', 'tools/prepare_source_archives.py',
            'tools/run_focused_native_diagnostic.py', 'tools/guard_focused_native_diagnostic.py',
-           'tools/test_focused_native_diagnostic.py', 'tools/test_window_size_workflow.py',
+           'tools/test_focused_native_diagnostic.py', 'tools/test_i18n_stage_progress.py',
+           'tools/test_window_size_workflow.py',
            '.github/workflows/windows.yml')
 RECEIPT_KEYS = set('schema utc ru_commit ru_tree app_version scintilla_version scintilla_archive_sha256 '
     'lexilla_version lexilla_archive_sha256 entry_source entry_sha256 source_sha256 build_input_sha256 '
@@ -188,13 +190,67 @@ def verify_receipts(binary, objdump, cc, compiler, sources):
     return results, {name: record['sha256'] for name, record in pe.items()}, helpers
 
 
+def i18n_stage_sequence():
+    """Fixed original 1417-assertion grouping, independent of private labels."""
+    rows = [(0, 7, 0, 1)]
+    for language in range(7):
+        for stage, width, next_assertion in (
+                (1, 0, 9), (2, 0, 12), (3, 0, 89), (4, 0, 115),
+                (5, 0, 145), (6, 640, 149), (6, 900, 166), (6, 1600, 183)):
+            rows.append((stage, language, width, next_assertion + 191 * language))
+    rows.extend(((7, 7, 0, 1346), (8, 7, 0, 1407), (9, 7, 0, 1415), (10, 7, 0, 1417)))
+    return tuple(rows)
+
+
+I18N_STAGE_SEQUENCE = i18n_stage_sequence()
+I18N_STAGE_PATTERN = re.compile(
+    rb'I18N_STAGE stage=(0|[1-9][0-9]?) language=([0-7]) '
+    rb'width=(0|640|900|1600) next=([1-9][0-9]{0,3})')
+
+
+def parse_i18n_progress(stdout, *, complete=False):
+    """Admit only a contiguous valid prefix, never search past corrupt markers."""
+    require(type(stdout) is bytes and 0 < len(stdout) <= ci.MAX_LOG_BYTES)
+    rows, passed = [], 0
+    for raw in stdout.splitlines(keepends=True):
+        line = raw.removesuffix(b'\n').removesuffix(b'\r')
+        if b'I18N_STAGE' in line:
+            require(raw.endswith(b'\n'))
+            match = I18N_STAGE_PATTERN.fullmatch(line)
+            require(match is not None and len(rows) < len(I18N_STAGE_SEQUENCE))
+            row = tuple(map(int, match.groups()))
+            require(row == I18N_STAGE_SEQUENCE[len(rows)] and row[3] == passed + 1)
+            rows.append(row)
+        elif line.startswith(b'PASS:'):
+            passed += 1
+            require(passed <= COUNTS[1])
+    require(rows)
+    # An omitted stage cannot silently borrow the following group's PASS lines.
+    upper = I18N_STAGE_SEQUENCE[len(rows)][3] - 1 if len(rows) < len(I18N_STAGE_SEQUENCE) else COUNTS[1]
+    require(rows[-1][3] <= passed + 1 and passed <= upper)
+    if complete:
+        require(len(rows) == len(I18N_STAGE_SEQUENCE) and passed == COUNTS[1])
+    return dict(zip(('stage', 'language', 'width', 'next'), rows[-1]))
+
+
+def failure_progress(logs):
+    """Optional numeric-only failure context; malformed/missing data stays private."""
+    try:
+        last = parse_i18n_progress(bounded(logs / 'app_i18n_native.stdout.log'))
+        return ('FOCUSED_I18N_PROGRESS stage={stage} language={language} '
+                'width={width} next={next}').format(**last)
+    except Exception:
+        return None
+
+
 def validated_result(name, result, logs):
     index = TESTS.index(name)
     require(result.get('name') == name and result.get('passed') is True
             and result.get('executed') is True and result.get('cleanup_killed') is False
             and type(result.get('exit_code')) is int and result['exit_code'] == 0
             and result.get('skips') == [] and result.get('assertions_passed') == COUNTS[index])
-    out = bounded(logs / (name + '.stdout.log')).decode('utf-8')
+    stdout = bounded(logs / (name + '.stdout.log'))
+    out = stdout.decode('utf-8')
     err = bounded(logs / (name + '.stderr.log')).decode('utf-8')
     # Recheck the actual private streams before publishing, never just a receipt.
     require(len(re.findall(r'^PASS:', out, re.M)) == COUNTS[index])
@@ -212,6 +268,7 @@ def validated_result(name, result, logs):
     else:
         require(err == '' and 'FOLD_METRICS' not in out and 'gc_stress' not in result
                 and 'bulk_route_metrics' not in result)
+        parse_i18n_progress(stdout, complete=True)
     return record
 
 
@@ -391,6 +448,10 @@ def main():
     except Exception:
         # Numeric stages: trigger, platform, freshness, compiler, archives, DLLs,
         # fixtures, receipts, Markdown, i18n, stability, publication. No raw errors.
+        if stage == 10:
+            progress = failure_progress(logs)
+            if progress is not None:
+                print(progress, file=sys.stderr)
         print(f'FOCUSED_NATIVE_DIAGNOSTIC code={stage} markdown={counts[0]} i18n={counts[1]}', file=sys.stderr)
         return 1
     print('FOCUSED_NATIVE_DIAGNOSTIC code=0 markdown=114 i18n=1417')

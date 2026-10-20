@@ -29,6 +29,13 @@ def metrics():
 
 def streams(index):
     text = 'PASS: synthetic\n' * runner.COUNTS[index]
+    if index == 1:
+        text, passed = '', 0
+        for stage, language, width, next_assertion in runner.I18N_STAGE_SEQUENCE:
+            text += 'PASS: synthetic\n' * (next_assertion - 1 - passed)
+            passed = next_assertion - 1
+            text += f'I18N_STAGE stage={stage} language={language} width={width} next={next_assertion}\n'
+        text += 'PASS: synthetic\n' * (runner.COUNTS[index] - passed)
     if index == 0:
         for row in metrics():
             text += 'FOLD_METRICS1 route=' + row['route'] + ''.join(' ' + key + '=' + str(row[key])
@@ -79,6 +86,19 @@ class RuntimeControls(unittest.TestCase):
             row = runner.validated_result(name, result(i), self.logs)
             self.assertEqual(row['assertions'], runner.COUNTS[i])
         self.assertEqual(runner.ci.MARKDOWN_DIRECT_GC_ENV, {'RU_GC_THRESHOLD': '64', 'RU_GC_STATS': '1'})
+        # Preserve stable control IDs/count while testing both native line endings.
+        name = runner.TESTS[1]
+        for ending in ('\n', '\r\n'):
+            out, err = streams(1)
+            (self.logs / (name + '.stdout.log')).write_bytes(out.replace('\n', ending).encode('utf-8'))
+            runner.validated_result(name, result(1), self.logs)
+        for mutation in (
+                lambda text: text.replace('I18N_STAGE stage=0 language=7 width=0 next=1\n', ''),
+                lambda text: text.replace('stage=5 language=4 width=0 next=909', 'stage=5 language=4 width=0 next=908'),
+                lambda text: text + 'I18N_STAGE private/path\n'):
+            (self.logs / (name + '.stdout.log')).write_bytes(mutation(streams(1)[0]).encode('utf-8'))
+            with self.assertRaises(ValueError):
+                runner.validated_result(name, result(1), self.logs)
 
     def test_wrong_counts_totals_fail_skip_and_stderr(self):
         for i, name in enumerate(runner.TESTS):

@@ -1,5 +1,15 @@
 # Seven-language integration validation, 2026-10-20
 
+## Subsequent native filter correction
+
+The initial integration evidence below describes the 263-key snapshot. A later
+focused Windows run reached a production Spanish filter-construction limit;
+[the filter-buffer correction](i18n-filter-buffer.md) records the actual observed
+boundary, independently reproduced cause, owned-buffer repair, and remaining
+Windows acceptance. The current catalog adds one complete seven-language error
+key, for 264 keys / 1,848 values. Earlier local or Windows results are not
+relabeled as acceptance of that changed shared source.
+
 ## Current candidate and acceptance boundary
 
 The seven-language interface has been integrated locally onto the current C++

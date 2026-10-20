@@ -68,6 +68,8 @@ LoadImageW 取 用户 其 绑定 'LoadImageW' (密 其 签名 PTR ([PTR,PTR,U,I,
 GetModuleHandleW 取 内核 其 绑定 'GetModuleHandleW' (密 其 签名 PTR ([PTR]) 'win64').
 GetModuleFileNameW 取 内核 其 绑定 'GetModuleFileNameW' (密 其 签名 U ([PTR,PTR,U]) 'win64').
 RtlMoveMemory 取 内核 其 绑定 'RtlMoveMemory' (密 其 签名 V ([PTR,PTR,UP]) 'win64').
+CharNextW 取 用户 其 绑定 'CharNextW' (密 其 签名 PTR ([PTR]) 'win64').
+_过滤字 取 密 其 结构 [['unit',W]].
 GetTickCount64 取 内核 其 绑定 'GetTickCount64' (密 其 签名 UP ([]) 'win64').
 GetOpenFileNameW 取 对话 其 绑定 'GetOpenFileNameW' (密 其 签名 I ([PTR]) 'win64').
 GetSaveFileNameW 取 对话 其 绑定 'GetSaveFileNameW' (密 其 签名 I ([PTR]) 'win64').
@@ -206,28 +208,57 @@ FreeLibrary 取 内核 其 绑定 'FreeLibrary' (密 其 签名 I ([PTR]) 'win64
     得 宽.
 法
 # Native filters are a sequence of NUL-terminated UTF-16 fields plus final NUL.
-# Build owned WCHAR fields, replacing only our ASCII separators, never user paths.
-算 文件过滤:
-    文 取 (本地 其 文本 'file.filter.all')+'|*.*|'+(本地 其 文本 'file.filter.text')+'|*.txt|'+(本地 其 文本 'file.filter.ru')+'|*.ru|'+(本地 其 文本 'file.filter.markdown')+'|*.md;*.markdown|'.
+# Replace only our ASCII separators in owned encoded memory, never user paths.
+# Keep the variable-length MULTI_SZ in owned UTF16 memory. A WCHAR-per-field
+# structure exceeds the fixed 128-field native limit for long translations.
+# CharNextW returns an opaque pointer within the still-live NUL-terminated tail;
+# fetch it BEFORE replacing a separator, and never convert addresses to numbers.
+算 文件过滤缓冲 段们 为 阵:
+    若 (段们 其 量) < 2 或 (段们 其 量)%2 != 0 则 卒 (本地 其 文本 'error.win32.filter_invalid'). 然
+    文 取 ''. 段位 取 0.
+    循 段们 其 量 次
+        片 取 段们[段位].
+        若 片 == '' 则 卒 (本地 其 文本 'error.win32.filter_invalid'). 然
+        位 取 0.
+        循 片 其 量 次
+            若 片[位] == '|' 则 卒 (本地 其 文本 'error.win32.filter_invalid'). 然
+            位 取 位+1.
+        环
+        文 取 文+片+'|'. 段位 取 段位+1.
+    环
+    # UTF16 rejects embedded NUL and enforces its existing byte-size limit.
     存 取 密 其 UTF16 文.
-    数量 取 (存 其 大小)/2.
-    字段们 取 [].
-    位 取 0.
-    循 数量 次
-        字段们 其 增 [('u'+(位 为 句)),W].
-        位 取 位+1.
-    环
-    类型 取 密 其 结构 字段们.
-    滤 取 类型 其 新建.
-    结果 (RtlMoveMemory 其 调用 [滤,存,(存 其 大小)]).
-    存 其 关闭.
-    位 取 0.
-    循 数量 次
-        名 取 'u'+(位 为 句).
-        若 ((滤 其 读 名) 其 数) == 124 则 滤 其 写 名 0. 然
-        位 取 位+1.
-    环
-    得 滤.
+    单 取 空. 零 取 空.
+    试
+        单 取 _过滤字 其 新建. 零 取 _过滤字 其 新建.
+        零 其 写 'unit' 0.
+        指 取 存 其 地址. 分隔数 取 0. 到尾 取 假.
+        # At most one step per UTF16 code unit, including the final terminator.
+        # Combining marks/surrogate units may be skipped by CharNextW, but the
+        # ASCII separators are visited and all untouched bytes stay identical.
+        循 (存 其 大小)/2 次
+            结果 (RtlMoveMemory 其 调用 [单,指,2]).
+            值 取 (单 其 读 'unit') 其 数.
+            若 值 == 0 则 到尾 取 真. 破. 然
+            后 取 结果 (CharNextW 其 调用 [指]).
+            若 后 其 为空 或 (后 其 句) == (指 其 句) 则 卒 (本地 其 文本 'error.win32.filter_invalid'). 然
+            若 值 == 124 则
+                结果 (RtlMoveMemory 其 调用 [指,零,2]).
+                分隔数 取 分隔数+1.
+            然
+            指 取 后.
+        环
+        若 非 到尾 或 分隔数 != (段们 其 量) 则 卒 (本地 其 文本 'error.win32.filter_invalid'). 然
+    救 原因
+        若 单 != 空 则 单 其 关闭. 然
+        若 零 != 空 则 零 其 关闭. 然
+        存 其 关闭. 卒 原因.
+    终
+    单 其 关闭. 零 其 关闭.
+    得 存.
+法
+算 文件过滤:
+    得 文件过滤缓冲 ([(本地 其 文本 'file.filter.all'),'*.*',(本地 其 文本 'file.filter.text'),'*.txt',(本地 其 文本 'file.filter.ru'),'*.ru',(本地 其 文本 'file.filter.markdown'),'*.md;*.markdown']).
 法
 算 文件对话 父, 保存 为 事实, 原名 为 句:
     存 取 密 其 缓冲 65538.

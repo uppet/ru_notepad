@@ -1330,5 +1330,14 @@
     "es": "No se puede cargar Scintilla.dll (error de Windows {0}). Extraiga el paquete Windows x64 completo y deje la DLL junto a ru_notepad.exe.",
     "ru": "Не удалось загрузить Scintilla.dll (ошибка Windows {0}). Распакуйте полный пакет Windows x64 и поместите DLL рядом с ru_notepad.exe.",
     "it": "Impossibile caricare Scintilla.dll (errore di Windows {0}). Estrarre il pacchetto Windows x64 completo e tenere la DLL accanto a ru_notepad.exe."
+  },
+  "error.win32.filter_invalid": {
+    "en": "The file-type filter is invalid. The file dialog was not opened.",
+    "zh-CN": "文件类型筛选器无效。未打开文件对话框。",
+    "ja": "ファイルの種類フィルターが無効です。ファイルダイアログは開かれませんでした。",
+    "ko": "파일 형식 필터가 올바르지 않습니다. 파일 대화 상자를 열지 않았습니다.",
+    "es": "El filtro de tipos de archivo no es válido. No se abrió el diálogo de archivos.",
+    "ru": "Недопустимый фильтр типов файлов. Диалог выбора файла не открыт.",
+    "it": "Il filtro dei tipi di file non è valido. La finestra di selezione del file non è stata aperta."
   }
 }
