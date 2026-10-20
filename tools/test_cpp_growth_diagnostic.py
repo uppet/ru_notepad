@@ -2,6 +2,8 @@
 """Parser rejection and manual workflow isolation controls; no Windows claims."""
 import unittest
 import itertools
+import ast
+import zipfile
 from pathlib import Path
 from run_cpp_growth_diagnostic import validate_measurements, validate_trigger, ONE_SHOT_TITLE
 
@@ -71,5 +73,31 @@ class Controls(unittest.TestCase):
         # GitHub == treats refs case-insensitively; this strict guard must fail
         # before measurement for a matching-title case-variant branch.
         self.assertEqual('refs/heads/WIP'.casefold(), 'refs/heads/wip'.casefold())
+
+    def test_lexilla_platform_matches_product_builder(self):
+        # Capture the actual runner's literal command, not a second command copy.
+        runner = ast.parse((ROOT/'tools/run_cpp_growth_diagnostic.py').read_text())
+        calls = [n for n in ast.walk(runner) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id == 'run' and n.args and isinstance(n.args[0],ast.Constant) and n.args[0].value == 'lexilla']
+        self.assertEqual(len(calls), 1)
+        constants = [n.value for n in ast.walk(calls[0].args[1]) if isinstance(n,ast.Constant) and isinstance(n.value,str)]
+        self.assertIn('../bin/lexilla.dll', constants)
+        self.assertEqual(constants.count('windir=C:/Windows'), 1)
+        product = (ROOT/'tools/build.py').read_text()
+        self.assertIn("'windir=C:/Windows'", product)
+        with zipfile.ZipFile(ROOT/'third_party/source_archives/lexilla554.zip') as archive:
+            makefile = archive.read('lexilla/src/makefile').decode().replace('\r\n','\n')
+        # Without the lower-case windir make variable this exact pinned file
+        # selects liblexilla.so, so the .dll target must be paired with it.
+        self.assertIn('ifdef windir\n    SHARED_NAME = lexilla\n    SHAREDEXTENSION = dll', makefile)
+        self.assertIn('SHARED_NAME = liblexilla', makefile)
+        self.assertIn('SHAREDEXTENSION = so', makefile)
+        def require_windows_target(args):
+            if '../bin/lexilla.dll' not in args or args.count('windir=C:/Windows') != 1:
+                raise ValueError('Windows target requires explicit lower-case windir')
+        require_windows_target(constants)
+        with self.assertRaises(ValueError):
+            require_windows_target([x for x in constants if x != 'windir=C:/Windows'])
+        with self.assertRaises(ValueError):
+            require_windows_target([x.replace('windir=', 'WINDIR=') for x in constants])
 
 if __name__ == '__main__': unittest.main()

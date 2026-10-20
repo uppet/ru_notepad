@@ -92,7 +92,7 @@ def main():
     make = binpath / 'mingw32-make.exe'
     common = ['CXX=g++.exe', 'WINDRES=windres.exe', 'AR=ar.exe', 'RANLIB=ranlib.exe']
     run('scintilla', [make, '-j2', '-C', ROOT / 'vendor/scintilla/win32', '../bin/Scintilla.dll', *common])
-    run('lexilla', [make, '-j2', '-C', ROOT / 'vendor/lexilla/src', '../bin/lexilla.dll', *common, 'LDFLAGS=-shared -static -mwindows -Wl,--kill-at -s'])
+    run('lexilla', [make, '-j2', '-C', ROOT / 'vendor/lexilla/src', '../bin/lexilla.dll', *common, 'windir=C:/Windows', 'LDFLAGS=-shared -static -mwindows -Wl,--kill-at -s'])
     exe = output / 'cpp_growth_diagnostic.exe'
     source = 'tests/fixtures/cpp_growth_diagnostic.ru'
     run('build', [sys.executable, 'tools/build.py', '--ru-root', a.ru_root.resolve(), '--cc', binpath / 'gcc.exe', '--cxx', binpath / 'g++.exe', '--windres', binpath / 'windres.exe', '--ar', binpath / 'ar.exe', '--ranlib', binpath / 'ranlib.exe', '--skip-scintilla', '--skip-lexilla', '--source', source, '--output', exe, '--console'])
