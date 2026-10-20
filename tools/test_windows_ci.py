@@ -401,7 +401,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'app_features_native': r'^TOTAL PASS: 31\s*$',
             'app_streaming_native': r'^APP_STREAMING_TESTS_PASS=63\s*$',
             'shortcuts': r'^TOTAL PASS: 42\s*$',
-            'syntax_policy': r'^TOTAL PASS: 108\s*$',
+            'syntax_policy': r'^TOTAL PASS: 134\s*$',
             'status_native': r'^TOTAL PASS: 21\s*$',
             'syntax_native': r'^TOTAL PASS: 138\s*$',
             'app_ru_native': r'^TOTAL PASS: 73\s*$',
@@ -1236,7 +1236,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                'ru_syntax_missing_lexilla', 'main-gui-ru-syntax', *ci.HELPER_FALLBACK_LAYOUTS}
         prior = [test for test in summary['tests'] if test['name'] not in new]
         self.assertEqual(len(prior), 23)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 835 + 16 + 64)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 835 + 16 + 90)
 
     def test_acceptance_preserves_original_33_groups_1487_assertions_and_adds_markdown(self):
         summary = self.acceptance()
@@ -1246,8 +1246,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                  'app_markdown_native', 'markdown_direct_native', 'main-gui-markdown'}
         prior = [test for test in summary['tests'] if test['name'] not in added]
         self.assertEqual(len(prior), 33)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487 + 64)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 2045)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487 + 90)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 2071)
 
     def test_direct_style_fixture_is_built_packaged_and_required(self):
         name = 'ru_direct_styling_native'
@@ -3051,7 +3051,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         direct = next(t for t in summary['tests'] if t['name'] == 'markdown_direct_native')
         prior = [t for t in summary['tests'] if t['name'] != 'markdown_direct_native']
         self.assertEqual(len(prior), 38)
-        self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1867 + 64)
+        self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1867 + 90)
         self.assertEqual(direct['assertions_passed'], 114)
         self.assertEqual(ci.console_command('markdown_direct_native', self.root, self.root),
                          [str(self.root / 'markdown_direct_native.exe')])

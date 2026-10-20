@@ -181,15 +181,15 @@
     确认 (语法 其 全折 甲 1) 'C++ expand-all succeeds'.
     确认 ((窗 其 发送 甲 2228 1 0) 其 数 == 1) 'C++ expand-all restores body'.
     层 取 (窗 其 发送 甲 2223 0 0) 其 数.
-    确认 ((层 其 位段 13 1) == 1) 'namespace is a fold header'.
+    确认 ((策 其 是折头 层)) 'namespace is a fold header'.
     层 取 (窗 其 发送 甲 2223 1 0) 其 数.
-    确认 ((层 其 位段 13 1) == 1) 'function is a nested fold header'.
+    确认 ((策 其 是折头 层)) 'function is a nested fold header'.
     层 取 (窗 其 发送 甲 2223 3 0) 其 数.
-    确认 ((层 其 位段 13 1) == 1) 'conditional brace is a nested fold header'.
+    确认 ((策 其 是折头 层)) 'conditional brace is a nested fold header'.
     层 取 (窗 其 发送 甲 2223 8 0) 其 数.
-    确认 ((层 其 位段 13 1) == 1) 'multiline C++ comment is foldable'.
+    确认 ((策 其 是折头 层)) 'multiline C++ comment is foldable'.
     层 取 (窗 其 发送 甲 2223 11 0) 其 数.
-    确认 ((层 其 位段 13 1) == 1) 'preprocessor conditional is foldable without branch evaluation'.
+    确认 ((策 其 是折头 层)) 'preprocessor conditional is foldable without branch evaluation'.
     普位 取 (窗 其 发送 甲 2167 2 0) 其 数.
     确认 (非 (语法 其 折叠 甲 普位)) 'packed next-level bits and string braces are not fold headers'.
     确认 (非 (语法 其 折叠 甲 (-1))) 'negative C++ margin position is rejected'.
@@ -240,11 +240,11 @@
     确认 ((编 其 文本 甲) == 'return 1;\n}\n') 'deleting collapsed C++ header preserves remaining source'.
     确认 ((窗 其 发送 甲 2236 0 0) 其 数 == 1) 'deleting C++ header restores every hidden child through native fold maintenance'.
     层 取 (窗 其 发送 甲 2223 0 0) 其 数.
-    确认 ((层 其 位段 13 1) == 0) 'deleted C++ header is removed by Lexilla recomputation'.
+    确认 (非 (策 其 是折头 层)) 'deleted C++ header is removed by Lexilla recomputation'.
     窗 其 发送 甲 2176 0 0.
     窗 其 发送 甲 4003 0 (-1).
     层 取 (窗 其 发送 甲 2223 0 0) 其 数.
-    确认 ((编 其 文本 甲) == 删文 且 (层 其 位段 13 1) == 1 且 非 (编 其 已变 甲)) 'one undo restores C++ header, native fold level and original savepoint'.
+    确认 ((编 其 文本 甲) == 删文 且 (策 其 是折头 层) 且 非 (编 其 已变 甲)) 'one undo restores C++ header, native fold level and original savepoint'.
 
     # Replace the collapsed document using the actual production large-mode
     # constructor. Its byte count is genuinely small, its STYLES_NONE flag real.

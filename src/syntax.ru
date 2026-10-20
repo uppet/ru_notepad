@@ -274,7 +274,7 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
         行 取 (_发设 态 柄 2166 位置 0) 其 数.
         层 取 (_发设 态 柄 2223 行 0) 其 数.
         # Native levels also pack the NEXT level in the upper 16 bits.
-        若 (层 其 位段 13 1) == 0 则 得 假. 然
+        若 非 (策 其 是折头 层) 则 得 假. 然
         若 (如语 其 _受限 柄) 且 ((_发设 态 柄 2230 行 0) 其 数 != 0) 则 得 假. 然
         _发设 态 柄 2231 行 0.
         得 真.

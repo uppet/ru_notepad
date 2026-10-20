@@ -282,7 +282,7 @@ require different modifier combinations.
 Markdown uses Lexilla only for style bytes. `markdown_policy.ru` and `markdown_syntax.ru` implement a separate conservative heading folder. See [editing scope](markdown-editing.md) and the [exact policy subset](markdown-policy-subset.md). Selection uses a token and live-thread/document checks before and after each setup message. Owners must invalidate before changing documents or destroying windows; arbitrary subclasses swapping a document while forwarding the same mutation are outside this contract.
 
 C++ folding regression coverage adds 56 native syntax assertions and eight real
-application command/margin assertions (2,045 assertions across the existing
+application command/margin assertions (2,071 assertions across the existing
 39 product groups). These are required tests, not a claim they have passed.
 The separate known Markdown double-undo deadline remains unchanged.
 
@@ -290,3 +290,13 @@ The native fixtures also delete a collapsed C++ header and undo it, replace
 the document with real STYLES_NONE storage, and append an actual 32 MiB ASCII
 string to a collapsed styled document. Above the byte threshold, new collapse
 requests are refused while margin expansion and expand-all remain available.
+
+The first Windows C++ candidate exposed a real runtime type error: the bridge
+converted a native fold result to a Ru number, then called the native-integer
+`位段` method on that number. The repaired margin route uses the shared numeric
+header-bit predicate. Twenty-six additional portable policy assertions execute
+that exact predicate on interpreter and native C, including packed high bits,
+signed levels, boundaries and invalid numeric values. An unchanged failing
+expression is retained as a negative control on both backends. These additions
+do not replace the 138 native syntax and 31 application feature assertions or
+the required Windows acceptance run.

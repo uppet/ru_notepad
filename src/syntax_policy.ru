@@ -51,3 +51,12 @@
     若 含词 ['c','h','cc','hh','cpp','hpp','cxx','hxx','c++','h++','inl'] 小写 则 得 'cpp'. 然
     得 'plain'.
 法
+
+# SCI_GETFOLDLEVEL is converted to an ordinary Ru number by the bridge.
+# 位段 belongs to native integer objects, not numbers. Test bit 13 without
+# interpreting packed upper next-line levels as header flags. Normalize remainder
+# explicitly so signed int32 values agree in interpreter and native-C backends.
+算 是折头 层 为 数:
+    若 层 % 1 != 0 或 层 < -2147483648 或 层 > 4294967295 则 得 假. 然
+    得 ((层 % 16384)+16384)%16384 >= 8192.
+法

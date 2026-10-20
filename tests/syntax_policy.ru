@@ -81,4 +81,33 @@
 策 其 含词 原列 '--expect-missing'.
 确认 ((原列 其 量) == 3) 'membership never changes array length'.
 确认 (原列[0] == 'first' 且 原列[1] == '--expect-missing' 且 原列[2] == 'last') 'membership never changes array contents'.
+# Numeric header-bit regression: these exact values exercise the same pure
+# helper called by the Win32 margin handler after native result -> number.
+# Expected booleans are fixed bit-mask oracles, not recomputed by the helper.
+确认 (非 (策 其 是折头 0)) 'numeric fold header bit 0'.
+确认 (非 (策 其 是折头 1024)) 'numeric fold header bit 1024'.
+确认 (非 (策 其 是折头 4096)) 'numeric fold header bit 4096'.
+确认 (非 (策 其 是折头 8191)) 'numeric fold header bit 8191'.
+确认 ((策 其 是折头 8192)) 'numeric fold header bit 8192'.
+确认 ((策 其 是折头 9216)) 'numeric fold header bit 9216'.
+确认 ((策 其 是折头 12288)) 'numeric fold header bit 12288'.
+确认 ((策 其 是折头 16383)) 'numeric fold header bit 16383'.
+确认 (非 (策 其 是折头 16384)) 'numeric fold header bit 16384'.
+确认 (非 (策 其 是折头 17408)) 'numeric fold header bit 17408'.
+确认 ((策 其 是折头 24576)) 'numeric fold header bit 24576'.
+确认 (非 (策 其 是折头 65536)) 'numeric fold header bit 65536'.
+确认 (非 (策 其 是折头 67109888)) 'numeric fold header bit 67109888'.
+确认 ((策 其 是折头 67118080)) 'numeric fold header bit 67118080'.
+确认 ((策 其 是折头 2147483647)) 'numeric fold header bit 2147483647'.
+确认 (非 (策 其 是折头 2147483648)) 'numeric fold header bit 2147483648'.
+确认 ((策 其 是折头 2147491840)) 'numeric fold header bit 2147491840'.
+确认 ((策 其 是折头 4294967295)) 'numeric fold header bit 4294967295'.
+确认 ((策 其 是折头 (-1))) 'numeric fold header bit -1'.
+确认 (非 (策 其 是折头 (-8193))) 'numeric fold header bit -8193'.
+确认 ((策 其 是折头 (-8192))) 'numeric fold header bit -8192'.
+确认 (非 (策 其 是折头 (-2147483648))) 'numeric fold header bit -2147483648'.
+确认 ((策 其 是折头 (-2147475456))) 'numeric fold header bit -2147475456'.
+确认 (非 (策 其 是折头 8192.5)) 'numeric fold header bit 8192.5'.
+确认 (非 (策 其 是折头 4294967296)) 'numeric fold header bit 4294967296'.
+确认 (非 (策 其 是折头 (-2147483649))) 'numeric fold header bit -2147483649'.
 显 'TOTAL PASS: '+(次数[0] 为 句).

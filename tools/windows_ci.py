@@ -48,7 +48,7 @@ NATIVE_CONSOLE_TESTS = (
     ('associations_native', r'^TOTAL PASS: 36\s*$'),
     ('file_drop_native', r'^TOTAL PASS: 38\s*$'),
     ('shortcuts', r'^TOTAL PASS: 42\s*$'),
-    ('syntax_policy', r'^TOTAL PASS: 108\s*$'),
+    ('syntax_policy', r'^TOTAL PASS: 134\s*$'),
     ('status_native', r'^TOTAL PASS: 21\s*$'),
     ('syntax_native', r'^TOTAL PASS: 138\s*$'),
     ('app_ru_native', r'^TOTAL PASS: 73\s*$'),
