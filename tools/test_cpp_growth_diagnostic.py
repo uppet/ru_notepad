@@ -41,6 +41,7 @@ class Controls(unittest.TestCase):
         self.assertEqual(workflow.count('if: ${{ !(' + mode + ' || '), 2)
         self.assertIn('inputs.i18n_window_diagnostic', workflow)
         self.assertIn('inputs.i18n_focused_diagnostic', job)
+        self.assertIn('inputs.markdown_owned_profile', job)
         self.assertIn('if: ${{ inputs.historical_callback }}', job)
         self.assertIn("throw 'Select only one diagnostic mode.'", job)
         self.assertNotIn('*.zip', job)
@@ -79,6 +80,7 @@ class Controls(unittest.TestCase):
             ('workflow_dispatch','refs/heads/wip',{'inputs':{'syntax_growth_diagnostic':'true','historical_callback':'true'}}),
             ('workflow_dispatch','refs/heads/wip',{'inputs':{'syntax_growth_diagnostic':'true','i18n_focused_diagnostic':'true'}}),
             ('workflow_dispatch','refs/heads/wip',{'inputs':{'syntax_growth_diagnostic':'true','i18n_window_diagnostic':'true'}}),
+            ('workflow_dispatch','refs/heads/wip',{'inputs':{'syntax_growth_diagnostic':'true','markdown_owned_profile':'true'}}),
         ]:
             with self.assertRaises(RuntimeError): validate_trigger(event,ref,payload)
         # Every push, including the former diagnostic title and ref variants,

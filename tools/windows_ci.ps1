@@ -7,7 +7,8 @@ param(
     [string]$ResearchBaselineRoot,
     [Parameter(Mandatory=$true)][string]$MsysRoot,
     [switch]$RunAclTests,
-    [switch]$RunCallbackResearch
+    [switch]$RunCallbackResearch,
+    [switch]$RunMarkdownOwnedProfile
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -79,6 +80,21 @@ function Invoke-Checked([string]$Command, [string[]]$Arguments) {
     if ($LASTEXITCODE -ne 0) { throw "Command failed with exit code ${LASTEXITCODE}: $Command" }
 }
 
+# Only the isolated diagnostic uses this private command sink. It deliberately
+# avoids Invoke-Checked's command echo and never prints child exception text.
+function Invoke-OwnedDiagnosticCommand([string]$Command, [string[]]$Arguments) {
+    $script:MarkdownOwnedCommandSequence++
+    $Log = Join-Path $Evidence ('command-{0:D3}.log' -f $script:MarkdownOwnedCommandSequence)
+    try {
+        & $Command @Arguments *> $Log
+        if ($LASTEXITCODE -ne 0) { throw 'Owned diagnostic command failed.' }
+    } catch {
+        Write-Host 'MARKDOWN_OWNED_PROFILE_COMMAND_FAILED=1'
+        throw 'Owned diagnostic command failed.'
+    }
+    Write-Host 'MARKDOWN_OWNED_PROFILE_COMMAND_COMPLETE=1'
+}
+
 # Research is separate from product acceptance. Even an unsuccessful research
 # sample must not prevent the original full product inventory from executing.
 function Invoke-ResearchThenAcceptance(
@@ -129,13 +145,32 @@ function Invoke-OptionalMarkdownStudy(
     }
 }
 function Git-Value([string[]]$Arguments) {
-    $value = & $Git -C $RuRoot @Arguments
+    if ($RunMarkdownOwnedProfile) {
+        $value = & $Git -C $RuRoot @Arguments 2>> (Join-Path $Evidence 'compiler-identity.log')
+    } else {
+        $value = & $Git -C $RuRoot @Arguments
+    }
     if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the pinned Ru checkout.' }
     return ($value -join "`n").Trim()
 }
 
 Push-Location $Root
 try {
+    if ($RunMarkdownOwnedProfile) {
+        if ($RunCallbackResearch -or $RunAclTests) {
+            throw 'Select only the isolated owned Markdown diagnostic mode.'
+        }
+        & $Python '-I' (Join-Path $PSScriptRoot 'guard_markdown_owned_profile.py') '--guard-only'
+        if ($LASTEXITCODE -ne 0) { throw 'Owned diagnostic trigger rejected.' }
+        $Ci = Join-Path $Root 'build/markdown-owned-profile'
+        if (Test-Path -LiteralPath $Ci) { throw 'Use a fresh isolated diagnostic checkout.' }
+        $Evidence = Join-Path $Ci 'private'
+        $Output = Join-Path $Ci 'bin'
+        New-Item -ItemType Directory -Path $Evidence,$Output -ErrorAction Stop | Out-Null
+        $script:MarkdownOwnedCommandSequence = 0
+        Set-Alias -Name Invoke-Checked -Value Invoke-OwnedDiagnosticCommand -Scope Local
+
+    }
     if ((Git-Value @('rev-parse','HEAD')) -ne '85c7821fda35aa79deeaf67b4d430f24ddd7f07f') {
         throw 'Ru public commit does not match the reviewed pin.'
     }
@@ -146,47 +181,53 @@ try {
     foreach ($name in @('gcc.exe','g++.exe','windres.exe','ar.exe','ranlib.exe','objdump.exe','mingw32-make.exe')) {
         if (-not (Test-Path -LiteralPath (Join-Path $Bin $name) -PathType Leaf)) { throw "Missing official MinGW tool: $name" }
     }
-    $Ci = Join-Path $Root 'build/windows-ci'
-    if (Test-Path -LiteralPath $Ci) { throw 'Use a fresh checkout: build/windows-ci already exists.' }
-    $Evidence = Join-Path $Ci 'evidence'
-    $Output = Join-Path $Ci 'bin'
-    New-Item -ItemType Directory -Path $Evidence,$Output -Force | Out-Null
-    $packages = & (Join-Path $MsysRoot 'usr/bin/pacman.exe') -Q
-    if ($LASTEXITCODE -ne 0) { throw 'Could not record installed MSYS2 package versions.' }
-    $packages | Set-Content -LiteralPath (Join-Path $Evidence 'msys2-packages.log') -Encoding utf8
+    if ($RunMarkdownOwnedProfile) {
+        Invoke-Checked (Join-Path $MsysRoot 'usr/bin/pacman.exe') @('-Q')
+    } else {
+        $Ci = Join-Path $Root 'build/windows-ci'
+        if (Test-Path -LiteralPath $Ci) { throw 'Use a fresh checkout: build/windows-ci already exists.' }
+        $Evidence = Join-Path $Ci 'evidence'
+        $Output = Join-Path $Ci 'bin'
+        New-Item -ItemType Directory -Path $Evidence,$Output -Force | Out-Null
+        $packages = & (Join-Path $MsysRoot 'usr/bin/pacman.exe') -Q
+        if ($LASTEXITCODE -ne 0) { throw 'Could not record installed MSYS2 package versions.' }
+        $packages | Set-Content -LiteralPath (Join-Path $Evidence 'msys2-packages.log') -Encoding utf8
+    }
     Invoke-Checked (Join-Path $Bin 'gcc.exe') @('--version')
     Invoke-Checked $Python @('--version')
-    # Orchestration tests are separate from the native application acceptance.
-    Invoke-Checked $Python @('tools/test_windows_ci.py')
-    Invoke-Checked $Python @('tools/test_package.py')
-    Invoke-Checked $Python @('-I','tools/test_package_manual_preview.py')
-    Invoke-Checked $Python @('-I','tools/test_ru_cli_diagnostics.py','--ru-root',$RuRoot,'-v')
-    # Historical research is opt-in. Normal product CI does not execute a
-    # locked old-source experiment against a new application graph.
-    if ($RunCallbackResearch) {
-        # A research-only control failure prohibits research execution, but it
-        # does not suppress the independent original product builds/acceptance.
-        $ResearchControlsPassed = $false
-        try {
-            Invoke-Checked $Python @('tools/test_markdown_callback_cost.py')
-            $ResearchControlsPassed = $true
-        } catch {
-            Write-Host 'MARKDOWN_CALLBACK_RESEARCH_CONTROLS_FAILED=1'
-            $ControlFailure = @{
-                schema = 2; research_only = $true; product_acceptance = 'not_claimed'
-                status = 'failed'; samples = @()
-                failure = @{ stage = 'host_controls'; code = 'research_controls_failed' }
+    if (-not $RunMarkdownOwnedProfile) {
+        # Orchestration tests are separate from the native application acceptance.
+        Invoke-Checked $Python @('tools/test_windows_ci.py')
+        Invoke-Checked $Python @('tools/test_package.py')
+        Invoke-Checked $Python @('-I','tools/test_package_manual_preview.py')
+        Invoke-Checked $Python @('-I','tools/test_ru_cli_diagnostics.py','--ru-root',$RuRoot,'-v')
+        # Historical research is opt-in. Normal product CI does not execute a
+        # locked old-source experiment against a new application graph.
+        if ($RunCallbackResearch) {
+            # A research-only control failure prohibits research execution, but it
+            # does not suppress the independent original product builds/acceptance.
+            $ResearchControlsPassed = $false
+            try {
+                Invoke-Checked $Python @('tools/test_markdown_callback_cost.py')
+                $ResearchControlsPassed = $true
+            } catch {
+                Write-Host 'MARKDOWN_CALLBACK_RESEARCH_CONTROLS_FAILED=1'
+                $ControlFailure = @{
+                    schema = 2; research_only = $true; product_acceptance = 'not_claimed'
+                    status = 'failed'; samples = @()
+                    failure = @{ stage = 'host_controls'; code = 'research_controls_failed' }
+                }
+                $ControlFailure | ConvertTo-Json -Depth 4 |
+                    Set-Content -LiteralPath (Join-Path $Evidence 'markdown-callback-summary.json') -Encoding utf8
             }
-            $ControlFailure | ConvertTo-Json -Depth 4 |
-                Set-Content -LiteralPath (Join-Path $Evidence 'markdown-callback-summary.json') -Encoding utf8
         }
+        Invoke-Checked $Python @('-I','tools/test_i18n_runner.py','--ru-root',$RuRoot,'-v')
+        Invoke-Checked $Python @('tools/test_i18n_models.py')
+        Invoke-Checked $Python @('tools/test_i18n.py','--ru-root',$RuRoot,
+            '--cc',(Join-Path $Bin 'gcc.exe'),'--output',(Join-Path $Ci 'i18n-policy-evidence'))
+        Invoke-Checked $Python @('tools/test_markdown_portable.py','--ru-root',$RuRoot,
+            '--cc',(Join-Path $Bin 'gcc.exe'))
     }
-    Invoke-Checked $Python @('-I','tools/test_i18n_runner.py','--ru-root',$RuRoot,'-v')
-    Invoke-Checked $Python @('tools/test_i18n_models.py')
-    Invoke-Checked $Python @('tools/test_i18n.py','--ru-root',$RuRoot,
-        '--cc',(Join-Path $Bin 'gcc.exe'),'--output',(Join-Path $Ci 'i18n-policy-evidence'))
-    Invoke-Checked $Python @('tools/test_markdown_portable.py','--ru-root',$RuRoot,
-        '--cc',(Join-Path $Bin 'gcc.exe'))
 
     # Run the complete helper suite on this host before admitting source bytes.
     # The helper copies only reviewed in-repository ZIPs and never extracts.
@@ -211,17 +252,32 @@ try {
         '-j2','-C',(Join-Path $Root 'vendor/scintilla/win32'),'../bin/Scintilla.dll',
         'CXX=g++.exe','WINDRES=windres.exe','AR=ar.exe','RANLIB=ranlib.exe'
     )
-    Invoke-Checked (Join-Path $Bin 'mingw32-make.exe') @(
+    $DiagnosticLexillaArgs = @()
+    if ($RunMarkdownOwnedProfile) { $DiagnosticLexillaArgs = @('windir=C:/Windows') }
+    Invoke-Checked (Join-Path $Bin 'mingw32-make.exe') (@(
         '-j2','-C',(Join-Path $Root 'vendor/lexilla/src'),'../bin/lexilla.dll',
         'CXX=g++.exe','WINDRES=windres.exe','AR=ar.exe','RANLIB=ranlib.exe',
         'LDFLAGS=-shared -static -mwindows -Wl,--kill-at -s'
-    )
+    ) + $DiagnosticLexillaArgs)
     Invoke-Checked $Python @('tools/check_static.py','--ru-root',$RuRoot)
     $BuildArgs = @('tools/build.py','--ru-root',$RuRoot,
         '--cc',(Join-Path $Bin 'gcc.exe'),'--cxx',(Join-Path $Bin 'g++.exe'),
         '--windres',(Join-Path $Bin 'windres.exe'),'--ar',(Join-Path $Bin 'ar.exe'),
         '--ranlib',(Join-Path $Bin 'ranlib.exe'),'--skip-scintilla','--skip-lexilla')
     Invoke-Checked $Python ($BuildArgs + @('--source','src/main.ru','--output',(Join-Path $Output 'ru_notepad.exe')))
+    # This independent diagnostic stops before native acceptance and packaging.
+    # Only the sanitizer's single fixed-schema JSON is eligible for publication.
+    if ($RunMarkdownOwnedProfile) {
+        $Measurements = Join-Path $Ci 'measurements'
+        New-Item -ItemType Directory -Path $Measurements -ErrorAction Stop | Out-Null
+        Invoke-Checked $Python @((Join-Path $PSScriptRoot 'test_markdown_profile_public.py'),'-v')
+        Invoke-Checked $Python @((Join-Path $PSScriptRoot 'test_markdown_owned_profile.py'),
+            '--cc',(Join-Path $Bin 'gcc.exe'))
+        Invoke-Checked $Python @((Join-Path $PSScriptRoot 'run_markdown_owned_profile.py'),
+            '--ru-root',$RuRoot,'--binary-dir',$Output,'--evidence-dir',$Measurements,
+            '--cc',(Join-Path $Bin 'gcc.exe'),'--windres',(Join-Path $Bin 'windres.exe'))
+        return
+    }
     # The bounded fold helper is a product input, unlike optional timing studies.
     # Execute shared-core controls and the real DLL/foreign-owner tests before
     # admitting any product native/GUI result; these are mandatory on Windows.
@@ -295,6 +351,12 @@ try {
             }
         }
     }
+} catch {
+    if ($RunMarkdownOwnedProfile) {
+        Write-Host 'MARKDOWN_OWNED_PROFILE_DIAGNOSTIC_FAILED=1'
+        exit 1
+    }
+    throw
 } finally {
     Pop-Location
 }

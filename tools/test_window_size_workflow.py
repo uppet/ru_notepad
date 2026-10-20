@@ -36,11 +36,11 @@ class CaseInsensitiveStrings(ast.NodeTransformer):
 
 
 def evaluate(expression, *, event='push', ref=ALLOWED_REF, title='ordinary change',
-             owned=False, cpp=False, historical=False, focused=False):
+             owned=False, cpp=False, historical=False, focused=False, markdown=False):
     values = {'github.event.head_commit.message': title, 'github.event_name': event,
               'github.ref': ref, 'inputs.i18n_window_diagnostic': owned,
               'inputs.syntax_growth_diagnostic': cpp, 'inputs.historical_callback': historical,
-              'inputs.i18n_focused_diagnostic': focused}
+              'inputs.i18n_focused_diagnostic': focused, 'inputs.markdown_owned_profile': markdown}
     for key in sorted(values, key=len, reverse=True):
         expression = expression.replace(key, repr(values[key]))
     expression = re.sub(r'!(?!=)', ' not ', expression.replace('&&', ' and ').replace('||', ' or ')).strip()
@@ -82,7 +82,7 @@ class TriggerControls(unittest.TestCase):
         for value in (False, 'false', '', 'TRUE', 'True', 1, 0, None, [], {}):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 validate_trigger('workflow_dispatch', ALLOWED_REF, {'inputs': {'i18n_focused_diagnostic': value}})
-        for key in ('syntax_growth_diagnostic', 'historical_callback', 'i18n_window_diagnostic'):
+        for key in ('syntax_growth_diagnostic', 'historical_callback', 'i18n_window_diagnostic', 'markdown_owned_profile'):
             for value in (True, 'true', 'TRUE', 1, None):
                 with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                     validate_trigger('workflow_dispatch', ALLOWED_REF, {'inputs': {
@@ -132,7 +132,8 @@ class WorkflowControls(unittest.TestCase):
             self.assertIn('default: false', entry)
         self.assertNotIn(RETIRED_FOCUSED_TITLE, source)
         self.assertNotIn(RETIRED_TITLE, source)
-        self.assertNotIn('github.event.head_commit.message', source)
+        for name in ('focused-native-diagnostic', 'window-size-diagnostic', 'cpp-growth-diagnostic'):
+            self.assertNotIn('github.event.head_commit.message', job(name))
         self.assertEqual(condition('focused-native-diagnostic'),
                          "(github.event_name == 'workflow_dispatch' && inputs.i18n_focused_diagnostic)")
 
@@ -208,9 +209,9 @@ class WorkflowControls(unittest.TestCase):
 
     def test_conflicting_modes_refused(self):
         for name, keys in (
-            ('window-size-diagnostic', ('historical_callback', 'syntax_growth_diagnostic', 'i18n_focused_diagnostic')),
-            ('cpp-growth-diagnostic', ('historical_callback', 'i18n_window_diagnostic', 'i18n_focused_diagnostic')),
-            ('focused-native-diagnostic', ('historical_callback', 'syntax_growth_diagnostic', 'i18n_window_diagnostic'))):
+            ('window-size-diagnostic', ('historical_callback', 'syntax_growth_diagnostic', 'i18n_focused_diagnostic', 'markdown_owned_profile')),
+            ('cpp-growth-diagnostic', ('historical_callback', 'i18n_window_diagnostic', 'i18n_focused_diagnostic', 'markdown_owned_profile')),
+            ('focused-native-diagnostic', ('historical_callback', 'syntax_growth_diagnostic', 'i18n_window_diagnostic', 'markdown_owned_profile'))):
             body = job(name)
             for key in keys:
                 self.assertIn('inputs.' + key, body)

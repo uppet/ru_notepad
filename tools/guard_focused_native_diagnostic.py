@@ -24,7 +24,7 @@ def validate_trigger(event_name, ref, event):
         inputs = event.get('inputs')
         allowed = (type(inputs) is dict and enabled(inputs.get('i18n_focused_diagnostic'))
                    and all(disabled(inputs.get(key, False)) for key in (
-                       'i18n_window_diagnostic', 'syntax_growth_diagnostic', 'historical_callback')))
+                       'i18n_window_diagnostic', 'syntax_growth_diagnostic', 'historical_callback', 'markdown_owned_profile')))
     if not allowed:
         raise ValueError('Rejected diagnostic trigger')
 

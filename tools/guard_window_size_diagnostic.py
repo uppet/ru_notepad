@@ -34,6 +34,7 @@ def validate_trigger(event_name, ref, event):
             and disabled(inputs.get("syntax_growth_diagnostic", False))
             and disabled(inputs.get("historical_callback", False))
             and disabled(inputs.get("i18n_focused_diagnostic", False))
+            and disabled(inputs.get("markdown_owned_profile", False))
         )
     if not allowed:
         raise ValueError("Rejected diagnostic trigger")

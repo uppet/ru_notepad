@@ -46,7 +46,7 @@ def publish_measurements(path, report):
 def validate_trigger(event_name, ref, event):
     if event_name == 'workflow_dispatch':
         inputs = event.get('inputs', {})
-        allowed = inputs.get('syntax_growth_diagnostic') in (True, 'true') and all(inputs.get(key, False) in (False, 'false', '') for key in ('historical_callback', 'i18n_window_diagnostic', 'i18n_focused_diagnostic'))
+        allowed = inputs.get('syntax_growth_diagnostic') in (True, 'true') and all(inputs.get(key, False) in (False, 'false', '') for key in ('historical_callback', 'i18n_window_diagnostic', 'i18n_focused_diagnostic', 'markdown_owned_profile'))
     else:
         allowed = False
     if not allowed:
