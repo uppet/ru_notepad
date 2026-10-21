@@ -420,7 +420,10 @@ def bounded_command(command,cwd,log,seconds):
                     process.kill();process.wait(timeout=5)
 
 
-def prepare(ru_root,binary_dir,cc,windres,private):
+def prepare(ru_root,binary_dir,cc,windres,private,*,edit_profile=False):
+    active_transform=transform
+    if edit_profile:
+        import profile_markdown_edits as active_transform
     ru_root=plain(ru_root).resolve(strict=True);binary_dir=plain(binary_dir).resolve(strict=True)
     receipt=json.loads((binary_dir/'ru_notepad.build.json').read_text())
     if receipt['ru_commit']!='85c7821fda35aa79deeaf67b4d430f24ddd7f07f':raise ValueError('Product compiler pin mismatch')
@@ -445,16 +448,19 @@ def prepare(ru_root,binary_dir,cc,windres,private):
     code=Compiler(program,graph.root,modules=graph,allow_native=True).compile()
     emitted=private/'main.c';emitted.write_text(code,encoding='utf-8')
     if sha(emitted)!=receipt['generated_c_sha256']:raise ValueError('Regenerated product C differs from receipt')
-    mapping=transform.make_map(code,ROOT,receipt);mapfile=private/'source-map.json';write(mapfile,mapping)
+    mapping=active_transform.make_map(code,ROOT,receipt);mapfile=private/'source-map.json';write(mapfile,mapping)
     input_receipt=private/'input-receipt.json';write(input_receipt,receipt)
-    header=ROOT/'native/markdown_phase_profile.h'
-    transformed=transform.transform(code,ROOT,receipt,mapping,header.read_text())
+    header=ROOT/('native/markdown_edit_profile.h' if edit_profile else 'native/markdown_phase_profile.h')
+    transformed=active_transform.transform(code,ROOT,receipt,mapping,header.read_text())
     profile_c=private/'main-profile.c';profile_c.write_text(transformed,encoding='utf-8')
     launcher=(ROOT/'packaging/diagnostic_launcher.c').read_text()
     release_tu=private/'main-release-gui.c';release_tu.write_text('#define main ru_program_main\n'+code+'\n#undef main\n'+launcher,encoding='utf-8')
     if sha(release_tu)!=receipt['translation_unit_sha256']:raise ValueError('Regenerated product GUI TU differs from receipt')
     profile_tu=private/'main-profile-gui.c';profile_tu.write_text('#define main ru_program_main\n'+transformed+'\n#undef main\n'+launcher,encoding='utf-8')
-    from test_markdown_phases import audit_actual
+    if edit_profile:
+        from test_markdown_edit_transform import audit_actual
+    else:
+        from test_markdown_phases import audit_actual
     audit_actual(ROOT,emitted,input_receipt,header)
     # The unchanged controls run in a bounded direct child so compiler error
     # paths/source snippets cannot escape to public CI stdout/stderr.

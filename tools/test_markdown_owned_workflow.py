@@ -322,6 +322,35 @@ class PowershellControls(unittest.TestCase):
                 self.assertIn("PRIVATE_STDOUT_PATH=C:/private/input.md", log)
                 self.assertIn("PRIVATE_STDERR_PATH=C:/private/input.md", log)
 
+    def test_actual_control_marker_projection_is_numeric_and_path_scoped(self):
+        powershell = shutil.which("pwsh")
+        if powershell is None:
+            if sys.platform == "win32": self.fail("Windows requires PowerShell marker controls")
+            self.skipTest("pwsh absent on non-Windows host")
+        source = (ROOT / "tools/windows_ci.ps1").read_text(encoding="utf-8")
+        wrapper = re.search(r"(?ms)^function Invoke-OwnedDiagnosticCommand\b.*?^}", source).group(0)
+        quote = lambda value: "'" + str(value).replace("'", "''") + "'"
+        with tempfile.TemporaryDirectory() as directory:
+            evidence=Path(directory)
+            for filename in ("test_markdown_owned_profile.py", "unrelated.py"):
+                child=evidence/filename
+                child.write_text("print('MARKDOWN_OWNED_CONTROL_STAGE=6')\n"
+                    "print('MARKDOWN_OWNED_CONTROL_EXIT=7')\n"
+                    "print('MARKDOWN_OWNED_CONTROL_STAGE=C:/private/secret')\n"
+                    "print('MARKDOWN_OWNED_CONTROL_STAGE=6 extra')\n"
+                    "print('MARKDOWN_OWNED_CONTROL_EXIT=12345678901')\n"
+                    "print('PRIVATE_RAW_FAILURE')\nraise SystemExit(7)\n",encoding="utf-8")
+                script=evidence/"probe.ps1"
+                script.write_text("Set-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n"+wrapper+"\n"
+                    +f"$Evidence = {quote(evidence)}\n$script:MarkdownOwnedCommandSequence = 0\n"
+                    +f"try {{ Invoke-OwnedDiagnosticCommand {quote(sys.executable)} @({quote(child)}) }} catch {{ Write-Host 'EXPECTED=1' }}\n",encoding="utf-8")
+                result=subprocess.run([powershell,"-NoProfile","-NonInteractive","-File",str(script)],capture_output=True,text=True,timeout=20)
+                self.assertEqual(result.returncode,0);self.assertEqual(result.stderr,"")
+                expected="MARKDOWN_OWNED_PROFILE_COMMAND_FAILED=1\n"
+                if filename == "test_markdown_owned_profile.py":
+                    expected+="MARKDOWN_OWNED_CONTROL_STAGE=6\nMARKDOWN_OWNED_CONTROL_EXIT=7\n"
+                self.assertEqual(result.stdout,expected+"EXPECTED=1\n")
+
     def test_private_command_sink_is_scoped_to_diagnostic_only(self):
         source = (ROOT / "tools/windows_ci.ps1").read_text(encoding="utf-8")
         wrapper = re.search(r"(?ms)^function Invoke-OwnedDiagnosticCommand\b.*?^}", source).group(0)
@@ -354,8 +383,9 @@ class PowershellControls(unittest.TestCase):
         self.assertIn("'--evidence-dir',$Measurements", branch)
         self.assertLess(branch.index("test_markdown_profile_public.py"),
                         branch.index("run_markdown_owned_profile.py"))
-        self.assertLess(branch.index("test_markdown_owned_profile.py"),
-                        branch.index("run_markdown_owned_profile.py"))
+        controls = source.index("Invoke-Checked $Python @((Join-Path $PSScriptRoot 'test_markdown_owned_profile.py')")
+        self.assertLess(controls, source.index("# Run the complete helper suite"))
+        self.assertLess(controls, build)
         self.assertLess(branch.index("run_markdown_owned_profile.py"), branch.index("        return"))
         for forbidden in ("tools/windows_ci.py", "tools/package", "ResearchThenAcceptance"):
             self.assertNotIn(forbidden, branch)

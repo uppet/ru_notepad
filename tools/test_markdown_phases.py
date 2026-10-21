@@ -16,7 +16,7 @@ class TransformControls(unittest.TestCase):
             self.code+=f'static RuFunction ru_function_{i}_descriptor = {{"{p.octal(name)}", {n}, NULL, NULL, ru_function_{i}, 0}};\n'
             self.code+=f'static Val ru_function_{i}(Env *global, Val self, int call_line, Val *args) {{\n    ru_source = "{p.octal(str(self.root/relative))}";\n    return v_null();\n}}\n'
         self.code+='    env_bind(env, "_FoldApply", ru_v_123, 1);\n'
-        self.receipt={'generated_c_sha256':p.digest(self.code.encode()),'ru_commit':'85c7821fda35aa79deeaf67b4d430f24ddd7f07f','source_sha256':{str(f.relative_to(self.root)):p.sha(f) for f in (self.root/'src').iterdir()}}
+        self.receipt={'generated_c_sha256':p.digest(self.code.encode()),'ru_commit':'85c7821fda35aa79deeaf67b4d430f24ddd7f07f','source_sha256':{f.relative_to(self.root).as_posix():p.sha(f) for f in (self.root/'src').iterdir()}}
     def tearDown(self):self.temp.cleanup()
     def mapping(self,code=None,receipt=None):return p.make_map(code or self.code,self.root,receipt or self.receipt)
     def test_exact_map(self):

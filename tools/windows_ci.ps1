@@ -91,6 +91,14 @@ function Invoke-OwnedDiagnosticCommand([string]$Command, [string[]]$Arguments) {
     } catch {
         Write-Host 'MARKDOWN_OWNED_PROFILE_COMMAND_FAILED=1'
         throw 'Owned diagnostic command failed.'
+    } finally {
+        # Only this exact known controls script may project fixed numeric markers.
+        # Raw child logs, exception text, command arguments and paths stay private.
+        if ($Arguments.Count -ge 1 -and $Arguments[0] -ceq (Join-Path $PSScriptRoot 'test_markdown_owned_profile.py') -and (Test-Path -LiteralPath $Log)) {
+            foreach ($Line in Get-Content -LiteralPath $Log) {
+                if ($Line -cmatch '^MARKDOWN_OWNED_CONTROL_(STAGE|COMPLETE|EXIT)=-?[0-9]{1,10}$') { Write-Host $Line }
+            }
+        }
     }
     Write-Host 'MARKDOWN_OWNED_PROFILE_COMMAND_COMPLETE=1'
 }
@@ -229,6 +237,13 @@ try {
             '--cc',(Join-Path $Bin 'gcc.exe'))
     }
 
+    # Fail diagnostic controls before expensive DLL/application compilation.
+    if ($RunMarkdownOwnedProfile) {
+        Invoke-Checked $Python @((Join-Path $PSScriptRoot 'test_markdown_control_markers.py'))
+        Invoke-Checked $Python @((Join-Path $PSScriptRoot 'test_markdown_owned_profile.py'),
+            '--cc',(Join-Path $Bin 'gcc.exe'))
+    }
+
     # Run the complete helper suite on this host before admitting source bytes.
     # The helper copies only reviewed in-repository ZIPs and never extracts.
     Invoke-Checked $Python @('tools/test_source_archives.py')
@@ -271,8 +286,6 @@ try {
         $Measurements = Join-Path $Ci 'measurements'
         New-Item -ItemType Directory -Path $Measurements -ErrorAction Stop | Out-Null
         Invoke-Checked $Python @((Join-Path $PSScriptRoot 'test_markdown_profile_public.py'),'-v')
-        Invoke-Checked $Python @((Join-Path $PSScriptRoot 'test_markdown_owned_profile.py'),
-            '--cc',(Join-Path $Bin 'gcc.exe'))
         Invoke-Checked $Python @((Join-Path $PSScriptRoot 'run_markdown_owned_profile.py'),
             '--ru-root',$RuRoot,'--binary-dir',$Output,'--evidence-dir',$Measurements,
             '--cc',(Join-Path $Bin 'gcc.exe'),'--windres',(Join-Path $Bin 'windres.exe'))
