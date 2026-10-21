@@ -63,8 +63,13 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Path build -ErrorAction Stop | Out-Null
-          & python tools/test_markdown_width_ab.py *> build/width-ab-controls.private.log
-          if ($LASTEXITCODE -ne 0) { throw 'WIDTH_AB_CONTROLS_FAILED=1' }
+          & python tools/test_markdown_width_ab.py --public *> build/width-ab-controls.private.log
+          $ControlsCode = $LASTEXITCODE
+          foreach ($Line in Get-Content -LiteralPath build/width-ab-controls.private.log) {
+            if ($Line -cmatch '^WIDTH_AB_CONTROL case=[0-9]{1,4} status=[12] module=[012] line=[0-9]{1,5} exception=[123]$' -or
+                $Line -cmatch '^WIDTH_AB_CONTROL cases=[0-9]{1,4} failed=[0-9]{1,4} errors=[0-9]{1,4} skipped=[0-9]{1,4}$') { Write-Host $Line }
+          }
+          if ($ControlsCode -ne 0) { throw 'WIDTH_AB_CONTROLS_FAILED=1' }
           Write-Host 'WIDTH_AB_CONTROLS_COMPLETE=1'
           & python tools/run_markdown_width_ab.py verify --baseline ../baseline --candidate . --compiler ../.ci/ru-language --cc "$env:MSYS2_ROOT/mingw64/bin/gcc.exe" --output build/markdown-width-ab-public
           if ($LASTEXITCODE -ne 0) { throw 'WIDTH_AB_SOURCE_FAILED=1' }

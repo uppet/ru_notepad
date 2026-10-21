@@ -421,4 +421,69 @@ class FullReceiptControls(unittest.TestCase):
 
 
 
-if __name__=='__main__':unittest.main()
+class ReporterControls(unittest.TestCase):
+    def test_numeric_reporter_hides_private_errors_and_subtests(self):
+        import contextlib,io,re
+        class Probe(unittest.TestCase):
+            def test_a(self):self.fail('PRIVATE_GUI_AND_PATH')
+            def test_b(self):
+                with self.subTest(private='PRIVATE_GUI_AND_PATH'):raise ValueError('PRIVATE_GUI_AND_PATH')
+        output=io.StringIO()
+        with contextlib.redirect_stdout(output):code=public_controls(unittest.defaultTestLoader.loadTestsFromTestCase(Probe))
+        self.assertEqual(code,1);self.assertNotIn('PRIVATE',output.getvalue())
+        rows=output.getvalue().splitlines()
+        self.assertEqual(len(rows),3)
+        for row in rows[:2]:self.assertRegex(row,r'^WIDTH_AB_CONTROL case=[12] status=[12] module=[012] line=[0-9]+ exception=[123]$')
+        self.assertEqual(rows[-1],'WIDTH_AB_CONTROL cases=2 failed=1 errors=1 skipped=0')
+    def test_numeric_reporter_success_and_skip_counts(self):
+        import contextlib,io
+        class Probe(unittest.TestCase):
+            def test_a(self):pass
+            @unittest.skip('PRIVATE')
+            def test_b(self):pass
+        output=io.StringIO()
+        with contextlib.redirect_stdout(output):code=public_controls(unittest.defaultTestLoader.loadTestsFromTestCase(Probe))
+        self.assertEqual(code,0)
+        self.assertEqual(output.getvalue(),'WIDTH_AB_CONTROL cases=2 failed=0 errors=0 skipped=1\n')
+
+def public_controls(suite=None):
+    """Stable sorted case IDs and reviewed-module line numbers, never messages."""
+    import contextlib,io
+    suite=suite or unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])
+    def flatten(node):
+        for test in node:
+            if isinstance(test,unittest.TestSuite):yield from flatten(test)
+            else:yield test
+    identities=sorted({test.id() for test in flatten(suite)})
+    rows=[]
+    class Result(unittest.TextTestResult):
+        def numeric(self,test,error,status):
+            identity=getattr(test,'test_case',test).id()
+            if identity not in identities:identity=getattr(test,'_test_case',test).id()
+            case=identities.index(identity)+1
+            module=line=0;tb=error[2]
+            while tb is not None:
+                name=Path(tb.tb_frame.f_code.co_filename).name
+                if name in ('test_markdown_width_ab.py','run_markdown_width_ab.py'):
+                    module=1 if name=='test_markdown_width_ab.py' else 2;line=tb.tb_lineno
+                tb=tb.tb_next
+            kind=1 if issubclass(error[0],AssertionError) else 2 if issubclass(error[0],OSError) else 3
+            rows.append((case,status,module,line,kind))
+        def addFailure(self,test,error):
+            self.numeric(test,error,1);super().addFailure(test,error)
+        def addError(self,test,error):
+            self.numeric(test,error,2);super().addError(test,error)
+        def addSubTest(self,test,subtest,error):
+            if error is not None:self.numeric(test,error,1 if issubclass(error[0],AssertionError) else 2)
+            super().addSubTest(test,subtest,error)
+    sink=io.StringIO()
+    with contextlib.redirect_stdout(sink),contextlib.redirect_stderr(sink):
+        result=unittest.TextTestRunner(stream=sink,resultclass=Result,verbosity=0).run(suite)
+    for row in rows:
+        print('WIDTH_AB_CONTROL case=%d status=%d module=%d line=%d exception=%d'%row)
+    print('WIDTH_AB_CONTROL cases=%d failed=%d errors=%d skipped=%d'%(result.testsRun,len(result.failures),len(result.errors),len(result.skipped)))
+    return 0 if result.wasSuccessful() else 1
+
+if __name__=='__main__':
+    if sys.argv[1:]==['--public']:raise SystemExit(public_controls())
+    unittest.main()
