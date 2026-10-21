@@ -419,8 +419,26 @@ class FullReceiptControls(unittest.TestCase):
                 self.skipTest('host does not permit symlink creation')
             with self.subTest(kind=kind), self.assertRaises((ValueError, RuntimeError, OSError)):
                 f.verify()
+    def test_compiler_regular_hardlink_alias_is_identity_bound(self):
+        f=self.fresh();alias=f.home/'gcc-alias'
+        os.link(f.cc,alias)
+        self.assertGreater(f.cc.stat().st_nlink,1)
+        with self.assertRaises(ValueError):a.plain(f.cc)
+        self.assertEqual(a.compiler_file(f.cc),f.cc)
+        f.verify()
+        alias.write_bytes(b'changed through compiler hardlink')
+        with self.assertRaises(ValueError):f.verify()
+    def test_compiler_alias_cannot_change_expected_receipt_path(self):
+        f=self.fresh();alias=f.home/'gcc-alias';os.link(f.cc,alias)
+        f.helper['build_inputs']['compiler_path']=str(alias);f.reseal_native_key();f.write()
+        with self.assertRaises(ValueError):f.verify()
+    def test_compiler_exception_does_not_admit_runtime_alias(self):
+        f=self.fresh();os.link(f.cc,f.home/'gcc-alias')
+        target=f.binary/'RuSyntax.dll';os.link(target,f.home/'runtime-alias')
+        with self.assertRaises(ValueError):f.verify()
+
     def test_hardlinked_inputs_rejected(self):
-        for kind in ('source', 'runtime', 'compiler', 'receipt'):
+        for kind in ('source', 'runtime', 'receipt'):
             f = self.fresh()
             target = {'source': f.root / 'src/unselected.ru', 'runtime': f.binary / 'Scintilla.dll',
                       'compiler': f.cc, 'receipt': f.binary / 'ru_notepad.build.json'}[kind]

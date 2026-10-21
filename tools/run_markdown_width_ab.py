@@ -46,6 +46,17 @@ def plain(path, *, directory=False):
     if not directory:need(p.stat().st_nlink==1)
     return p.resolve(strict=True)
 
+def compiler_file(path):
+    # Official MSYS2 GCC installs regular hardlink aliases in its bin directory.
+    # This exception is used only for the expected compiler and compiler receipt
+    # paths. Source/runtime/receipt files continue through single-link plain().
+    p=Path(os.path.abspath(path))
+    for q in (p,*p.parents):
+        need(not q.is_symlink())
+        if q.exists():need(not (getattr(q.lstat(),'st_file_attributes',0)&0x400))
+    need(p.is_file() and p.stat().st_nlink>=1)
+    return p.resolve(strict=True)
+
 def under(root, relative):
     need(type(relative) is str and relative and not Path(relative).is_absolute())
     p=plain(root/relative);need(p.is_relative_to(root));return p
@@ -110,7 +121,7 @@ def source_snapshot(root,p):
     result.update(native);return result
 
 def full_receipt(root,binary,cc,p):
-    root=plain(root,directory=True);binary=plain(binary,directory=True);cc=plain(cc)
+    root=plain(root,directory=True);binary=plain(binary,directory=True);cc=compiler_file(cc)
     receipt=read(binary/'ru_notepad.build.json')
     need(receipt['schema']==1 and receipt['ru_commit']==COMPILER and receipt['ru_tree']==COMPILER_TREE)
     need(receipt['entry_source']=='src/main.ru' and receipt['entry_sha256']==sha(under(root,'src/main.ru')))
@@ -125,14 +136,14 @@ def full_receipt(root,binary,cc,p):
     need(cmd[1:7]==['-std=c99','-O2','-Wall','-Wextra','-Wno-unused-function','-static-libgcc'])
     need(cmd[8]=='-o' and cmd[10]=='-lm' and cmd[12:]==['-mwindows','-lshell32','-luser32'])
     for index,expected in ((0,cc),(7,root/'build/main-gui.c'),(9,binary/'ru_notepad.exe'),(11,root/'build/app-resource.o')):
-        need(plain(cmd[index])==plain(expected))
+        need((compiler_file(cmd[index])==cc) if index==0 else (plain(cmd[index])==plain(expected)))
     helper=read(binary/'RuSyntax.native-build.json');n=helper['build_inputs']
     need(helper['schema']==1 and helper['name']=='RuSyntax.dll' and n['output_name']=='RuSyntax.dll')
     need(n['source_sha256']==p.package.native_source_snapshot(root))
     need(n['driver_sha256']=={rel:sha(under(root,rel)) for rel in p.package.NATIVE_BUILD_DRIVERS})
     need(n['compile_sources']==list(p.package.NATIVE_COMPILE_SOURCES['RuSyntax.dll']))
     need(n['compiler_flags']==list(p.package.NATIVE_CFLAGS) and n['link_libraries']==list(p.package.NATIVE_LINK_LIBRARIES))
-    need(plain(n['compiler_path'])==cc and n['compiler_sha256']==sha(cc))
+    need(compiler_file(n['compiler_path'])==cc and n['compiler_sha256']==sha(cc))
     version=subprocess.run([str(cc),'--version'],capture_output=True,timeout=30);need(version.returncode==0)
     need(hashlib.sha256(version.stdout).hexdigest()==n['compiler_version_sha256'])
     need(helper['build_key']==p.package.native_build_key(n)==receipt['native_helper_build_key'])
@@ -157,6 +168,7 @@ def prepare_arm(root,binary,compiler,cc,windres,private):
         'runner_receipt_sha256':sha(receipt),'cc_sha256':sha(cc)})
 
 def verify_arm(root,binary,cc,private,p):
+    cc=compiler_file(cc)
     ready=read(private/'ready.json');need(set(ready)=={'schema','build_receipt_sha256','runner_receipt_sha256','cc_sha256'})
     need(ready['schema']==1 and ready['build_receipt_sha256']==sha(binary/'ru_notepad.build.json'))
     need(ready['runner_receipt_sha256']==sha(private/'runner-receipt.json') and ready['cc_sha256']==sha(cc))

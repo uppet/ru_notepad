@@ -39,7 +39,11 @@ whose common source, catalog and tools bytes are identical to baseline.
 Every GUI process uses its explicit arm source root and receipt. Before every GUI process and after each diagnostically complete process,
 the coordinator verifies both full source/build receipts,
 runtime bytes, private runner receipts, compiler pin/tree/clean state and the
-complete tracked-file relation. There is no module ROOT swapping and no
+complete tracked-file relation. Official MSYS2 compiler executable hardlink aliases are allowed only for the
+explicit expected compiler path; its path, bytes, version and native build key
+are still revalidated. Symlinks/reparse points are rejected everywhere; source,
+runtime and receipt files additionally require a single filesystem link.
+There is no module ROOT swapping and no
 seven-file receipt substituted for the full build-source receipt.
 
 ## Measurements
