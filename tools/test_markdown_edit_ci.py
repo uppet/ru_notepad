@@ -50,6 +50,16 @@ class Controls(unittest.TestCase):
         self.assertNotIn('MPP_CUSTOM_BACKEND',HARNESS)
         for s in ('CreateThread','WaitForSingleObject','preserved()','--four','--five','--foreign'):
             self.assertIn(s,HARNESS)
+    def test_stages_are_ordered_and_bound_to_same_commit(self):
+        stages=('controls','dependencies','application','measure')
+        positions=[self.workflow.index('-Stage '+stage) for stage in stages]
+        self.assertEqual(positions,sorted(positions))
+        self.assertIn("[ValidateSet('controls','dependencies','application','measure')]",self.ps)
+        self.assertIn("dependencies='controls'; application='dependencies'; measure='application'",self.ps)
+        self.assertIn("$env:GITHUB_SHA + '|' + $Previous",self.ps)
+        self.assertIn("$env:GITHUB_SHA + '|' + $Stage",self.ps)
+        self.assertIn("$env:GITHUB_SHA -cnotmatch '^[0-9a-f]{40}$'",self.ps)
+        self.assertLess(self.ps.index('MI_EDIT_STAGE_ORDER_REJECTED'),self.ps.index('Invoke-Checked $Python'))
     def test_failure_projection_is_numeric_only(self):
         import io
         from run_markdown_edit_controls import Result

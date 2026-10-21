@@ -48,10 +48,22 @@ jobs:
           install: >-
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-make
-      - name: Controls then exact build and owned release/profile pair
+      - name: Verify diagnostic controls
         env:
           MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
-        run: ./tools/run_markdown_edit_ci.ps1 -RuRoot .ci/ru-language -MsysRoot "$env:MSYS2_ROOT"
+        run: ./tools/run_markdown_edit_ci.ps1 -RuRoot .ci/ru-language -MsysRoot "$env:MSYS2_ROOT" -Stage controls
+      - name: Build verified native dependencies
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: ./tools/run_markdown_edit_ci.ps1 -RuRoot .ci/ru-language -MsysRoot "$env:MSYS2_ROOT" -Stage dependencies
+      - name: Check sources and build exact application
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: ./tools/run_markdown_edit_ci.ps1 -RuRoot .ci/ru-language -MsysRoot "$env:MSYS2_ROOT" -Stage application
+      - name: Measure owned release and profile pair
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: ./tools/run_markdown_edit_ci.ps1 -RuRoot .ci/ru-language -MsysRoot "$env:MSYS2_ROOT" -Stage measure
       - name: Preserve only validated numeric and hash diagnostic evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

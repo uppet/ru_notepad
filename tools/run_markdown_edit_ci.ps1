@@ -1,12 +1,13 @@
 # Experimental-only orchestration; never packages or certifies product acceptance.
 [CmdletBinding()]
 param([Parameter(Mandatory=$true)][string]$RuRoot,
-      [Parameter(Mandatory=$true)][string]$MsysRoot)
+      [Parameter(Mandatory=$true)][string]$MsysRoot,
+      [Parameter(Mandatory=$true)][ValidateSet('controls','dependencies','application','measure')][string]$Stage)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($env:OS -cne 'Windows_NT' -or $PSVersionTable.PSVersion.Major -lt 7) { throw 'MI_EDIT_HOST_REJECTED=1' }
 if ($env:GITHUB_EVENT_NAME -cne 'push' -or $env:GITHUB_REF -cne 'refs/heads/mi-perf-prototype' -or
-    $env:GITHUB_REPOSITORY -cne 'uppet/ru_notepad') { throw 'MI_EDIT_TRIGGER_REJECTED=1' }
+    $env:GITHUB_REPOSITORY -cne 'uppet/ru_notepad' -or $env:GITHUB_SHA -cnotmatch '^[0-9a-f]{40}$') { throw 'MI_EDIT_TRIGGER_REJECTED=1' }
 function Resolve-Application([string]$Name) {
     $Command = Get-Command -Name $Name -CommandType Application -ErrorAction Stop |
         Select-Object -First 1
@@ -63,11 +64,23 @@ $env:PATH = "$Bin;$env:PATH"
 $Python = Resolve-Application 'python'
 $Git = Resolve-Application 'git'
 $Ci = Join-Path $Root 'build/markdown-edit-experiment'
-if (Test-Path -LiteralPath $Ci) { throw 'MI_EDIT_FRESH_DIRECTORY_REQUIRED=1' }
+if ($Stage -ceq 'controls' -and (Test-Path -LiteralPath $Ci)) { throw 'MI_EDIT_FRESH_DIRECTORY_REQUIRED=1' }
 $Evidence = Join-Path $Ci 'private'
 $Output = Join-Path $Ci 'bin'
 $Measurements = Join-Path $Ci 'measurements'
-New-Item -ItemType Directory -Path $Evidence,$Output,$Measurements -ErrorAction Stop | Out-Null
+if ($Stage -ceq 'controls') {
+    New-Item -ItemType Directory -Path $Evidence,$Output,$Measurements -ErrorAction Stop | Out-Null
+} else {
+    foreach ($Directory in @($Evidence,$Output,$Measurements)) {
+        if (-not (Test-Path -LiteralPath $Directory -PathType Container)) { throw 'MI_EDIT_STAGE_INPUTS_MISSING=1' }
+    }
+    $Previous = @{ dependencies='controls'; application='dependencies'; measure='application' }[$Stage]
+    $Stamp = Join-Path $Evidence ($Previous + '.complete')
+    if (-not (Test-Path -LiteralPath $Stamp -PathType Leaf) -or
+        (Get-Content -LiteralPath $Stamp -Raw) -cne ($env:GITHUB_SHA + '|' + $Previous)) { throw 'MI_EDIT_STAGE_ORDER_REJECTED=1' }
+}
+$Evidence = Join-Path $Evidence $Stage
+New-Item -ItemType Directory -Path $Evidence -ErrorAction Stop | Out-Null
 $script:Sequence = 0
 function Invoke-Checked([string]$Command, [string[]]$Arguments) {
     $script:Sequence++
@@ -91,6 +104,7 @@ try {
     if ($LASTEXITCODE -ne 0 -or $Tree -cne 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba') { throw 'MI_EDIT_TREE_REJECTED=1' }
     $Dirty = & $Git -C $RuRoot status --porcelain
     if ($LASTEXITCODE -ne 0 -or $Dirty) { throw 'MI_EDIT_DIRTY_COMPILER=1' }
+    if ($Stage -ceq 'controls') {
     foreach ($Name in @('test_markdown_edit_ci.py','test_markdown_control_markers.py','test_markdown_owned_workflow.py',
             'test_markdown_edit_transform.py','test_markdown_edit_profile.py',
             'test_markdown_edit_late.py','test_markdown_edit_observers.py')) {
@@ -98,6 +112,7 @@ try {
     }
     Invoke-Checked $Python @((Join-Path $PSScriptRoot 'test_markdown_owned_profile.py'),'--cc',(Join-Path $Bin 'gcc.exe'))
     Invoke-Checked $Python @((Join-Path $PSScriptRoot 'test_markdown_edit_windows.py'),'--cc',(Join-Path $Bin 'gcc.exe'),'--objdump',(Join-Path $Bin 'objdump.exe'))
+    } elseif ($Stage -ceq 'dependencies') {
     # Run the complete helper suite on this host before admitting source bytes.
     # The helper copies only reviewed in-repository ZIPs and never extracts.
     Invoke-Checked $Python @('tools/test_source_archives.py')
@@ -128,6 +143,7 @@ try {
         'CXX=g++.exe','WINDRES=windres.exe','AR=ar.exe','RANLIB=ranlib.exe',
         'LDFLAGS=-shared -static -mwindows -Wl,--kill-at -s'
     ) + $DiagnosticLexillaArgs)
+    } elseif ($Stage -ceq 'application') {
     Invoke-Checked $Python @('tools/check_static.py','--ru-root',$RuRoot)
     $BuildArgs = @('tools/build.py','--ru-root',$RuRoot,
         '--cc',(Join-Path $Bin 'gcc.exe'),'--cxx',(Join-Path $Bin 'g++.exe'),
@@ -135,10 +151,13 @@ try {
         '--ranlib',(Join-Path $Bin 'ranlib.exe'),'--skip-scintilla','--skip-lexilla')
     Invoke-Checked $Python ($BuildArgs + @('--source','src/main.ru','--output',(Join-Path $Output 'ru_notepad.exe')))
 
+    } elseif ($Stage -ceq 'measure') {
     # CLI publishes only a validated, bounded numeric/hash JSON, including failure.
     # A late diagnostic still exits nonzero: the 30-second product gate is intact.
     & $Python (Join-Path $PSScriptRoot 'run_markdown_edit_profile.py') `
         --ru-root $RuRoot --binary-dir $Output --evidence-dir $Measurements `
         --cc (Join-Path $Bin 'gcc.exe') --windres (Join-Path $Bin 'windres.exe')
     if ($LASTEXITCODE -ne 0) { throw 'MI_EDIT_DIAGNOSTIC_OR_PRODUCT_GATE_FAILED=1' }
+    }
+    [System.IO.File]::WriteAllText((Join-Path (Split-Path -Parent $Evidence) ($Stage + '.complete')), ($env:GITHUB_SHA + '|' + $Stage))
 } finally { Pop-Location }

@@ -264,4 +264,18 @@ class BoundedObserverControls(unittest.TestCase):
         with self.assertRaisesRegex(Exception,'hard_deadline'):api.responsive(1)
         self.assertEqual(len(native),1)
 
+class FailureContextControls(unittest.TestCase):
+    def test_private_error_message_not_projected(self):
+        try: raise ValueError('PRIVATE_PATH=C:/private/input.md')
+        except ValueError as error:
+            rows=r.failure_context(error)
+        self.assertNotIn('PRIVATE',repr(rows))
+        self.assertTrue(all(type(value) is int for row in rows for value in row))
+    def test_known_module_source_line_is_numeric(self):
+        try: r.require(False,'PRIVATE_PATH=C:/private/input.md')
+        except Exception as error: rows=r.failure_context(error)
+        self.assertTrue(rows)
+        self.assertLessEqual(len(rows),16)
+        self.assertTrue(all(1<=module<=6 and 1<=line<=99999 and 1<=kind<=5 for module,line,kind in rows))
+
 if __name__=='__main__':unittest.main()

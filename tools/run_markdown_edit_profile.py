@@ -578,12 +578,28 @@ def publish_public(evidence,value):
                 pass  # No partial .json; an unpublishable .tmp stays private.
 
 
+# The public failure context is a fixed module number, source line and exception
+# category only. Never print exception messages, locals, arguments or file paths.
+FAILURE_MODULES = ('run_markdown_edit_profile.py', 'run_markdown_owned_profile.py',
+                   'profile_markdown_edits.py', 'profile_markdown_phases.py',
+                   'run_markdown_phase_profile.py', 'test_markdown_edit_transform.py')
+def failure_context(error):
+    root=Path(__file__).resolve().parent
+    kind=1 if isinstance(error,ValueError) else 2 if isinstance(error,RuntimeError) else 3 if isinstance(error,OSError) else 4 if isinstance(error,subprocess.SubprocessError) else 5
+    rows=[]; tb=error.__traceback__
+    while tb is not None:
+        path=Path(tb.tb_frame.f_code.co_filename)
+        if path.name in FAILURE_MODULES and path.resolve().parent==root and 0<tb.tb_lineno<=99999:
+            rows.append((FAILURE_MODULES.index(path.name)+1,tb.tb_lineno,kind))
+        tb=tb.tb_next
+    return rows[-16:]
+
 def main(argv=None):
     import argparse,contextlib,tempfile
     import run_markdown_owned_profile as owned
     parser=owned.PublicArgumentParser(prog='run_markdown_edit_profile.py',description=__doc__)
     for name in ('ru-root','binary-dir','evidence-dir','cc','windres'):parser.add_argument('--'+name,type=Path,required=True)
-    public=blank_public(2);evidence=None
+    public=blank_public(2);evidence=None;failure_rows=[]
     try:
         args=parser.parse_args(argv);evidence=base.checked_path(args.evidence_dir,directory=True)
         if sys.platform!='win32':public=blank_public(1)
@@ -599,10 +615,12 @@ def main(argv=None):
                     public=public_projection(summary,base.digest(owned.ROOT/'native/markdown_edit_profile.h'),base.load_ci(owned.ROOT))
     except SystemExit as exc:
         if exc.code==0:return 0
-    except Exception:pass  # Never echo private paths, source or raw exception text.
+    except Exception as error:failure_rows=failure_context(error)
     try:publish_public(evidence,public)
     except Exception:
         print('MARKDOWN_EDIT_PROFILE_DIAGNOSTIC_COMPLETE=0');print('MARKDOWN_EDIT_PROFILE_FAILURE_CODE=5');return 1
+    for module,line,kind in failure_rows:
+        print(f'MARKDOWN_EDIT_PROFILE_CONTEXT module={module} line={line} exception={kind}')
     print('MARKDOWN_EDIT_PROFILE_DIAGNOSTIC_COMPLETE='+str(public['diagnostic_complete']))
     print('MARKDOWN_EDIT_PROFILE_PRODUCT_GATE_FAILED='+str(public['product_gate_failed']))
     if not public['passed']:print('MARKDOWN_EDIT_PROFILE_FAILURE_CODE='+str(public['failure_code']))
