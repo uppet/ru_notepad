@@ -175,7 +175,7 @@ class SourceControls(unittest.TestCase):
     def test_real_two_root_loader_fixture_locale_and_source_receipt(self):
         # Real private loader + adapter construction, no mocked ci.ROOT.
         with tempfile.TemporaryDirectory() as t:
-            candidate=Path(t)/'candidate';candidate.mkdir()
+            candidate=Path(t).resolve()/'candidate';candidate.mkdir()
             shutil.copytree(ROOT/'tools',candidate/'tools',ignore=shutil.ignore_patterns('__pycache__'))
             shutil.copytree(ROOT/'locales',candidate/'locales')
             previous=sys.modules.pop('package',None)
@@ -223,7 +223,7 @@ class FullReceiptFixture:
     VERSION = b'synthetic compiler version 1\n'
     def __init__(self):
         self.temp = tempfile.TemporaryDirectory(prefix='width-full-receipt-')
-        self.home = Path(self.temp.name)
+        self.home = Path(self.temp.name).resolve()
         self.root = self.home / 'application'
         self.binary = self.home / 'binary'
         self.binary.mkdir()
@@ -324,6 +324,18 @@ class FullReceiptControls(unittest.TestCase):
                 self.reject(lambda f: (f.root / relative).write_bytes(b'changed'))
         self.reject(lambda f: f.receipt['build_input_sha256'].pop('VERSION'))
         self.reject(lambda f: f.receipt['build_input_sha256'].update({'unexpected': '0' * 64}))
+    def test_fixture_canonicalizes_noncanonical_temp_spelling(self):
+        original=tempfile.TemporaryDirectory
+        def alternate(*args,**kwargs):
+            value=original(*args,**kwargs)
+            path=Path(value.name)
+            value.name=str(path/'..'/path.name)
+            return value
+        with patch.object(tempfile,'TemporaryDirectory',side_effect=alternate):
+            f=self.fresh()
+            self.assertEqual(f.home,f.home.resolve())
+            f.verify()
+
     def test_all_runtime_hashes_rejected(self):
         for name in receipt_base.RUNTIME_NAMES:
             with self.subTest(name=name):
@@ -464,7 +476,7 @@ def public_controls(suite=None):
             module=line=0;tb=error[2]
             while tb is not None:
                 name=Path(tb.tb_frame.f_code.co_filename).name
-                if name in ('test_markdown_width_ab.py','run_markdown_width_ab.py'):
+                if name in ('test_markdown_width_ab.py','run_markdown_width_ab.py') and tb.tb_frame.f_code.co_name!='need':
                     module=1 if name=='test_markdown_width_ab.py' else 2;line=tb.tb_lineno
                 tb=tb.tb_next
             kind=1 if issubclass(error[0],AssertionError) else 2 if issubclass(error[0],OSError) else 3
