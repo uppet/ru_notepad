@@ -295,13 +295,13 @@ class FailureContextControls(unittest.TestCase):
         except Exception as error: rows=r.failure_context(error)
         self.assertTrue(rows)
         self.assertLessEqual(len(rows),16)
-        self.assertTrue(all(1<=module<=7 and 1<=line<=99999 and 1<=kind<=5 for module,line,kind in rows))
+        self.assertTrue(all(1<=module<=8 and 1<=line<=99999 and 1<=kind<=5 for module,line,kind in rows))
 
     def test_owned_context_rejects_non_numeric_and_unknown_values(self):
         for value in ('PRIVATE',True,8,-1):
             with self.subTest(value=value),self.assertRaises(Exception):
                 r.owned_failure_rows({'runs':[dict(variant='release',owned_stage=value)]})
-        for row in [('PRIVATE',1,1),(8,1,1),(1,100000,1),(1,1,6),(True,1,1)]:
+        for row in [('PRIVATE',1,1),(9,1,1),(1,100000,1),(1,1,6),(True,1,1)]:
             with self.subTest(row=row),self.assertRaises(Exception):
                 r.owned_failure_rows({'runs':[dict(variant='release',failure_context=[row])]})
 

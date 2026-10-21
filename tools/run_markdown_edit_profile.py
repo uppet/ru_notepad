@@ -599,7 +599,7 @@ def publish_public(evidence,value):
 # category only. Never print exception messages, locals, arguments or file paths.
 FAILURE_MODULES = ('run_markdown_edit_profile.py', 'run_markdown_owned_profile.py',
                    'profile_markdown_edits.py', 'profile_markdown_phases.py',
-                   'run_markdown_phase_profile.py', 'test_markdown_edit_transform.py', 'windows_ci.py')
+                   'run_markdown_phase_profile.py', 'test_markdown_edit_transform.py', 'windows_ci.py', 'markdown_edit_observers.py')
 def failure_context(error):
     root=Path(__file__).resolve().parent
     kind=1 if isinstance(error,ValueError) else 2 if isinstance(error,RuntimeError) else 3 if isinstance(error,OSError) else 4 if isinstance(error,subprocess.SubprocessError) else 5

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Private diagnostic observer copies; no product source or globals are modified."""
-import ast, hashlib, inspect
+import ast, hashlib, inspect, sys, threading
 from pathlib import Path
 
 MODULE_SHA256 = '5e87bfee0c516f3e805c6bbdd9b32d24f6d2f818474cfb7d0538ba4422389b8e'
@@ -12,12 +12,33 @@ POLICY = {
     'validate_markdown_memory': {'snapshot':1},
 }
 
+_SOURCE_LOCK=threading.RLock()
+
+def object_source(ci, original):
+    # inspect resolves classes through sys.modules; the owned source loader
+    # deliberately leaves its private module unregistered. Register only for
+    # inspection, never replace another module or retain global state.
+    name=ci.__name__
+    if original.__module__!=name:raise ValueError('edit_observer_module_identity')
+    with _SOURCE_LOCK:
+        missing=name not in sys.modules
+        if not missing and sys.modules[name] is not ci:
+            raise ValueError('edit_observer_module_collision')
+        if missing:sys.modules[name]=ci
+        try:return inspect.getsource(original)
+        finally:
+            if missing:
+                if sys.modules.get(name) is not ci:
+                    raise ValueError('edit_observer_module_replaced')
+                del sys.modules[name]
+
+
 def adapted(ci):
     if hashlib.sha256(Path(ci.__file__).read_bytes()).hexdigest()!=MODULE_SHA256:
         raise ValueError('edit_observer_module_changed')
     outputs={}
     for name,expected_hash in OBJECT_SHA256.items():
-        original=getattr(ci,name);source=inspect.getsource(original)
+        original=getattr(ci,name);source=object_source(ci,original)
         if hashlib.sha256(source.encode()).hexdigest()!=expected_hash:
             raise ValueError('edit_observer_object_changed')
         counts={};policy=POLICY[name]

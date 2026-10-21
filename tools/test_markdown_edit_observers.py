@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Real adapted observer methods with fake clocks/native calls; not Windows proof."""
-import copy, ctypes, inspect, unittest
+import copy, ctypes, inspect, unittest, sys
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 import windows_ci as ci
@@ -81,5 +82,50 @@ class Controls(unittest.TestCase):
             self.assertIsNot(self.objects[name],getattr(ci,name))
         self.assertEqual(ci.GUI_RU_TIMER_TIMEOUT_SECONDS,30)
         self.assertEqual(ci.GUI_RU_SNAPSHOT_MESSAGE_LIMIT,32)
+
+class OwnedLoaderControls(unittest.TestCase):
+    def load(self):
+        import run_markdown_phase_profile as base
+        return base.load_ci(Path(ci.__file__).resolve().parents[1])
+    def test_real_loader_adapter_and_stage_construction(self):
+        import run_markdown_edit_profile as edit
+        for _ in range(2):
+            owned=self.load();name=owned.__name__
+            self.assertNotIn(name,sys.modules)
+            original={key:getattr(owned,key) for key in adapter.OBJECT_SHA256}
+            objects=adapter.adapted(owned)
+            stage=edit.diagnostic_stage(owned,{'product_gate_failed':False})
+            self.assertTrue(callable(stage));self.assertEqual(set(objects),set(adapter.OBJECT_SHA256))
+            self.assertNotIn(name,sys.modules)
+            self.assertTrue(all(getattr(owned,key) is value for key,value in original.items()))
+            self.assertEqual(owned.GUI_MARKDOWN_TIMEOUT_SECONDS,30)
+    def test_collision_never_overwrites_existing_module(self):
+        owned=self.load();sentinel=object()
+        with patch.dict(sys.modules,{owned.__name__:sentinel}):
+            with self.assertRaisesRegex(ValueError,'module_collision'):adapter.adapted(owned)
+            self.assertIs(sys.modules[owned.__name__],sentinel)
+    def test_inspection_failure_removes_temporary_registration(self):
+        owned=self.load()
+        with patch('inspect.getsource',side_effect=TypeError('PRIVATE')):
+            with self.assertRaises(TypeError):adapter.adapted(owned)
+        self.assertNotIn(owned.__name__,sys.modules)
+    def test_same_registered_module_preserved(self):
+        owned=self.load()
+        with patch.dict(sys.modules,{owned.__name__:owned}):
+            adapter.adapted(owned)
+            self.assertIs(sys.modules[owned.__name__],owned)
+    def test_registration_replacement_is_not_deleted(self):
+        owned=self.load();sentinel=object()
+        def replace(original):
+            sys.modules[owned.__name__]=sentinel
+            return 'PRIVATE'
+        with patch.dict(sys.modules):
+            with patch('inspect.getsource',side_effect=replace):
+                with self.assertRaisesRegex(ValueError,'module_replaced'):adapter.adapted(owned)
+            self.assertIs(sys.modules[owned.__name__],sentinel)
+    def test_unrelated_object_identity_rejected(self):
+        owned=self.load();owned.GuiRuObserver=ci.GuiRuObserver
+        with self.assertRaisesRegex(ValueError,'module_identity'):adapter.adapted(owned)
+        self.assertNotIn(owned.__name__,sys.modules)
 
 if __name__=='__main__':unittest.main(verbosity=2)
