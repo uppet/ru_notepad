@@ -343,7 +343,10 @@ class PowershellControls(unittest.TestCase):
                 script=evidence/"probe.ps1"
                 script.write_text("Set-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n"+wrapper+"\n"
                     +f"$Evidence = {quote(evidence)}\n$script:MarkdownOwnedCommandSequence = 0\n"
-                    +f"try {{ Invoke-OwnedDiagnosticCommand {quote(sys.executable)} @({quote(child)}) }} catch {{ Write-Host 'EXPECTED=1' }}\n",encoding="utf-8")
+                    # Let PowerShell spell the fixture path exactly as the production
+                    # guard does. Windows temp paths can use 8.3/case aliases;
+                    # those aliases are intentionally not accepted by a lexical guard.
+                    +f"try {{ Invoke-OwnedDiagnosticCommand {quote(sys.executable)} @((Join-Path $PSScriptRoot {quote(filename)})) }} catch {{ Write-Host 'EXPECTED=1' }}\n",encoding="utf-8")
                 result=subprocess.run([powershell,"-NoProfile","-NonInteractive","-File",str(script)],capture_output=True,text=True,timeout=20)
                 self.assertEqual(result.returncode,0);self.assertEqual(result.stderr,"")
                 expected="MARKDOWN_OWNED_PROFILE_COMMAND_FAILED=1\n"
