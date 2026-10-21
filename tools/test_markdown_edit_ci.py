@@ -35,7 +35,8 @@ class Controls(unittest.TestCase):
         self.assertIn('& $Command @Arguments *> $Log',self.ps)
         self.assertNotIn('package.py',self.ps)
         self.assertNotIn('package_manual_preview',self.ps)
-        self.assertNotIn('Get-Content',self.ps)
+        self.assertIn("$Arguments[0] -ceq (Join-Path $PSScriptRoot 'run_markdown_edit_controls.py')",self.ps)
+        self.assertIn("'^MI_EDIT_CONTROL module=[1-7]",self.ps)
         self.assertIn("if ($LASTEXITCODE -ne 0) { throw 'MI_EDIT_DIAGNOSTIC_OR_PRODUCT_GATE_FAILED=1' }",self.ps)
     def test_upload_allowlist(self):
         self.assertEqual(self.workflow.count('uses: actions/upload-artifact@'),1)
@@ -49,6 +50,15 @@ class Controls(unittest.TestCase):
         self.assertNotIn('MPP_CUSTOM_BACKEND',HARNESS)
         for s in ('CreateThread','WaitForSingleObject','preserved()','--four','--five','--foreign'):
             self.assertIn(s,HARNESS)
+    def test_failure_projection_is_numeric_only(self):
+        import io
+        from run_markdown_edit_controls import Result
+        def bad(): raise AssertionError('PRIVATE_PATH=C:/private/input.md')
+        result=unittest.TextTestRunner(stream=io.StringIO(),resultclass=lambda *a,**k:Result(*a,module_number=1,**k)).run(unittest.FunctionTestCase(bad))
+        self.assertEqual(len(result.rows),1)
+        self.assertTrue(all(type(x) is int for x in result.rows[0]))
+        self.assertEqual(result.rows[0][1],1)
+        self.assertNotIn('PRIVATE',repr(result.rows))
     def test_disassembly_inline(self):
         self.assertTrue(inspect_counter('0001 <checked_hot_counter>:\n  1: mov %gs:0x58,%rax\n  2: ret\n'))
     def test_disassembly_tail(self):

@@ -73,7 +73,14 @@ function Invoke-Checked([string]$Command, [string[]]$Arguments) {
     $script:Sequence++
     $Log = Join-Path $Evidence ('command-{0:D3}.log' -f $script:Sequence)
     & $Command @Arguments *> $Log
-    if ($LASTEXITCODE -ne 0) { throw ('MI_EDIT_COMMAND_FAILED=' + $script:Sequence) }
+    $Code = $LASTEXITCODE
+    if ($Arguments.Count -ge 1 -and $Arguments[0] -ceq (Join-Path $PSScriptRoot 'run_markdown_edit_controls.py')) {
+        foreach ($Line in Get-Content -LiteralPath $Log) {
+            if ($Line -cmatch '^MI_EDIT_CONTROL module=[1-7] case=[0-9]{1,4} status=[12] line=[0-9]{1,5} exception=[1-3]$' -or
+                $Line -cmatch '^MI_EDIT_CONTROL module=[1-7] cases=[0-9]{1,4} failed=[0-9]{1,4} errors=[0-9]{1,4} skipped=[0-9]{1,4}$') { Write-Host $Line }
+        }
+    }
+    if ($Code -ne 0) { throw ('MI_EDIT_COMMAND_FAILED=' + $script:Sequence) }
     Write-Host ('MI_EDIT_COMMAND_COMPLETE=' + $script:Sequence)
 }
 Push-Location $Root
@@ -87,7 +94,7 @@ try {
     foreach ($Name in @('test_markdown_edit_ci.py','test_markdown_control_markers.py','test_markdown_owned_workflow.py',
             'test_markdown_edit_transform.py','test_markdown_edit_profile.py',
             'test_markdown_edit_late.py','test_markdown_edit_observers.py')) {
-        Invoke-Checked $Python @((Join-Path $PSScriptRoot $Name))
+        Invoke-Checked $Python @((Join-Path $PSScriptRoot 'run_markdown_edit_controls.py'),'--module',($Name -replace '\.py$',''))
     }
     Invoke-Checked $Python @((Join-Path $PSScriptRoot 'test_markdown_owned_profile.py'),'--cc',(Join-Path $Bin 'gcc.exe'))
     Invoke-Checked $Python @((Join-Path $PSScriptRoot 'test_markdown_edit_windows.py'),'--cc',(Join-Path $Bin 'gcc.exe'),'--objdump',(Join-Path $Bin 'objdump.exe'))
