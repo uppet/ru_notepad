@@ -268,23 +268,29 @@ def run_owned(variant, directory, source, ci, styles, folds, *,
     result['stages'] = []
     result['gates'] = []
     result['diagnostic_complete'] = False
+    result['owned_stage'] = 0
     try:
         base.verify_fixture(base.bounded_read(source, base.FIXTURE_SIZE))
         base.runtime_inventory(directory)
         # Starting before Popen is conservative: launch latency consumes budget.
+        result['owned_stage'] = 1
         started = clock()
         deadline = base.Deadline(started, clock)
         process = spawn([str(directory / 'ru_notepad.exe'), '--markdown-phase-diagnostics'],
                         cwd=directory, creationflags=0x00000008,
                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                         close_fds=True, env=dict(os.environ if environment is None else environment))
+        result['owned_stage'] = 2
         result['executed'] = True
         result['owned_pid'] = process.pid
         logs = base.OwnedLog(directory, process.pid)
         guard = guard_factory(process, deadline, logs)
         deadline.remaining()
+        result['owned_stage'] = 3
         api = api_factory(ci, process, deadline)
+        result['owned_stage'] = 4
         hwnd = perform_edits(ci, api, process, deadline, source, logs, guard, sleeper, result['stages'], result['gates'])
+        result['owned_stage'] = 5
         api.close(hwnd)
         result['close_posted'] = True
         while process.poll() is None:
@@ -295,6 +301,7 @@ def run_owned(variant, directory, source, ci, styles, folds, *,
             logs.inspect()
             deadline.sleep(sleeper)
         deadline.remaining()
+        result['owned_stage'] = 6
         result['exit_code'] = process.returncode
         if process.returncode != 0:
             base.fail('nonzero_exit')
@@ -308,10 +315,12 @@ def run_owned(variant, directory, source, ci, styles, folds, *,
         if record is not None: result['edit_profile'] = record
         base.verify_fixture(base.bounded_read(source, base.FIXTURE_SIZE))
         # The child has already exited; validation does not extend its lifetime.
+        result['owned_stage'] = 7
         result['diagnostic_complete'] = True
         result['passed'] = not any(g['product_gate_failed'] for g in result['gates'])
     except Exception as exc:
         result['failure'] = str(exc) if isinstance(exc, base.StudyError) else 'runner_exception'
+        result['failure_context'] = failure_context(exc)
     finally:
         if process is not None:
             if guard is not None:
@@ -325,6 +334,14 @@ def run_owned(variant, directory, source, ci, styles, folds, *,
                     process.kill()
                 except OSError:
                     pass
+            # TerminateProcess is asynchronous. Confirm only through this retained
+            # Popen object and only inside its original lifetime budget. Never add
+            # a post-120s grace period or reopen a PID.
+            if deadline is not None:
+                while process.poll() is None:
+                    try: remaining = deadline.remaining()
+                    except base.StudyError: break
+                    sleeper(min(base.POLL_SECONDS, remaining))
             # No second grace period after 120s and no PID-based kill fallback.
             result['cleanup_unconfirmed'] = process.poll() is None
             if result['cleanup_killed'] or result['cleanup_unconfirmed']:
@@ -582,7 +599,7 @@ def publish_public(evidence,value):
 # category only. Never print exception messages, locals, arguments or file paths.
 FAILURE_MODULES = ('run_markdown_edit_profile.py', 'run_markdown_owned_profile.py',
                    'profile_markdown_edits.py', 'profile_markdown_phases.py',
-                   'run_markdown_phase_profile.py', 'test_markdown_edit_transform.py')
+                   'run_markdown_phase_profile.py', 'test_markdown_edit_transform.py', 'windows_ci.py')
 def failure_context(error):
     root=Path(__file__).resolve().parent
     kind=1 if isinstance(error,ValueError) else 2 if isinstance(error,RuntimeError) else 3 if isinstance(error,OSError) else 4 if isinstance(error,subprocess.SubprocessError) else 5
@@ -594,12 +611,27 @@ def failure_context(error):
         tb=tb.tb_next
     return rows[-16:]
 
+def owned_failure_rows(summary):
+    """Allowlisted numeric progress only, never copy a private failure string."""
+    rows=[]
+    for index,run in enumerate(summary.get('runs',[]),1):
+        require(index<=2 and run['variant']==('release','profile')[index-1])
+        stage=integer(run.get('owned_stage',0),7)
+        elapsed=int(finite(run.get('last_observed_wall_ms',0),180000))
+        contexts=run.get('failure_context',[])
+        require(type(contexts) is list and len(contexts)<=16)
+        for module,line,kind in contexts:
+            require(1<=integer(module,len(FAILURE_MODULES)) and 1<=integer(line,99999) and 1<=integer(kind,5))
+            rows.append((index,stage,module,line,kind,elapsed))
+    return rows
+
+
 def main(argv=None):
     import argparse,contextlib,tempfile
     import run_markdown_owned_profile as owned
     parser=owned.PublicArgumentParser(prog='run_markdown_edit_profile.py',description=__doc__)
     for name in ('ru-root','binary-dir','evidence-dir','cc','windres'):parser.add_argument('--'+name,type=Path,required=True)
-    public=blank_public(2);evidence=None;failure_rows=[]
+    public=blank_public(2);evidence=None;failure_rows=[];owned_rows=[]
     try:
         args=parser.parse_args(argv);evidence=base.checked_path(args.evidence_dir,directory=True)
         if sys.platform!='win32':public=blank_public(1)
@@ -611,6 +643,7 @@ def main(argv=None):
                     release,profile,receipt,_=owned.prepare(args.ru_root,args.binary_dir,args.cc,args.windres,private,edit_profile=True)
                     public=blank_public(3)
                     summary=run_pair(receipt,owned.ROOT,release,profile,private/'runs')
+                    owned_rows=owned_failure_rows(summary)
                     public=blank_public(4)
                     public=public_projection(summary,base.digest(owned.ROOT/'native/markdown_edit_profile.h'),base.load_ci(owned.ROOT))
     except SystemExit as exc:
@@ -619,6 +652,8 @@ def main(argv=None):
     try:publish_public(evidence,public)
     except Exception:
         print('MARKDOWN_EDIT_PROFILE_DIAGNOSTIC_COMPLETE=0');print('MARKDOWN_EDIT_PROFILE_FAILURE_CODE=5');return 1
+    for variant,stage,module,line,kind,elapsed in owned_rows:
+        print(f'MARKDOWN_EDIT_OWNED_CONTEXT variant={variant} stage={stage} module={module} line={line} exception={kind} elapsed_ms={elapsed}')
     for module,line,kind in failure_rows:
         print(f'MARKDOWN_EDIT_PROFILE_CONTEXT module={module} line={line} exception={kind}')
     print('MARKDOWN_EDIT_PROFILE_DIAGNOSTIC_COMPLETE='+str(public['diagnostic_complete']))

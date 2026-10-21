@@ -152,9 +152,14 @@ class LifetimeControls(unittest.TestCase):
     def setUp(self):
         self.fixture=old.Controls();self.fixture.setUp()
     def tearDown(self):self.fixture.tearDown()
-    def run_fake(self,*,late=False,hang=False,unkillable=False,wrong_owner=False,nondeadline=False):
+    def run_fake(self,*,late=False,hang=False,unkillable=False,wrong_owner=False,nondeadline=False,kill_delay=0):
         f=self.fixture;clock=old.Clock();process=old.Process(clock,exit_delay=121 if hang else 0,unkillable=unkillable)
         calls=[]
+        if kill_delay:
+            def delayed_kill():
+                process.kills+=1
+                process.exit_at=clock()+kill_delay
+            process.kill=delayed_kill
         class Api(old.API):
             def release_drops(self):pass
         def spawn(command,**kwargs):
@@ -191,6 +196,20 @@ class LifetimeControls(unittest.TestCase):
         out,p,_,_=self.run_fake(nondeadline=True)
         self.assertFalse(out['diagnostic_complete']);self.assertEqual(out['failure'],'runner_exception');self.assertEqual(p.kills,1)
         self.assertNotIn('PRIVATE',json.dumps(out))
+    def test_async_termination_confirmed_inside_original_budget(self):
+        out,p,c,_=self.run_fake(nondeadline=True,kill_delay=.2)
+        self.assertEqual(p.kills,1);self.assertFalse(out['cleanup_unconfirmed'])
+        self.assertGreaterEqual(c(),.2);self.assertLess(c(),120)
+        self.assertFalse(out['diagnostic_complete']);self.assertFalse(out['passed'])
+    def test_async_termination_cannot_extend_expired_budget(self):
+        out,p,c,_=self.run_fake(hang=True,kill_delay=.2)
+        self.assertEqual(p.kills,1);self.assertTrue(out['cleanup_unconfirmed'])
+        self.assertEqual(c(),120);self.assertFalse(out['passed'])
+    def test_owned_exception_numeric_trace_survives(self):
+        out,_,_,_=self.run_fake(nondeadline=True)
+        rows=r.owned_failure_rows({'runs':[out]})
+        self.assertTrue(rows);self.assertEqual(rows[0][:2],(1,4))
+        self.assertNotIn('PRIVATE',repr(rows))
     def test_wrong_owner_fails_before_actions(self):
         out,p,_,_=self.run_fake(wrong_owner=True)
         self.assertEqual(out['failure'],'wrong_hwnd_owner');self.assertEqual(out['stages'],[]);self.assertEqual(p.kills,1)
@@ -276,6 +295,14 @@ class FailureContextControls(unittest.TestCase):
         except Exception as error: rows=r.failure_context(error)
         self.assertTrue(rows)
         self.assertLessEqual(len(rows),16)
-        self.assertTrue(all(1<=module<=6 and 1<=line<=99999 and 1<=kind<=5 for module,line,kind in rows))
+        self.assertTrue(all(1<=module<=7 and 1<=line<=99999 and 1<=kind<=5 for module,line,kind in rows))
+
+    def test_owned_context_rejects_non_numeric_and_unknown_values(self):
+        for value in ('PRIVATE',True,8,-1):
+            with self.subTest(value=value),self.assertRaises(Exception):
+                r.owned_failure_rows({'runs':[dict(variant='release',owned_stage=value)]})
+        for row in [('PRIVATE',1,1),(8,1,1),(1,100000,1),(1,1,6),(True,1,1)]:
+            with self.subTest(row=row),self.assertRaises(Exception):
+                r.owned_failure_rows({'runs':[dict(variant='release',failure_context=[row])]})
 
 if __name__=='__main__':unittest.main()
