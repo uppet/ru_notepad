@@ -21,6 +21,21 @@ class TransformControls(unittest.TestCase):
     def mapping(self,code=None,receipt=None):return p.make_map(code or self.code,self.root,receipt or self.receipt)
     def test_exact_map(self):
         m=self.mapping();self.assertEqual(len(m['entries']),6);self.assertEqual(m['binding']['value'],'ru_v_123')
+    def _with_extra_source(self,path):
+        code=self.code+'\nstatic RuFunction ru_function_900_descriptor = {"extra", 0, NULL};\n'
+        code+='static Val ru_function_900(Env *global, Val self, int call_line, Val *args) {\n'
+        code+='    ru_source = "'+p.octal(str(path))+'";\n    return v_null();\n}\n'
+        receipt=copy.deepcopy(self.receipt);receipt['generated_c_sha256']=p.digest(code.encode())
+        return code,receipt
+    def test_nested_unreceipted_source_is_still_rejected(self):
+        extra=self.root/'.ci/ru-language/rulang/stdlib/密.ru';extra.parent.mkdir(parents=True);extra.write_text('fixture')
+        code,receipt=self._with_extra_source(extra)
+        with self.assertRaisesRegex(ValueError,'Unreceipted generated source'):self.mapping(code,receipt)
+    def test_external_nonselected_compiler_source_is_not_application_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            extra=Path(directory)/'密.ru';extra.write_text('fixture')
+            code,receipt=self._with_extra_source(extra)
+            self.assertEqual(len(self.mapping(code,receipt)['entries']),6)
     def test_wrong_generated_hash(self):
         with self.assertRaises(ValueError):self.mapping(self.code+'\n')
     def test_wrong_source_hash(self):

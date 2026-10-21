@@ -15,17 +15,20 @@ jobs:
     defaults:
       run:
         shell: pwsh
+        working-directory: application
     env:
       PYTHONUTF8: '1'
       PYTHONDONTWRITEBYTECODE: '1'
       PYTHONOPTIMIZE: '0'
     steps:
       - name: Preserve exact source bytes
+        working-directory: ${{ github.workspace }}
         run: git config --global core.autocrlf false
       - name: Check out exact experiment
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.sha }}
+          path: application
           persist-credentials: false
       - name: Check out unchanged product compiler
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -51,24 +54,24 @@ jobs:
       - name: Verify diagnostic controls
         env:
           MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
-        run: ./tools/run_markdown_edit_ci.ps1 -RuRoot .ci/ru-language -MsysRoot "$env:MSYS2_ROOT" -Stage controls
+        run: ./tools/run_markdown_edit_ci.ps1 -RuRoot "$env:GITHUB_WORKSPACE/.ci/ru-language" -MsysRoot "$env:MSYS2_ROOT" -Stage controls
       - name: Build verified native dependencies
         env:
           MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
-        run: ./tools/run_markdown_edit_ci.ps1 -RuRoot .ci/ru-language -MsysRoot "$env:MSYS2_ROOT" -Stage dependencies
+        run: ./tools/run_markdown_edit_ci.ps1 -RuRoot "$env:GITHUB_WORKSPACE/.ci/ru-language" -MsysRoot "$env:MSYS2_ROOT" -Stage dependencies
       - name: Check sources and build exact application
         env:
           MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
-        run: ./tools/run_markdown_edit_ci.ps1 -RuRoot .ci/ru-language -MsysRoot "$env:MSYS2_ROOT" -Stage application
+        run: ./tools/run_markdown_edit_ci.ps1 -RuRoot "$env:GITHUB_WORKSPACE/.ci/ru-language" -MsysRoot "$env:MSYS2_ROOT" -Stage application
       - name: Measure owned release and profile pair
         env:
           MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
-        run: ./tools/run_markdown_edit_ci.ps1 -RuRoot .ci/ru-language -MsysRoot "$env:MSYS2_ROOT" -Stage measure
+        run: ./tools/run_markdown_edit_ci.ps1 -RuRoot "$env:GITHUB_WORKSPACE/.ci/ru-language" -MsysRoot "$env:MSYS2_ROOT" -Stage measure
       - name: Preserve only validated numeric and hash diagnostic evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: markdown-edit-profile-${{ github.sha }}
-          path: build/markdown-edit-experiment/measurements/markdown-edit-profile.json
+          path: application/build/markdown-edit-experiment/measurements/markdown-edit-profile.json
           if-no-files-found: warn
           retention-days: 14

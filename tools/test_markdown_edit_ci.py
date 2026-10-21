@@ -40,7 +40,7 @@ class Controls(unittest.TestCase):
         self.assertIn("if ($LASTEXITCODE -ne 0) { throw 'MI_EDIT_DIAGNOSTIC_OR_PRODUCT_GATE_FAILED=1' }",self.ps)
     def test_upload_allowlist(self):
         self.assertEqual(self.workflow.count('uses: actions/upload-artifact@'),1)
-        self.assertIn('path: build/markdown-edit-experiment/measurements/markdown-edit-profile.json',self.workflow)
+        self.assertIn('path: application/build/markdown-edit-experiment/measurements/markdown-edit-profile.json',self.workflow)
         self.assertNotIn('*.log',self.workflow)
         self.assertNotIn('continue-on-error',self.workflow)
         self.assertIn('if: always()',self.workflow)
@@ -50,6 +50,12 @@ class Controls(unittest.TestCase):
         self.assertNotIn('MPP_CUSTOM_BACKEND',HARNESS)
         for s in ('CreateThread','WaitForSingleObject','preserved()','--four','--five','--foreign'):
             self.assertIn(s,HARNESS)
+    def test_compiler_checkout_is_outside_application_root(self):
+        self.assertIn('working-directory: application',self.workflow)
+        self.assertIn('working-directory: ${{ github.workspace }}',self.workflow)
+        self.assertIn('path: application',self.workflow)
+        self.assertIn('path: .ci/ru-language',self.workflow)
+        self.assertEqual(self.workflow.count('-RuRoot "$env:GITHUB_WORKSPACE/.ci/ru-language"'),4)
     def test_stages_are_ordered_and_bound_to_same_commit(self):
         stages=('controls','dependencies','application','measure')
         positions=[self.workflow.index('-Stage '+stage) for stage in stages]
