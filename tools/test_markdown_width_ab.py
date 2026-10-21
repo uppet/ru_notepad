@@ -38,7 +38,7 @@ class PublicControls(unittest.TestCase):
                 x=a.blank(P,COMMIT);change(x)
                 with self.assertRaises(Exception):a.validate(x,P)
     def test_partial_ratios_and_wrong_arm_receipt(self):
-        x=a.blank(P,COMMIT);x['prepared']=[1,1];x['runner_receipt_sha256']=['a'*64,'c'*64]
+        x=a.blank(P,COMMIT);x['prepared']=[1,1];x['native_origin_sha256']='e'*64;x['runner_receipt_sha256']=['a'*64,'c'*64]
         for i in (0,1):
             summary=fixtures.summary();summary['runs']=summary['runs'][:1];summary['passed']=False
             summary['receipt_sha256']=x['runner_receipt_sha256'][i]
@@ -102,7 +102,7 @@ class CoordinatorControls(unittest.TestCase):
                 if pair_incomplete and variant=='release':
                     raw.update(diagnostic_complete=False,passed=False,drop_cleanup_failed=True)
                 return raw
-            with patch.object(a,'load_protocol',return_value=P),patch.object(a,'verify_roots',side_effect=verify),patch.object(a,'verify_arm',side_effect=arm),patch.object(base,'load_ci',return_value=ci),patch.object(edit,'run_pair',side_effect=pair),patch.object(edit,'run_owned',side_effect=owned_run):
+            with patch.object(a,'load_protocol',return_value=P),patch.object(a,'verify_roots',side_effect=verify),patch.object(a,'verify_arm',side_effect=arm),patch.object(a,'verify_native_origin',return_value='f'*64),patch.object(base,'load_ci',return_value=ci),patch.object(edit,'run_pair',side_effect=pair),patch.object(edit,'run_owned',side_effect=owned_run):
                 value=a.measure(*roots,COMMIT,top/'compiler',top/'cc',output,release_runner=release)
             saved=a.read(output/'markdown-width-ab.json');self.assertEqual(saved,value);a.validate(value,P)
             return value,calls,checks[0]
@@ -148,6 +148,7 @@ class WorkflowControls(unittest.TestCase):
         self.assertIn('path: candidate/build/markdown-width-ab-public/markdown-width-ab.json',text)
         self.assertIn('if: always()',text);self.assertIn('cache: false',text)
         self.assertLess(text.index('sync-dlls'),text.index('name: Check and build candidate application'))
+        self.assertLess(text.index('check-built --baseline'),text.index('prepare --arm 0'))
         self.assertLess(text.index('prepare --arm 0'),text.index('prepare --arm 1'))
         self.assertLess(text.index('prepare --arm 1'),text.index('run_markdown_width_ab.py measure'))
     def test_safe_failure_trace_no_messages_or_paths(self):
@@ -449,6 +450,213 @@ class FullReceiptControls(unittest.TestCase):
             with self.subTest(kind=kind), self.assertRaises((ValueError, RuntimeError, OSError)):
                 f.verify()
 
+
+
+"""Same-job native provenance controls; synthetic files, real receipt/cache checks."""
+import copy
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import unittest
+from contextlib import ExitStack
+from unittest.mock import patch
+
+import run_markdown_width_ab as a
+import build as native_builder
+
+
+class NativeOriginFixture:
+    JOB = {'GITHUB_RUN_ID': '123456', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_SHA': 'a' * 40}
+    def __init__(self):
+        self.f = FullReceiptFixture()
+        f = self.f
+        old = f.binary
+        f.binary = f.root / 'build/markdown-edit-experiment/bin'
+        f.binary.parent.mkdir(parents=True)
+        old.rename(f.binary)
+        f.receipt['compiler_command'][9] = str(f.binary / 'ru_notepad.exe')
+        f.helper['compiler_command'] = [str(f.cc), *f.p.package.NATIVE_CFLAGS,
+            *f.p.package.NATIVE_COMPILE_SOURCES['RuSyntax.dll'], '-o',
+            str(f.root / 'build/native-helper/RuSyntax.pending.dll'),
+            *('-l' + x for x in f.p.package.NATIVE_LINK_LIBRARIES)]
+        f.write()
+        self.candidate = f.home / 'candidate'
+        shutil.copytree(f.root, self.candidate)
+        self.cbin = self.candidate / 'build/markdown-edit-experiment/bin'
+        shutil.rmtree(self.cbin)
+        for relative in ('vendor/scintilla/bin/Scintilla.dll', 'vendor/lexilla/bin/lexilla.dll'):
+            path = self.candidate / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'candidate vendor before sync')
+        self.cache = self.candidate / 'build/native-helper'
+        self.stamp = self.candidate / 'build/markdown-width-native-origin.json'
+    def close(self): self.f.close()
+    def context(self):
+        f = self.f
+        stack = ExitStack()
+        def version(command, **kwargs):
+            if command != [str(f.cc), '--version']:
+                raise AssertionError('unexpected external command: only compiler version allowed')
+            return subprocess.CompletedProcess(command, 0, f.VERSION, b'')
+        stack.enter_context(patch.dict(os.environ, self.JOB))
+        stack.enter_context(patch.object(a, 'load_protocol', return_value=f.p))
+        stack.enter_context(patch.object(a.subprocess, 'run', side_effect=version))
+        return stack
+    def sync(self):
+        f = self.f
+        return a.sync_dlls(f.root, self.candidate, f.binary, f.cc)
+    def verify(self, require_candidate=True):
+        f = self.f
+        return a.verify_native_origin(f.root, self.candidate, f.cc, f.p, require_candidate=require_candidate)
+    def candidate_receipt(self):
+        f = self.f
+        self.cbin.mkdir(parents=True)
+        for name in f.p.base.RUNTIME_NAMES:
+            shutil.copyfile(f.binary / name, self.cbin / name)
+        shutil.copyfile(self.cache / 'RuSyntax.native-build.json', self.cbin / 'RuSyntax.native-build.json')
+        receipt = copy.deepcopy(f.receipt)
+        for index in (7, 9, 11):
+            receipt['compiler_command'][index] = str(self.candidate / Path(receipt['compiler_command'][index]).relative_to(f.root))
+        receipt['source_sha256'] = a.source_snapshot(self.candidate, f.p)
+        (self.cbin / 'ru_notepad.build.json').write_text(json.dumps(receipt))
+    def ready(self):
+        self.sync()
+        self.candidate_receipt()
+
+
+class NativeOriginControls(unittest.TestCase):
+    def fresh(self):
+        x = NativeOriginFixture()
+        self.addCleanup(x.close)
+        self.enterContext(x.context())
+        return x
+    def reject(self, change, *, ready=True):
+        x = self.fresh()
+        if ready: x.ready()
+        change(x)
+        with self.assertRaises((ValueError, RuntimeError, OSError, KeyError)):
+            x.verify() if ready else x.sync()
+    def test_sync_and_both_receipts_verified(self):
+        x = self.fresh(); x.sync()
+        self.assertEqual(x.verify(False), a.sha(x.stamp))
+        x.candidate_receipt()
+        self.assertEqual(x.verify(), a.sha(x.stamp))
+        for name in ('RuSyntax.dll', 'RuSyntax.native-build.json'):
+            self.assertEqual((x.cache / name).read_bytes(), (x.f.binary / name).read_bytes())
+        for name, rel in (('Scintilla.dll','vendor/scintilla/bin/Scintilla.dll'),('Lexilla.dll','vendor/lexilla/bin/lexilla.dll')):
+            self.assertEqual((x.candidate / rel).read_bytes(), (x.f.binary / name).read_bytes())
+    def test_candidate_native_source_mutation_before_sync(self):
+        self.reject(lambda x: (x.candidate / 'native/nested/extra.h').write_bytes(b'changed'), ready=False)
+    def test_candidate_driver_mutation_before_sync(self):
+        self.reject(lambda x: (x.candidate / 'tools/build.py').write_bytes(b'changed'), ready=False)
+    def test_existing_cache_rejected(self):
+        self.reject(lambda x: x.cache.mkdir(), ready=False)
+    def test_cross_job_rejected(self):
+        for key, value in (('GITHUB_RUN_ID','123457'),('GITHUB_RUN_ATTEMPT','2'),('GITHUB_SHA','b'*40)):
+            with self.subTest(key=key):
+                x = self.fresh(); x.ready()
+                with patch.dict(os.environ,{key:value}), self.assertRaises(ValueError): x.verify()
+    def test_stamp_tamper_rejected(self):
+        self.reject(lambda x: x.stamp.write_text('{}'))
+    def test_stamp_each_identity_and_hash_field_tamper_rejected(self):
+        paths = [('schema',), ('baseline_build_receipt_sha256',), ('helper_receipt_sha256',), ('native_build_key',)]
+        paths += [('job', key) for key in ('run_id','run_attempt','candidate_commit','baseline_commit','baseline_root','candidate_root')]
+        paths += [('dll_sha256', name) for name in ('Scintilla.dll','Lexilla.dll','RuSyntax.dll')]
+        for keys in paths:
+            with self.subTest(keys=keys):
+                def change(x):
+                    value=json.loads(x.stamp.read_text()); cursor=value
+                    for key in keys[:-1]: cursor=cursor[key]
+                    cursor[keys[-1]]='wrong'
+                    x.stamp.write_text(json.dumps(value))
+                self.reject(change)
+    def test_absent_or_invalid_job_rejected_before_sync(self):
+        for key in NativeOriginFixture.JOB:
+            with self.subTest(key=key):
+                x=self.fresh()
+                with patch.dict(os.environ,{key:''}), self.assertRaises(ValueError): x.sync()
+                self.assertFalse(x.cache.exists())
+    def test_candidate_receipt_required_only_after_build(self):
+        x=self.fresh(); x.sync()
+        self.assertEqual(x.verify(False),a.sha(x.stamp))
+        with self.assertRaises((ValueError,OSError)): x.verify()
+    def test_candidate_helper_command_cannot_claim_recompile(self):
+        def change(x):
+            path=x.cbin / 'RuSyntax.native-build.json'
+            value=json.loads(path.read_text())
+            value['compiler_command'][-2]=str(x.candidate / 'different-output')
+            path.write_text(json.dumps(value))
+        self.reject(change)
+    def test_compiler_hardlink_alias_write_rejected(self):
+        def change(x):
+            alias = x.f.home / 'cc-alias'
+            os.link(x.f.cc, alias)
+            alias.write_bytes(b'compiler identity changed through alias')
+        self.reject(change)
+    def test_candidate_native_source_mutation_after_sync(self):
+        self.reject(lambda x: (x.candidate / 'native/nested/extra.h').write_bytes(b'changed'))
+    def test_candidate_driver_mutation_after_sync(self):
+        self.reject(lambda x: (x.candidate / 'tools/build.py').write_bytes(b'changed'))
+    def test_cache_dll_mutation_rejected(self):
+        self.reject(lambda x: (x.cache / 'RuSyntax.dll').write_bytes(b'changed'))
+    def test_cache_receipt_mutation_rejected(self):
+        self.reject(lambda x: (x.cache / 'RuSyntax.native-build.json').write_text('{}'))
+    def test_cache_native_key_mutation_rejected(self):
+        def change(x):
+            path=x.cache / 'RuSyntax.native-build.json'
+            value=json.loads(path.read_text()); value['build_key']='0'*64
+            path.write_text(json.dumps(value))
+        self.reject(change)
+    def test_baseline_dll_mutation_rejected(self):
+        self.reject(lambda x: (x.f.binary / 'RuSyntax.dll').write_bytes(b'changed'))
+    def test_baseline_native_receipt_mutation_rejected(self):
+        self.reject(lambda x: (x.f.binary / 'RuSyntax.native-build.json').write_text('{}'))
+    def test_candidate_binary_dll_mutation_rejected(self):
+        self.reject(lambda x: (x.cbin / 'RuSyntax.dll').write_bytes(b'changed'))
+    def test_candidate_binary_native_receipt_mutation_rejected(self):
+        self.reject(lambda x: (x.cbin / 'RuSyntax.native-build.json').write_text('{}'))
+    def test_candidate_binary_app_receipt_mutation_rejected(self):
+        self.reject(lambda x: (x.cbin / 'ru_notepad.build.json').write_text('{}'))
+    def test_early_built_identity_outputs_only_fixed_hash_rows(self):
+        import contextlib,io,re
+        x=self.fresh();x.ready();output=io.StringIO()
+        with contextlib.redirect_stdout(output):
+            origin=a.check_built(x.f.root,x.candidate,x.f.cc,x.f.p)
+        self.assertEqual(origin,a.sha(x.stamp));rows=output.getvalue().splitlines();self.assertEqual(len(rows),3)
+        for i,row in enumerate(rows,1):
+            self.assertRegex(row,r'^WIDTH_AB_DLL index='+str(i)+r' equal=1 baseline=[0-9a-f]{64} candidate=[0-9a-f]{64}$')
+    def test_early_built_mismatch_fails_before_prepare(self):
+        import contextlib,io
+        x=self.fresh();x.ready();target=x.cbin/'Scintilla.dll';target.write_bytes(b'other valid recorded DLL')
+        receipt=a.read(x.cbin/'ru_notepad.build.json');receipt['dll_sha256']=a.sha(target)
+        (x.cbin/'ru_notepad.build.json').write_text(json.dumps(receipt))
+        output=io.StringIO()
+        with contextlib.redirect_stdout(output),self.assertRaises(ValueError):
+            a.check_built(x.f.root,x.candidate,x.f.cc,x.f.p)
+        rows=output.getvalue().splitlines();self.assertEqual(len(rows),3);self.assertTrue(rows[0].startswith('WIDTH_AB_DLL index=1 equal=0 '))
+    def test_unknown_existing_origin_rejected_before_sync(self):
+        x=self.fresh();x.stamp.write_text('{}')
+        with self.assertRaises(ValueError):x.sync()
+        self.assertFalse(x.cache.exists())
+
+    def test_real_build_cache_hit_preserves_baseline_compiler_command(self):
+        x=self.fresh(); x.sync(); f=x.f
+        def version(command, **kwargs):
+            self.assertEqual(command,[str(f.cc),'--version'])
+            return f.VERSION
+        with patch.object(native_builder,'ROOT',x.candidate), \
+             patch.object(native_builder,'NATIVE_COMPILE_SOURCES',{'RuSyntax.dll': f.p.package.NATIVE_COMPILE_SOURCES['RuSyntax.dll']}), \
+             patch.object(native_builder.subprocess,'check_output',side_effect=version):
+            # No mocked build_native_helpers/native_build_inputs/hash/cache checks.
+            # Any compile would hit the version-only subprocess guard and fail.
+            result=native_builder.build_native_helpers(str(f.cc),x.candidate / 'build')
+        self.assertEqual(result['RuSyntax.dll'],f.helper)
+        self.assertEqual(result['RuSyntax.dll']['compiler_command'],f.helper['compiler_command'])
+        self.assertIn(str(f.root / 'build/native-helper/RuSyntax.pending.dll'),result['RuSyntax.dll']['compiler_command'])
+        self.assertEqual(x.verify(False),a.sha(x.stamp))
 
 
 class ReporterControls(unittest.TestCase):

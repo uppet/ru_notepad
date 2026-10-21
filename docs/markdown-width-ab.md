@@ -29,9 +29,24 @@ not persisted. No previous-job artifact or cache supplies a binary.
 Each arm runs the existing diagnostic controls, archive verification,
 dependency builds, static checks and application build. After verifying the
 baseline's full build receipt, its same-job Scintilla/Lexilla DLL bytes are copied
-to the candidate's already validated dependency outputs. The candidate then
-builds and receipts its own application. All three final DLL hashes must match.
-RuSyntax uses the existing deterministic no-insert-timestamp linker option.
+to the candidate's already validated dependency outputs. Its RuSyntax DLL and
+unmodified native receipt are copied to a previously absent candidate native
+cache only after both roots' complete native inputs match: sources, drivers,
+compiler path/hash/version, flags, libraries and build key. The candidate's
+unchanged build_native_helpers validates this cache hit and its application
+build generates its own application receipt. This is an explicitly shared
+same-job native build, not a claim of independent identical DLL compilation.
+The cached native receipt retains its baseline compiler_command paths as origin
+evidence; they must not be rewritten to pretend it was compiled in candidate.
+
+A private handoff stamp binds run ID, attempt, both commits and canonical roots,
+baseline application/native receipt hashes, all three DLL hashes and native key.
+The stamp and all inputs/outputs are rechecked after candidate build and for every
+GUI process. A prior-job stamp or unknown existing cache is rejected.
+All three final DLL hashes must match; fixed numeric DLL IDs 1 Scintilla, 2 Lexilla,
+3 RuSyntax and both SHA values are checked/logged immediately after both builds,
+before profile preparation. The existing no-insert-timestamp option alone does
+not prove identical output bytes across different linker output directories.
 
 Each arm prepares its own release/profile once in a separate Python process
 using its own module root. The coordinator imports only the candidate protocol,
@@ -85,6 +100,9 @@ Any incomplete operation, uncertain retained-process/output cleanup or failed
 drop cleanup blocks subsequent GUI spawning. The original retained Popen handle
 and original deadline perform cleanup; no process-name killing, outer-worker
 termination, extra grace period or relaxed safety check is introduced.
+
+The public native_origin_sha256 binds the verified private handoff stamp without
+exporting its local paths. It must be nonzero before any release attempt.
 
 Top-level failure codes: 0 complete pass; 1 initial/incomplete; 2 complete but
 product gate failed; 3 incomplete/cleanup stop; 4 coordinator or receipt failure.

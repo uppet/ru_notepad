@@ -106,6 +106,12 @@ jobs:
         env:
           MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
         run: ./tools/run_markdown_edit_ci.ps1 -RuRoot "$env:GITHUB_WORKSPACE/.ci/ru-language" -MsysRoot "$env:MSYS2_ROOT" -Stage application
+      - name: Verify all three same-job DLL identities before profile preparation
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          & python tools/run_markdown_width_ab.py check-built --baseline ../baseline --candidate . --compiler ../.ci/ru-language --cc "$env:MSYS2_ROOT/mingw64/bin/gcc.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'WIDTH_AB_BUILT_IDENTITY_FAILED=1' }
       - name: Compare complete policy state in both real backends
         env:
           MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}

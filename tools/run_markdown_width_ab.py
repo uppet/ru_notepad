@@ -178,17 +178,89 @@ def verify_arm(root,binary,cc,private,p):
     need(manifest['runtime_sha256']['release']=={name:build[key] for name,key in zip(p.base.RUNTIME_NAMES,('exe_sha256','dll_sha256','lexilla_dll_sha256','native_helper_sha256'))})
     return ready,manifest
 
+def native_inputs(root,cc,p):
+    cc=compiler_file(cc)
+    version=subprocess.run([str(cc),'--version'],capture_output=True,timeout=30);need(version.returncode==0)
+    sources=p.package.native_source_snapshot(root)
+    for rel,want in sources.items():need(sha(under(root,rel))==want)
+    return {'output_name':'RuSyntax.dll','compile_sources':list(p.package.NATIVE_COMPILE_SOURCES['RuSyntax.dll']),
+        'source_sha256':sources,
+        'driver_sha256':{rel:sha(under(root,rel)) for rel in p.package.NATIVE_BUILD_DRIVERS},
+        'compiler_path':str(cc),'compiler_sha256':sha(cc),
+        'compiler_version_sha256':hashlib.sha256(version.stdout).hexdigest(),
+        'compiler_flags':list(p.package.NATIVE_CFLAGS),'link_libraries':list(p.package.NATIVE_LINK_LIBRARIES)}
+
+def job_identity(baseline,candidate):
+    run=os.environ.get('GITHUB_RUN_ID','');attempt=os.environ.get('GITHUB_RUN_ATTEMPT','')
+    commit=os.environ.get('GITHUB_SHA','')
+    need(re.fullmatch('[1-9][0-9]{0,19}',run) is not None)
+    need(re.fullmatch('[1-9][0-9]{0,7}',attempt) is not None)
+    need(re.fullmatch('[0-9a-f]{40}',commit) is not None)
+    return {'run_id':run,'run_attempt':attempt,'candidate_commit':commit,'baseline_commit':BASELINE,
+        'baseline_root':str(plain(baseline,directory=True)),'candidate_root':str(plain(candidate,directory=True))}
+
+def verify_native_origin(baseline,candidate,cc,p,*,require_candidate=True):
+    origin_path=candidate/'build/markdown-width-native-origin.json';origin=read(origin_path)
+    need(set(origin)=={'schema','job','baseline_build_receipt_sha256','helper_receipt_sha256','dll_sha256','native_build_key'})
+    need(origin['schema']==1 and origin['job']==job_identity(baseline,candidate))
+    binary=baseline/'build/markdown-edit-experiment/bin'
+    full_receipt(baseline,binary,cc,p)
+    need(origin['baseline_build_receipt_sha256']==sha(under(binary,'ru_notepad.build.json')))
+    helper=read(binary/'RuSyntax.native-build.json')
+    need(helper['build_inputs']==native_inputs(baseline,cc,p)==native_inputs(candidate,cc,p))
+    need(origin['native_build_key']==helper['build_key']==p.package.native_build_key(helper['build_inputs']))
+    need(origin['helper_receipt_sha256']==sha(under(binary,'RuSyntax.native-build.json')))
+    need(origin['dll_sha256']=={n:sha(under(binary,n)) for n in p.base.RUNTIME_NAMES[1:]})
+    cache=candidate/'build/native-helper';plain(cache,directory=True)
+    need(sha(under(cache,'RuSyntax.dll'))==origin['dll_sha256']['RuSyntax.dll'])
+    need(sha(under(cache,'RuSyntax.native-build.json'))==origin['helper_receipt_sha256'])
+    # Cache-hit receipt deliberately retains the baseline compiler_command;
+    # changing that command to imply an independent candidate compilation is forbidden.
+    if require_candidate:
+        target=candidate/'build/markdown-edit-experiment/bin'
+        full_receipt(candidate,target,cc,p)
+        need(sha(under(target,'RuSyntax.native-build.json'))==origin['helper_receipt_sha256'])
+        need(sha(under(target,'RuSyntax.dll'))==origin['dll_sha256']['RuSyntax.dll'])
+    return sha(origin_path)
+
 def sync_dlls(baseline,candidate,binary,cc):
     p=load_protocol(candidate);full_receipt(baseline,binary,cc,p)
-    # Both archives were independently validated/extracted/built by old scripts.
-    # Replace only generated dependency DLLs using this job's sealed baseline.
+    need(plain(binary,directory=True)==plain(baseline/'build/markdown-edit-experiment/bin',directory=True))
+    helper_path=under(binary,'RuSyntax.native-build.json');helper=read(helper_path)
+    need(helper['build_inputs']==native_inputs(baseline,cc,p)==native_inputs(candidate,cc,p))
+    cache=candidate/'build/native-helper';origin_path=candidate/'build/markdown-width-native-origin.json'
+    need(not cache.exists() and not origin_path.exists());plain(cache.parent,directory=True)
+    origin={'schema':1,'job':job_identity(baseline,candidate),
+        'baseline_build_receipt_sha256':sha(under(binary,'ru_notepad.build.json')),
+        'helper_receipt_sha256':sha(helper_path),'native_build_key':helper['build_key'],
+        'dll_sha256':{n:sha(under(binary,n)) for n in p.base.RUNTIME_NAMES[1:]}}
     for name,relative in (('Scintilla.dll','vendor/scintilla/bin/Scintilla.dll'),('Lexilla.dll','vendor/lexilla/bin/lexilla.dll')):
         source=under(binary,name);target=under(candidate,relative)
         need(target!=source);shutil.copyfile(source,target);need(sha(source)==sha(target))
+    cache.mkdir()
+    for name in ('RuSyntax.dll','RuSyntax.native-build.json'):
+        source=under(binary,name);target=cache/name;need(not target.exists())
+        with target.open('xb') as f:f.write(source.read_bytes())
+        need(sha(source)==sha(plain(target)))
+    atomic_private(origin_path,origin)
+    verify_native_origin(baseline,candidate,cc,p,require_candidate=False)
+
+def check_built(baseline,candidate,cc,p):
+    hashes=[]
+    for root in (baseline,candidate):
+        binary=root/'build/markdown-edit-experiment/bin'
+        full_receipt(root,binary,cc,p)
+        hashes.append([sha(under(binary,n)) for n in p.base.RUNTIME_NAMES[1:]])
+    for i,(left,right) in enumerate(zip(*hashes),1):
+        print('WIDTH_AB_DLL index='+str(i)+' equal='+str(int(left==right))+' baseline='+left+' candidate='+right)
+    origin_sha=verify_native_origin(baseline,candidate,cc,p)
+    need(hashes[0]==hashes[1])
+    return origin_sha
 
 def blank(p,candidate_sha):
     return {'schema':1,'diagnostic_only':1,'product_acceptance_claimed':0,'baseline_commit':BASELINE,
         'candidate_commit':candidate_sha,'compiler_commit':COMPILER,'policy_sha256':list(POLICIES),'protocol_sha256':ZERO,
+        'native_origin_sha256':ZERO,
         'stage_deadline_seconds':30,'process_deadline_seconds':120,'order':list(ORDER),
         'prepared':[0,0],'build_receipt_sha256':[ZERO,ZERO],'runner_receipt_sha256':[ZERO,ZERO],
         'release_attempted':[0]*8,'release_verified':[0]*8,'release_results':[p.edit.blank_public() for _ in ORDER],
@@ -227,6 +299,7 @@ def validate(value,p):
     need(re.fullmatch('[0-9a-f]{40}',value['candidate_commit']) is not None)
     for key in ('prepared','release_attempted','release_verified','profile_attempted','profile_verified','pair_complete'):need(all(type(x) is int and x in (0,1) for x in value[key]))
     need(value['failure_code'] in range(8))
+    need(not any(value['release_attempted']) or value['native_origin_sha256']!=ZERO)
     for i,x in enumerate(value['release_results']):
         p.edit.validate_public(x)
         need(x['runs'][1]['executed']==0 and x['phase_wall_measured']==0)
@@ -282,6 +355,8 @@ def measure(baseline,candidate,candidate_sha,compiler,cc,output,*,release_runner
                 need(value['build_receipt_sha256'][i]==ready['build_receipt_sha256'] and value['runner_receipt_sha256'][i]==ready['runner_receipt_sha256'])
             value['prepared'][i]=1;value['build_receipt_sha256'][i]=ready['build_receipt_sha256'];value['runner_receipt_sha256'][i]=ready['runner_receipt_sha256']
             all_ready.append(ready);all_manifests.append(manifest)
+        origin=verify_native_origin(baseline,candidate,cc,p)
+        need(value['native_origin_sha256'] in (ZERO,origin));value['native_origin_sha256']=origin
         need(all(all_manifests[0]['runtime_sha256']['release'][n]==all_manifests[1]['runtime_sha256']['release'][n] for n in p.base.RUNTIME_NAMES[1:]))
     try:
         check();save(target,value,p)
@@ -334,7 +409,7 @@ def main(argv=None):
     class PublicParser(argparse.ArgumentParser):
         def error(self,message):raise ValueError('width_ab_arguments')
     parser=PublicParser()
-    parser.add_argument('mode',choices=('verify','prepare','sync-dlls','measure'))
+    parser.add_argument('mode',choices=('verify','prepare','sync-dlls','check-built','measure'))
     for name in ('baseline','candidate','compiler','cc'):parser.add_argument('--'+name,type=Path,required=True)
     parser.add_argument('--arm',type=int,choices=(0,1));parser.add_argument('--windres',type=Path);parser.add_argument('--output',type=Path)
     # argparse messages contain only declared option names, no private GUI data.
@@ -351,6 +426,7 @@ def main(argv=None):
             need(a.arm in (0,1) and a.windres is not None)
             root=roots[a.arm];prepare_arm(root,root/'build/markdown-edit-experiment/bin',a.compiler,a.cc,a.windres,root/'build/markdown-width-ab-private')
         elif a.mode=='sync-dlls':sync_dlls(*roots,roots[0]/'build/markdown-edit-experiment/bin',a.cc)
+        elif a.mode=='check-built':check_built(*roots,a.cc,load_protocol(roots[1]))
         else:
             need(a.output is not None)
             result=measure(*roots,commit,a.compiler,a.cc,a.output)
