@@ -2,6 +2,7 @@ name: Windows native acceptance
 
 on:
   push:
+    branches-ignore: [notepadpp-comparison]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -592,3 +593,4 @@ jobs:
           path: build/focused-native-public/measurements.json
           if-no-files-found: error
           retention-days: 14
+

@@ -1,0 +1,94 @@
+name: Experimental stock Notepad++ text comparison
+on:
+  push:
+    branches: [notepadpp-comparison]
+permissions:
+  contents: read
+concurrency:
+  group: notepadpp-comparison-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  compare:
+    if: github.repository == 'uppet/ru_notepad' && github.ref == 'refs/heads/notepadpp-comparison'
+    runs-on: windows-2022
+    timeout-minutes: 60
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Preserve source bytes
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          path: comparison
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 6aa535d62c28cc9a03f33c3610fe99b3cf1bd14e
+          path: baseline
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: uppet/ru-language
+          ref: 85c7821fda35aa79deeaf67b4d430f24ddd7f07f
+          path: compiler
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Pure comparison controls
+        shell: pwsh
+        working-directory: comparison/notepadpp-comparison-20261021
+        run: |
+          python -m unittest discover -q
+          if ($LASTEXITCODE -ne 0) { throw 'COMPARISON_CONTROLS_FAILED' }
+      - name: Install pinned-action official MinGW toolchain
+        id: msys2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e
+        with:
+          msystem: MINGW64
+          update: true
+          cache: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+      - name: Build fixed production baseline with private provenance
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python comparison/notepadpp-comparison-20261021/build_baseline.py --baseline "$env:GITHUB_WORKSPACE/baseline" --compiler "$env:GITHUB_WORKSPACE/compiler" --toolbin "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin" --output "$env:GITHUB_WORKSPACE/baseline-release" --private-logs "$env:GITHUB_WORKSPACE/private-build"
+          if ($LASTEXITCODE -ne 0) { throw 'COMPARISON_BUILD_FAILED' }
+      - name: Acquire exact official NPP package without executing
+        shell: pwsh
+        run: |
+          python comparison/notepadpp-comparison-20261021/acquire_npp.py --allow-download --destination "$env:GITHUB_WORKSPACE/npp" > "$env:GITHUB_WORKSPACE/npp-receipt.private.json"
+          if ($LASTEXITCODE -ne 0) { throw 'COMPARISON_ACQUIRE_FAILED' }
+      - name: Seal verified provenance
+        shell: pwsh
+        run: |
+          python comparison/notepadpp-comparison-20261021/seal_receipt.py --baseline "$env:GITHUB_WORKSPACE/baseline" --compiler "$env:GITHUB_WORKSPACE/compiler" --cc "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin/gcc.exe" --ru-dir "$env:GITHUB_WORKSPACE/baseline-release" --npp-dir "$env:GITHUB_WORKSPACE/npp" --npp-receipt "$env:GITHUB_WORKSPACE/npp-receipt.private.json" --output "$env:GITHUB_WORKSPACE/combined-receipt.private.json"
+          if ($LASTEXITCODE -ne 0) { throw 'COMPARISON_SEAL_FAILED' }
+      - name: Same-job ABC native feasibility
+        shell: pwsh
+        run: |
+          python comparison/notepadpp-comparison-20261021/feasibility.py --source-root "$env:GITHUB_WORKSPACE/baseline" --compiler "$env:GITHUB_WORKSPACE/compiler" --cc "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin/gcc.exe" --ru-dir "$env:GITHUB_WORKSPACE/baseline-release" --npp-dir "$env:GITHUB_WORKSPACE/npp" --npp-receipt "$env:GITHUB_WORKSPACE/npp-receipt.private.json" --receipt "$env:GITHUB_WORKSPACE/combined-receipt.private.json" --output-root "$env:GITHUB_WORKSPACE/comparison-results"
+          if ($LASTEXITCODE -ne 0) { throw 'COMPARISON_FEASIBILITY_FAILED' }
+      - name: Validate public numeric result only
+        id: public
+        if: always() && !cancelled()
+        shell: pwsh
+        run: |
+          if (!(Test-Path "$env:GITHUB_WORKSPACE/comparison-results/result.json")) { exit 0 }
+          python comparison/notepadpp-comparison-20261021/validate_public.py "$env:GITHUB_WORKSPACE/comparison-results/result.json"
+          if ($LASTEXITCODE -ne 0) { throw 'COMPARISON_PUBLIC_VALIDATION_FAILED' }
+          "validated=true" >> $env:GITHUB_OUTPUT
+      - name: Upload validated result only
+        if: always() && !cancelled() && steps.public.outputs.validated == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: notepadpp-comparison-numeric-result
+          path: ${{ github.workspace }}/comparison-results/result.json
+          if-no-files-found: error
+          retention-days: 14
