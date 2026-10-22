@@ -6,6 +6,8 @@ import struct
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'tools'))
@@ -18,7 +20,7 @@ class ReleaseTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.files = {key: self.root/key for key in ('source', 'compiler', 'ir', 'binary', 'host')}
         for key, path in self.files.items():
             path.write_text(key)
@@ -35,6 +37,30 @@ class ReleaseTests(unittest.TestCase):
     def verify(self):
         return b.verify_proof(self.proof, **{k: self.files[k] for k in ('source','compiler','ir','binary')},
                               triple='triple', layout='layout', frozen=self.frozen)
+
+    def test_fixture_normalizes_short_temp_alias_before_use(self):
+        # Portable model of Windows RUNNER~1: no symlink privileges required.
+        canonical = self.root / 'long-temporary-path'
+        canonical.mkdir()
+        class ShortAlias:
+            def resolve(alias_self):
+                return canonical
+            def __truediv__(alias_self, child):
+                raise AssertionError('short alias used before canonicalization')
+        original = Path
+        alias = 'RUNNER~1/temporary'
+        def paths(value):
+            return ShortAlias() if value == alias else original(value)
+        fixture = ReleaseTests(methodName='runTest')
+        temporary = SimpleNamespace(name=alias, cleanup=lambda: None)
+        try:
+            with patch.object(tempfile, 'TemporaryDirectory', return_value=temporary), \
+                    patch.object(sys.modules[__name__], 'Path', side_effect=paths):
+                fixture.setUp()
+            self.assertEqual(fixture.root, canonical)
+            self.assertEqual(fixture.root, fixture.root.resolve())
+        finally:
+            fixture.doCleanups()
 
     def test_proof_valid_fixture(self):
         self.verify()

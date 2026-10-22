@@ -5,6 +5,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
 import bootstrap_provenance as p
@@ -20,7 +22,7 @@ class ProvenanceTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.base = Path(self.temp.name)
+        self.base = Path(self.temp.name).resolve()
         self.root = self.base / 'source'
         self.artifacts = self.base / 'artifacts'
         self.artifacts.mkdir()
@@ -70,6 +72,30 @@ class ProvenanceTests(unittest.TestCase):
         self.report_path.write_text(json.dumps(self.report))
         return p.validate(self.root, self.artifacts, self.report_path, self.commit, self.tree, compare,
             expected_triple='x86_64-pc-windows-msvc19.0', expected_data_layout='e-m:w-p270:32:32')
+
+    def test_fixture_normalizes_short_temp_alias_before_use(self):
+        # Portable model of Windows RUNNER~1: no symlink privileges required.
+        canonical = self.base / 'long-temporary-path'
+        canonical.mkdir()
+        class ShortAlias:
+            def resolve(alias_self):
+                return canonical
+            def __truediv__(alias_self, child):
+                raise AssertionError('short alias used before canonicalization')
+        original = Path
+        alias = 'RUNNER~1/temporary'
+        def paths(value):
+            return ShortAlias() if value == alias else original(value)
+        fixture = ProvenanceTests(methodName='runTest')
+        temporary = SimpleNamespace(name=alias, cleanup=lambda: None)
+        try:
+            with patch.object(tempfile, 'TemporaryDirectory', return_value=temporary), \
+                    patch.object(sys.modules[__name__], 'Path', side_effect=paths):
+                fixture.setUp()
+            self.assertEqual(fixture.base, canonical)
+            self.assertEqual(fixture.base, fixture.base.resolve())
+        finally:
+            fixture.doCleanups()
 
     def test_complete_fixture_is_evidence_only(self):
         self.assertEqual(self.validate()['status'], 'bootstrap-evidence-validated-not-editor-build')
