@@ -1,8 +1,8 @@
 import copy, unittest
 import public_result as p
 class Tests(unittest.TestCase):
-    def fixture(self):return dict(schema=1,feasibility_only=True,baseline_commit='6aa535d62c28cc9a03f33c3610fe99b3cf1bd14e',fixture_sha256='a'*64,harness_sha256='b'*64,receipt_sha256='c'*64,clock_resolution_seconds=1e-7,requested_poll_seconds=.005,stages_seconds=30.,process_seconds=120.,text_times_are_observable_upper_bounds=True,runs=[])
-    def test_valid(self):self.assertEqual(p.project(self.fixture())['schema'],1)
+    def fixture(self):return dict(schema=2,observer_revision=2,markdown_poll_seconds=.25,markdown_native_common_separate=0,markdown_diagnostics=1,feasibility_only=True,baseline_commit='6aa535d62c28cc9a03f33c3610fe99b3cf1bd14e',fixture_sha256='a'*64,harness_sha256='b'*64,receipt_sha256='c'*64,clock_resolution_seconds=1e-7,requested_poll_seconds=.005,stages_seconds=30.,process_seconds=120.,text_times_are_observable_upper_bounds=True,runs=[])
+    def test_valid(self):self.assertEqual(p.project(self.fixture())['schema'],2)
     def test_extra_raw_path(self):
         x=self.fixture();x['raw_path']='secret'
         with self.assertRaises(ValueError):p.project(x)

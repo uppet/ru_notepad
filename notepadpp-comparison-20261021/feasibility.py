@@ -11,6 +11,7 @@ from public_result import project as public_projection
 BASELINE = '6aa535d62c28cc9a03f33c3610fe99b3cf1bd14e'
 SIZE = 1_000_000
 POLL = .005
+MARKDOWN_POLL = .250
 STAGE = 30.
 HARD = 120.
 
@@ -86,12 +87,23 @@ def common_ready(snap, arm):
     return lexer_ok and end_ok and snap['styles'] == [0] * 16 and not snap['fold_header']
 
 
+def marker_identity(marker):
+    return tuple(marker[k] for k in ('id','gen','rev'))
+
+
+def marker_ready(api, length):
+    marker=getattr(api,'last_markdown_marker',None)
+    if marker is None or marker['pending']!=0 or marker['length']!=length or marker['feed']!=length:return False
+    previous=getattr(api,'accepted_markdown_marker',None)
+    return previous is None or (marker['gen']==previous['gen'] and marker['rev']>previous['rev'] and marker['id']>previous['id'])
+
+
 def run_stage(api, hwnd, editor, deadline, arm, operation, result, clock=time.perf_counter, sleep=time.sleep):
     if operation != 'open':
         deadline.next_stage()
     started = deadline.started if operation == 'open' else clock()
     result.update(operation=operation, completed=False, censored=False, undo_commands=0, undo_acknowledged=0,
-                  first_text_upper_ms=None, first_common_upper_ms=None, savepoint_text_upper_ms=None, rounds=[], poll_gaps_ms=[])
+                  first_text_upper_ms=None, first_common_upper_ms=None, savepoint_text_upper_ms=None, rounds=[], poll_gaps_ms=[], pending_poll_count=0)
     previous = started
     def dispatch(action):
         a = clock(); event = {'acknowledged': False, 'delivery_completion_unknown': True}
@@ -110,11 +122,24 @@ def run_stage(api, hwnd, editor, deadline, arm, operation, result, clock=time.pe
         dispatch(lambda: api.command(hwnd, 42003 if arm == 'B' else 201))
         result['undo_acknowledged'] = 1
     tail = False
+    pending = False
     while True:
         deadline.remaining()
         now = clock()
         result['poll_gaps_ms'].append((now - previous) * 1000)
         previous = now
+        before = None
+        if arm == 'C' and pending:
+            before = (api.scalar(editor,2006),bool(api.scalar(editor,2159)))
+            result['last'] = {'length':before[0],'dirty':before[1]}
+            result['pending_poll_count'] += 1
+            done=api.markdown_done(hwnd)
+            marker_before=getattr(api,'last_markdown_marker',None)
+            if marker_before is not None:
+                result['last'].update({('markdown_'+k):marker_before[k] for k in ('id','gen','rev','pending','length','feed')})
+            if not done or not marker_ready(api,before[0]):
+                sleep(min(MARKDOWN_POLL,deadline.remaining()))
+                continue
         snap = {'length': api.scalar(editor, 2006), 'dirty': bool(api.scalar(editor, 2159)),
                 'context': [api.scalar(editor, 2007, i) & 255 for i in range(6, 10)]}
         result['last'] = snap
@@ -126,6 +151,9 @@ def run_stage(api, hwnd, editor, deadline, arm, operation, result, clock=time.pe
         if matches and not tail:
             api.scalar(editor, 2025, snap['length']); api.scalar(editor, 2169)
             tail = True
+        if arm == 'C' and matches and tail and not pending:
+            pending = True
+            continue
         if matches and tail:
             positions = list(range(8)) + list(range(snap['length'] - 8, snap['length']))
             snap.update(lexer=api.scalar(editor, 4002), endstyled=api.scalar(editor, 2028),
@@ -133,9 +161,20 @@ def run_stage(api, hwnd, editor, deadline, arm, operation, result, clock=time.pe
                         fold_header=bool(api.scalar(editor, 2223, 0) & 0x2000))
             if common_ready(snap, arm):
                 api.scalar(hwnd, 0); api.scalar(editor, 0)
-                if result['first_common_upper_ms'] is None:
-                    result['first_common_upper_ms'] = (clock() - started) * 1000
                 pending_done = arm != 'C' or api.markdown_done(hwnd)
+                if arm == 'C':
+                    api.verify_fixture_title(hwnd)
+                    after=(api.scalar(editor,2006),bool(api.scalar(editor,2159)))
+                    pending_done = (pending_done and before == (snap['length'],snap['dirty']) == after
+                                    and marker_ready(api,after[0])
+                                    and marker_identity(marker_before)==marker_identity(api.last_markdown_marker))
+                    if pending_done:
+                        api.accepted_markdown_marker=dict(api.last_markdown_marker)
+                        snap.update({('markdown_'+k):api.last_markdown_marker[k] for k in ('id','gen','rev','pending','length','feed')})
+                if pending_done and result['first_common_upper_ms'] is None:
+                    # C observes common readiness only after folding reports done;
+                    # this is a late full-proof upper bound, not native-only latency.
+                    result['first_common_upper_ms'] = (clock() - started) * 1000
                 if pending_done:
                     result['rounds'].append({'command': result['undo_commands'], 'dirty': snap['dirty'],
                                             'length': snap['length'], 'upper_ms': (clock() - started) * 1000})
@@ -146,11 +185,12 @@ def run_stage(api, hwnd, editor, deadline, arm, operation, result, clock=time.pe
                         dispatch(lambda: api.command(hwnd, 42003 if arm == 'B' else 201))
                         result['undo_acknowledged'] += 1
                         tail = False
+                        pending = False
                     else:
                         deadline.remaining()
                         result.update(completed=True, wall_ms=(clock() - started) * 1000)
                         return
-        sleep(min(POLL, deadline.remaining()))
+        sleep(min(MARKDOWN_POLL if arm == 'C' and pending else POLL, deadline.remaining()))
 
 
 def markdown_state(ci, status):
@@ -173,9 +213,13 @@ def owned_api(ci, process, deadline):
                 raise TimeoutError('owned message timeout')
             deadline.remaining()
             return result.value
+        def verify_fixture_title(self, hwnd):
+            if self.markdown_status(hwnd).removeprefix('* ') != self.expected_fixture_title:
+                raise RuntimeError('wrong opened fixture')
         def markdown_done(self, hwnd):
             status = self.markdown_status(self.control(hwnd, 11))
             self.last_markdown_state = markdown_state(ci,status)
+            self.last_markdown_marker = ci.parse_markdown_diagnostic(status)
             return ci.markdown_status_complete(status)
     return API()
 
@@ -334,12 +378,13 @@ def run_one(ci, arm, executable, source, scratch, inventory):
     deadline = Deadline()
     result = {'arm': arm, 'executed': False, 'stages': [{'operation': 'open', 'completed': False, 'censored': False}], 'passed': False}
     argv = [str(executable)]
+    if arm == 'C':argv += ['--markdown-phase-diagnostics']
     if arm == 'B':
         settings = scratch / 'settings'; settings.mkdir()
         argv += ['-multiInst', '-noPlugin', '-nosession', '-lnormal', '-settingsDir=' + str(settings)]
     argv += [str(source)]
     process = None; guard = None; started_filetime = None; api = None
-    startup_phase=0; startup_length_match=0; startup_title_state=0
+    startup_phase=0; startup_length_match=0; startup_title_state=0; startup_title_diagnostic=None
     try:
         closed_manifest(executable.parent, inventory)
         started_filetime = filetime_now()
@@ -351,6 +396,7 @@ def run_one(ci, arm, executable, source, scratch, inventory):
                                 lambda: process.kill() if process.poll() is None else None)
         guard.daemon = True; guard.start()
         api = owned_api(ci, process, deadline)
+        api.expected_fixture_title = source.name + ' · ru_notepad'
         classname = 'Notepad++' if arm == 'B' else ci.MAIN_CLASS
         while True:
             deadline.remaining()
@@ -363,7 +409,11 @@ def run_one(ci, arm, executable, source, scratch, inventory):
                 except RuntimeError: time.sleep(POLL); continue
                 startup_length_match=int(api.scalar(editor,2006)==SIZE)
                 if startup_length_match:
-                    startup_title_state=1 if arm=='B' else title_state(api.text(hwnd),source,ci.comparison_initial_titles)
+                    if arm=='B':startup_title_state=1
+                    else:
+                        title=api.markdown_status(hwnd)  # Existing single bounded WM_GETTEXT reader; not a Markdown predicate.
+                        startup_title_state=title_state(title,source,ci.comparison_initial_titles)
+                        startup_title_diagnostic=(len(title.encode('utf-16-le','surrogatepass'))//2,hashlib.sha256(title.encode('utf-8','surrogatepass')).hexdigest())
                     if startup_title_state==2:raise RuntimeError('wrong opened fixture')
                     if startup_title_state==1:break
             time.sleep(POLL)
@@ -382,6 +432,8 @@ def run_one(ci, arm, executable, source, scratch, inventory):
         print(f'COMPARISON_STARTUP_STATE PHASE={startup_phase} LENGTH_MATCH={startup_length_match} TITLE_STATE={startup_title_state}',file=sys.stderr)
         if api is not None and hasattr(api,'last_markdown_state'):
             print('COMPARISON_MARKDOWN_STATE '+ ' '.join(f'{k}={v}' for k,v in zip(('LANGUAGE','FOLDING','FOLDS_OFF','OPENING','ERROR'),api.last_markdown_state)),file=sys.stderr)
+        if startup_title_state==2 and startup_title_diagnostic is not None:
+            print(f'COMPARISON_TITLE_UNITS={startup_title_diagnostic[0]} SHA256={startup_title_diagnostic[1]}',file=sys.stderr)
         result['error_type'] = type(exc).__name__
         result['elapsed_upper_ms'] = (time.perf_counter() - deadline.started) * 1000
         result['timed_out'] = isinstance(exc, TimeoutError)
@@ -464,7 +516,7 @@ def main():
     PREP_STAGE = 8
     ci = load_ci(args.source_root)
     PREP_STAGE = 9
-    report = {'schema': 1, 'feasibility_only': True, 'baseline_commit': BASELINE,
+    report = {'schema': 2, 'observer_revision': 2, 'markdown_poll_seconds': MARKDOWN_POLL, 'markdown_native_common_separate': 0, 'markdown_diagnostics': 1, 'feasibility_only': True, 'baseline_commit': BASELINE,
               'host': {'windows_version':list(sys.getwindowsversion()[:3]),'cpu_count':os.cpu_count() or 0,
                        'cpu_identifier_sha256':hashlib.sha256(os.environ.get('PROCESSOR_IDENTIFIER','').encode()).hexdigest(),
                        'runner_image_sha256':hashlib.sha256((os.environ.get('ImageOS','')+'|'+os.environ.get('ImageVersion','')).encode()).hexdigest()},

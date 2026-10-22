@@ -19,11 +19,15 @@ def fields(obj, allowed):need(type(obj) is dict and set(obj)<=set(allowed.split(
 
 
 def project(raw):
-    fields(raw,'schema feasibility_only baseline_commit fixture_sha256 harness_sha256 receipt_sha256 clock_resolution_seconds requested_poll_seconds stages_seconds process_seconds text_times_are_observable_upper_bounds runs host npp_version toolchain runtime_sha256')
-    need(raw['schema']==1 and raw['feasibility_only'] is True)
+    fields(raw,'schema observer_revision markdown_poll_seconds markdown_native_common_separate markdown_diagnostics feasibility_only baseline_commit fixture_sha256 harness_sha256 receipt_sha256 clock_resolution_seconds requested_poll_seconds stages_seconds process_seconds text_times_are_observable_upper_bounds runs host npp_version toolchain runtime_sha256')
+    need(raw['schema']==2 and raw['feasibility_only'] is True)
+    need(type(raw['observer_revision']) is int and raw['observer_revision']==2)
+    need(type(raw['markdown_poll_seconds']) in (int,float) and raw['markdown_poll_seconds']==.25)
+    need(type(raw['markdown_native_common_separate']) is int and raw['markdown_native_common_separate']==0)
+    need(type(raw['markdown_diagnostics']) is int and raw['markdown_diagnostics']==1)
     need(raw['baseline_commit']=='6aa535d62c28cc9a03f33c3610fe99b3cf1bd14e')
     need(raw['stages_seconds']==30 and raw['process_seconds']==120)
-    out={'schema':1,'feasibility_only':1,'baseline_commit':raw['baseline_commit'],'runs':[]}
+    out={'schema':2,'observer_revision':2,'markdown_poll_seconds':.25,'markdown_native_common_separate':0,'markdown_diagnostics':1,'feasibility_only':1,'baseline_commit':raw['baseline_commit'],'runs':[]}
     if 'host' in raw:
         host=raw['host'];fields(host,'windows_version cpu_count cpu_identifier_sha256 runner_image_sha256')
         need(len(host['windows_version'])==3)
@@ -57,7 +61,7 @@ def project(raw):
             r['error_kind']=kinds.index(row['error_type'])+1 if row['error_type'] in kinds else 99
         need(len(row['stages'])<=4)
         for j,stage in enumerate(row['stages']):
-            fields(stage,'operation completed censored undo_commands undo_acknowledged first_text_upper_ms first_common_upper_ms savepoint_text_upper_ms rounds poll_gaps_ms dispatches last wall_ms')
+            fields(stage,'operation completed censored pending_poll_count undo_commands undo_acknowledged first_text_upper_ms first_common_upper_ms savepoint_text_upper_ms rounds poll_gaps_ms dispatches last wall_ms')
             need(stage['operation']==('open','insert','backspace','undo')[j])
             s={'operation':j}
             for key,value in stage.items():
@@ -78,7 +82,7 @@ def project(raw):
                 fields(item,'acknowledged delivery_completion_unknown upper_ms');s['dispatches'].append({k:number(v) for k,v in item.items()})
             need(len(s['dispatches'])<=2)
             if 'last' in stage:
-                last=stage['last'];fields(last,'length dirty context lexer endstyled styles fold_header')
+                last=stage['last'];fields(last,'length dirty context lexer endstyled styles fold_header markdown_id markdown_gen markdown_rev markdown_pending markdown_length markdown_feed')
                 s['last']={k:number(v) for k,v in last.items() if k not in ('context','styles')}
                 if 'context' in last:
                     need(type(last['context']) is list and len(last['context'])==4 and all(type(v) is int and 0<=v<=255 for v in last['context']))

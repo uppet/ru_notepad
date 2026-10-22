@@ -12,9 +12,13 @@ def number(x):
 
 
 def validate(x):
-    fields(x, 'schema feasibility_only baseline_commit fixture_sha256 harness_sha256 receipt_sha256 clock_resolution_seconds requested_poll_seconds stages_seconds process_seconds text_times_are_observable_upper_bounds runs host npp_version toolchain runtime_sha256')
-    need(set(x) == set('schema feasibility_only baseline_commit fixture_sha256 harness_sha256 receipt_sha256 clock_resolution_seconds requested_poll_seconds stages_seconds process_seconds text_times_are_observable_upper_bounds runs host npp_version toolchain runtime_sha256'.split()))
-    need(x['schema'] == 1 and x['feasibility_only'] == 1)
+    fields(x, 'schema observer_revision markdown_poll_seconds markdown_native_common_separate markdown_diagnostics feasibility_only baseline_commit fixture_sha256 harness_sha256 receipt_sha256 clock_resolution_seconds requested_poll_seconds stages_seconds process_seconds text_times_are_observable_upper_bounds runs host npp_version toolchain runtime_sha256')
+    need(set(x) == set('schema observer_revision markdown_poll_seconds markdown_native_common_separate markdown_diagnostics feasibility_only baseline_commit fixture_sha256 harness_sha256 receipt_sha256 clock_resolution_seconds requested_poll_seconds stages_seconds process_seconds text_times_are_observable_upper_bounds runs host npp_version toolchain runtime_sha256'.split()))
+    need(x['schema'] == 2 and x['feasibility_only'] == 1)
+    need(type(x['observer_revision']) is int and x['observer_revision']==2)
+    need(type(x['markdown_poll_seconds']) in (int,float) and x['markdown_poll_seconds']==.25)
+    need(type(x['markdown_native_common_separate']) is int and x['markdown_native_common_separate']==0)
+    need(type(x['markdown_diagnostics']) is int and x['markdown_diagnostics']==1)
     need(x['baseline_commit'] == '6aa535d62c28cc9a03f33c3610fe99b3cf1bd14e')
     need(x['stages_seconds'] == 30 and x['process_seconds'] == 120)
     need(type(x['npp_version']) is list and all(type(v) is int for v in x['npp_version']) and x['npp_version'] == [8, 9, 8, 1])
@@ -46,7 +50,7 @@ def validate(x):
             if k != 'stages' and value is not None: number(value)
         need(r['arm'] == i and type(r['stages']) is list and len(r['stages']) <= 4)
         for j, s in enumerate(r['stages']):
-            fields(s, 'operation completed censored undo_commands undo_acknowledged first_text_upper_ms first_common_upper_ms savepoint_text_upper_ms rounds dispatches last wall_ms poll_count poll_gap_min_ms poll_gap_max_ms poll_gap_p50_ms poll_gap_p95_ms')
+            fields(s, 'operation completed censored pending_poll_count undo_commands undo_acknowledged first_text_upper_ms first_common_upper_ms savepoint_text_upper_ms rounds dispatches last wall_ms poll_count poll_gap_min_ms poll_gap_max_ms poll_gap_p50_ms poll_gap_p95_ms')
             need({'operation','completed','censored','rounds','dispatches','poll_count'} <= set(s))
             for k, value in s.items():
                 if k not in ('rounds','dispatches','last') and value is not None: number(value)
@@ -59,14 +63,24 @@ def validate(x):
             for v in s['dispatches']:
                 fields(v, 'acknowledged delivery_completion_unknown upper_ms')
                 for n in v.values(): number(n)
+            if 'pending_poll_count' in s:need(type(s['pending_poll_count']) is int and 0<=s['pending_poll_count']<=25000)
+            if i==2 and s['completed']:need('last' in s)
             if 'last' in s:
-                fields(s['last'], 'length dirty lexer endstyled styles fold_header context_sha256')
+                fields(s['last'], 'length dirty lexer endstyled styles fold_header context_sha256 markdown_id markdown_gen markdown_rev markdown_pending markdown_length markdown_feed')
                 for k, n in s['last'].items():
                     if k not in ('styles','context_sha256'): number(n)
                 if 'styles' in s['last']:
                     need(type(s['last']['styles']) is list and len(s['last']['styles']) == 16)
                     for n in s['last']['styles']: number(n)
                 if 'context_sha256' in s['last']: h(s['last']['context_sha256'])
+                md=set('markdown_id markdown_gen markdown_rev markdown_pending markdown_length markdown_feed'.split())
+                if md & set(s['last']):
+                    need(md<=set(s['last']))
+                    for key in md:need(type(s['last'][key]) is int and 0<=s['last'][key]<=1e12)
+                    need(s['last']['markdown_id']>0 and s['last']['markdown_gen']>0 and s['last']['markdown_pending'] in (0,1))
+                if i==2 and s['completed']:
+                    need(md<=set(s['last']) and s['last']['markdown_pending']==0)
+                    need(s['last']['markdown_length']==s['last']['markdown_feed']==s['last']['length'])
     def leaves(v):
         if type(v) is dict:
             for item in v.values(): leaves(item)

@@ -37,8 +37,19 @@ class Publication(unittest.TestCase):
         x=self.fixture();del x['host']
         with self.assertRaises(ValueError):v.validate(x)
     def test_unknown_schema(self):
-        x=self.fixture();x['schema']=2
+        x=self.fixture();x['schema']=99
         with self.assertRaises(ValueError):v.validate(x)
     def test_nonfinite(self):
         x=self.fixture();x['host']['cpu_count']=float('inf')
         with self.assertRaises(ValueError):v.validate(x)
+
+    def test_observer_v2_exact_fields(self):
+        for key,bad in [('schema',1),('observer_revision',1),('markdown_poll_seconds',.005),('markdown_native_common_separate',1),('markdown_diagnostics',0)]:
+            x=self.fixture();x[key]=bad
+            with self.assertRaises(ValueError):v.validate(x)
+        for key in ('observer_revision','markdown_poll_seconds','markdown_native_common_separate','markdown_diagnostics'):
+            for bad in (True,{},'a'*64,float('nan')):
+                x=self.fixture();x[key]=bad
+                with self.assertRaises(ValueError):v.validate(x)
+            x=self.fixture();del x[key]
+            with self.assertRaises(ValueError):v.validate(x)
