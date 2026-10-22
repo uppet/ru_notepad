@@ -27,7 +27,7 @@ Primary arms: A=ru_notepad baseline6aa535 plain text; B=stock NPP plain text. Se
 
 ## Isolation and process ownership
 
-Same windows-2022 job, sequential fresh processes; no parallel GUI timing. Separate immutable product/source directories and distinct per-run writable scratch directories. Every NPP run gets a fresh portable copy, empty doLocalConf.xml and disableNppAutoUpdate.xml alongside its EXE, and unique settingsDir. CLI: -multiInst -noPlugin -nosession -settingsDir=<unique path> -lnormal <fixture>. CLI is case-sensitive. No verified -noUpdate or -localConf switch exists; do not use these. Record the added config markers as deliberate modifications, preserve official archive hash separately.
+Same windows-2022 job, sequential fresh processes; no parallel GUI timing. Separate immutable product/source directories and distinct per-run writable scratch directories. Every NPP run gets a fresh portable copy, doLocalConf.xml and disableNppAutoUpdate.xml presence flags alongside its EXE (preserve existing official bytes; create empty only if absent), and unique settingsDir. CLI: -multiInst -noPlugin -nosession -settingsDir=<unique path> -lnormal <fixture>. CLI is case-sensitive. No verified -noUpdate or -localConf switch exists; do not use these. Record the added config markers as deliberate modifications, preserve official archive hash separately.
 
 Own Popen handle and PID from launch to reap; enumerate windows by that exact live PID, main class Notepad++, visible descendant Scintilla. Check PID ownership before every action and reject ambiguity. Never FindWindow globally and assume ownership. Never inject DLLs, use remote threads, allocate remote memory, or touch existing windows. Kill only the owned process on deadline; no name-based taskkill. Original input immutable and never saved; verify disk hash before/after.
 
@@ -58,3 +58,5 @@ Export numeric observations, enum IDs, fixed hashes, versions and provenance onl
 ## Before implementing/executing
 
 Pure tests: digest failure, archive traversal rejection, unique-run directory refusal on preexistence, PID/HWND mismatch, ambiguous Scintilla, process exit, SendMessageTimeout, one/two-Undo grouping, early-clean stop, 30s censored state, source/compiler receipt mismatch, metadata allowlist, unsupported Markdown refusal. Windows feasibility must confirm actual observed lexer and natural undo grouping; a Linux mock is not a GUI benchmark result.
+
+Official marker semantics are verified at commit dd40fe45598791e9aa38f3aeb200e10fb3d6338a, PowerEditor/src/Parameters.cpp: both flags use doesFileExist, not XML parsing. The locked official ZIP contains doLocalConf.xml (308 bytes, SHA256 3ae00a975f3b7e6f0507e679e33b69f6c665908aab83deb2bdfd7250a404602f) and disableNppAutoUpdate.xml (219 bytes, SHA256 bcca2933d5759768aef2c3721895b5a7269da31a2940247f12f40a2ac3e538ff). These originals remain byte-identical and are included in the closed runtime seal.

@@ -196,7 +196,8 @@ def verify_receipt(receipt, ru_dir, npp_dir):
         if '/' in name or receipt['npp_all_files_sha256'].get(name)!=value:raise ValueError('NPP root inventory mismatch')
     if receipt['npp_archive_sha256'] != __import__('acquire_npp').PINS['npp.8.9.8.1.portable.x64.zip'][1]:raise ValueError('NPP archive mismatch')
     for marker in ('disableNppAutoUpdate.xml','doLocalConf.xml'):
-        if (npp_dir/marker).stat().st_size != 0:raise ValueError('invalid isolation marker')
+        if digest(provenance.under(npp_dir, marker)) != receipt['npp_all_files_sha256'][marker]:
+            raise ValueError('invalid isolation marker')
 
 
 def cleanup_owned(process, hard, clock=time.perf_counter):

@@ -170,7 +170,8 @@ def extract(data, destination):
             for name in ('doLocalConf.xml', 'disableNppAutoUpdate.xml'):
                 marker = destination / name
                 if marker.exists():
-                    if not marker.is_file() or marker.stat().st_size:
+                    # Official markers are presence flags, not parsed XML. Preserve pinned bytes.
+                    if not marker.is_file():
                         raise ValueError('unexpected_existing_config_marker')
                 else:
                     marker.touch(exist_ok=False)

@@ -97,10 +97,28 @@ class AcquisitionTests(unittest.TestCase):
             with self.assertRaises(ValueError): a.extract(zipped([('x',b'x')]),dest)
             self.assertFalse(dest.exists())
 
-    def test_config_marker_nonempty_rejected(self):
+    def test_official_nonempty_markers_preserved_and_sealed(self):
+        import feasibility
         with tempfile.TemporaryDirectory() as temp:
             dest=Path(temp)/'new'
-            with self.assertRaises(ValueError): a.extract(zipped([('notepad++.exe',b'x'),('doLocalConf.xml',b'content')]),dest)
+            markers={'doLocalConf.xml':b'original-local-marker','disableNppAutoUpdate.xml':b'original-disable-marker'}
+            receipt=a.extract(zipped([('notepad++.exe',b'x'),*markers.items()]),dest)
+            for name, value in markers.items():
+                self.assertEqual((dest/name).read_bytes(),value)
+                self.assertEqual(receipt['files'][name],a.digest(value))
+            feasibility.closed_manifest(dest,receipt['files'])
+            for name, value in markers.items():
+                (dest/name).write_bytes(b'changed')
+                with self.assertRaises(ValueError):feasibility.closed_manifest(dest,receipt['files'])
+                (dest/name).write_bytes(value)
+                (dest/name).unlink()
+                with self.assertRaises(ValueError):feasibility.closed_manifest(dest,receipt['files'])
+                (dest/name).write_bytes(value)
+
+    def test_marker_directory_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            dest=Path(temp)/'new'
+            with self.assertRaises(ValueError):a.extract(zipped([('notepad++.exe',b'x'),('doLocalConf.xml/',b'')]),dest)
             self.assertFalse(dest.exists())
 
     def test_symlink_parent(self):

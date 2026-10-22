@@ -26,7 +26,8 @@ def seal(root,compiler,cc,ru,npp,npp_receipt):
     actual={x.relative_to(npp).as_posix():b.sha(b.plain(x)) for x in sorted(npp.rglob('*')) if x.is_file()}
     b.need(actual==package['files'] and len(actual)==package['file_count'])
     b.need(actual['notepad++.exe']==package['executable_sha256'])
-    for marker in ('doLocalConf.xml','disableNppAutoUpdate.xml'):b.need((npp/marker).stat().st_size==0)
+    for marker in ('doLocalConf.xml','disableNppAutoUpdate.xml'):
+        b.need(b.sha(b.under(npp,marker)) == actual[marker])
     runtime={'ru':{name:b.sha(b.under(ru,name)) for name in p.base.RUNTIME_NAMES},
              'npp':{name:h for name,h in actual.items() if '/' not in name}}
     return {'schema':1,'baseline_commit':b.BASELINE,'compiler_commit':b.COMPILER,'compiler_tree':b.COMPILER_TREE,

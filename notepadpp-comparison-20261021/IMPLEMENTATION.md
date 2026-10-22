@@ -1,6 +1,6 @@
 # Implementation status — 2026-10-22
 
-**72 Linux pure/mock/real-source-loading tests pass. Native Windows results are still required.** The retained local template has its historical gate; the reviewed publication candidate is windows-feasibility.yml, triggered only by pushes to notepadpp-comparison.
+**74 Linux pure/mock/real-source-loading tests pass. Native Windows results are still required.** The retained local template has its historical gate; the reviewed publication candidate is windows-feasibility.yml, triggered only by pushes to notepadpp-comparison.
 
 ## Files
 
@@ -10,7 +10,7 @@
 - `feasibility.py`: only A=Ru baseline plain text, B=stock NPP plain text, C=Ru baseline Markdown. Exact1M synthetic bytes; fresh per-arm runtime copy. Re-seals provenance before/after every run; closed inventories before/after launch; owns retained Popen and HWND/PID; no global input/injection.
 - `public_result.py`: fail-closed fixed-field numeric/hash projection. Includes Windows build, CPU count/identity hash, runner-image hash, NPP version, tool and runtime hashes; no raw context bytes/private paths.
 - `windows-feasibility.yml.template`: pinned actions, fixed source/compiler checkouts, independent branch guard, sequential build/acquire/seal/ABC steps. Review gate remains; artifact upload still requires separate review.
-- `test_*.py`:72 tests, including source/runtime/generated-code/native-key/compiler tampering, safe extraction, natural1/2Undo, stage/process budgets, async exit/no post-deadline grace, extraDLL/copy mutation, uncertain dispatch evidence and stop-next-arm.
+- `test_*.py`:74 tests, including source/runtime/generated-code/native-key/compiler tampering, safe extraction, natural1/2Undo, stage/process budgets, async exit/no post-deadline grace, extraDLL/copy mutation, uncertain dispatch evidence and stop-next-arm.
 
 ## Timing and completion
 
@@ -31,3 +31,5 @@ CLI exception paths now emit fixed numeric failure codes only; a subprocess nega
 Only the fixed closed-schema comparison-results/result.json may be uploaded, after validate_public.py revalidation. A failed/censored run can publish its validated numeric partial evidence; build failures have no result artifact. No private receipt, runtime, build log, source content, or executable is uploaded by the comparison workflow.
 
 Acquisition diagnostics use only closed numeric stage/reason enums and bounded HTTP status, never exception text or network bodies. Exact acquisition precedes the expensive baseline build, preserving all lock/hash/redirect/extraction controls. First Windows build succeeded; acquisition failed before GUI execution, so no timing conclusion exists yet.
+
+The official package contains nonempty presence-flag markers (308/219 bytes). Extraction preserves those verified original bytes; missing flags alone are created empty. Closed inventory and pre/post hash verification still reject modified, removed, extra, nonregular, or reparse files.
