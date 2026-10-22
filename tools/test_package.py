@@ -121,7 +121,7 @@ class PackageTests(unittest.TestCase):
         sources = ci.scanner_preflight_sources(self.root)
         self.summary['scanner_preflight'] = {'name': package.SCANNER_PREFLIGHT_NAME,
             'passed': True, 'executed': True, 'cleanup_killed': False, 'exit_code': 0,
-            'source_sha256': sources, 'report': {'cases': 157, 'chunk_checks': 942,
+            'source_sha256': sources, 'report': {'cases': 163, 'chunk_checks': 978,
                 'ru_assertions_per_backend': 0, 'sanitizer': None,
                 'library_sha256': self.summary['tested_binary_sha256'][package.NATIVE_HELPER_NAME],
                 'source_sha256': sources['native/ru_scan.c']}}

@@ -1,3 +1,8 @@
+## Unreleased — Ru 0.23.0 conditional-chain editing
+
+- Recognize `另若` in both pure-Ru and table-driven native highlighting, sharing one conditional fold frame. Preserve nested `另 若`, whole-name boundaries, and strings/comments.
+- Keep the application compiler pin, scanner ABI and Markdown policy unchanged, and retain all mandatory acceptance gates. New syntax execution requires a corresponding external Ru toolchain.
+
 # Changelog
 
 ## 0.1.4-preview — 2026-10-16

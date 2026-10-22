@@ -14,7 +14,7 @@ def run(cmd, log, expected=0, contains=None, assertions=None):
   if totals != [str(assertions)] or len(re.findall(r'^PASS:',p.stdout,re.M)) != assertions or re.search(r'^(FAIL:|SKIP:)',p.stdout,re.M):
    raise SystemExit(f'{log}: exact individual assertions and unique total required\n{p.stdout}')
  print(f'PASS: {log}')
-for source,slug,count in [('document_policy','document-policy',23),('ui_arguments','ui-arguments',19),('file_codec_flags','file-codec-flags',80),('shortcuts','shortcuts',42),('syntax_policy','syntax-policy',108),('ru_lexical_policy','ru-lexical-policy',338)]:
+for source,slug,count in [('document_policy','document-policy',23),('ui_arguments','ui-arguments',19),('file_codec_flags','file-codec-flags',80),('shortcuts','shortcuts',42),('syntax_policy','syntax-policy',108),('ru_lexical_policy','ru-lexical-policy',380)]:
  src=ROOT/'tests'/f'{source}.ru';exe=build/f'{source}_linux'
  run([sys.executable,ru,'run',src],f'{slug}-python.log',assertions=count)
  run([sys.executable,ru,'build','--cc','gcc',src,'-o',exe],f'{slug}-linux-build.log')

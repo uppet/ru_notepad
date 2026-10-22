@@ -218,7 +218,7 @@ passed; see that run's exact-commit results and distribution validation receipt.
 
 ## Ru-owned native acceptance
 
-The production lexical policy has **338 portable assertions**, replaying small
+The production lexical policy has **380 portable assertions**, replaying small
 fixtures at different scalar boundaries. The real Scintilla bridge adds **125
 assertions** for byte styles, fold levels, incomplete multiline edits, bounded
 reads, checkpoint convergence, stale document generations, fallback visibility,
@@ -263,3 +263,11 @@ Physical mouse interaction, non-US keyboard layouts and IME composition still
 need manual acceptance. Keyboard shortcuts use Windows virtual-key positions;
 the View menu and fold margin provide alternatives on layouts where brackets
 require different modifier combinations.
+
+## Conditional-chain editing validation
+
+`另若` is recognized as one keyword and shares the existing conditional frame;
+spaced `另 若` remains nested. The interpreter and native scanner consume the
+same Ru-owned keyword table. This is editor support, not an upgrade of the
+bundled compiler pin. Six new fixtures add 42 assertions to the existing 338,
+for 380 total, preserving original fixture coverage and all acceptance gates.
