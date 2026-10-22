@@ -14,6 +14,23 @@ POLL = .005
 STAGE = 30.
 HARD = 120.
 
+PREP_STAGE = 0
+DIAGNOSTIC_SOURCES = ('feasibility.py', 'build_baseline.py', 'seal_receipt.py', 'public_result.py', 'acquire_npp.py', 'windows_smoke.py', 'windows_ci.py')
+
+
+def failure_diagnostics(exc, stage):
+    # Closed numeric source IDs/line numbers, never traceback text or paths.
+    kinds = (ValueError, RuntimeError, TimeoutError, OSError, ImportError, KeyError, TypeError, AttributeError)
+    kind = next((i + 1 for i, cls in enumerate(kinds) if isinstance(exc, cls)), 99)
+    source, line = 0, 0
+    tb = exc.__traceback__
+    while tb is not None:
+        name = Path(tb.tb_frame.f_code.co_filename).name
+        if name in DIAGNOSTIC_SOURCES and type(tb.tb_lineno) is int and 0 < tb.tb_lineno <= 10000:
+            source, line = DIAGNOSTIC_SOURCES.index(name) + 1, tb.tb_lineno
+        tb = tb.tb_next
+    return (stage if type(stage) is int and stage in range(12) else 0, kind, source, line)
+
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -292,6 +309,8 @@ def drive_arms(launch, results, checkpoint):
 
 
 def main():
+    global PREP_STAGE
+    PREP_STAGE = 1
     ap = argparse.ArgumentParser()
     ap.add_argument('--source-root', type=Path, required=True)
     ap.add_argument('--ru-dir', type=Path, required=True)
@@ -302,8 +321,10 @@ def main():
     ap.add_argument('--npp-receipt', type=Path, required=True)
     ap.add_argument('--output-root', type=Path, required=True)
     args = ap.parse_args()
+    PREP_STAGE = 2
     if os.name != 'nt': raise RuntimeError('native Windows required; no emulation')
     provenance.host_guard()
+    PREP_STAGE = 3
     for key in ('source_root','ru_dir','npp_dir','compiler'):
         setattr(args,key,provenance.plain(getattr(args,key),directory=True))
     for key in ('receipt','npp_receipt'):
@@ -311,19 +332,26 @@ def main():
     args.cc=provenance.compiler_file(args.cc)
     args.output_root=Path(os.path.abspath(args.output_root))
     provenance.plain(args.output_root.parent,directory=True)
+    PREP_STAGE = 4
     receipt = provenance.read(args.receipt)
     import seal_receipt
     def revalidate():
+        global PREP_STAGE
+        PREP_STAGE = 5
         verify_receipt(receipt, args.ru_dir, args.npp_dir)
+        PREP_STAGE = 6
         if seal_receipt.seal(args.source_root,args.compiler,args.cc,args.ru_dir,args.npp_dir,args.npp_receipt) != receipt:
             raise ValueError('sealed provenance changed')
     revalidate()
+    PREP_STAGE = 7
     head = subprocess.check_output(['git', '-C', str(args.source_root), 'rev-parse', 'HEAD'], text=True).strip()
     if head != BASELINE: raise ValueError('source checkout mismatch')
     if subprocess.check_output(['git', '-C', str(args.source_root), 'status', '--porcelain', '--untracked-files=no'], text=True).strip():
         raise ValueError('modified source checkout')
     args.output_root.mkdir()  # Refuse re-use; never overwrite prior evidence.
+    PREP_STAGE = 8
     ci = load_ci(args.source_root)
+    PREP_STAGE = 9
     report = {'schema': 1, 'feasibility_only': True, 'baseline_commit': BASELINE,
               'host': {'windows_version':list(sys.getwindowsversion()[:3]),'cpu_count':os.cpu_count() or 0,
                        'cpu_identifier_sha256':hashlib.sha256(os.environ.get('PROCESSOR_IDENTIFIER','').encode()).hexdigest(),
@@ -354,7 +382,10 @@ def main():
             result['passed'] = False
         return result
     def checkpoint():
+        global PREP_STAGE
+        PREP_STAGE = 11
         (args.output_root / 'result.json').write_text(json.dumps(public_projection(report), indent=2, allow_nan=False) + '\n')
+    PREP_STAGE = 10
     drive_arms(launch, report['runs'], checkpoint)
     return 0 if all(r['passed'] for r in report['runs']) else 1
 
@@ -362,8 +393,10 @@ def main():
 if __name__ == '__main__':
     try:
         result = main()
-    except Exception:
+    except Exception as exc:
         import sys
         print('COMPARISON_FAILURE_CODE=4', file=sys.stderr)
+        stage, kind, source, line = failure_diagnostics(exc, PREP_STAGE)
+        print(f'COMPARISON_PREP_STAGE={stage} ERROR_KIND={kind} SOURCE_ID={source} LINE={line}', file=sys.stderr)
         raise SystemExit(1)
     raise SystemExit(result or 0)

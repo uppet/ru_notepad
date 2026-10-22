@@ -49,6 +49,11 @@ jobs:
         run: |
           python comparison/notepadpp-comparison-20261021/acquire_npp.py --allow-download --destination "$env:GITHUB_WORKSPACE/npp" > "$env:GITHUB_WORKSPACE/npp-receipt.private.json"
           if ($LASTEXITCODE -ne 0) { throw 'COMPARISON_ACQUIRE_FAILED' }
+      - name: Real Windows preparation smoke without GUI launch
+        shell: pwsh
+        run: |
+          python comparison/notepadpp-comparison-20261021/windows_smoke.py --baseline "$env:GITHUB_WORKSPACE/baseline" --compiler "$env:GITHUB_WORKSPACE/compiler" --npp "$env:GITHUB_WORKSPACE/npp" --receipt "$env:GITHUB_WORKSPACE/npp-receipt.private.json" --future-output "$env:GITHUB_WORKSPACE/comparison-results"
+          if ($LASTEXITCODE -ne 0) { throw 'COMPARISON_WINDOWS_SMOKE_FAILED' }
       - name: Install pinned-action official MinGW toolchain
         id: msys2
         uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e

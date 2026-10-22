@@ -158,3 +158,16 @@ class Test(unittest.TestCase):
         self.assertIn('_发设 态 柄 4033 0 0.',source)
 
 if __name__=='__main__': unittest.main()
+
+class DiagnosticPrivacy(unittest.TestCase):
+    def test_closed_failure_metadata(self):
+        self.assertEqual(f.failure_diagnostics(ValueError('private-path/private-text'), 5), (5,1,0,0))
+        self.assertEqual(f.failure_diagnostics(Exception('private-path'), {'private-key':1}), (0,99,0,0))
+    def test_traceback_text_is_not_returned(self):
+        try: f.closed_manifest(Path('/private-secret-missing'), {})
+        except Exception as exc:
+            stage, kind, source, line = f.failure_diagnostics(exc, 5)
+            self.assertEqual(stage,5)
+            self.assertIn(kind,range(1,9))
+            self.assertIn(source,range(1,6))
+            self.assertTrue(type(line) is int and 0 < line <= 10000)
