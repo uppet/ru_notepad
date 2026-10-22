@@ -5,7 +5,7 @@ from npp_udl_result import exact,integer,num,h,need,unique
 
 def validate(x):
     exact(x,'schema observer_revision baseline_commit compiler_commit stages_seconds process_seconds poll_seconds order repetitions opening_compared disabled_marker_after_edits style_semantic_equivalence fixture_sha256 harness_sha256 receipt_sha256 runtime_sha256 udl_sha256 host runs')
-    for key,value in [('schema',4),('observer_revision',4),('repetitions',1),('opening_compared',0),('disabled_marker_after_edits',0),('style_semantic_equivalence',0)]:integer(x[key],value,value)
+    for key,value in [('schema',4),('observer_revision',5),('repetitions',1),('opening_compared',0),('disabled_marker_after_edits',0),('style_semantic_equivalence',0)]:integer(x[key],value,value)
     need(x['baseline_commit']=='6aa535d62c28cc9a03f33c3610fe99b3cf1bd14e' and x['compiler_commit']=='85c7821fda35aa79deeaf67b4d430f24ddd7f07f')
     need(x['poll_seconds']==[.005,.005,.250])
     need(x['stages_seconds']==30 and x['process_seconds']==120 and x['order']==[0,1,2])

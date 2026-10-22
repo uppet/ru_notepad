@@ -51,6 +51,12 @@ class Tests(unittest.TestCase):
         ci=SimpleNamespace(parse_markdown_diagnostic=lambda s:dict(id=1,phase=4,pending=0,feed=0,published=0))
         with patch.object(c.f,'markdown_state',return_value=(1,0,1,0,0)):c.ru_proof(ci,api,1,2,0,True)
         self.assertIn(2664,calls);self.assertNotIn(2378,calls)
+    def test_header_probe_is_marker_not_default_text(self):
+        data,probes=c.fixture(1)
+        self.assertEqual(probes[-3:],[18,40,54])
+        self.assertEqual(data[probes[-3]:probes[-3]+1],b'#')
+        self.assertNotEqual(probes[-3],data.index(b'Heading'))
+
     def test_original_budgets(self):
         self.assertEqual((c.f.STAGE,c.f.HARD),(30,120));self.assertEqual(c.ORDER,(0,1,2))
 
@@ -62,7 +68,7 @@ class SchemaTests(unittest.TestCase):
             row={};reference=c.stage(None,api,1,2,c.f.Deadline(),1,c.TEXT,c.fixture(0)[1],op,row,reference);rows.append(row)
         for row in rows:
             for v in row['rounds']:v['lexer']=98
-        return dict(schema=4,observer_revision=4,baseline_commit=c.b.BASELINE,compiler_commit=c.b.COMPILER,
+        return dict(schema=4,observer_revision=5,baseline_commit=c.b.BASELINE,compiler_commit=c.b.COMPILER,
           stages_seconds=30,process_seconds=120,poll_seconds=[.005,.005,.250],order=[0,1,2],repetitions=1,opening_compared=0,
           disabled_marker_after_edits=0,style_semantic_equivalence=0,fixture_sha256=[hashlib.sha256(c.fixture(k)[0]).hexdigest() for k in (0,1)],
           harness_sha256='a'*64,receipt_sha256='b'*64,udl_sha256='c'*64,

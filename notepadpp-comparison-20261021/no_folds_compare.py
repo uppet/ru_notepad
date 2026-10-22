@@ -29,7 +29,7 @@ def fixture(kind):
     data=(TEXT,MARKDOWN)[kind]
     # Independent product-specific style IDs; never claim semantic equivalence.
     probes=list(range(8))+list(range(len(data)-8,len(data)))
-    if kind:probes += [data.index(b'Heading'),data.index(b'strong'),data.index(b'code')]
+    if kind:probes += [data.index(b'# Heading'),data.index(b'strong'),data.index(b'code')]
     return data,probes
 
 
@@ -207,7 +207,7 @@ def main():
         b.need(n.official_udl(b.under(a.npp_dir,n.UDL_PATH))==udl)
         b.need({name:b.sha(b.plain(Path(__file__).with_name(name))) for name in harness_files}==harness)
     revalidate();ci=f.load_ci(a.source_root);a.output_root.mkdir()
-    report=dict(schema=4,observer_revision=4,baseline_commit=b.BASELINE,compiler_commit=b.COMPILER,
+    report=dict(schema=4,observer_revision=5,baseline_commit=b.BASELINE,compiler_commit=b.COMPILER,
       stages_seconds=f.STAGE,process_seconds=f.HARD,poll_seconds=[f.POLL,f.POLL,f.MARKDOWN_POLL],order=list(ORDER),repetitions=1,opening_compared=0,
       disabled_marker_after_edits=0,style_semantic_equivalence=0,
       fixture_sha256=[hashlib.sha256(fixture(k)[0]).hexdigest() for k in (0,1)],

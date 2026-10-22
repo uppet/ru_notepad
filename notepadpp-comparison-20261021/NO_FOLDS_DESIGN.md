@@ -67,3 +67,19 @@ Add only runner, closed numeric/hash validator, tests, this design and independe
 .github/workflows/markdown-no-folds.yml on notepadpp-comparison. Existing workflow,
 history, product sources and main/wip are untouched. Upload only validated
 no-folds-result.json, never private paths, logs, runtime, executable or receipts.
+
+## Observer revision 5: heading probe correction
+
+Run 39748675377 at c0ccd2a passed all three 1 MB arms, then failed the
+14,208-byte fixture's initial nondefault-style assertion. No Markdown-fixture
+edit ran. Preserve that run and all original 1 MB observations; do not select
+between reruns or treat this harness failure as a performance timeout.
+
+Pinned official Lexilla 5.5.4 defaults lexer.markdown.header.eolfill to 0. Its
+SetStateAndZoom styles the heading marker but leaves Heading text default. A
+local native TestDocument probe against archive-hash-verified official sources
+observed byte 18 (#)=6, byte 20 (Heading)=0, byte 40 (strong)=2 and byte 54
+(code)=19. Observer revision 5 changes only the heading probe from byte 20 to
+18, retaining strict nondefault styles for heading marker, emphasis and code.
+No product property, fixture bytes, timing budget, order or repetition changes.
+The complete fixed six-process plan is rerun, not a best-of 1 MB sample.
