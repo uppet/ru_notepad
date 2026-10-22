@@ -228,5 +228,115 @@ class GatePolicyTests(unittest.TestCase):
         self.assertEqual(source.count('其 元初 []'), 3)
 
 
+class ResourceDiagnosticTests(unittest.TestCase):
+    def fixture(self, planes=1, payload=b'PNG-owned'):
+        header=gate.struct.pack('<HHH',0,1,1)
+        icon=header+gate.struct.pack('<BBBBHHII',16,16,0,0,0,32,len(payload),22)+payload
+        group=header+gate.struct.pack('<BBBBHHIH',16,16,0,0,planes,32,len(payload),7)
+        return icon,group,payload
+
+    def test_plane_difference_is_described_not_normalized(self):
+        icon,group,payload=self.fixture()
+        calls=[]
+        def image(number): calls.append(number);return payload
+        languages=lambda kind,name:{'available_langids':[1033],'selected_langid':1033}
+        result=gate.icon_resource_diagnostic(icon,group,image,languages)
+        entry=result['entries'][0]
+        self.assertEqual(entry['source']['planes'],0)
+        self.assertEqual(entry['group']['planes'],1)
+        self.assertEqual(entry['source']['payload_sha256'],entry['group']['payload_sha256'])
+        self.assertEqual(entry['group']['resource_id'],7)
+        self.assertEqual(entry['group']['languages']['selected_langid'],1033)
+        self.assertEqual(calls,[7])
+        self.assertNotEqual(group[6:18],icon[6:18])  # Existing strict gate still rejects.
+        self.assertNotIn('passed',result)
+        self.assertEqual(entry['group']['raw_hex'],group[6:].hex())
+
+    def test_missing_images_and_unknown_language_are_explicit(self):
+        icon,group,payload=self.fixture()
+        def missing(number): raise ValueError('missing image')
+        result=gate.icon_resource_diagnostic(icon,group,missing,lambda *args:{'available_langids':None,'selected_langid':None,'unknown_reason':'not available'})
+        self.assertEqual(result['entries'][0]['group']['payload_error'],'missing image')
+        self.assertIsNone(result['group_languages']['selected_langid'])
+        changed=gate.icon_resource_diagnostic(icon,group,lambda _:b'other',lambda *args:{})
+        self.assertNotEqual(changed['entries'][0]['source']['payload_sha256'],changed['entries'][0]['group']['payload_sha256'])
+
+    def test_bounds_truncation_and_outside_source_offsets(self):
+        icon,group,payload=self.fixture()
+        self.assertIn('description_error',gate.icon_resource_diagnostic(b'',group,lambda _:payload,lambda *args:{}))
+        for data in (b'x'*(1024*1024+1),gate.struct.pack('<HHH',0,1,65)):
+            with self.assertRaises(ValueError): gate.icon_resource_diagnostic(data,group,lambda _:payload,lambda *args:{})
+        bad=bytearray(icon);gate.struct.pack_into('<I',bad,18,2**32-1)
+        result=gate.icon_resource_diagnostic(bytes(bad),group,lambda _:payload,lambda *args:{})
+        self.assertEqual(result['entries'][0]['source']['payload_error'],'outside source ICO')
+
+    def test_snapshot_identity_change_is_not_a_new_baseline(self):
+        with tempfile.TemporaryDirectory() as temp:
+            pe,icon=Path(temp)/'app.exe',Path(temp)/'app.ico'
+            pe.write_bytes(b'pe');icon.write_bytes(b'ico')
+            diagnostic={'pe':gate.identity(pe),'source_ico':gate.identity(icon)}
+            gate.resource_snapshot_stable(diagnostic,pe,icon)
+            self.assertTrue(diagnostic['identity_stable'])
+            pe.write_bytes(b'changed')
+            with self.assertRaises(ValueError):gate.resource_snapshot_stable(diagnostic,pe,icon)
+            self.assertFalse(diagnostic['identity_stable'])
+            self.assertNotEqual(diagnostic['pe'],diagnostic['pe_after'])
+
+    def test_mock_mapping_retains_exact_gate_and_single_read_snapshot(self):
+        # Portable API model, NOT a real Windows resource/runtime result.
+        class Function:
+            def __init__(self,function):self.function=function
+            def __call__(self,*args):return self.function(*args)
+        class Kernel:pass
+        for planes,changed_image,mutate in [(0,False,False),(1,False,False),(0,True,False),(0,False,True)]:
+            with self.subTest(planes=planes,changed_image=changed_image,mutate=mutate),tempfile.TemporaryDirectory() as temp:
+                app=Path(temp);(app/'assets').mkdir();(app/'packaging').mkdir()
+                pe=app/'app.exe';pe.write_bytes(b'owned PE bytes')
+                icon,group,payload=self.fixture(planes)
+                (app/'assets/app-icon.ico').write_bytes(icon)
+                (app/'packaging/app.manifest').write_bytes(b'manifest')
+                version=gate.struct.pack('<13I',0xFEEF04BD,0x10000,1,8<<16,1,8<<16,0x3f,2,0x40004,1,0,0,0)
+                version+=' '.join(('FileDescription','ru_notepad preview','FileVersion','0.1.8-preview','InternalName','OriginalFilename','ru_notepad.exe','ProductName','ProductVersion','040904B0')).encode('utf-16-le')
+                resources={(14,1):group,(3,7):b'wrong' if changed_image else payload,(24,1):b'manifest',(16,1):version}
+                reads={};kernel=Kernel()
+                def read(pointer,size):
+                    reads[pointer]=reads.get(pointer,0)+1
+                    if mutate:pe.write_bytes(b'replaced PE')
+                    return resources[pointer]
+                methods={'LoadLibraryExW':lambda *args:1,'FindResourceW':lambda module,name,kind:(kind,name),
+                         'SizeofResource':lambda module,found:len(resources[found]),'LoadResource':lambda module,found:found,
+                         'LockResource':lambda found:found,'FreeLibrary':lambda module:True,
+                         'EnumResourceLanguagesW':lambda module,kind,name,callback,param:callback(module,kind,name,1033,param)}
+                for name,function in methods.items():setattr(kernel,name,Function(function))
+                with patch.object(gate,'verify_gui_pe'),patch.object(gate.ctypes,'WinDLL',return_value=kernel,create=True), \
+                     patch.object(gate.ctypes,'WINFUNCTYPE',gate.ctypes.CFUNCTYPE,create=True),patch.object(gate.ctypes,'string_at',side_effect=read):
+                    if not planes and not changed_image and not mutate:
+                        result=gate.verify_resources(pe,app)
+                        self.assertTrue(result['passed'])
+                        diagnostic=result['resource_diagnostics']
+                    else:
+                        with self.assertRaises(gate.ResourceEvidenceError) as caught:gate.verify_resources(pe,app)
+                        diagnostic=caught.exception.diagnostic
+                        expected='metadata differs' if planes else 'image differs' if changed_image else 'identity changed'
+                        self.assertIn(expected,str(caught.exception))
+                    self.assertEqual(diagnostic['icon']['group_languages']['selected_langid'],1033)
+                    self.assertTrue(all(value==1 for value in reads.values()))
+                    self.assertEqual(diagnostic['identity_stable'],not mutate)
+
+    def test_failure_persists_diagnostics_but_never_grants_acceptance(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output=Path(temp)/'gui-acceptance.json'
+            diagnostic={'scope':'diagnostic-only-not-runtime-acceptance','unicode':'汉😀','identity_stable':True}
+            with patch.object(gate.sys,'argv',['gate','--config',str(Path(temp)/'config.json'),'--output',str(output)]), \
+                    patch.object(gate,'read_json',return_value={}), \
+                    patch.object(gate,'verify',side_effect=gate.ResourceEvidenceError('icon metadata differs',diagnostic)):
+                self.assertEqual(gate.main(),1)
+            result=json.loads(output.read_bytes())
+            self.assertEqual(result['status'],'failed')
+            self.assertFalse(result['release_permission'])
+            self.assertEqual(result['resource_diagnostics'],diagnostic)
+            self.assertNotIn('results',result)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -301,9 +301,75 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
     return result
 
 
+class ResourceEvidenceError(ValueError):
+    def __init__(self, message, diagnostic):
+        super().__init__(message)
+        self.diagnostic = diagnostic
+
+
+def icon_resource_diagnostic(icon, group, image, languages):
+    """Bounded descriptions only; never canonicalize bytes or grant acceptance."""
+    require(len(icon) <= 1024*1024 and len(group) <= 1024*1024, 'resource diagnostic size cap')
+    result = {'scope': 'diagnostic-only; original exact resource gates unchanged',
+              'source_ico_sha256': hashlib.sha256(icon).hexdigest(), 'source_ico_size': len(icon),
+              'group_sha256': hashlib.sha256(group).hexdigest(), 'group_size': len(group),
+              'group_languages': languages(14, 1), 'entries': []}
+    if len(icon) < 6 or len(group) < 6:
+        result['description_error'] = 'truncated directory header'
+        return result
+    source_count, group_count = struct.unpack_from('<H', icon, 4)[0], struct.unpack_from('<H', group, 4)[0]
+    result.update(source_header_hex=icon[:6].hex(), group_header_hex=group[:6].hex(),
+                  source_count=source_count, group_count=group_count)
+    require(max(source_count, group_count) <= 64, 'resource diagnostic entry cap')
+    for index in range(max(source_count, group_count)):
+        entry = {'index': index}
+        i, g = 6+16*index, 6+14*index
+        if index < source_count and i+16 <= len(icon):
+            values = struct.unpack_from('<BBBBHHII', icon, i)
+            source = dict(zip(('width_raw','height_raw','colors','reserved','planes','bit_count','byte_length','offset'), values))
+            source.update(width=values[0] or 256,height=values[1] or 256,raw_hex=icon[i:i+16].hex())
+            end = values[7]+values[6]
+            if end <= len(icon):
+                payload=icon[values[7]:end]
+                source.update(payload_sha256=hashlib.sha256(payload).hexdigest(),payload_size=len(payload),prefix_hex=payload[:32].hex())
+            else: source['payload_error']='outside source ICO'
+            entry['source']=source
+        if index < group_count and g+14 <= len(group):
+            values=struct.unpack_from('<BBBBHHIH', group, g)
+            actual=dict(zip(('width_raw','height_raw','colors','reserved','planes','bit_count','byte_length','resource_id'),values))
+            actual.update(width=values[0] or 256,height=values[1] or 256,raw_hex=group[g:g+14].hex(),languages=languages(3,values[7]))
+            try:
+                payload=image(values[7])
+                actual.update(payload_sha256=hashlib.sha256(payload).hexdigest(),payload_size=len(payload),prefix_hex=payload[:32].hex())
+            except Exception as exc:
+                actual['payload_error']=str(exc)[:500]
+            entry['group']=actual
+        result['entries'].append(entry)
+    return result
+
+
+def resource_snapshot_stable(diagnostic, path, icon_path):
+    for key, file in [('pe',path),('source_ico',icon_path)]:
+        try:
+            current=identity(file)
+            diagnostic[key+'_after']=current
+            require(current == diagnostic[key], 'resource '+key+' identity changed')
+        except Exception:
+            diagnostic['identity_stable']=False
+            raise
+    diagnostic['identity_stable']=True
+
+
 def verify_resources(path, app):
     """Read resource bytes from final PE (datafile mapping never executes DllMain)."""
+    pe_identity=identity(path)
     verify_gui_pe(path)
+    icon_path=app/'assets/app-icon.ico'
+    with icon_path.open('rb') as stream:
+        icon=stream.read(1024*1024+1)
+    require(len(icon)<=1024*1024,'source icon diagnostic size cap')
+    diagnostic={'schema':'ru-notepad-resource-diagnostic-v1', 'scope':'diagnostic-only-not-runtime-acceptance',
+                'pe':pe_identity, 'source_ico':{'path':str(icon_path.resolve()),'sha256':hashlib.sha256(icon).hexdigest(),'size':len(icon)}}
     from ctypes import wintypes as w
     kernel = ctypes.WinDLL('kernel32', use_last_error=True)
     kernel.LoadLibraryExW.argtypes = [w.LPCWSTR, w.HANDLE, w.DWORD]
@@ -320,14 +386,43 @@ def verify_resources(path, app):
     kernel.FreeLibrary.restype = w.BOOL
     module = kernel.LoadLibraryExW(str(path), None, 0x22)
     require(module, 'cannot map final resources')
+    cache={}
     def resource(kind, name):
+        key=(kind,name)
+        if key in cache: return cache[key]
         found = kernel.FindResourceW(module, name, kind)
         require(found, 'missing PE resource')
         size = kernel.SizeofResource(module, found)
         pointer = kernel.LockResource(kernel.LoadResource(module, found))
         require(pointer and 0 < size <= 1024*1024, 'invalid resource bytes')
-        return ctypes.string_at(pointer, size)
+        require(sum(map(len,cache.values()))+size <= 16*1024*1024, 'resource snapshot aggregate cap')
+        cache[key]=ctypes.string_at(pointer, size)
+        return cache[key]
+    def languages(kind,name):
+        # FindResourceW selects a language implicitly. Only a unique enumerated
+        # language identifies that selection; otherwise report it as unknown.
+        result={'available_langids':None,'selected_langid':None}
+        try:
+            callback_type=ctypes.WINFUNCTYPE(w.BOOL,w.HMODULE,ctypes.c_void_p,ctypes.c_void_p,w.WORD,ctypes.c_ssize_t)
+            values=[]
+            def collect(module,kind,name,lang,param):
+                if len(values)>=32: return False
+                values.append(int(lang)); return True
+            callback=callback_type(collect)
+            function=kernel.EnumResourceLanguagesW
+            function.argtypes=[w.HMODULE,ctypes.c_void_p,ctypes.c_void_p,callback_type,ctypes.c_ssize_t]
+            function.restype=w.BOOL
+            ok=function(module,kind,name,callback,0)
+            if ok and len(values)==len(set(values)) and values:
+                result.update(available_langids=sorted(values),selected_langid=values[0] if len(values)==1 else None)
+                if len(values)>1: result['selection_reason']='multiple languages; FindResourceW selection not exposed'
+            else: result['unknown_reason']='enumeration failed, empty, duplicate, or bounded out'
+        except Exception as exc:
+            result['unknown_reason']=str(exc)[:300]
+        return result
     try:
+        group=resource(14,1)
+        diagnostic['icon']=icon_resource_diagnostic(icon,group,lambda name:resource(3,name),languages)
         require(resource(24, 1) == (app/'packaging/app.manifest').read_bytes(), 'manifest differs from source')
         version = resource(16, 1)
         fixed = struct.pack('<13I', 0xFEEF04BD, 0x10000, 1, 8 << 16, 1, 8 << 16,
@@ -336,8 +431,7 @@ def verify_resources(path, app):
             for value in ('FileDescription', 'ru_notepad preview', 'FileVersion', '0.1.8-preview',
                           'InternalName', 'OriginalFilename', 'ru_notepad.exe', 'ProductName',
                           'ProductVersion', '040904B0')), 'incorrect version resource')
-        group = resource(14, 1)
-        icon = (app/'assets/app-icon.ico').read_bytes()
+        group = resource(14, 1)  # Same cached bytes described above.
         require(len(group) >= 6 and group[:6] == icon[:6], 'icon group differs')
         count = struct.unpack_from('<H', group, 4)[0]
         require(count > 0 and len(group) == 6+14*count and len(icon) >= 6+16*count, 'truncated icon group')
@@ -346,9 +440,15 @@ def verify_resources(path, app):
             require(group[g:g+12] == icon[i:i+12], 'icon metadata differs')
             size, offset = struct.unpack_from('<II', icon, i+8)
             require(offset+size <= len(icon) and resource(3, struct.unpack_from('<H', group, g+12)[0]) == icon[offset:offset+size], 'icon image differs')
+    except Exception as exc:
+        try: resource_snapshot_stable(diagnostic,path,icon_path)
+        except Exception as changed: diagnostic['identity_error']=str(changed)[:500]
+        raise ResourceEvidenceError(str(exc),diagnostic) from exc
     finally:
         kernel.FreeLibrary(module)
-    return {'passed': True, 'executed': True, 'cleanup_killed': False}
+    try: resource_snapshot_stable(diagnostic,path,icon_path)
+    except Exception as exc: raise ResourceEvidenceError(str(exc),diagnostic) from exc
+    return {'passed': True, 'executed': True, 'cleanup_killed': False, 'resource_diagnostics':diagnostic}
 
 
 def load_windows_harness(app):
@@ -443,6 +543,7 @@ def main():
         verify_log_records(result['results'])  # Last check before publishing the receipt.
     except Exception as exc:
         result = {'schema': SCHEMA, 'status': 'failed', 'release_permission': False, 'error': str(exc)}
+        if isinstance(exc,ResourceEvidenceError): result['resource_diagnostics']=exc.diagnostic
     with args.output.open('x', encoding='utf-8') as output:
         json.dump(result, output, indent=2, ensure_ascii=True)
         output.write('\n')
