@@ -1,3 +1,4 @@
+_密核 取 外言 'markdown_ascii_kernel.ru'.
 # Conservative top-level Markdown heading folds; pure Ru 0.21.6.
 # The bridge drains ordered [startLine,count,depth,header] assignments.
 # It must not expand a long retroactive paragraph range in one UI callback.
@@ -345,6 +346,171 @@
                     若 字 == '\r' 则 态[1] 取 真. 然
                 另
                     _字符 态 字.
+                然
+            然
+        环
+    然
+    若 结束 且 位 == 长 且 (列 其 量) < 60 则
+        _行 态 列. _完段 态 列. 态[2] 取 真.
+    然
+    得 {'folds':列,'used':位,'line':态[0],'bytes':态[23],'finished':态[2]}.
+法
+# Experimental source-generated readonly-u8 bridge entry. The ordinary 喂入
+# above remains byte-for-byte the a09 oracle. Both entries use the SAME helpers,
+# state, alias graph, range pause/CR handling and final deferred materialization.
+# Caller owns the UTF8 adaptation buffer through this synchronous call, and must
+# pass its exact text byte length (excluding NUL). No view is retained in state.
+算 喂入视图 态 文 为 句 结束 为 事实 字节块 字节末 为 数:
+    # _宽 returns at most four bytes per scalar. Keep the original scalar-limit
+    # check before any state access; a separate full byte-count pass is redundant.
+    若 文 其 量 > 1024 则 卒 'Markdown input exceeds 1024 Unicode scalars.'. 然
+    列 取 []. 位 取 0.
+    若 态[2] 则
+        若 文 != '' 或 非 结束 则 卒 'Markdown state is already finished.'. 然
+        得 {'folds':列,'used':0,'line':态[0],'bytes':态[23],'finished':真}.
+    然
+    长 取 文 其 量.
+    块始字节 取 态[23].
+    窗 取 ''. 窗始 取 0. 窗末 取 0.
+    # Local deferral is eligible only after this active-fence line cannot close.
+    # Keep the original route for chunks with no newline, including long lines.
+    若 态[6] != '' 且 态[8] == '' 且 非 (文 其 含 '>') 且 ((文 其 含 '\r') 或 (文 其 含 '\n')) 则
+        缓始 取 -1.
+        循
+            若 位 >= 长 或 (列 其 量) >= 60 则 破. 然
+            # A complete, non-closing ASCII line batch has one compressed
+            # fold assignment. Fresh-line and queue guards preserve the exact
+            # public feed boundary and retained closer/header alias behavior.
+            批长 取 0.
+            栈 取 态[3].
+            若 非 态[20] 且 非 态[1] 且 缓始 < 0 且 (列 其 量) < 59 且 态[6] != '' 且 态[8] == '' 且 ((栈 其 量) == 0 或 栈[(栈 其 量)-1][3]) 则
+                围栏字节 取 96. 若 态[6] == '~' 则 围栏字节 取 126. 然
+                批长 取 _密核 其 安全围栏段 字节块 (态[23]-块始字节) 字节末 围栏字节.
+            然
+            若 批长 > 0 则
+                批始 取 态[23]-块始字节.
+                批行 取 _密核 其 计换行 字节块 批始 (批始+批长).
+                _行 态 列.
+                若 批行 > 1 则 _加 列 (态[0]+1) (批行-1) (态[3] 其 量) 假. 然
+                态[0] 取 态[0]+批行. 态[23] 取 态[23]+批长. 位 取 位+批长.
+                _清行 态. 态[1] 取 假.
+            另
+                # The byte cursor is explicit: state bytes consumed since this feed.
+                # Only ASCII makes byte run length equal the ordinary scalar count.
+                连长 取 0.
+                若 态[6] != '' 且 态[8] == '' 且 (态[9] > 3 或 (非 态[10] 且 态[13] != 态[6])) 则
+                    连长 取 _密核 其 ASCII段 字节块 (态[23]-块始字节) 字节末.
+                然
+                若 连长 > 0 则
+                    若 缓始 < 0 则 缓始 取 位. 然
+                    位 取 位+连长. 态[23] 取 态[23]+连长. 态[1] 取 假.
+                另
+                    若 位 >= 窗末 则
+                        窗始 取 位. 窗末 取 位+32.
+                        若 窗末 > 长 则 窗末 取 长. 然
+                        窗 取 文[窗始:窗末].
+                    然
+                    字 取 窗[位-窗始]. 位 取 位+1.
+                    若 字 < '' 则
+                        态[23] 取 态[23]+1.
+                    另
+                        若 字 < 'ࠀ' 则
+                            态[23] 取 态[23]+2.
+                        另
+                            若 字 < '𐀀' 则
+                                态[23] 取 态[23]+3.
+                            另
+                                态[23] 取 态[23]+4.
+                            然
+                        然
+                    然
+                    若 字 == '\n' 且 态[1] 则
+                        态[1] 取 假.
+                    另
+                        态[1] 取 假.
+                        若 字 == '\r' 或 字 == '\n' 则
+                            _行 态 列. 缓始 取 -1.
+                            态[0] 取 态[0]+1. _清行 态.
+                            若 字 == '\r' 则 态[1] 取 真. 然
+                        另
+                            若 字 != '>' 且 态[6] != '' 且 态[8] == '' 且 (态[9] > 3 或 (非 态[10] 且 态[13] != 态[6])) 则
+                                若 缓始 < 0 则 缓始 取 位-1. 然
+                            另
+                                # A retained closer-flags array must observe every >.
+                                若 缓始 >= 0 则
+                                    循
+                                        若 缓始 >= 位-1 则 破. 然
+                                        _字符 态 文[缓始]. 缓始 取 缓始+1.
+                                    环
+                                    缓始 取 -1.
+                                然
+                                _字符 态 字.
+                            然
+                        然
+                    然
+                然
+            然
+        环
+        # EOF keeps line fields, and every public return exposes all 24 slots.
+        若 缓始 >= 0 则
+            循
+                若 缓始 >= 位 则 破. 然
+                _字符 态 文[缓始]. 缓始 取 缓始+1.
+            环
+        然
+    另
+        循
+            若 位 >= 长 或 (列 其 量) >= 60 则 破. 然
+            # At a saturated prefix, a uniform ASCII run can preserve every
+            # state field without per-scalar work. Keep its final 11 scalars on
+            # the ordinary path to materialize the exact lowercase rolling tail.
+            连长 取 0. 同首 取 假.
+            若 非 态[10] 且 (态[11] 其 量) == 32 则
+                若 非 态[15] 则
+                    同首 取 文[位] == 态[13].
+                然
+                若 同首 或 (态[15] 且 非 态[16]) 则
+                    连长 取 _密核 其 重复ASCII段 字节块 (态[23]-块始字节) 字节末.
+                然
+            然
+            若 连长 > 11 则
+                跳过 取 连长-11.
+                态[12] 取 态[12]+跳过.
+                若 同首 则 态[14] 取 态[14]+跳过. 然
+                态[23] 取 态[23]+跳过. 位 取 位+跳过. 态[1] 取 假.
+                循 11 次
+                    _字符 态 文[位]. 位 取 位+1. 态[23] 取 态[23]+1.
+                环
+            另
+                若 位 >= 窗末 则
+                    窗始 取 位. 窗末 取 位+32.
+                    若 窗末 > 长 则 窗末 取 长. 然
+                    窗 取 文[窗始:窗末].
+                然
+                字 取 窗[位-窗始]. 位 取 位+1.
+                若 字 < '' 则
+                    态[23] 取 态[23]+1.
+                另
+                    若 字 < 'ࠀ' 则
+                        态[23] 取 态[23]+2.
+                    另
+                        若 字 < '𐀀' 则
+                            态[23] 取 态[23]+3.
+                        另
+                            态[23] 取 态[23]+4.
+                        然
+                    然
+                然
+                若 字 == '\n' 且 态[1] 则
+                    态[1] 取 假.
+                另
+                    态[1] 取 假.
+                    若 字 == '\r' 或 字 == '\n' 则
+                        _行 态 列. 态[0] 取 态[0]+1. _清行 态.
+                        若 字 == '\r' 则 态[1] 取 真. 然
+                    另
+                        _字符 态 字.
+                    然
                 然
             然
         环

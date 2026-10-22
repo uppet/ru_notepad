@@ -11,6 +11,11 @@
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
 策 取 外言 'markdown_policy.ru'.
+密策 取 外言 'markdown_dense.ru'.
+增策 取 外言 'markdown_incremental.ru'.
+_增量策略 取 {'enabled':假}.
+_增量们 取 {}.
+_密扫描策略 取 {'enabled':假}.
 _编辑们 取 {}.
 _序号 取 [0].
 _身份 取 [0].
@@ -186,8 +191,19 @@ _时存 取 _计数型 其 新建.
     然
     得 空.
 法
+算 _增量 柄 态:
+    若 非 _增量策略['enabled'] 则 得 空. 然
+    项 取 _增量们 其 查 (柄 其 句).
+    若 项 == 空 或 项['identity'] != 态['identity'] 则
+        项 取 {'identity':态['identity'],'cache':(增策 其 新缓存)}.
+        _增量们 其 增 (柄 其 句) 项.
+    然
+    得 项['cache'].
+法
 算 _丢弃 柄 态:
     若 态 == 空 则 得 空. 然
+    增 取 _增量们 其 查 (柄 其 句).
+    若 增 != 空 且 增['identity'] == 态['identity'] 则 _增量们 其 除 (柄 其 句). 然
     计 取 _批统计们 其 查 (柄 其 句).
     若 计 != 空 且 计['identity'] == 态['identity'] 则 _批统计们 其 除 (柄 其 句). 然
     若 _本态 柄 态 则 _编辑们 其 除 (柄 其 句). 然
@@ -375,6 +391,11 @@ _时存 取 _计数型 其 新建.
 算 变化 柄 位置 为 数 长度 为 数 加行 为 数 修改 为 数:
     旧 取 _编辑们 其 查 (柄 其 句).
     若 旧 == 空 或 旧['language'] != 'markdown' 或 修改 % 4 == 0 或 非 (_同线程 柄) 则 得 假. 然
+    新增 取 空.
+    若 _增量策略['enabled'] 则
+        旧增 取 _增量 柄 旧.
+        新增 取 增策 其 修订 旧增 位置 长度 加行 修改 旧['pending'].
+    然
     # Even inside a running tick, invalidate synchronously. No native messages
     # are sent from SCN_MODIFIED; the next timer snapshots size and expands.
     态 取 _建态 柄 旧['generation'] (旧['revision']+1) 旧['document'].
@@ -394,6 +415,7 @@ _时存 取 _计数型 其 新建.
     然
     _丢弃 柄 旧.
     _编辑们 其 增 (柄 其 句) 态.
+    若 新增 != 空 则 _增量们 其 增 (柄 其 句) ({'identity':态['identity'],'cache':新增}). 然
     得 真.
 法
 算 设置折叠 柄 开启 为 事实:
@@ -723,20 +745,38 @@ _时存 取 _计数型 其 新建.
         _配折叠 柄 态.
         _检查 柄 态.
         态 其 增 'phase' 'scan'.
+        增 取 _增量 柄 态.
+        若 增 != 空 则
+            起态 取 增策 其 开始 增 态['length'] 态['lines'].
+            若 起态 != 空 则
+                增 其 增 'dirtyLine' ((_讯 柄 态 2166 增['dirtyEnd'] 0) 其 数).
+                态 其 增 'policy' 起态. 态 其 增 'feed' 起态[23]. 态 其 增 'readEnd' 起态[23].
+            然
+        然
         得 空.
     然
     若 (态['ranges']) 其 量 > 0 则 _发布 柄 态. 得 空. 然
+    增 取 _增量 柄 态.
+    若 增 != 空 且 态['chunk'] == '' 且 非 态['eof'] 则
+        末态 取 增策 其 观察 增 态['policy'].
+        若 末态 != 空 则
+            态 其 增 'policy' 末态. 态 其 增 'feed' 态['length'].
+            态 其 增 'readEnd' 态['length']. 态 其 增 'eof' 真.
+        然
+    然
     若 态['eof'] 则
         # finished means EOF AND the entire last range batch has been published.
         若 态['feed'] != 态['length'] 或 态['chunk'] != '' 则 卒 'Premature Markdown EOF.'. 然
         _讯 柄 态 2663 5 0.
         _检查 柄 态.
         态 其 增 'pending' 假.
+        若 增 != 空 则 增策 其 完成 增 态['policy']. 然
         得 空.
     然
     始 取 态['feed'].
     若 态['chunk'] == '' 且 始 < 态['length'] 则
         末 取 始+1024.
+        若 增 != 空 则 末 取 增策 其 读末 增 始 末. 然
         若 末 >= 态['length'] 则 末 取 态['length']. 另 末 取 (_讯 柄 态 2417 (末+1) 0) 其 数. 然
         若 末 <= 始 或 末-始 > 1024 则 卒 'Invalid Markdown UTF-8 boundary.'. 然
         文 取 _读块 柄 态 始 末.
@@ -746,7 +786,11 @@ _时存 取 _计数型 其 新建.
         若 末-始 > 态['maxRead'] 则 态 其 增 'maxRead' (末-始). 然
     然
     文 取 态['chunk'].
-    果 取 策 其 喂入 态['policy'] 文 (态['readEnd'] == 态['length']).
+    若 _密扫描策略['enabled'] 则
+        果 取 密策 其 喂入 态['policy'] 文 (态['readEnd'] == 态['length']).
+    另
+        果 取 策 其 喂入 态['policy'] 文 (态['readEnd'] == 态['length']).
+    然
     _护 柄 态.
     用 取 果['used'].
     若 用 < 0 或 用 > 文 其 量 则 卒 'Invalid Markdown consumed scalar count.'. 然
