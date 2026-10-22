@@ -24,6 +24,10 @@ class AcquisitionTests(unittest.TestCase):
         self.assertEqual(a.failure_diagnostics(a.urllib.error.URLError('private-reason'),1), (1,2,0))
         self.assertEqual(a.failure_diagnostics(RuntimeError('private-path'),{'private':1}), (0,99,0))
 
+    def test_marker_metadata_only_fixed_numeric_hash(self):
+        data = zipped([('notepad++.exe',b'fake'),('doLocalConf.xml',b'official-like-content'),('other-private-name',b'secret')])
+        self.assertEqual(a.marker_metadata(data), [(0,1,21,a.digest(b'official-like-content')),(1,0,0,'0'*64)])
+
     def test_hash_and_size(self):
         a.verify(b'abc', 3, a.digest(b'abc'))
         for size, sha in ((4, a.digest(b'abc')), (3, '0'*64)):

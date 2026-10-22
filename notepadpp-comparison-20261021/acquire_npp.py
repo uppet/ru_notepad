@@ -131,6 +131,19 @@ def safe_members(archive):
     return infos
 
 
+def marker_metadata(data):
+    # Called only after the pinned archive and checksum checks; never print bytes/names.
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        entries = {entry.filename.casefold(): entry for entry in safe_members(archive)}
+        result = []
+        for index, name in enumerate(('doLocalConf.xml', 'disableNppAutoUpdate.xml')):
+            entry = entries.get(name.casefold())
+            content = archive.read(entry) if entry is not None and not entry.is_dir() else None
+            result.append((index, int(content is not None), len(content) if content is not None else 0,
+                           digest(content) if content is not None else '0' * 64))
+        return result
+
+
 def extract(data, destination):
     destination = Path(destination)
     # Caller supplies an owned, existing parent; do not follow symlink parents.
@@ -193,6 +206,9 @@ def main():
     filename = 'npp.8.9.8.1.portable.x64.zip'
     verify_checksums(acquired['npp.8.9.8.1.checksums.sha256'], filename, PINS[filename][1])
     ACQUIRE_STAGE = 4
+    import sys
+    for index, present, size, sha in marker_metadata(acquired[filename]):
+        print(f'COMPARISON_MARKER_ID={index} PRESENT={present} BYTES={size} SHA256={sha}', file=sys.stderr)
     print(json.dumps(extract(acquired[filename], args.destination), sort_keys=True))
 
 
