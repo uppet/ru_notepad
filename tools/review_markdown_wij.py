@@ -72,7 +72,7 @@ def native_child(ru, runtime, output, ordinary=False):
     sys.argv = [str(script), '--app-root', str(ROOT), '--runtime', str(runtime), '--output', str(output)]
     module.main()
     require(calls == [120], 'native functional timeout not exercised')
-    result = json.loads((output / 'result.json').read_text())
+    result = json.loads((output / 'result.json').read_text(encoding='utf-8'))
     require(result.get('passed') is True and result.get('gc_live_zero') is True, 'native result failed')
     require(result.get('stdout') == 'NATIVE_ALL_FOLDS 42\nINCREMENTAL_NATIVE_PASS\n', 'native case inventory changed')
 
@@ -190,7 +190,7 @@ def main():
         # Not a product BUILD.json and never packaged or uploaded as a runtime.
         (runtime / 'BUILD.json').write_text(json.dumps({'development_only': True,
             'binaries': {n: {'sha256': h} for n, h in dlls.items()},
-            'source': {'tracked_source_sha256': {n: h for n, h in source.items() if n.startswith('native/')}}}) + '\n')
+            'source': {'tracked_source_sha256': {n: h for n, h in source.items() if n.startswith('native/')}}}) + '\n', encoding='utf-8')
         receipt['dll_sha256'] = dlls
         sys.path.insert(0, str(ru))
         from rulang.llvm_toolchain import LLVMToolchain

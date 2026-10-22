@@ -3387,6 +3387,30 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 with patch.object(Path, 'read_text', read_text), self.assertRaises(AssertionError):
                     self.test_markdown_selection_invalidates_native_prefix_and_requires_natural_paint()
 
+    def test_markdown_incremental_cleanup_contract_rejects_missing_moved_or_unguarded_cleanup(self):
+        # Source-contract negatives, not a replacement for actual native tests.
+        path = ci.ROOT / 'src/markdown_syntax.ru'
+        source = path.read_text(encoding='utf-8')
+        original_read_text = Path.read_text
+        lookup = "    增 取 _增量们 其 查 (柄 其 句).\n"
+        cleanup = "    若 增 != 空 且 增['identity'] == 态['identity'] 则 _增量们 其 除 (柄 其 句). 然\n"
+        delta = lookup + cleanup
+        anchor = "算 _丢弃 柄 态:\n    若 态 == 空 则 得 空. 然\n"
+        self.assertEqual(source.count(anchor + delta), 1)
+        mutations = (
+            source.replace(anchor + delta, anchor),
+            source.replace(cleanup, cleanup.replace(" 且 增['identity'] == 态['identity']", ''), 1),
+            source.replace(anchor + delta, "算 _丢弃 柄 态:\n" + delta + "    若 态 == 空 则 得 空. 然\n", 1),
+            source.replace(anchor + delta, anchor + lookup, 1),
+            source.replace(anchor + delta, anchor + delta + delta, 1),
+        )
+        for index, mutated in enumerate(mutations):
+            with self.subTest(mutation=index):
+                def read_text(actual, *args, **kwargs):
+                    return mutated if actual == path else original_read_text(actual, *args, **kwargs)
+                with patch.object(Path, 'read_text', read_text), self.assertRaises(AssertionError):
+                    self.test_markdown_publisher_keeps_reviewed_full_guards_and_prepared_expansion()
+
     def test_markdown_publisher_keeps_reviewed_full_guards_and_prepared_expansion(self):
         # Reviewed source contract only. Actual callback/contraction behavior is
         # separately required from markdown_native and the detached GUI cases.
@@ -3398,6 +3422,18 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             self.assertEqual(len(functions), 1, name)
             code = '\n'.join(line.strip() for line in functions[0].splitlines()
                              if line.strip() and not line.lstrip().startswith('#'))
+            if name == '_丢弃':
+                # wij adds only identity-gated incremental-cache cleanup here.
+                # Require its exact content/position, then retain the original
+                # complete publisher-guard hash rather than blessing a new one.
+                additions = ("增 取 _增量们 其 查 (柄 其 句).",
+                    "若 增 != 空 且 增['identity'] == 态['identity'] 则 _增量们 其 除 (柄 其 句). 然")
+                for line in additions:
+                    self.assertEqual(code.splitlines().count(line), 1)
+                delta = '\n'.join(additions) + '\n'
+                prefix = "若 态 == 空 则 得 空. 然\n" + delta + "计 取 _批统计们 其 查 (柄 其 句).\n"
+                self.assertTrue(code.startswith(prefix))
+                code = code.replace(delta, '', 1)
             if name == '状态':
                 self.assertEqual(code.count("'warning':(_警告 态)"), 1)
                 code = code.replace("'warning':(_警告 态)", "'warning':态['warning']")

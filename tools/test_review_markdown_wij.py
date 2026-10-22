@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Offline negative controls for the development review wrapper, not native proof."""
+import ast
 import importlib.util
 import json
 from pathlib import Path
@@ -25,7 +26,7 @@ class ReviewContracts(unittest.TestCase):
         module = types.SimpleNamespace(SOURCE="(折 其 _密扫描策略) 其 增 'enabled' 真.")
         def main():
             module.subprocess.run([str(out / 'program.exe')], timeout=timeout)
-            (out / 'result.json').write_text(json.dumps({'passed': True, 'gc_live_zero': True, 'stdout': stdout}))
+            (out / 'result.json').write_text(json.dumps({'passed': True, 'gc_live_zero': True, 'stdout': stdout}), encoding='utf-8')
         module.main = main
         fake_spec = types.SimpleNamespace(loader=types.SimpleNamespace(exec_module=lambda _: None))
         with patch.object(review.importlib.util, 'spec_from_file_location', return_value=fake_spec), \
@@ -49,13 +50,13 @@ class ReviewContracts(unittest.TestCase):
                 self.native_fixture(stdout=stdout)
 
     def test_workflow_keeps_development_separate_and_uploads_only_receipts(self):
-        text = (HERE.parent / '.github/workflows/wij-development.yml').read_text()
+        text = (HERE.parent / '.github/workflows/wij-development.yml').read_text(encoding='utf-8')
         self.assertIn('ref: ' + review.COMPILER, text)
         self.assertIn('fetch-depth: 0', text)
         self.assertIn('path: build/wij-development/evidence/*.json', text)
         self.assertNotIn('package.py', text)
         self.assertNotIn('release', text.replace('ZIP release', ''))
-        product = (HERE.parent / '.github/workflows/windows.yml').read_text()
+        product = (HERE.parent / '.github/workflows/windows.yml').read_text(encoding='utf-8')
         self.assertIn('ref: 85c7821fda35aa79deeaf67b4d430f24ddd7f07f', product)
 
     def test_ordinary_native_changes_only_dense_activation(self):
@@ -85,10 +86,10 @@ class ReviewContracts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory); evidence = out / 'evidence'; evidence.mkdir()
             failed = out / 'benchmark/control-1/result.json'; failed.parent.mkdir(parents=True)
-            failed.write_text('{"passed":false}')
-            (failed.parent / 'private.log').write_text('not uploaded')
+            failed.write_text('{"passed":false}', encoding='utf-8')
+            (failed.parent / 'private.log').write_text('not uploaded', encoding='utf-8')
             native = out / 'native-helper/RuSyntax.native-build.json'; native.parent.mkdir()
-            native.write_text('{}')
+            native.write_text('{}', encoding='utf-8')
             review.collect_evidence(out, evidence)
             self.assertEqual({p.name for p in evidence.iterdir()},
                              {'benchmark-control-1.json', 'native-source-build.json'})
@@ -103,8 +104,27 @@ class ReviewContracts(unittest.TestCase):
             self.assertEqual(len(tail), 4096)
             self.assertTrue(tail.endswith('end'))
 
+    def test_review_text_io_has_explicit_utf8_except_deliberate_regression_probe(self):
+        missing = []
+        for name in ('review_markdown_wij.py', 'review_markdown_ordinary_pair.py', 'test_review_markdown_wij.py'):
+            source = (HERE / name).read_text(encoding='utf-8')
+            for node in ast.walk(ast.parse(source)):
+                if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                        and node.func.attr in ('read_text', 'write_text')
+                        and not any(k.arg == 'encoding' for k in node.keywords)):
+                    missing.append((name, ast.get_source_segment(source, node)))
+        self.assertEqual(missing, [('test_review_markdown_wij.py',
+                         "(HERE.parent / 'src/markdown_syntax.ru').read_text()")])
+
+    def test_source_flag_check_is_independent_of_windows_default_encoding(self):
+        with patch('io.text_encoding', side_effect=lambda encoding, *args: encoding or 'cp1252'):
+            self.test_production_flags_remain_false()
+            # Prove the old locale-dependent source read fails under this model.
+            with self.assertRaises(UnicodeDecodeError):
+                (HERE.parent / 'src/markdown_syntax.ru').read_text()
+
     def test_production_flags_remain_false(self):
-        text = (HERE.parent / 'src/markdown_syntax.ru').read_text()
+        text = (HERE.parent / 'src/markdown_syntax.ru').read_text(encoding='utf-8')
         for name in ('_密扫描策略', '_增量策略'):
             self.assertEqual(text.count(name + " 取 {'enabled':假}."), 1)
 

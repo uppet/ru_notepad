@@ -20,7 +20,7 @@ def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def pair_proof(builds):
-    receipts = {arm: json.loads((p / 'experiment-build.json').read_text()) for arm, p in builds.items()}
+    receipts = {arm: json.loads((p / 'experiment-build.json').read_text(encoding='utf-8')) for arm, p in builds.items()}
     a, b = receipts['control'], receipts['incremental']
     assert a['incremental'] is False and b['incremental'] is True
     assert a['arm'] == b['arm'] == 'ordinary' and a['target'] == b['target'] == 'c-llvm'
@@ -80,13 +80,13 @@ def main():
                 process.wait(timeout=5)
                 raise
         # An infrastructure failure lacking an original-gate result is not a censored sample.
-        result = json.loads((work / 'result.json').read_text())
+        result = json.loads((work / 'result.json').read_text(encoding='utf-8'))
         assert result['runtime_sha256']['ru_notepad.exe'] == receipts[arm]['exe_sha256'] == sha(builds[arm] / 'ru_notepad.exe')
         assert all(result['runtime_sha256'][n] == h for n, h in receipts[arm]['dependencies'].items())
         status = classification(result)
         assert (process.returncode == 0) == (status == 'complete')
         runs.append({'name': name, 'arm': arm, 'classification': status, 'result': result})
-        (out / 'runs.json').write_text(json.dumps(runs, indent=2) + '\n')
+        (out / 'runs.json').write_text(json.dumps(runs, indent=2) + '\n', encoding='utf-8')
     candidate_pass = all(r['classification'] == 'complete' for r in runs if r['arm'] == 'incremental')
     baseline_valid = all(r['classification'] in ('complete', 'original_30s_timeout') for r in runs if r['arm'] == 'control')
     complete = all(r['classification'] == 'complete' for r in runs)
@@ -110,7 +110,7 @@ def main():
                'statistical_significance_claim': False, 'bootstrap': False, 'full_product_acceptance': False,
                'builds': receipts, 'comparison': comparison,
                'sample_status': [{k: r[k] for k in ('name', 'arm', 'classification')} for r in runs]}
-    (out / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+    (out / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({k: summary[k] for k in ('passed', 'comparison_complete', 'sample_status')}))
     raise SystemExit(0 if summary['passed'] else 1)
 
