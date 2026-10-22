@@ -224,7 +224,7 @@ passed; see that run's exact-commit results and distribution validation receipt.
 
 ## Ru-owned native acceptance
 
-The production lexical policy has **338 portable assertions**, replaying small
+The production lexical policy has **380 portable assertions**, replaying small
 fixtures at different scalar boundaries. The real Scintilla bridge requires **149
 assertions** for byte styles, fold levels, incomplete multiline edits, bounded
 reads, checkpoint convergence, stale document generations, fallback visibility,
@@ -331,3 +331,19 @@ Syntax acceptance is 144 (previous 138 plus 6), total product assertions 2077
 in 39 groups. State values are printed before the growth assertion. The
 one-shot push diagnostic trigger is removed; a complete Windows regression
 run remains required before packaging. No earlier failed run is relabelled.
+
+## Conditional-chain editing validation
+
+`另若` is recognized as one keyword and shares the existing conditional frame;
+spaced `另 若` remains nested. The interpreter and native scanner consume the
+same Ru-owned keyword table. This is editor support, not an upgrade of the
+bundled compiler pin.
+
+The historical fast-prefix proof retains the exact `a5f5fd8` baseline identity,
+frozen 196-case input plan and all 12 source-guard mutations. Its comparison
+applies the same narrowly pinned conditional-chain semantics to both policies;
+schema 2 records the original baseline hash separately from the adapted hash.
+This verifies the prefix optimization under the extended grammar, not unchanged
+historical grammar output or a new performance result. The original lexical
+fixture bytes remain checked after removing only the hash-pinned six-case
+addition; its 42 assertions bring the full oracle from 338 to 380.

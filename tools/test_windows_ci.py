@@ -406,7 +406,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'syntax_native': r'^TOTAL PASS: 144\s*$',
             'app_ru_native': r'^TOTAL PASS: 73\s*$',
             'app_ru_timer_native': r'^TOTAL PASS: 8\s*$',
-            'ru_lexical_policy': r'^TOTAL PASS: 338\s*$',
+            'ru_lexical_policy': r'^TOTAL PASS: 380\s*$',
             'ru_syntax_native': r'^TOTAL PASS: 149\s*$',
             'ru_direct_styling_native': r'^TOTAL PASS: 36\s*$',
             'markdown_policy': r'^TOTAL PASS: 221\s*$',
@@ -549,6 +549,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 target.write_bytes((ci.ROOT / name).read_bytes())
         # Historical bytes are represented by their reviewed digests here; the
         # real integration proof reads the exact public baseline checkout.
+        fixture_path = baseline / 'tests/ru_lexical_policy.ru'
+        fixture_path.write_bytes(proof.historical_fixture(fixture_path.read_bytes()))
         real_sha = proof.sha
         digests = {b'historical:' + (candidate / name).read_bytes(): before
                    for name, (before, after) in proof.LOCALIZED_BRIDGE_SHA256.items()}
@@ -566,6 +568,31 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     with self.assertRaises(AssertionError, msg=str(path)):
                         proof.verify_shared_inputs(baseline, candidate)
                     path.write_bytes(original)
+
+    def test_prefix_proof_elif_adaptation_is_exact_and_preserves_old_guards(self):
+        import test_ru_policy_fast as proof
+        candidate = (ci.ROOT / 'src/ru_lexical.ru').read_text(encoding='utf-8')
+        before = candidate.replace(proof.PREFIX_SOURCE, '', 1).replace(
+            '    循 ((事件 其 量)-位) 次\n', '    循 事件 其 量 次\n', 1)
+        before = before.replace(
+            '    # close anything. The batch prefix duplicates only this exact transition;\n'
+            '    # tools/test_ru_policy_fast.py guards both copies and the original fallback.\n',
+            '    # close anything. Keep this shortcut inside the sole shared grammar policy.\n')
+        for old, new, count in reversed(proof.ELIF_SOURCE_REPLACEMENTS):
+            self.assertEqual(before.count(new), count)
+            before = before.replace(new, old)
+        self.assertEqual(proof.sha(before.encode()), proof.BASE_SOURCE_SHA256)
+        adapted = proof.adapt_baseline(before)
+        self.assertEqual(proof.sha(adapted.encode()), proof.ADAPTED_BASE_SOURCE_SHA256)
+        proof.verify_transition(adapted, candidate)
+        proof.verify_guard_rejections(adapted, candidate)
+        self.assertEqual(len(proof.GUARD_MUTATIONS), 12)
+        for source in (before + '\n', adapted, before.replace("'非':36", "'非':35", 1)):
+            with self.assertRaises(AssertionError):
+                proof.adapt_baseline(source)
+        for old, new, _ in proof.ELIF_SOURCE_REPLACEMENTS:
+            with self.assertRaises(AssertionError):
+                proof.verify_transition(adapted, candidate.replace(new, old, 1))
 
     def test_style_diagnostic_controls_are_mandatory_on_both_hosts(self):
         workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
@@ -1320,12 +1347,12 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                  'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}
         prior = [test for test in summary['tests'] if test['name'] not in added]
         self.assertEqual(len(prior), 33)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487 + 90 + 6 + 103)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487 + 90 + 6 + 103 + 42)
         baseline = [test for test in summary['tests'] if test['name'] not in
                     {'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
         self.assertEqual(len(baseline), 39)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in baseline), 2077 + 103)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 2077 + 103 + 289 + 69 + 1606)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in baseline), 2077 + 103 + 42)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 2077 + 103 + 289 + 69 + 1606 + 42)
 
     def test_direct_style_fixture_is_built_packaged_and_required(self):
         name = 'ru_direct_styling_native'
@@ -3138,7 +3165,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         prior = [t for t in summary['tests'] if t['name'] not in
                  {'markdown_direct_native', 'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
         self.assertEqual(len(prior), 38)
-        self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1867 + 90 + 6 + 103)
+        self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1867 + 90 + 6 + 103 + 42)
         self.assertEqual(direct['assertions_passed'], 114)
         self.assertEqual(ci.console_command('markdown_direct_native', self.root, self.root),
                          [str(self.root / 'markdown_direct_native.exe')])

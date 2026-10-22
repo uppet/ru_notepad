@@ -20,12 +20,14 @@ BASE_COMMIT = 'a5f5fd825767cd5af662cba792f5ce352991c21e'
 BASE_TREE = 'e8a402fb3eb551bfe416b8aee0aaaf942d2d4f4a'
 BASE_POLICY_BLOB = '876a99f76db706cfd76427b9341ee5f05180ce0d'
 BASE_SOURCE_SHA256 = 'f78589e247186890855526f7bb3624d34e4004bb8fbc69587c96d38c826a602c'
+GRAMMAR_ADAPTATION = 'ru-0.23.0-elif-v1'
+ADAPTED_BASE_SOURCE_SHA256 = '1887d1daceeb71f6c046c962142ef1b99ffe3a0b73770686dd4f9b3025e9b8ae'
 RU_COMMIT = '85c7821fda35aa79deeaf67b4d430f24ddd7f07f'
 RU_TREE = 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba'
 CANONICAL_PLAN_SHA256 = 'a712c3b5c70e5bfe4ae09900d928f594c2c88bb49448d40ca15422b09a015e90'
 PLAN_CONTENT_SHA256 = '0183679cfac0583d3a160e7ab7549967fe6b53b87b605647f2da3ce09c171616'
 TOTALS = {'cases':196,'batches':19627,'events':2554,'context_transitions':21504}
-SCOPE = 'Actual interpreter and ordinary generated host C. No native import or platform guard substitution; no Windows/GUI speed claim.'
+SCOPE = 'Actual interpreter and ordinary generated host C, with the same explicit Ru 0.23.0 elif grammar adaptation on the historical baseline. Not the original historical baseline output; no Windows/GUI speed claim.'
 LOG_NAMES = ('interpreter.log',)+tuple(f'host-c-{i}.log' for i in range(4))
 PUBLIC_FILE_LIMITS = {'report.json':64*1024,'fixture-manifest.json':256*1024,
                       'ordered-output-validation.json':16*1024,
@@ -33,7 +35,7 @@ PUBLIC_FILE_LIMITS = {'report.json':64*1024,'fixture-manifest.json':256*1024,
 EXPECTED_INPUT_KEYS = frozenset(('baseline_commit','baseline_tree','baseline_source_sha256',
     'toolchain_commit','toolchain_tree','candidate_sha256','test_script_sha256',
     'verifier_source_sha256','canonical_plan_sha256'))
-REPORT_KEYS = frozenset(('schema_version','status','baseline_commit','baseline_tree','baseline_policy_blob',
+REPORT_KEYS = frozenset(('schema_version','status','grammar_adaptation','baseline_adapted_source_sha256','baseline_commit','baseline_tree','baseline_policy_blob',
     'toolchain_commit','toolchain_tree','baseline_source_sha256','candidate_sha256','probe_sha256',
     'test_script_sha256','fixture_manifest_sha256','canonical_plan_sha256','plan_content_sha256',
     'host_c_shards','totals_per_backend','timings','edit_replay_cases','boundary_cases','boundary_count',
@@ -48,7 +50,7 @@ OUTPUT_CHECKED = False
 
 CONTROL_NAMES = (
     'changed-candidate','changed-test-script','changed-verifier','changed-baseline',
-    'changed-toolchain','changed-plan-hash','pending-report','extra-report-field',
+    'changed-adapted-baseline','changed-grammar-adaptation','changed-toolchain','changed-plan-hash','pending-report','extra-report-field',
     'missing-report-field','wrong-total','bool-count','false-artifact-flag',
     'integer-compaction-flag','nan-timing','negative-timing','reordered-shards',
     'missing-shard','extra-shard','wrong-shard-count','integer-order-boolean',
@@ -221,8 +223,10 @@ def validate_public_evidence(directory, expected_inputs):
     manifest = strict_json(data['fixture-manifest.json'])
     order = strict_json(data['ordered-output-validation.json'])
     fields(report,REPORT_KEYS,'report-fields')
-    require(type(report['schema_version']) is int and report['schema_version'] == 1,'report-schema')
+    require(type(report['schema_version']) is int and report['schema_version'] == 2,'report-schema')
     require(report['status'] == 'passed','report-status')
+    require(report['grammar_adaptation'] == GRAMMAR_ADAPTATION and
+            report['baseline_adapted_source_sha256'] == ADAPTED_BASE_SOURCE_SHA256, 'adapted-baseline')
     require(all(report[key] == value for key,value in expected_inputs.items()),'source-bindings')
     require(report['baseline_policy_blob'] == BASE_POLICY_BLOB,'baseline-blob')
     require(report['fixture_manifest_sha256'] == sha(data['fixture-manifest.json']) == CANONICAL_PLAN_SHA256,'manifest-bytes')
@@ -293,6 +297,8 @@ def verify_negative_controls(data, expected):
             ('changed-test-script','report.json',('test_script_sha256',),'0'*64),
             ('changed-verifier','report.json',('verifier_source_sha256',),'0'*64),
             ('changed-baseline','report.json',('baseline_commit',),'0'*40),
+            ('changed-adapted-baseline','report.json',('baseline_adapted_source_sha256',),'0'*64),
+            ('changed-grammar-adaptation','report.json',('grammar_adaptation',),'unreviewed'),
             ('changed-toolchain','report.json',('toolchain_tree',),'0'*40),
             ('changed-plan-hash','report.json',('canonical_plan_sha256',),'0'*64),
             ('pending-report','report.json',('status',),'pending_order_verification'),
@@ -392,7 +398,8 @@ def main():
     verify_inputs(expected)
     require(all(report[key] == value for key,value in expected.items() if key != 'verifier_source_sha256'),'local-source-bindings')
     require(digest(OUT/'differential.ru') == report['probe_sha256'],'local-probe')
-    require(digest(OUT/'baseline.ru') == BASE_SOURCE_SHA256,'local-baseline')
+    require(digest(OUT/'baseline.ru') == report['baseline_adapted_source_sha256'] == ADAPTED_BASE_SOURCE_SHA256, 'local-adapted-baseline')
+    require(report['grammar_adaptation'] == GRAMMAR_ADAPTATION, 'local-grammar-adaptation')
     require(digest(OUT/'fixture-manifest.json') == CANONICAL_PLAN_SHA256,'local-plan')
     manifest = strict_json((OUT/'fixture-manifest.json').read_bytes())
     for shard,entry in enumerate(report['host_c_shards']):

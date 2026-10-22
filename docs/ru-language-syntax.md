@@ -4,7 +4,7 @@
 
 ## Language baseline
 
-The unchanged lexical/folding policy was derived from the Ru 0.21.3 language source (public baseline `dd6cb81b`). The build pins Ru 0.22.1, retaining the generic owned-memory bulk-read transport introduced with the earlier Ru 0.21.6 pin. The current callback-runtime update does not change the application policy rules below:
+The lexical/folding policy was originally derived from the Ru 0.21.3 language source (public baseline `dd6cb81b`). The build pins Ru 0.22.1, retaining the generic owned-memory bulk-read transport introduced with the earlier Ru 0.21.6 pin. The editor-only conditional-chain extension is described below; the original policy sources are:
 
 - `rulang/frontend.py`: `KEYWORDS`, `NUMBER`, `comment_marker`, `block_comment_end`, `lex`, and the `Parser` declaration, literal, reference, statement and expression rules
 - `rulang/language-spec.md`: sections 2–4, including contextual scope/recovery delimiters
@@ -12,7 +12,7 @@ The unchanged lexical/folding policy was derived from the Ru 0.21.3 language sou
 The complete reserved-word set is:
 
 ```text
-显 取 为 得 完 破 若 则 另 然 循 次 环 算 作 法 其
+显 取 为 得 完 破 若 则 另若 另 然 循 次 环 算 作 法 其
 且 或 非 空 真 假 典 成 对 形 象 如 新 外言 尽取 尽 试 救 卒
 ```
 
@@ -21,6 +21,12 @@ The complete reserved-word set is:
 Names use the frontend's Unicode `isalpha()` start and `isalnum()` continuation rules, with `_` additionally allowed. A whole name is never split to color a keyword prefix. Non-BMP letters are supported; emoji and combining marks are not silently accepted as name characters. Decimal numbers follow the frontend pattern, including `.5` and signed exponents. Signs are operators. A trailing dot in `1.` is a statement terminator, not part of the number. This editing lexer identifies numeric spelling without attempting runtime numeric-overflow validation.
 
 ASCII and Chinese full-width punctuation follow the exact frontend aliases. `:=` and `：=` require adjacent characters. Full-width arithmetic operators are not aliases. The four string pairs are `'…'`, `"…"`, `‘…’`, and `“…”`; actual line breaks are allowed. Only the language's eight escape spellings are accepted. An unknown escape is marked invalid while the surrounding string remains a string.
+
+## Ru 0.23.0 conditional-chain editing support
+
+`另若` is one complete reserved word, not two nested openers. A chain shares one `然`; `另 若` remains a nested `若` and needs its own closer. Longer names such as `另若值` are not split. The branch condition enters expression context until `则`; it does not push an additional fold frame. Strings and comments do not create branches.
+
+This update changes editing vocabulary and structural policy only. The native scanner consumes the same Ru-provided table, so its C ABI and implementation do not change. The application continues to compile its existing syntax with the pinned Ru compiler; highlighting a Ru 0.23.0 file does not upgrade the compiler or prove the document executes. No application code is migrated to the new syntax.
 
 ## Comments and incomplete input
 
@@ -36,7 +42,7 @@ The scanner is intentionally an editing policy, not a compiler or syntax validat
 
 The structural state recognizes the following actual Ru constructs:
 
-- `若 … 则 … [另 …] 然`
+- `若 … 则 … [另若 … 则 …] … [另 …] 然`
 - `循 [expression 次] … 环`
 - Named and anonymous `算 … : … 法` and `作 … : … 为`
 - `形 … 象`, including methods and function-valued field annotations
