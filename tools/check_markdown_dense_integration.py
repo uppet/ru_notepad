@@ -18,8 +18,8 @@ def main():
     compiler_before={p.name:sha(p) for p in paths};report={'passed':False,'windows_executed':False,'compiler_inputs':compiler_before,'arms':results}
     try:
         for arm in ('ordinary','dense'):
-            ast=parse(source.read_text());graph=load_module_graph(str(source),ast);receipt=prepare_graph(ROOT,graph,a.manifest,arm);t=time.monotonic()
-            compiler=Compiler(ast,graph.root,modules=graph,allow_native=True,mi_manifest=a.manifest.resolve());code=compiler.compile();cp=out/(arm+'.c');cp.write_text(code);codes[arm]=code
+            ast=parse(source.read_text(encoding='utf-8'));graph=load_module_graph(str(source),ast);receipt=prepare_graph(ROOT,graph,a.manifest,arm);t=time.monotonic()
+            compiler=Compiler(ast,graph.root,modules=graph,allow_native=True,mi_manifest=a.manifest.resolve());code=compiler.compile();cp=out/(arm+'.c');cp.write_text(code,encoding='utf-8');codes[arm]=code
             verify_receipt(ROOT,a.manifest,arm,receipt)
             results[arm]={'generated_c_sha256':sha(cp),'bytes':cp.stat().st_size,'native_analysis_steps':compiler.native_plan._steps,'generation_seconds':time.monotonic()-t,'activation_receipt':receipt}
         changed=[x for x in difflib.ndiff(codes['ordinary'].splitlines(),codes['dense'].splitlines()) if x.startswith(('- ','+ '))]
@@ -27,5 +27,5 @@ def main():
         need(compiler_before=={p.name:sha(p) for p in paths},'compiler drift during verification')
         report.update(passed=True,generated_difference='one v_fact(0) -> v_fact(1)',source_unchanged=True)
         print('MARKDOWN_DENSE_MAIN passed=1 arms=2 changed_facts=1 windows_executed=0')
-    finally:(out/'report.json').write_text(json.dumps(report,indent=2)+'\n')
+    finally:(out/'report.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
 if __name__=='__main__':main()

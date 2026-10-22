@@ -12,6 +12,8 @@ from pathlib import Path
 import test_markdown_width_policy as old
 ROOT=Path(__file__).resolve().parents[1]
 BASE_SHA='e3606ac3806d4b4b0255b10c4600f088bcdacaffab9918f62c91bd5115d648e0'
+# -I deliberately ignores PYTHONUTF8; Ru sources always have an explicit format.
+INTERPRETER_CODE='import sys; from pathlib import Path; sys.path.insert(0,sys.argv[1]); from rulang.frontend import parse; from rulang.interpreter import Interpreter; p=Path(sys.argv[2]); Interpreter().execute(parse(p.read_text(encoding="utf-8")),source_path=p)'
 
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def lit(s):return "'"+s.replace('\\','\\\\').replace("'","\\'").replace('\r','\\r').replace('\n','\\n').replace('\t','\\t')+"'"
@@ -38,7 +40,7 @@ def dense_transform(original):
 
 def drift_check(base):
     p=base/'src/markdown_policy.ru';need(sha(p)==BASE_SHA,'baseline hash')
-    original=p.read_text();candidate=(ROOT/'src/markdown_policy.ru').read_text()
+    original=p.read_text(encoding='utf-8');candidate=(ROOT/'src/markdown_policy.ru').read_text(encoding='utf-8')
     start=original.index('算 喂入 态 文 为 句 结束 为 事实:');end=original.index('算 资源 态:')
     body=original[start:end]
     a=candidate.index('算 喂入视图 ');b=candidate.index('算 资源 态:')
@@ -62,7 +64,7 @@ EXTRA=[
 def generate(base,out,mode):
     # Reuse the established fixture corpus/stepwise compare, not its old hash gate.
     old.generate(ROOT,base,out)
-    p=out/'oracle.ru';s=p.read_text()
+    p=out/'oracle.ru';s=p.read_text(encoding='utf-8')
     # Every candidate result is the real alternate policy path, not a stand-in.
     s=s.replace('果乙 取 乙模 其 喂入 乙 文[位:] 末.', '果乙 取 候选 乙 文[位:] 末.')
     s=s.replace("试 乙模 其 喂入 乙 文 末.","试 候选 乙 文 末.")
@@ -104,7 +106,7 @@ def generate(base,out,mode):
         # Data-driven fixture traversal avoids reanalyzing the same mutating
         # policy from hundreds of top-level static call sites. No analyzer guard
         # is lifted, no policy state is discarded, and every runtime case remains.
-        fixture=(ROOT/'tests/markdown_policy.ru').read_text()
+        fixture=(ROOT/'tests/markdown_policy.ru').read_text(encoding='utf-8')
         texts=[ast.literal_eval(x) for x in re.findall(r"^核例 '(?:[^'\\]|\\.)*' ('(?:[^'\\]|\\.)*')",fixture,re.M)]
         texts += ['# h\r\n\x7f\x80\u07ff\u0800\uffff\U00010000😀\r\n---','```\r\n\x7f\x80\u07ff\u0800\uffff\U00010000😀\r\n```','<!--\r\n中😀\r\n-->\r\n# h','> # 中\r\n> 😀\r\n\r\n- 中\n  x']
         texts += [t for _,t in EXTRA]
@@ -170,8 +172,7 @@ def main():
     try:
         outputs=[]
         if a.mode=='array':
-            code='import sys; from pathlib import Path; sys.path.insert(0,sys.argv[1]); from rulang.frontend import parse; from rulang.interpreter import Interpreter; p=Path(sys.argv[2]); Interpreter().execute(parse(p.read_text()),source_path=p)'
-            outputs.append(run([sys.executable,'-I','-c',code,str(ru),str(source)],'interpreter'))
+            outputs.append(run([sys.executable,'-I','-c',INTERPRETER_CODE,str(ru),str(source)],'interpreter'))
         exe=out/('oracle.exe' if os.name=='nt' else 'oracle');cmd=[sys.executable,str(ru/'ru'),'build','--cc',a.cc,str(source),'-o',str(exe)]
         if a.mode=='native':
             need(a.manifest is not None,'native mode requires explicit manifest');cmd+=['--allow-native','--experimental-mi-manifest',str(a.manifest.resolve())]
@@ -182,15 +183,15 @@ def main():
             from rulang.modules import load_module_graph
             from rulang.compiler import Compiler
             from test_native_c_runtime import TEST_PLATFORM
-            program=parse(source.read_text());graph=load_module_graph(str(source),program)
+            program=parse(source.read_text(encoding='utf-8'));graph=load_module_graph(str(source),program)
             generated=Compiler(program,graph.root,modules=graph,allow_native=True,mi_manifest=a.manifest.resolve()).compile()
-            (out/'oracle-production.c').write_text(generated)
+            (out/'oracle-production.c').write_text(generated,encoding='utf-8')
             pattern=r'/\* RU_NATIVE_PLATFORM_BEGIN \*/.*?/\* RU_NATIVE_PLATFORM_END \*/'
             host,count=re.subn(pattern,lambda _:TEST_PLATFORM,generated,flags=re.S)
             need(count==1,'exact test-platform replacement')
             guard='#error "Ru native C requires Windows x64"';need(host.count(guard)==1,'production ABI guard')
             host=host.replace(guard,'/* POSIX test artifact only; not Windows acceptance. */')
-            cp=out/'oracle-host.c';cp.write_text(host)
+            cp=out/'oracle-host.c';cp.write_text(host,encoding='utf-8')
             receipt.update(posix_test_host=True,production_c_sha256=sha(out/'oracle-production.c'),test_c_sha256=sha(cp),manifest_sha256=sha(a.manifest.resolve()))
             run([a.cc,'-std=c99','-O2','-Wno-unused-function',str(cp),'-o',str(exe),'-lm','-ldl','-pthread'],'compile')
         else:run(cmd,'compile')
@@ -199,5 +200,5 @@ def main():
         need(re.fullmatch(r'FULL_STATE_RETURNS [0-9]+\nERROR_ORDER_CHECKS [0-9]+\nRANGE_PAUSES [1-9][0-9]*\nDIFFERENTIAL_PASS\n',outputs[0]) is not None,'exact output control')
         receipt.update(passed=True,output=outputs[0],executable_sha256=sha(exe));need(drift_check(base)=={k:receipt[k] for k in drift_check(base)},'sources drifted')
         print('MARKDOWN_DENSE_ORACLE mode='+a.mode+' passed=1 '+outputs[0].replace('\n',' ').strip())
-    finally:(out/'report.json').write_text(json.dumps(receipt,indent=2)+'\n')
+    finally:(out/'report.json').write_text(json.dumps(receipt,indent=2)+'\n',encoding='utf-8')
 if __name__=='__main__':main()

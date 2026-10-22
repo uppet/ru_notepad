@@ -62,7 +62,7 @@ class Controls(unittest.TestCase):
         with self.assertRaises(Exception):a.validate_public(v,P)
     def test_duplicate_json_and_links(self):
         with tempfile.TemporaryDirectory() as t:
-            r=Path(t);p=r/'a';p.write_text('{"x":1,"x":2}')
+            r=Path(t);p=r/'a';p.write_text('{"x":1,"x":2}',encoding='utf-8')
             with self.assertRaises(Exception):a.read(p)
             q=r/'hard';os.link(p,q)
             with self.assertRaises(Exception):a.plain(q)
@@ -87,8 +87,8 @@ class Controls(unittest.TestCase):
         # Real coordinator inputs have already passed plain()/resolve().
         roots=[(Path(t)/x).resolve() for x in ('a','b')]
         for i,r in enumerate(roots):
-            (r/'src').mkdir(parents=True);(r/'build').mkdir();(r/'src/main.ru').write_text('');(r/'build/main.c').write_text('ru_source = '+c_literal(str(r/'src/main.ru'))+';\nv_fact('+str(i)+');\n')
-        a.check_generated_pair(roots);p=roots[1]/'build/main.c';p.write_text(p.read_text()+'unrelated();\n')
+            (r/'src').mkdir(parents=True);(r/'build').mkdir();(r/'src/main.ru').write_text('',encoding='utf-8');(r/'build/main.c').write_text('ru_source = '+c_literal(str(r/'src/main.ru'))+';\nv_fact('+str(i)+');\n',encoding='utf-8')
+        a.check_generated_pair(roots);p=roots[1]/'build/main.c';p.write_text(p.read_text(encoding='utf-8')+'unrelated();\n',encoding='utf-8')
         with self.assertRaises(Exception):a.check_generated_pair(roots)
         literal=c_literal(str(roots[0]/'src/main.ru'));code='f('+literal+');\nru_source = '+literal+';';normalized,_=a.diagnostic_paths(code,roots[0]);self.assertIn('f('+literal+');',normalized)
     def test_debug_normalization_assignment_only(self):
@@ -100,7 +100,7 @@ class Controls(unittest.TestCase):
     def test_debug_normalization_escaped_path_bytes(self):
         self.assertEqual(c_literal('C:\\source'), '"C:\\134source"')
         with tempfile.TemporaryDirectory(prefix='dense路径-') as t:
-            root=Path(t);(root/'src').mkdir();source=root/'src/main.ru';source.write_text('')
+            root=Path(t);(root/'src').mkdir();source=root/'src/main.ru';source.write_text('',encoding='utf-8')
             for spelling in (str(source.resolve()),source.resolve().as_posix()):
                 with self.subTest(spelling=spelling):
                     code='ru_source = '+c_literal(spelling)+';'
@@ -111,7 +111,7 @@ class Controls(unittest.TestCase):
         v,_,_,_=self.run_case();v['verified'][0]=0;a.recompute(v)
         with self.assertRaises(Exception):a.validate_public(v,P)
     def test_workflow_and_powershell_contract(self):
-        root=Path(a.__file__).resolve().parents[1];w=(root/'.github/workflows/markdown-dense-ab.yml').read_text();ps=(root/'tools/run_markdown_dense_ci.ps1').read_text()
+        root=Path(a.__file__).resolve().parents[1];w=(root/'.github/workflows/markdown-dense-ab.yml').read_text(encoding='utf-8');ps=(root/'tools/run_markdown_dense_ci.ps1').read_text(encoding='utf-8')
         self.assertIn('needs: linux-correctness',w);self.assertIn('branches: [mi-perf-prototype]',w);self.assertIn('cancel-in-progress: false',w)
         self.assertEqual(w.count('persist-credentials: false'),7);self.assertEqual(w.count('uses: actions/upload-artifact@'),1)
         self.assertIn('path: dense/build/markdown-dense-ab-public/markdown-dense-ab.json',w);self.assertIn('if: always()',w)
@@ -122,6 +122,6 @@ class Controls(unittest.TestCase):
         self.assertLess(w.index('check-built --ordinary'),w.index('name: Eight fresh owned'))
         self.assertNotIn('85c7821f',w+ps);self.assertNotIn('run_markdown_edit_ci.ps1',w)
     def test_no_old_prepare_pin(self):
-        code=Path(a.__file__).read_text()
+        code=Path(a.__file__).read_text(encoding='utf-8')
         for forbidden in ('85c7821f','6aa535d6','owned.prepare'):self.assertNotIn(forbidden,code)
 if __name__=='__main__':unittest.main()

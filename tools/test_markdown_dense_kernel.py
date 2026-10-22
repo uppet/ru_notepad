@@ -23,7 +23,7 @@ def main():
     from rulang.modules import load_module_graph
     from rulang.mi_source import MiSourcePlan
     from rulang.interpreter import Interpreter
-    p=ROOT/'src/markdown_ascii_kernel.ru';program=parse(p.read_text());graph=load_module_graph(str(p),program);plan=MiSourcePlan(graph,a.manifest.resolve());tests=cases()
+    p=ROOT/'src/markdown_ascii_kernel.ru';program=parse(p.read_text(encoding='utf-8'));graph=load_module_graph(str(p),program);plan=MiSourcePlan(graph,a.manifest.resolve());tests=cases()
     parent=ROOT/'build/markdown-dense-private';parent.mkdir(parents=True,exist_ok=True);out=Path(tempfile.mkdtemp(prefix='kernel-',dir=parent));receipt={'passed':False,'source_sha256':sha(p),'manifest_sha256':sha(a.manifest.resolve()),'case_count':len(tests),'includes_zero_byte':True,'invalid_ranges':'ordinary bridge separately; not this compute-only harness'}
     try:
         i=Interpreter();i.execute(program,source_path=p);fn=i.function_values['ASCII段']
@@ -32,11 +32,11 @@ def main():
         c=plan.compute_source('c')+'\n#include <stdio.h>\nint main(void){\n'
         for idx,(data,begin,end,want) in enumerate(tests):
             c+='{uint8_t data[]={' + ','.join(map(str,data or [0]))+'};RuMiResult r=ru_mi_kernel_0((RuMiView){data,'+str(len(data))+'},'+str(begin)+','+str(end)+');if(r.status!=0||r.value!='+str(want)+')return 1;}\n'
-        c+='puts("KERNEL_PASS");return 0;}\n';cp=out/'kernel.c';cp.write_text(c);exe=out/('kernel.exe' if os.name=='nt' else 'kernel');subprocess.run([a.cc,'-std=c99','-O2',str(cp),'-o',str(exe)],check=True,timeout=120)
+        c+='puts("KERNEL_PASS");return 0;}\n';cp=out/'kernel.c';cp.write_text(c,encoding='utf-8');exe=out/('kernel.exe' if os.name=='nt' else 'kernel');subprocess.run([a.cc,'-std=c99','-O2',str(cp),'-o',str(exe)],check=True,timeout=120)
         got=subprocess.check_output([str(exe)],timeout=30);need(got.replace(b'\r\n',b'\n')==b'KERNEL_PASS\n','generated C output')
-        js=out/'kernel.js';js.write_text(plan.compute_source('js'));fixtures=out/'cases.json';fixtures.write_text(json.dumps(tests))
-        harness=out/'runner.js';harness.write_text("const k=require('./kernel.js').ru_mi_kernel_0;const t=require('./cases.json');for(const [d,b,e,w] of t){const r=k(Uint8Array.from(d),b,e);if(r.status!==0||r.value!==w)throw Error('kernel mismatch');}console.log('KERNEL_PASS');\n")
+        js=out/'kernel.js';js.write_text(plan.compute_source('js'),encoding='utf-8');fixtures=out/'cases.json';fixtures.write_text(json.dumps(tests),encoding='utf-8')
+        harness=out/'runner.js';harness.write_text("const k=require('./kernel.js').ru_mi_kernel_0;const t=require('./cases.json');for(const [d,b,e,w] of t){const r=k(Uint8Array.from(d),b,e);if(r.status!==0||r.value!==w)throw Error('kernel mismatch');}console.log('KERNEL_PASS');\n",encoding='utf-8')
         got=subprocess.check_output(['node',str(harness)],timeout=30);need(got.replace(b'\r\n',b'\n')==b'KERNEL_PASS\n','generated JS output')
         receipt.update(passed=True,c_sha256=sha(cp),js_sha256=sha(js),fixture_sha256=sha(fixtures),backends=['ordinary-interpreter','generated-c','generated-js']);print('MARKDOWN_DENSE_KERNEL passed=1 cases='+str(len(tests))+' backends=3')
-    finally:(out/'report.json').write_text(json.dumps(receipt,indent=2)+'\n')
+    finally:(out/'report.json').write_text(json.dumps(receipt,indent=2)+'\n',encoding='utf-8')
 if __name__=='__main__':main()
