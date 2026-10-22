@@ -1,6 +1,6 @@
 # Implementation status — 2026-10-22
 
-**82 Linux pure/mock/real-source-loading tests pass. Native Windows results are still required.** The retained local template has its historical gate; the reviewed publication candidate is windows-feasibility.yml, triggered only by pushes to notepadpp-comparison.
+**86 Linux pure/mock/real-source-loading tests pass. Native Windows results are still required.** The retained local template has its historical gate; the reviewed publication candidate is windows-feasibility.yml, triggered only by pushes to notepadpp-comparison.
 
 ## Files
 
@@ -10,7 +10,7 @@
 - `feasibility.py`: only A=Ru baseline plain text, B=stock NPP plain text, C=Ru baseline Markdown. Exact1M synthetic bytes; fresh per-arm runtime copy. Re-seals provenance before/after every run; closed inventories before/after launch; owns retained Popen and HWND/PID; no global input/injection.
 - `public_result.py`: fail-closed fixed-field numeric/hash projection. Includes Windows build, CPU count/identity hash, runner-image hash, NPP version, tool and runtime hashes; no raw context bytes/private paths.
 - `windows-feasibility.yml.template`: pinned actions, fixed source/compiler checkouts, independent branch guard, sequential build/acquire/seal/ABC steps. Review gate remains; artifact upload still requires separate review.
-- `test_*.py`:82 tests, including source/runtime/generated-code/native-key/compiler tampering, safe extraction, natural1/2Undo, stage/process budgets, async exit/no post-deadline grace, extraDLL/copy mutation, uncertain dispatch evidence and stop-next-arm.
+- `test_*.py`:86 tests, including source/runtime/generated-code/native-key/compiler tampering, safe extraction, natural1/2Undo, stage/process budgets, async exit/no post-deadline grace, extraDLL/copy mutation, uncertain dispatch evidence and stop-next-arm.
 
 ## Timing and completion
 
@@ -59,3 +59,19 @@ build output and product receipts are not renamed, deleted, or edited. Existing
 launch staging still copies exactly one EXE and three production DLLs, refuses
 any additional entry, and never copies or loads WrongAbi. Public runtime identity
 remains the original four files; no negative binary or private receipt is uploaded.
+
+Run 39719054151 reached real Ru plain-text editing: two Undo commands restored
+clean text at a 158.01 ms observable upper bound, but post-run inventory rejected
+one extra unknown path-hash and correctly stopped B/C. This is not a complete
+comparison. The fixed launcher always creates a private log beside the EXE (or
+falls back outside it); its verified Git blob is 9d284647cef39c28f0601d3ea137f1012b084307.
+The post-run gate now accepts exactly one log only for an executed Ru A/C process,
+after confirmed cleanup, with exact launcher syntax, owned PID, attempt 0..63,
+encoded FILETIME inside the launch-to-cleanup wall-clock window plus one second
+clock-granularity allowance, regular/single-link/non-reparse checks and 1 MiB cap.
+The content is streamed only into SHA-256, never parsed, printed or uploaded.
+Only fixed numeric/hash classification is logged. Four original runtime hashes
+remain mandatory; unknown additions, missing/multiple logs, NPP logs and fallback
+locations fail this gate. No LocalAppData/Temp search occurs. A/C remain separate
+owned runtime directories. The previous unknown hash is not retroactively claimed
+to be a diagnostic log: only the next live strict classification can establish it.

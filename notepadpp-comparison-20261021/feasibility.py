@@ -4,7 +4,7 @@ No download, injection, global input, or publishing. Windows execution is opt-in
 from __future__ import annotations
 import argparse, ctypes, hashlib, importlib.util, json, os
 from pathlib import Path
-import subprocess, sys, threading, time, shutil
+import subprocess, sys, threading, time, shutil, re, stat
 import build_baseline as provenance
 from public_result import project as public_projection
 
@@ -246,6 +246,54 @@ def verify_receipt(receipt, ru_dir, npp_dir):
             raise ValueError('invalid isolation marker')
 
 
+FILETIME_EPOCH = 116444736000000000
+PRIVATE_LOG_LIMIT = 1024 * 1024
+
+
+def filetime_now():
+    return FILETIME_EPOCH + time.time_ns() // 100
+
+
+def post_runtime(root, expected, arm, pid, started, ended, cleanup_confirmed):
+    if not cleanup_confirmed:raise ValueError('process not confirmed ended')
+    root=provenance.plain(root,directory=True)
+    extra=[p for p in root.iterdir() if p.name not in expected]
+    allowed=dict(expected)
+    if arm in ('A','C') and type(pid) is int and pid>0 and len(extra)!=1:
+        raise ValueError('expected exactly one owned diagnostic')
+    if extra:
+        if arm not in ('A','C') or type(pid) is not int or pid<=0 or len(extra)!=1:
+            raise ValueError('unexpected runtime output')
+        path=provenance.plain(extra[0]);before=path.stat()
+        match=re.fullmatch(r'ru_notepad-([0-9a-f]{8})-([0-9a-f]{16})-([0-9]{2})\.log',path.name)
+        if not match or int(match[1],16)!=pid or int(match[3])>=64:
+            raise ValueError('unowned diagnostic output')
+        # GetSystemTimeAsFileTime in the fixed launcher is wall-clock FILETIME.
+        # One second covers clock granularity, not any operation-time extension.
+        created=int(match[2],16)
+        if not (type(started) is int and type(ended) is int and 0<started<=ended and
+                started-10_000_000<=created<=ended+10_000_000):
+            raise ValueError('diagnostic creation outside owned launch')
+        if not stat.S_ISREG(before.st_mode) or not 0<=before.st_size<=PRIVATE_LOG_LIMIT:
+            raise ValueError('invalid diagnostic file')
+        h=hashlib.sha256()
+        with path.open('rb') as stream:
+            opened=os.fstat(stream.fileno())
+            if (opened.st_dev,opened.st_ino,opened.st_nlink,opened.st_size)!=(before.st_dev,before.st_ino,1,before.st_size):
+                raise ValueError('diagnostic changed while opening')
+            total=0
+            while chunk:=stream.read(65536):
+                total+=len(chunk)
+                if total>PRIVATE_LOG_LIMIT:raise ValueError('diagnostic exceeds limit')
+                h.update(chunk)
+        after=provenance.plain(path).stat()
+        if (after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns)!=(before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns):
+            raise ValueError('diagnostic changed after process ended')
+        allowed[path.name]=h.hexdigest()
+        print(f'COMPARISON_PRIVATE_DIAGNOSTIC PID={pid} COUNT=1 BYTES={before.st_size} SHA256={h.hexdigest()}',file=sys.stderr)
+    closed_manifest(root,allowed)
+
+
 def cleanup_owned(process, hard, clock=time.perf_counter):
     if process.poll() is None: process.kill()
     remaining = hard - clock()
@@ -264,9 +312,10 @@ def run_one(ci, arm, executable, source, scratch, inventory):
         settings = scratch / 'settings'; settings.mkdir()
         argv += ['-multiInst', '-noPlugin', '-nosession', '-lnormal', '-settingsDir=' + str(settings)]
     argv += [str(source)]
-    process = None; guard = None
+    process = None; guard = None; started_filetime = None
     try:
         closed_manifest(executable.parent, inventory)
+        started_filetime = filetime_now()
         process = subprocess.Popen(argv, cwd=executable.parent, stdin=subprocess.DEVNULL,
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
         result.update(executed=True, pid=process.pid)
@@ -314,7 +363,8 @@ def run_one(ci, arm, executable, source, scratch, inventory):
                 result['cleanup_unconfirmed'] = True
             if result['cleanup_unconfirmed']: result['passed'] = False
         try:
-            closed_manifest(executable.parent, inventory)
+            post_runtime(executable.parent, inventory, arm, process.pid if process else None,
+                         started_filetime, filetime_now(), not result.get('cleanup_unconfirmed',False))
             result['runtime_unchanged'] = True
         except (ValueError, OSError):
             result['runtime_unchanged'] = False
