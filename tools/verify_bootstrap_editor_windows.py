@@ -22,6 +22,7 @@ import sys
 import time
 import threading
 import uuid
+import zlib
 
 from bootstrap_provenance import require, sha, validate_toolchain
 from build_bootstrap_release import identity, snapshot, verify_gui_pe, verify_proof, verify_app_baseline, verify_linker_selection, verify_linker_probe
@@ -348,6 +349,38 @@ def icon_resource_diagnostic(icon, group, image, languages):
     return result
 
 
+def verify_png_icon_entry(source_entry, group_entry, source_image, resource_image):
+    """Only the observed SDK PNG planes 0->1 canonicalization is permitted.
+
+    This identifies the pinned RGBA8 PNG header, not a general PNG decoder.
+    The whole image must still equal the exact trusted source bytes and hash.
+    """
+    require(len(source_entry)==16 and len(group_entry)==14, 'truncated icon entry')
+    require(len(source_image)>=33 and source_image[:8]==b'\x89PNG\r\n\x1a\n'
+            and source_image[8:16]==b'\x00\x00\x00\x0dIHDR', 'unsupported non-PNG icon')
+    width,height=struct.unpack_from('>II',source_image,16)
+    require((width,height)==(source_entry[0] or 256,source_entry[1] or 256)
+            and source_image[24:29]==bytes((8,6,0,0,0)), 'unsupported PNG dimensions or RGBA8 header')
+    require(struct.unpack_from('>I',source_image,29)[0]==zlib.crc32(source_image[12:29]), 'PNG IHDR CRC differs')
+    source_planes,source_bits=struct.unpack_from('<HH',source_entry,4)
+    output_planes=struct.unpack_from('<H',group_entry,4)[0]
+    require(source_planes in (0,1) and output_planes==1 and source_bits==32, 'icon metadata differs: unsupported planes/bitcount')
+    expected=bytearray(source_entry[:12])
+    expected[4:6]=b'\x01\x00'
+    require(group_entry[:12]==expected, 'icon metadata differs')
+    require(len(source_image)==struct.unpack_from('<I',source_entry,8)[0]
+            and resource_image==source_image
+            and hashlib.sha256(resource_image).digest()==hashlib.sha256(source_image).digest(), 'icon image differs')
+
+
+def verify_icon_languages_and_members(diagnostic, ids):
+    require(len(ids)==len(diagnostic['entries']) and all(number>0 for number in ids)
+            and len(ids)==len(set(ids)), 'icon members duplicate or invalid')
+    records=[diagnostic['group_languages']]+[entry['group']['languages'] for entry in diagnostic['entries']]
+    require(all(record.get('available_langids')==[1033] and record.get('selected_langid')==1033 for record in records),
+            'icon resource language differs or unknown')
+
+
 def resource_snapshot_stable(diagnostic, path, icon_path):
     for key, file in [('pe',path),('source_ico',icon_path)]:
         try:
@@ -435,11 +468,13 @@ def verify_resources(path, app):
         require(len(group) >= 6 and group[:6] == icon[:6], 'icon group differs')
         count = struct.unpack_from('<H', group, 4)[0]
         require(count > 0 and len(group) == 6+14*count and len(icon) >= 6+16*count, 'truncated icon group')
+        ids=[struct.unpack_from('<H',group,6+14*index+12)[0] for index in range(count)]
+        verify_icon_languages_and_members(diagnostic['icon'],ids)
         for index in range(count):
             g, i = 6+14*index, 6+16*index
-            require(group[g:g+12] == icon[i:i+12], 'icon metadata differs')
             size, offset = struct.unpack_from('<II', icon, i+8)
-            require(offset+size <= len(icon) and resource(3, struct.unpack_from('<H', group, g+12)[0]) == icon[offset:offset+size], 'icon image differs')
+            require(offset+size <= len(icon), 'icon image differs')
+            verify_png_icon_entry(icon[i:i+16],group[g:g+14],icon[offset:offset+size],resource(3,ids[index]))
     except Exception as exc:
         try: resource_snapshot_stable(diagnostic,path,icon_path)
         except Exception as changed: diagnostic['identity_error']=str(changed)[:500]

@@ -229,7 +229,13 @@ class GatePolicyTests(unittest.TestCase):
 
 
 class ResourceDiagnosticTests(unittest.TestCase):
-    def fixture(self, planes=1, payload=b'PNG-owned'):
+    def fixture(self, planes=1, payload=None):
+        if payload is None:
+            ihdr=b'IHDR'+gate.struct.pack('>IIBBBBB',16,16,8,6,0,0,0)
+            payload=b'\x89PNG\r\n\x1a\n'+gate.struct.pack('>I',13)+ihdr+gate.struct.pack('>I',gate.zlib.crc32(ihdr))
+            compressed=gate.zlib.compress(bytes(16*(1+16*4)))
+            for kind,data in [(b'IDAT',compressed),(b'IEND',b'')]:
+                payload+=gate.struct.pack('>I',len(data))+kind+data+gate.struct.pack('>I',gate.zlib.crc32(kind+data))
         header=gate.struct.pack('<HHH',0,1,1)
         icon=header+gate.struct.pack('<BBBBHHII',16,16,0,0,0,32,len(payload),22)+payload
         group=header+gate.struct.pack('<BBBBHHIH',16,16,0,0,planes,32,len(payload),7)
@@ -288,7 +294,7 @@ class ResourceDiagnosticTests(unittest.TestCase):
             def __init__(self,function):self.function=function
             def __call__(self,*args):return self.function(*args)
         class Kernel:pass
-        for planes,changed_image,mutate in [(0,False,False),(1,False,False),(0,True,False),(0,False,True)]:
+        for planes,changed_image,mutate in [(1,False,False),(0,False,False),(1,True,False),(1,False,True)]:
             with self.subTest(planes=planes,changed_image=changed_image,mutate=mutate),tempfile.TemporaryDirectory() as temp:
                 app=Path(temp);(app/'assets').mkdir();(app/'packaging').mkdir()
                 pe=app/'app.exe';pe.write_bytes(b'owned PE bytes')
@@ -310,18 +316,47 @@ class ResourceDiagnosticTests(unittest.TestCase):
                 for name,function in methods.items():setattr(kernel,name,Function(function))
                 with patch.object(gate,'verify_gui_pe'),patch.object(gate.ctypes,'WinDLL',return_value=kernel,create=True), \
                      patch.object(gate.ctypes,'WINFUNCTYPE',gate.ctypes.CFUNCTYPE,create=True),patch.object(gate.ctypes,'string_at',side_effect=read):
-                    if not planes and not changed_image and not mutate:
+                    if planes==1 and not changed_image and not mutate:
                         result=gate.verify_resources(pe,app)
                         self.assertTrue(result['passed'])
                         diagnostic=result['resource_diagnostics']
                     else:
                         with self.assertRaises(gate.ResourceEvidenceError) as caught:gate.verify_resources(pe,app)
                         diagnostic=caught.exception.diagnostic
-                        expected='metadata differs' if planes else 'image differs' if changed_image else 'identity changed'
+                        expected='metadata differs' if planes!=1 else 'image differs' if changed_image else 'identity changed'
                         self.assertIn(expected,str(caught.exception))
                     self.assertEqual(diagnostic['icon']['group_languages']['selected_langid'],1033)
                     self.assertTrue(all(value==1 for value in reads.values()))
                     self.assertEqual(diagnostic['identity_stable'],not mutate)
+
+    def test_only_observed_png_planes_transition_is_allowed(self):
+        icon,group,payload=self.fixture()
+        source=bytearray(icon[6:22]);actual=bytearray(group[6:20])
+        for source_plane in (0,1):
+            gate.struct.pack_into('<H',source,4,source_plane)
+            gate.verify_png_icon_entry(bytes(source),bytes(actual),payload,payload)
+        for source_plane,output_plane in [(2,1),(65535,1),(0,0),(1,0),(0,2),(1,2)]:
+            gate.struct.pack_into('<H',source,4,source_plane);gate.struct.pack_into('<H',actual,4,output_plane)
+            with self.assertRaises(ValueError):gate.verify_png_icon_entry(bytes(source),bytes(actual),payload,payload)
+        source,actual=icon[6:22],group[6:20]
+        for index in [0,1,2,3,6,7,8,9,10,11]:
+            changed=bytearray(actual);changed[index]^=1
+            with self.assertRaises(ValueError):gate.verify_png_icon_entry(source,bytes(changed),payload,payload)
+        for changed in [payload+b'x',payload[:-1],payload[:-1]+bytes([payload[-1]^1])]:
+            with self.assertRaises(ValueError):gate.verify_png_icon_entry(source,actual,payload,changed)
+        for changed in [b'BM'+payload[2:],payload[:32],payload[:24]+b'\x10'+payload[25:],payload[:29]+b'bad!'+payload[33:]]:
+            with self.assertRaises(ValueError):gate.verify_png_icon_entry(source,actual,changed,changed)
+
+    def test_members_and_languages_are_not_relaxed(self):
+        known={'available_langids':[1033],'selected_langid':1033}
+        diagnostic={'group_languages':known,'entries':[{'group':{'languages':known}}]}
+        gate.verify_icon_languages_and_members(diagnostic,[1])
+        for ids in [[1,1],[1,2],[],[0],[-1]]:
+            with self.assertRaises(ValueError):gate.verify_icon_languages_and_members(diagnostic,ids)
+        for wrong in [{'available_langids':None,'selected_langid':None},{'available_langids':[2052],'selected_langid':2052},{'available_langids':[1033,2052],'selected_langid':1033}]:
+            for where in ('group','image'):
+                bad={'group_languages':wrong if where=='group' else known,'entries':[{'group':{'languages':wrong if where=='image' else known}}]}
+                with self.assertRaises(ValueError):gate.verify_icon_languages_and_members(bad,[1])
 
     def test_failure_persists_diagnostics_but_never_grants_acceptance(self):
         with tempfile.TemporaryDirectory() as temp:
