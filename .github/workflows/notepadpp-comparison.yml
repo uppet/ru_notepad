@@ -44,6 +44,11 @@ jobs:
         run: |
           python -m unittest discover -q
           if ($LASTEXITCODE -ne 0) { throw 'COMPARISON_CONTROLS_FAILED' }
+      - name: Acquire exact official NPP package without executing
+        shell: pwsh
+        run: |
+          python comparison/notepadpp-comparison-20261021/acquire_npp.py --allow-download --destination "$env:GITHUB_WORKSPACE/npp" > "$env:GITHUB_WORKSPACE/npp-receipt.private.json"
+          if ($LASTEXITCODE -ne 0) { throw 'COMPARISON_ACQUIRE_FAILED' }
       - name: Install pinned-action official MinGW toolchain
         id: msys2
         uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e
@@ -60,11 +65,6 @@ jobs:
           $ErrorActionPreference = 'Stop'
           python comparison/notepadpp-comparison-20261021/build_baseline.py --baseline "$env:GITHUB_WORKSPACE/baseline" --compiler "$env:GITHUB_WORKSPACE/compiler" --toolbin "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin" --output "$env:GITHUB_WORKSPACE/baseline-release" --private-logs "$env:GITHUB_WORKSPACE/private-build"
           if ($LASTEXITCODE -ne 0) { throw 'COMPARISON_BUILD_FAILED' }
-      - name: Acquire exact official NPP package without executing
-        shell: pwsh
-        run: |
-          python comparison/notepadpp-comparison-20261021/acquire_npp.py --allow-download --destination "$env:GITHUB_WORKSPACE/npp" > "$env:GITHUB_WORKSPACE/npp-receipt.private.json"
-          if ($LASTEXITCODE -ne 0) { throw 'COMPARISON_ACQUIRE_FAILED' }
       - name: Seal verified provenance
         shell: pwsh
         run: |

@@ -17,6 +17,13 @@ def zipped(entries):
 
 
 class AcquisitionTests(unittest.TestCase):
+    def test_failure_diagnostics_are_closed_numeric_enums(self):
+        self.assertEqual(a.failure_diagnostics(ValueError('private-secret-path'), 4), (4,99,0))
+        self.assertEqual(a.failure_diagnostics(ValueError('asset_digest_or_size_mismatch'), 1), (1,103,0))
+        self.assertEqual(a.failure_diagnostics(a.urllib.error.HTTPError('private-url',403,'private-body',{},None),1), (1,1,403))
+        self.assertEqual(a.failure_diagnostics(a.urllib.error.URLError('private-reason'),1), (1,2,0))
+        self.assertEqual(a.failure_diagnostics(RuntimeError('private-path'),{'private':1}), (0,99,0))
+
     def test_hash_and_size(self):
         a.verify(b'abc', 3, a.digest(b'abc'))
         for size, sha in ((4, a.digest(b'abc')), (3, '0'*64)):

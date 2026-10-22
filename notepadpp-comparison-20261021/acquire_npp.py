@@ -8,6 +8,7 @@ import json
 import re
 import shutil
 import stat
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -22,6 +23,30 @@ PINS = {
 MAX_TOTAL = 100 * 1024 * 1024
 MAX_MEMBER = 25 * 1024 * 1024
 MAX_ENTRIES = 5000
+
+ACQUIRE_STAGE = 0
+# Fixed public enums only: no exception text, URL, filesystem path or server body.
+FAILURE_REASONS = (
+    'release_lock_mismatch', 'release_lock_asset_mismatch',
+    'destination_must_be_new_with_existing_parent', 'asset_digest_or_size_mismatch',
+    'checksum_entry_missing_duplicate_or_mismatch', 'untrusted_download_redirect',
+    'invalid_download_request', 'untrusted_download_response', 'archive_entry_limit',
+    'unsafe_archive_path', 'duplicate_archive_path', 'archive_link_special_reparse_or_encrypted',
+    'inconsistent_archive_kind', 'archive_expansion_limit', 'archive_parent_is_file',
+    'symlink_destination', 'archive_member_size_mismatch', 'missing_root_executable',
+    'unexpected_existing_config_marker',
+)
+
+
+def failure_diagnostics(exc, stage):
+    reason, status = 99, 0
+    if isinstance(exc, urllib.error.HTTPError):
+        reason = 1
+        if type(exc.code) is int and 100 <= exc.code <= 599: status = exc.code
+    elif isinstance(exc, urllib.error.URLError): reason = 2
+    elif type(exc) is ValueError and len(exc.args) == 1 and exc.args[0] in FAILURE_REASONS:
+        reason = 100 + FAILURE_REASONS.index(exc.args[0])
+    return (stage if type(stage) is int and stage in range(5) else 0, reason, status)
 
 
 def digest(data):
@@ -147,6 +172,7 @@ def extract(data, destination):
 
 
 def main():
+    global ACQUIRE_STAGE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--allow-download', action='store_true', required=True)
     parser.add_argument('--destination', type=Path, required=True)
@@ -159,17 +185,24 @@ def main():
             raise ValueError('release_lock_asset_mismatch')
     if args.destination.exists() or not args.destination.parent.is_dir():
         raise ValueError('destination_must_be_new_with_existing_parent')
-    acquired = {name: download(BASE + name, size, sha) for name, (size, sha) in PINS.items()}
+    acquired = {}
+    for index, (name, (size, sha)) in enumerate(PINS.items(), 1):
+        ACQUIRE_STAGE = index
+        acquired[name] = download(BASE + name, size, sha)
+    ACQUIRE_STAGE = 3
     filename = 'npp.8.9.8.1.portable.x64.zip'
     verify_checksums(acquired['npp.8.9.8.1.checksums.sha256'], filename, PINS[filename][1])
+    ACQUIRE_STAGE = 4
     print(json.dumps(extract(acquired[filename], args.destination), sort_keys=True))
 
 
 if __name__ == '__main__':
     try:
         result = main()
-    except Exception:
+    except Exception as exc:
         import sys
         print('COMPARISON_FAILURE_CODE=1', file=sys.stderr)
+        stage, reason, status = failure_diagnostics(exc, ACQUIRE_STAGE)
+        print(f'COMPARISON_ACQUIRE_STAGE={stage} COMPARISON_ACQUIRE_REASON={reason} COMPARISON_HTTP_STATUS={status}', file=sys.stderr)
         raise SystemExit(1)
     raise SystemExit(result or 0)

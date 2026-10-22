@@ -13,5 +13,7 @@ class Tests(unittest.TestCase):
             with self.subTest(name=name):
                 r=subprocess.run([sys.executable,str(root/name),*args],capture_output=True,text=True,timeout=10)
                 self.assertEqual(r.returncode,1);self.assertEqual(r.stdout,'')
-                self.assertEqual(r.stderr.strip(),f'COMPARISON_FAILURE_CODE={code}')
+                expected=f'COMPARISON_FAILURE_CODE={code}'
+                if code == 1: expected += '\nCOMPARISON_ACQUIRE_STAGE=0 COMPARISON_ACQUIRE_REASON=102 COMPARISON_HTTP_STATUS=0'
+                self.assertEqual(r.stderr.strip(),expected)
 if __name__=='__main__':unittest.main()
