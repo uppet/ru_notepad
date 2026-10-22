@@ -208,3 +208,15 @@ class TitleIdentity(unittest.TestCase):
         self.assertEqual(f.title_state('* fixture.md · ru_notepad',source,names),1)
         for value in ('other.md · ru_notepad','Untitled 2 · ru_notepad','', '* Untitled 1 · ru_notepad'):
             self.assertEqual(f.title_state(value,source,names),2)
+
+class MarkdownState(unittest.TestCase):
+    def test_finite_private_status_classification(self):
+        class CI:
+            @staticmethod
+            def status_contains(s,k):return k in s
+            @staticmethod
+            def status_startswith(s,k):return s.startswith(k)
+        for status,expected in [('',(0,0,0,0,0)),('Markdown',(1,0,0,0,0)),('Markdown status.folding_markdown',(1,1,0,0,0)),('status.opening private/path Markdown status.heading_folds_off error.syntax.markdown_disabled',(1,0,1,1,1))]:
+            got=f.markdown_state(CI,status)
+            self.assertEqual(got,expected)
+            self.assertTrue(all(type(x) is int and x in (0,1) for x in got))

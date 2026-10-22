@@ -153,6 +153,14 @@ def run_stage(api, hwnd, editor, deadline, arm, operation, result, clock=time.pe
         sleep(min(POLL, deadline.remaining()))
 
 
+def markdown_state(ci, status):
+    return (int("Markdown" in status),
+            int(ci.status_contains(status,"status.folding_markdown")),
+            int(ci.status_contains(status,"status.heading_folds_off")),
+            int(ci.status_startswith(status,"status.opening")),
+            int(ci.status_contains(status,"error.syntax.markdown_disabled")))
+
+
 def owned_api(ci, process, deadline):
     class API(ci.Windows):
         def scalar(self, hwnd, message, wparam=0, lparam=0):
@@ -167,6 +175,7 @@ def owned_api(ci, process, deadline):
             return result.value
         def markdown_done(self, hwnd):
             status = self.markdown_status(self.control(hwnd, 11))
+            self.last_markdown_state = markdown_state(ci,status)
             return ci.markdown_status_complete(status)
     return API()
 
@@ -329,7 +338,7 @@ def run_one(ci, arm, executable, source, scratch, inventory):
         settings = scratch / 'settings'; settings.mkdir()
         argv += ['-multiInst', '-noPlugin', '-nosession', '-lnormal', '-settingsDir=' + str(settings)]
     argv += [str(source)]
-    process = None; guard = None; started_filetime = None
+    process = None; guard = None; started_filetime = None; api = None
     startup_phase=0; startup_length_match=0; startup_title_state=0
     try:
         closed_manifest(executable.parent, inventory)
@@ -371,6 +380,8 @@ def run_one(ci, arm, executable, source, scratch, inventory):
     except Exception as exc:
         print(arm_failure_diagnostics(arm,exc),file=sys.stderr)
         print(f'COMPARISON_STARTUP_STATE PHASE={startup_phase} LENGTH_MATCH={startup_length_match} TITLE_STATE={startup_title_state}',file=sys.stderr)
+        if api is not None and hasattr(api,'last_markdown_state'):
+            print('COMPARISON_MARKDOWN_STATE '+ ' '.join(f'{k}={v}' for k,v in zip(('LANGUAGE','FOLDING','FOLDS_OFF','OPENING','ERROR'),api.last_markdown_state)),file=sys.stderr)
         result['error_type'] = type(exc).__name__
         result['elapsed_upper_ms'] = (time.perf_counter() - deadline.started) * 1000
         result['timed_out'] = isinstance(exc, TimeoutError)
