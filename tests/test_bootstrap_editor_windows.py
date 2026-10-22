@@ -1,5 +1,8 @@
 """Portable policy tests only: none grants real Windows/LLVM acceptance."""
 import importlib.util
+import contextlib
+import hashlib
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -48,9 +51,66 @@ class GatePolicyTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     gate.successful_log(directory, 'PASS_MARKER')
 
+    def test_log_mutation_after_actual_read_rejected_not_rebaselined(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary).resolve()
+            log = directory/'ru_notepad-owned.log'
+            good = b'[launcher] Starting Ru program.\nPASS_MARKER\n[launcher] Ru program returned with status 0.\n'
+            log.write_bytes(good)
+            original_open = Path.open
+            reads = []
+            @contextlib.contextmanager
+            def raced_open(path, mode='r', *args, **kwargs):
+                with original_open(path, mode, *args, **kwargs) as stream:
+                    if path == log and mode == 'rb':
+                        class Reader:
+                            def read(self, count):
+                                raw = stream.read(count)
+                                reads.append((count, raw))
+                                if len(reads) == 1:
+                                    with original_open(log, 'wb') as writer:
+                                        writer.write(b'FAIL: changed after read')
+                                return raw
+                        yield Reader()
+                    else:
+                        yield stream
+            with patch.object(Path, 'open', raced_open):
+                with self.assertRaisesRegex(ValueError, 'validated launcher log changed'):
+                    gate.successful_log(directory, 'PASS_MARKER')
+            self.assertEqual(reads[0], (1024*1024+1, good))
+            self.assertEqual(reads[1][1], b'FAIL: changed after read')
+
+    def test_log_raw_identity_and_invalid_utf8(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary).resolve()
+            log = directory/'ru_notepad-owned.log'
+            raw = b'[launcher] Starting Ru program.\r\nPASS_MARKER\r\n[launcher] Ru program returned with status 0.\r\n'
+            log.write_bytes(raw)
+            record = gate.successful_log(directory, 'PASS_MARKER')
+            self.assertEqual(record, {'path': str(log), 'size': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()})
+            log.write_bytes(raw+b'\xff')
+            with self.assertRaises(UnicodeDecodeError):
+                gate.successful_log(directory, 'PASS_MARKER')
+
+    def test_log_changed_after_verify_before_publish_cannot_pass(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary).resolve()
+            log, config, output = directory/'ru_notepad-owned.log', directory/'config.json', directory/'output.json'
+            log.write_bytes(b'validated bytes')
+            record = gate.identity(log)
+            config.write_text('{}', encoding='utf-8')
+            def finished_verify(_):
+                log.write_bytes(b'FAIL: later overwrite')
+                return {'status': 'passed', 'results': {'argv': {'log': record}}}
+            with patch.object(gate, 'verify', side_effect=finished_verify), patch.object(sys, 'argv', ['gate', '--config', str(config), '--output', str(output)]):
+                self.assertEqual(gate.main(), 1)
+            result = json.loads(output.read_text(encoding='utf-8'))
+            self.assertEqual(result['status'], 'failed')
+            self.assertIn('validated launcher log changed', result['error'])
+
     def test_identity_change_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
-            path = Path(temporary)/'owned.exe'
+            path = Path(temporary).resolve()/'owned.exe'
             path.write_bytes(b'original')
             record = gate.identity(path)
             self.assertEqual(gate.verify_identity(record), path)

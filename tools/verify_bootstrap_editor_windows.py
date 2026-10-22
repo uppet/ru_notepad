@@ -8,6 +8,7 @@ this module are policy tests, never evidence of native acceptance.
 import argparse
 import ctypes
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -95,11 +96,31 @@ def validate_receipts(config):
     return receipts
 
 
+def read_log_bytes(path):
+    path = Path(path)
+    require(path.is_file() and not path.is_symlink(), 'invalid launcher log')
+    resolved = path.resolve()
+    with path.open('rb') as stream:
+        raw = stream.read(1024*1024 + 1)
+    require(len(raw) <= 1024*1024, 'oversized launcher log')
+    require(path.is_file() and not path.is_symlink() and path.resolve() == resolved, 'launcher log path changed')
+    return raw, {'path': str(resolved), 'sha256': hashlib.sha256(raw).hexdigest(), 'size': len(raw)}
+
+
+def verify_log_records(results):
+    # Re-read only to compare with the original validated bytes, never to
+    # replace their identity with a later version of the file.
+    for row in results.values():
+        if 'log' in row:
+            _, current = read_log_bytes(row['log']['path'])
+            require(current == row['log'], 'validated launcher log changed')
+
+
 def successful_log(directory, marker):
     logs = list(directory.glob('ru_notepad-*.log'))
     require(len(logs) == 1, 'exactly one owned launcher log required')
-    require(logs[0].is_file() and not logs[0].is_symlink() and logs[0].stat().st_size <= 1024*1024, 'invalid/oversized log')
-    text = logs[0].read_text(encoding='utf-8', errors='strict')
+    raw, record = read_log_bytes(logs[0])
+    text = raw.decode('utf-8', errors='strict')
     for value in ('[launcher] Starting Ru program.', '[launcher] Ru program returned with status 0.', marker):
         require(text.count(value) == 1, 'missing/duplicate lifecycle marker: '+value)
     if marker.startswith('BOOTSTRAP_DLL_ABI_PASS:'):
@@ -112,7 +133,8 @@ def successful_log(directory, marker):
             '[startup] initial document ready', '[startup] main window shown', '[operation] open started')),
             'incomplete GUI startup/open lifecycle')
     require(not re.search(r'FAIL:|initialization failed|exited before returning|fatal', text, re.I), 'diagnostic failure')
-    return identity(logs[0])
+    verify_log_records({'current': {'log': record}})
+    return record
 
 
 def owned_dialog(api, pid):
@@ -398,6 +420,7 @@ def verify(config):
     validate_receipt(Path(config['dependencies_receipt']))
     for record in [*inputs.values(), *copies]:
         verify_identity(record)
+    verify_log_records(results)
     return {'schema': SCHEMA, 'platform': sys.platform, 'status': 'passed' if all_passed(results) else 'failed',
         'functional_smoke_only': True, 'deadline_seconds_per_child': DEADLINE_SECONDS,
         'toolchain_identity_scopes': app_receipt['toolchain_identity_scopes'],
@@ -413,6 +436,7 @@ def main():
     require(not args.output.exists(), 'refuse overwrite evidence')
     try:
         result = verify(read_json(args.config))
+        verify_log_records(result['results'])  # Last check before publishing the receipt.
     except Exception as exc:
         result = {'schema': SCHEMA, 'status': 'failed', 'release_permission': False, 'error': str(exc)}
     with args.output.open('x', encoding='utf-8') as output:

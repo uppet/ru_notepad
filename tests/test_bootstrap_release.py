@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -157,20 +158,48 @@ class ReleaseTests(unittest.TestCase):
         cc = shutil.which('cc')
         if not cc:
             self.fail('C preprocessor required for bridge test')
-        (self.root/'diagnostic_launcher.c').write_text(
-            'int main(int argc, char **argv) { return ru_program_main(argc, argv); }\n')
-        wrapper = Path(__file__).resolve().parents[1]/'packaging/bootstrap_gui_launcher.c'
-        output = subprocess.check_output([cc, '-E', '-P', '-DRU_BOOTSTRAP_BRIDGE_TEST',
-            '-I', str(self.root), str(wrapper)], text=True)
-        self.assertIn('return main(argc, argv);', output)
-        self.assertIn('int ru_bootstrap_diagnostic_main(int argc, char **argv)', output)
-        self.assertIn('return ru_bootstrap_main_bridge(argc, argv);', output)
-        self.assertNotIn('return ru_bootstrap_diagnostic_main(argc, argv);', output)
-        # Compile the preprocessed adapter as C too; the real LLVM main remains
-        # an unresolved external for the final Windows linker, not recursion.
-        compiled = self.root/'bridge.o'
-        subprocess.run([cc, '-c', '-x', 'c', '-', '-o', str(compiled)], input=output, text=True, check=True)
-        self.assertTrue(compiled.is_file())
+        source = Path(__file__).resolve().parents[1]/'packaging/bootstrap_gui_launcher.c'
+        wrapper = self.root/'bootstrap_gui_launcher.c'
+        shutil.copyfile(source, wrapper)
+        # Quote includes first search beside the wrapper. Isolate both portable
+        # models so an installed/real diagnostic_launcher.c cannot shadow them.
+        forms = [
+            'int main(int argc, char **argv) { return ru_program_main(argc, argv); }\n',
+            'int main(int argc, char **argv) { int status = ru_program_main(argc, argv); return status; }\n',
+        ]
+        cases = []
+        for index, form in enumerate(forms):
+            (self.root/'diagnostic_launcher.c').write_text(form, encoding='utf-8')
+            output = subprocess.check_output([cc, '-E', '-P', '-DRU_BOOTSTRAP_BRIDGE_TEST', str(wrapper)], text=True)
+            cases.append(('portable-'+str(index), output, False))
+        if sys.platform == 'win32':
+            # Exercise the actual checked-in Windows diagnostic source AND
+            # wWinMain, not a substituted one-line stub or weaker assertion.
+            self.assertTrue((source.parent/'diagnostic_launcher.c').is_file())
+            output = subprocess.check_output([cc, '-E', '-P', str(source)], text=True)
+            cases.append(('real-windows', output, True))
+        def check_graph(output, windows):
+            self.assertRegex(output, r'extern int main\(int argc, char \*\*argv\);')
+            self.assertRegex(output, r'static int ru_bootstrap_main_bridge\(int argc, char \*\*argv\)\s*\{\s*return main\(argc, argv\);\s*\}')
+            self.assertIn('int ru_bootstrap_diagnostic_main(int argc, char **argv)', output)
+            self.assertEqual(output.count('ru_bootstrap_main_bridge(argc, argv)'), 1)
+            self.assertNotIn('ru_bootstrap_diagnostic_main(argc, argv)', output)
+            self.assertNotRegex(output, r'\bint main\([^;]*\)\s*\{')
+            if windows:
+                self.assertIn('wWinMain(', output)
+                self.assertEqual(output.count('ru_bootstrap_diagnostic_main(argc, utf8)'), 1)
+        for label, output, windows in cases:
+            with self.subTest(form=label):
+                check_graph(output, windows)
+                # Both macro-order recursion and diagnostic self-recursion
+                # must fail the same contract in each preprocessed form.
+                with self.assertRaises(AssertionError):
+                    check_graph(output.replace('return main(argc, argv);', 'return ru_bootstrap_main_bridge(argc, argv);', 1), windows)
+                with self.assertRaises(AssertionError):
+                    check_graph(output.replace('ru_bootstrap_main_bridge(argc, argv)', 'ru_bootstrap_diagnostic_main(argc, argv)'), windows)
+                compiled = self.root/(label+'.o')
+                subprocess.run([cc, '-c', '-x', 'c', '-', '-o', str(compiled)], input=output, text=True, check=True)
+                self.assertTrue(compiled.is_file())
 
     def test_final_gui_pe_not_console(self):
         pe = bytearray(256)
