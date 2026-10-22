@@ -31,6 +31,35 @@ def diagnostics(exc,stage):
     return stage,kind,origin,line
 
 
+def mode_diagnostics(proof,mode):
+    # No buffer ID/address, strings, or exception text can enter this record.
+    names=('language_type','lexer','udl_menu_id','udl_menu_checked','plain_menu_checked','file_count','same_buffer')
+    limits=((0,255),(0,4096),(46181,46210),(0,1),(0,1),(0,1024),(0,1))
+    values=[]
+    for name,(lo,hi) in zip(names,limits):
+        value=proof.get(name)
+        values.append(value if type(value) is int and lo<=value<=hi else 65535)
+    return (mode if type(mode) is int and mode in (0,1) else 65535,*values)
+
+
+def settings_diagnostics(root):
+    names=('config.xml','session.xml','langs.xml','stylers.xml','shortcuts.xml','contextMenu.xml',UDL_PATH,'userDefineLangs')
+    rows=[];stack=[root]
+    while stack and len(rows)<32:
+        parent=stack.pop();b.plain(parent,directory=True)
+        for path in sorted(parent.iterdir()):
+            if len(rows)>=32:break
+            relative=path.relative_to(root).as_posix();info=path.lstat()
+            linked=path.is_symlink() or bool(getattr(info,'st_file_attributes',0)&0x400)
+            kind=3 if linked else 2 if path.is_dir() else 1 if path.is_file() else 4
+            rows.append(dict(known_id=names.index(relative)+1 if relative in names else 0,kind=kind,
+                path_sha256=hashlib.sha256(relative.encode('utf-8','surrogatepass')).hexdigest(),
+                bytes=info.st_size if type(info.st_size) is int and 0<=info.st_size<=10485760 else 10485761,
+                single_link=int(info.st_nlink==1)))
+            if kind==2:stack.append(path)
+    return rows
+
+
 def official_udl(path):
     path=b.plain(path);b.need(path.stat().st_size<=16384)
     data=path.read_bytes();text=data.decode('utf-8')
@@ -136,6 +165,12 @@ class NppAPI:
                    plain_menu_checked=plain_checked,file_count=count,same_buffer=int(current==self.buffer_id))
         if not (current==self.buffer_id and count==1 and language==(15 if mode else 0) and
                 lexer in ((152,) if mode else (0,1)) and udl_checked==mode and plain_checked==1-mode):
+            values=mode_diagnostics(proof,mode)
+            try:
+                primary=self.scalar(hwnd,2031,0,1);secondary=self.scalar(hwnd,2031,0,2)
+                print('NPP_VIEW_COUNTS='+json.dumps([x if type(x) is int and 0<=x<=1024 else 65535 for x in (primary,secondary)]),file=sys.stderr)
+            except Exception:print('NPP_VIEW_COUNTS_UNAVAILABLE=1',file=sys.stderr)
+            print('NPP_MODE_STATE='+json.dumps(values),file=sys.stderr)
             raise RuntimeError('actual selected mode mismatch')
         return proof
 
@@ -246,12 +281,20 @@ def run_one(ci,mode,exe,source,scratch,inventory,udl):
                 result['cleanup_unconfirmed']=int(cleaned['cleanup_unconfirmed'])
             except OSError:result['cleanup_unconfirmed']=1
         result['elapsed_upper_ms']=(time.perf_counter()-deadline.started)*1000
+        post_stage=1
         try:
             if result['cleanup_unconfirmed']:raise RuntimeError('cleanup uncertain')
             f.closed_manifest(exe.parent,inventory);result['runtime_unchanged']=1
+            post_stage=2
             result['fixture_unchanged']=int(b.sha(b.plain(source))==hashlib.sha256(b'a'*f.SIZE).hexdigest())
+            post_stage=3
             settings_unchanged(settings,udl);result['udl_unchanged']=1
-        except (OSError,ValueError,RuntimeError):pass
+        except (OSError,ValueError,RuntimeError) as exc:
+            _,kind,origin,line=diagnostics(exc,7)
+            print(f'NPP_POST_STAGE={post_stage} ERROR_KIND={kind} SOURCE_ID={origin} LINE={line}',file=sys.stderr)
+            if post_stage==3:
+                try:print('NPP_SETTINGS_STATE='+json.dumps(settings_diagnostics(settings)),file=sys.stderr)
+                except (OSError,ValueError):print('NPP_SETTINGS_STATE_UNAVAILABLE=1',file=sys.stderr)
         if result['cleanup_unconfirmed'] or not all(result[k] for k in ('runtime_unchanged','fixture_unchanged','udl_unchanged')):result['passed']=0
     return result
 

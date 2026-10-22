@@ -178,6 +178,19 @@ class TestUDL(unittest.TestCase):
         with self.assertRaises(ValueError):p.validate(x)
     def test_duplicate_json_rejected(self):
         with self.assertRaises(ValueError):json.loads('{"schema":3,"schema":3}',object_pairs_hook=p.unique)
+    def test_mode_diagnostics_closed_numbers_only(self):
+        for bad in ('secret path',{'private key':42},True,float('nan'),float('inf'),-1,2**64):
+            row={k:bad for k in ('language_type','lexer','udl_menu_id','udl_menu_checked','plain_menu_checked','file_count','same_buffer')}
+            values=n.mode_diagnostics(row,bad)
+            self.assertTrue(all(type(x) is int and 0<=x<=65535 for x in values))
+            self.assertNotIn('secret',json.dumps(values))
+    def test_settings_diagnostics_never_reads_contents_or_follows_links(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);(root/'unknown-private-name').write_text('sensitive body')
+            rows=n.settings_diagnostics(root)
+            self.assertEqual(rows[0]['known_id'],0);self.assertEqual(rows[0]['kind'],1)
+            text=json.dumps(rows);self.assertNotIn('unknown-private-name',text);self.assertNotIn('sensitive body',text)
+            (root/'functionList').mkdir();self.assertEqual(len(n.settings_diagnostics(root)),2)
     def test_diagnostics_do_not_return_exception_text(self):
         try:raise RuntimeError('C:/private/path secret')
         except RuntimeError as exc:
