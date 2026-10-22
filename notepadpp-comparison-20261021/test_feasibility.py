@@ -191,3 +191,9 @@ class InventoryDiagnostics(unittest.TestCase):
         self.assertEqual(x['changed_count'],1)
         self.assertEqual(x['rows'][0]['kind'],3)
         self.assertEqual(x['rows'][0]['known_id'],1)
+
+
+class ArmDiagnostic(unittest.TestCase):
+    def test_only_closed_numeric_fields(self):
+        self.assertEqual(f.arm_failure_diagnostics('C',RuntimeError('/private/customer secret')),
+                         'COMPARISON_ARM_FAILURE ARM=2 ERROR_KIND=2 SOURCE_ID=0 LINE=0')

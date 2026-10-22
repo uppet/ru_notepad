@@ -1,6 +1,6 @@
 # Implementation status — 2026-10-22
 
-**87 Linux pure/mock/real-source-loading tests pass. Native Windows results are still required.** The retained local template has its historical gate; the reviewed publication candidate is windows-feasibility.yml, triggered only by pushes to notepadpp-comparison.
+**88 Linux pure/mock/real-source-loading tests pass. Native Windows results are still required.** The retained local template has its historical gate; the reviewed publication candidate is windows-feasibility.yml, triggered only by pushes to notepadpp-comparison.
 
 ## Files
 
@@ -10,7 +10,7 @@
 - `feasibility.py`: only A=Ru baseline plain text, B=stock NPP plain text, C=Ru baseline Markdown. Exact1M synthetic bytes; fresh per-arm runtime copy. Re-seals provenance before/after every run; closed inventories before/after launch; owns retained Popen and HWND/PID; no global input/injection.
 - `public_result.py`: fail-closed fixed-field numeric/hash projection. Includes Windows build, CPU count/identity hash, runner-image hash, NPP version, tool and runtime hashes; no raw context bytes/private paths.
 - `windows-feasibility.yml.template`: pinned actions, fixed source/compiler checkouts, independent branch guard, sequential build/acquire/seal/ABC steps. Review gate remains; artifact upload still requires separate review.
-- `test_*.py`:87 tests, including source/runtime/generated-code/native-key/compiler tampering, safe extraction, natural1/2Undo, stage/process budgets, async exit/no post-deadline grace, extraDLL/copy mutation, uncertain dispatch evidence and stop-next-arm.
+- `test_*.py`:88 tests, including source/runtime/generated-code/native-key/compiler tampering, safe extraction, natural1/2Undo, stage/process budgets, async exit/no post-deadline grace, extraDLL/copy mutation, uncertain dispatch evidence and stop-next-arm.
 
 ## Timing and completion
 
@@ -84,3 +84,11 @@ comparison. A nested-file regression reproduces this harness bug. B now directly
 uses the identical recursive pre-launch `closed_manifest` after confirmed cleanup;
 there is no NPP log/XML exception and unknown, changed, missing, or linked files
 still fail. No NPP-only warm-up is added to the next fresh complete ABC job.
+
+Run 39722857036 fully passed A and B, including cleanup, unchanged runtime,
+fixture and sealed provenance. C failed with RuntimeError about 292.7 ms into
+opening, before any edit/Undo dispatch; this is not a 30-second timeout and its
+precise cause was not captured. Runtime exceptions now emit only fixed numeric
+arm/error/source-ID/line diagnostics. No readiness condition or timing behavior
+is changed on speculation; the next live diagnostic must establish the failure
+site before any targeted compatibility correction.

@@ -308,6 +308,11 @@ def cleanup_owned(process, hard, clock=time.perf_counter):
     return {'exit_code': code, 'cleanup_unconfirmed': code is None}
 
 
+def arm_failure_diagnostics(arm, exc):
+    stage,kind,origin,line=failure_diagnostics(exc,10)
+    return f'COMPARISON_ARM_FAILURE ARM={"ABC".index(arm)} ERROR_KIND={kind} SOURCE_ID={origin} LINE={line}'
+
+
 def run_one(ci, arm, executable, source, scratch, inventory):
     deadline = Deadline()
     result = {'arm': arm, 'executed': False, 'stages': [{'operation': 'open', 'completed': False, 'censored': False}], 'passed': False}
@@ -353,6 +358,7 @@ def run_one(ci, arm, executable, source, scratch, inventory):
             run_stage(api, hwnd, editor, deadline, arm, operation, stage)
         result['passed'] = True
     except Exception as exc:
+        print(arm_failure_diagnostics(arm,exc),file=sys.stderr)
         result['error_type'] = type(exc).__name__
         result['elapsed_upper_ms'] = (time.perf_counter() - deadline.started) * 1000
         result['timed_out'] = isinstance(exc, TimeoutError)
