@@ -11,6 +11,9 @@
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
 策 取 外言 'markdown_policy.ru'.
+密策 取 外言 'markdown_dense.ru'.
+# Explicit experiment source control. Only a manifest-bound build may enable it.
+_密扫描策略 取 {'enabled':假}.
 _编辑们 取 {}.
 _序号 取 [0].
 _身份 取 [0].
@@ -746,7 +749,11 @@ _时存 取 _计数型 其 新建.
         若 末-始 > 态['maxRead'] 则 态 其 增 'maxRead' (末-始). 然
     然
     文 取 态['chunk'].
-    果 取 策 其 喂入 态['policy'] 文 (态['readEnd'] == 态['length']).
+    若 _密扫描策略['enabled'] 则
+        果 取 密策 其 喂入 态['policy'] 文 (态['readEnd'] == 态['length']).
+    另
+        果 取 策 其 喂入 态['policy'] 文 (态['readEnd'] == 态['length']).
+    然
     _护 柄 态.
     用 取 果['used'].
     若 用 < 0 或 用 > 文 其 量 则 卒 'Invalid Markdown consumed scalar count.'. 然

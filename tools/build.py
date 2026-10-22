@@ -116,7 +116,11 @@ def main():
     ap.add_argument('--console',action='store_true')
     ap.add_argument('--skip-scintilla',action='store_true')
     ap.add_argument('--skip-lexilla',action='store_true')
+    ap.add_argument('--experimental-mi-manifest',type=Path)
+    ap.add_argument('--experimental-markdown-dense',choices=('ordinary','dense'))
     args=ap.parse_args()
+    if bool(args.experimental_mi_manifest) != bool(args.experimental_markdown_dense):
+        ap.error('The dense experiment requires both an explicit manifest and ordinary/dense arm.')
     ru=args.ru_root.resolve()
     tree=git(ru,'rev-parse','HEAD^{tree}')
     if tree != args.allow_toolchain_tree:
@@ -159,9 +163,18 @@ def main():
     program=parse(text)
     graph=load_module_graph(str(source),program)
     graph.sources[graph.root]=text
+    dense_receipt=None
+    if args.experimental_mi_manifest:
+        from markdown_dense_build import prepare_graph, verify_receipt, MANIFEST, DRIVER
+        dense_receipt=prepare_graph(ROOT,graph,args.experimental_mi_manifest,args.experimental_markdown_dense)
+        build_inputs.update({rel:sha(ROOT/rel) for rel in (MANIFEST,DRIVER)})
     started=time.monotonic()
     native_helpers=build_native_helpers(args.cc, build)
-    code=Compiler(program,graph.root,modules=graph,allow_native=True).compile()
+    if dense_receipt is None:
+        code=Compiler(program,graph.root,modules=graph,allow_native=True).compile()
+    else:
+        code=Compiler(program,graph.root,modules=graph,allow_native=True,mi_manifest=args.experimental_mi_manifest).compile()
+        verify_receipt(ROOT,args.experimental_mi_manifest,args.experimental_markdown_dense,dense_receipt)
     emitted=build/(source.stem+'.c')
     emitted.write_text(code,encoding='utf-8')
     translation=emitted
@@ -202,6 +215,9 @@ def main():
              'generated_c_sha256':sha(emitted),'generated_c_bytes':emitted.stat().st_size,
              'seconds':time.monotonic()-started,'runtime_tested':False,
              'compiler_command':cmd}
+    if dense_receipt is not None:
+        verify_receipt(ROOT,args.experimental_mi_manifest,args.experimental_markdown_dense,dense_receipt)
+        receipt['experimental_markdown_dense']=dense_receipt
     (args.output.with_suffix('.build.json')).write_text(json.dumps(receipt,indent=2)+'\n')
     print(json.dumps(receipt,indent=2))
 

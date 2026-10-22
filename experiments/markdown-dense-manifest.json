@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "functions": [{
+    "module": "../src/markdown_ascii_kernel.ru",
+    "function": "ASCII段",
+    "params": {"字节": "borrow_ro_u8", "始": "u32", "终": "u32"},
+    "result": "u32",
+    "effects": ["borrow-read", "no-escape", "no-callback", "no-gc", "may-fail"],
+    "ranges": [{"view": "字节", "begin": "始", "end": "终"}]
+  }]
+}

@@ -1,0 +1,162 @@
+name: Experimental source-generated Markdown dense A-B
+on:
+  push:
+    branches: [mi-perf-prototype]
+permissions:
+  contents: read
+concurrency:
+  group: markdown-dense-ab-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  linux-correctness:
+    if: github.repository == 'uppet/ru_notepad'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: dense
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONOPTIMIZE: '0'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          path: dense
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: a09a2eaf8d976493a01a7098de0ea516c3023cbc
+          path: oracle
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: uppet/ru-language
+          ref: d78a29d51844acf23ee0a49129d0211c006ac737
+          path: .ci/ru-language
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Freeze actual ordinary and manifest paths before Windows
+        run: |
+          set -euo pipefail
+          mkdir -p build/dense-ci-private
+          python tools/test_markdown_dense_build.py --ru-root ../.ci/ru-language > build/dense-ci-private/build.log 2>&1
+          python tools/test_markdown_dense_ab.py > build/dense-ci-private/coordinator.log 2>&1
+          python tools/test_markdown_dense.py --baseline ../oracle --ru-root ../.ci/ru-language --mode array > build/dense-ci-private/array.log 2>&1
+          python tools/test_markdown_dense.py --baseline ../oracle --ru-root ../.ci/ru-language --mode native --manifest experiments/markdown-dense-manifest.json --posix-test-host > build/dense-ci-private/native.log 2>&1
+          python tools/test_markdown_dense_kernel.py --ru-root ../.ci/ru-language --manifest experiments/markdown-dense-manifest.json > build/dense-ci-private/kernel.log 2>&1
+          python tools/check_markdown_dense_integration.py --ru-root ../.ci/ru-language --manifest experiments/markdown-dense-manifest.json > build/dense-ci-private/main.log 2>&1
+          echo DENSE_LINUX_CORRECTNESS_COMPLETE=1
+  compare:
+    needs: linux-correctness
+    if: github.repository == 'uppet/ru_notepad'
+    runs-on: windows-2022
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: dense
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONOPTIMIZE: '0'
+    steps:
+      - name: Preserve exact source bytes
+        working-directory: ${{ github.workspace }}
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          path: ordinary
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          path: dense
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: a09a2eaf8d976493a01a7098de0ea516c3023cbc
+          path: oracle
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: uppet/ru-language
+          ref: d78a29d51844acf23ee0a49129d0211c006ac737
+          path: .ci/ru-language
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install official MinGW
+        id: msys2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e
+        with:
+          msystem: MINGW64
+          update: true
+          cache: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+      - name: Same-source same-compiler relation
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          & python tools/run_markdown_dense_ab.py verify --ordinary ../ordinary --dense . --compiler ../.ci/ru-language --cc "$env:MSYS2_ROOT/mingw64/bin/gcc.exe" --notepad-commit $env:GITHUB_SHA --compiler-commit d78a29d51844acf23ee0a49129d0211c006ac737 --compiler-tree a853464d36d70dc358537e76dee7711ec6dbfecf
+          if ($LASTEXITCODE -ne 0) { throw 'DENSE_SOURCE_RELATION_FAILED=1' }
+      - name: Ordinary real Windows oracle and owned controls
+        working-directory: ordinary
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: ./tools/run_markdown_dense_ci.ps1 -RuRoot ../.ci/ru-language -MsysRoot $env:MSYS2_ROOT -OracleRoot ../oracle -Stage controls -Arm ordinary
+      - name: Dense real Windows oracle and owned controls
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: ./tools/run_markdown_dense_ci.ps1 -RuRoot ../.ci/ru-language -MsysRoot $env:MSYS2_ROOT -OracleRoot ../oracle -Stage controls -Arm dense
+      - name: Ordinary verified dependencies
+        working-directory: ordinary
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: ./tools/run_markdown_dense_ci.ps1 -RuRoot ../.ci/ru-language -MsysRoot $env:MSYS2_ROOT -Stage dependencies -Arm ordinary
+      - name: Dense verified dependency sources
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: ./tools/run_markdown_dense_ci.ps1 -RuRoot ../.ci/ru-language -MsysRoot $env:MSYS2_ROOT -Stage dependencies -Arm dense
+      - name: Build ordinary arm with exact manifest and explicit flag off
+        working-directory: ordinary
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: ./tools/run_markdown_dense_ci.ps1 -RuRoot ../.ci/ru-language -MsysRoot $env:MSYS2_ROOT -Stage application -Arm ordinary
+      - name: Bind same-job native DLL handoff before dense build
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          & python tools/run_markdown_dense_ab.py sync-dlls --ordinary ../ordinary --dense . --compiler ../.ci/ru-language --cc "$env:MSYS2_ROOT/mingw64/bin/gcc.exe" --notepad-commit $env:GITHUB_SHA --compiler-commit d78a29d51844acf23ee0a49129d0211c006ac737 --compiler-tree a853464d36d70dc358537e76dee7711ec6dbfecf
+          if ($LASTEXITCODE -ne 0) { throw 'DENSE_NATIVE_HANDOFF_FAILED=1' }
+      - name: Build dense arm with identical source and explicit flag on
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: ./tools/run_markdown_dense_ci.ps1 -RuRoot ../.ci/ru-language -MsysRoot $env:MSYS2_ROOT -Stage application -Arm dense
+      - name: Verify exact build relation before any application launch
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          & python tools/run_markdown_dense_ab.py check-built --ordinary ../ordinary --dense . --compiler ../.ci/ru-language --cc "$env:MSYS2_ROOT/mingw64/bin/gcc.exe" --notepad-commit $env:GITHUB_SHA --compiler-commit d78a29d51844acf23ee0a49129d0211c006ac737 --compiler-tree a853464d36d70dc358537e76dee7711ec6dbfecf
+          if ($LASTEXITCODE -ne 0) { throw 'DENSE_BUILD_RELATION_FAILED=1' }
+      - name: Eight fresh owned release processes with original gates
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          & python tools/run_markdown_dense_ab.py measure --ordinary ../ordinary --dense . --compiler ../.ci/ru-language --cc "$env:MSYS2_ROOT/mingw64/bin/gcc.exe" --notepad-commit $env:GITHUB_SHA --compiler-commit d78a29d51844acf23ee0a49129d0211c006ac737 --compiler-tree a853464d36d70dc358537e76dee7711ec6dbfecf --output build/markdown-dense-ab-public
+          if ($LASTEXITCODE -ne 0) { throw 'DENSE_DIAGNOSTIC_OR_PRODUCT_GATE_FAILED=1' }
+      - name: Upload bounded numeric and hash evidence only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: markdown-dense-ab-public
+          path: dense/build/markdown-dense-ab-public/markdown-dense-ab.json
+          if-no-files-found: warn
+          retention-days: 14
