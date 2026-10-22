@@ -171,3 +171,23 @@ class DiagnosticPrivacy(unittest.TestCase):
             self.assertIn(kind,range(1,9))
             self.assertIn(source,range(1,6))
             self.assertTrue(type(line) is int and 0 < line <= 10000)
+
+
+class InventoryDiagnostics(unittest.TestCase):
+    def test_case_hash_and_unknown_paths_are_bounded(self):
+        actual={'lexilla.dll':'a'*64,**{f'/private/customer/{i}':'secret' for i in range(30)}}
+        expected={'Lexilla.dll':'a'*64}
+        result=f.inventory_diagnostics(actual,expected)
+        self.assertEqual(result['missing_count'],1)
+        self.assertEqual(result['extra_count'],31)
+        self.assertEqual(len(result['rows']),16)
+        self.assertNotIn('private',__import__('json').dumps(result))
+        self.assertNotIn('secret',__import__('json').dumps(result))
+        self.assertTrue(all(len(row['path_sha256'])==64 for row in result['rows']))
+        pair=f.inventory_diagnostics({'lexilla.dll':'a'*64},expected)['rows']
+        self.assertEqual([(x['known_id'],x['case'],x['kind']) for x in pair],[(3,1,1),(3,2,2)])
+    def test_hash_difference_exact_id(self):
+        x=f.inventory_diagnostics({'ru_notepad.exe':'a'*64},{'ru_notepad.exe':'b'*64})
+        self.assertEqual(x['changed_count'],1)
+        self.assertEqual(x['rows'][0]['kind'],3)
+        self.assertEqual(x['rows'][0]['known_id'],1)

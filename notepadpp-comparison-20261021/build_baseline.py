@@ -117,6 +117,29 @@ def source_snapshot(root,p):
     for rel,want in native.items():need(sha(under(root,rel))==want)
     result.update(native);return result
 
+NONRUNTIME_NAMES=('RuSyntaxWrongAbi.dll','RuSyntaxWrongAbi.native-build.json')
+
+
+def nonruntime_build(root,binary,p):
+    # These two pinned negative-test build outputs are never GUI runtime inputs.
+    expected=dict(read(under(binary,'RuSyntax.native-build.json'))['build_inputs'])
+    expected.update(output_name=NONRUNTIME_NAMES[0],compile_sources=['native/ru_wrong_abi.c'])
+    need(tuple(p.package.NATIVE_COMPILE_SOURCES[NONRUNTIME_NAMES[0]])==('native/ru_wrong_abi.c',))
+    hashes={}
+    for name in NONRUNTIME_NAMES:
+        copied=under(binary,name);original=under(root,'build/native-helper/'+name)
+        need(sha(copied)==sha(original))
+        hashes[name]=sha(copied)
+    negative=read(under(binary,NONRUNTIME_NAMES[1]))
+    command=[expected['compiler_path'],*expected['compiler_flags'],*expected['compile_sources'],
+             '-o',str(root/'build/native-helper/RuSyntaxWrongAbi.pending.dll'),
+             *('-l'+name for name in expected['link_libraries'])]
+    need(negative=={'schema':1,'name':NONRUNTIME_NAMES[0],'build_inputs':expected,
+                    'build_key':p.package.native_build_key(expected),'dll_sha256':hashes[NONRUNTIME_NAMES[0]],
+                    'compiler_command':command})
+    return hashes
+
+
 def full_receipt(root,binary,cc,p):
     root=plain(root,directory=True);binary=plain(binary,directory=True);cc=compiler_file(cc)
     receipt=read(binary/'ru_notepad.build.json')
@@ -214,6 +237,7 @@ def build(root,compiler,toolbin,out,logs):
         # Generated dependencies must be byte-identical to the app's copied DLLs.
         for name,src in [('Scintilla.dll','vendor/scintilla/bin/Scintilla.dll'),('Lexilla.dll','vendor/lexilla/bin/lexilla.dll')]:need(sha(under(out,name))==sha(under(root,src)))
         record={'schema':1,'baseline_commit':BASELINE,'compiler_commit':COMPILER,'compiler_tree':COMPILER_TREE,
+                'nonruntime_build_sha256':nonruntime_build(root,out,protocol),
                 'tracked_source_sha256':snapshot,'build_receipt_sha256':sha(out/'ru_notepad.build.json'),
                 'native_receipt_sha256':sha(out/'RuSyntax.native-build.json'),
                 'tools':tools,'dependency_build_commands':[[str(x) for x in cmd] for cmd in commands[:2]],

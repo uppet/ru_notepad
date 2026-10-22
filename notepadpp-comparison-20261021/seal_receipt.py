@@ -9,6 +9,8 @@ def seal(root,compiler,cc,ru,npp,npp_receipt):
     source=b.checkout(root,b.BASELINE);b.verify_compiler(compiler)
     p=b.load_protocol(root);build=b.full_receipt(root,ru,cc,p)
     record=b.read(ru/'comparison-build.json')
+    nonruntime=b.nonruntime_build(root,ru,p)
+    b.need(record['nonruntime_build_sha256']==nonruntime)
     b.need(record['tracked_source_sha256']==source)
     b.need(record['build_receipt_sha256']==b.sha(ru/'ru_notepad.build.json'))
     b.need(record['native_receipt_sha256']==b.sha(ru/'RuSyntax.native-build.json'))
@@ -30,14 +32,18 @@ def seal(root,compiler,cc,ru,npp,npp_receipt):
         b.need(b.sha(b.under(npp,marker)) == actual[marker])
     runtime={'ru':{name:b.sha(b.under(ru,name)) for name in p.base.RUNTIME_NAMES},
              'npp':{name:h for name,h in actual.items() if '/' not in name}}
-    return {'schema':1,'baseline_commit':b.BASELINE,'compiler_commit':b.COMPILER,'compiler_tree':b.COMPILER_TREE,
-            'runtime':runtime,'npp_all_files_sha256':actual,'npp_archive_sha256':package['archive_sha256'],
+    result={'schema':1,'baseline_commit':b.BASELINE,'compiler_commit':b.COMPILER,'compiler_tree':b.COMPILER_TREE,
+            'nonruntime_build_sha256':nonruntime,'runtime':runtime,'npp_all_files_sha256':actual,'npp_archive_sha256':package['archive_sha256'],
             'baseline_source_snapshot_sha256':b.digest(source),'build_provenance_sha256':b.sha(ru/'comparison-build.json'),
             'build_receipt_sha256':b.sha(ru/'ru_notepad.build.json'),'native_receipt_sha256':b.sha(ru/'RuSyntax.native-build.json'),'npp_receipt_sha256':b.sha(npp_receipt),
             'tools':{name:{'sha256':v['sha256'],'version_stdout_sha256':v['version_stdout_sha256'],'path_sha256':hashlib.sha256(v['path'].encode()).hexdigest()} for name,v in record['tools'].items()},'npp_version':[8,9,8,1],
             'generated_c_sha256':build['generated_c_sha256'],'translation_unit_sha256':build['translation_unit_sha256'],
             'native_helper_build_key':build['native_helper_build_key'],'compiler_sha256':record['compiler_sha256'],
             'compiler_version_sha256':record['compiler_version_sha256'],'build_input_sha256':build['build_input_sha256']}
+    # Apply the exact runtime gate now, not only after successful sealing.
+    from feasibility import verify_receipt
+    verify_receipt(result,ru,npp)
+    return result
 
 
 def main():

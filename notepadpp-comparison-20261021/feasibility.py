@@ -169,6 +169,30 @@ def owned_api(ci, process, deadline):
     return API()
 
 
+INVENTORY_NAMES = ('ru_notepad.exe','Scintilla.dll','Lexilla.dll','RuSyntax.dll',
+                   'ru_notepad.build.json','comparison-build.json','RuSyntax.native-build.json',
+                   'notepad++.exe','doLocalConf.xml','disableNppAutoUpdate.xml',
+                   'RuSyntaxWrongAbi.dll','RuSyntaxWrongAbi.native-build.json')
+
+
+def inventory_diagnostics(actual, expected):
+    missing=set(expected)-set(actual);extra=set(actual)-set(expected)
+    changed={k for k in set(actual)&set(expected) if actual[k]!=expected[k]}
+    def safe_hash(value):
+        return value if type(value) is str and len(value)==64 and all(c in '0123456789abcdef' for c in value) else '0'*64
+    rows=[]
+    for name in sorted(missing|extra|changed)[:16]:
+        known=next((i+1 for i,n in enumerate(INVENTORY_NAMES) if n.casefold()==name.casefold()),0)
+        case=1 if name in INVENTORY_NAMES else (2 if known else 0)
+        rows.append({'kind':1 if name in missing else (2 if name in extra else 3),
+                     'known_id':known,'case':case,
+                     'path_sha256':hashlib.sha256(name.encode('utf-8',errors='surrogatepass')).hexdigest(),
+                     'expected_sha256':safe_hash(expected.get(name)),
+                     'actual_sha256':safe_hash(actual.get(name))})
+    return {'expected_count':len(expected),'actual_count':len(actual),'missing_count':len(missing),
+            'extra_count':len(extra),'changed_count':len(changed),'rows':rows}
+
+
 def closed_manifest(root, expected):
     root = provenance.plain(root, directory=True)
     actual = {}
@@ -179,6 +203,7 @@ def closed_manifest(root, expected):
             provenance.plain(path)
             actual[path.relative_to(root).as_posix()] = digest(path)
     if actual != expected:
+        print('COMPARISON_INVENTORY='+json.dumps(inventory_diagnostics(actual,expected),sort_keys=True),file=sys.stderr)
         raise ValueError('runtime inventory mismatch')
     return actual
 
@@ -207,6 +232,10 @@ def verify_receipt(receipt, ru_dir, npp_dir):
     allowed_ru = dict(receipt['runtime']['ru'])
     for filename,key in [('ru_notepad.build.json','build_receipt_sha256'),('comparison-build.json','build_provenance_sha256'),('RuSyntax.native-build.json','native_receipt_sha256')]:
         allowed_ru[filename] = receipt[key]
+    # Original build inventory is nine entries; launched runtime remains four.
+    nonruntime=receipt['nonruntime_build_sha256']
+    if set(nonruntime)!=set(provenance.NONRUNTIME_NAMES):raise ValueError('invalid nonruntime build inventory')
+    allowed_ru.update(nonruntime)
     closed_manifest(ru_dir, allowed_ru)
     closed_manifest(npp_dir, receipt['npp_all_files_sha256'])
     for name,value in receipt['runtime']['npp'].items():

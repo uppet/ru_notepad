@@ -1,6 +1,6 @@
 # Implementation status — 2026-10-22
 
-**77 Linux pure/mock/real-source-loading tests pass. Native Windows results are still required.** The retained local template has its historical gate; the reviewed publication candidate is windows-feasibility.yml, triggered only by pushes to notepadpp-comparison.
+**82 Linux pure/mock/real-source-loading tests pass. Native Windows results are still required.** The retained local template has its historical gate; the reviewed publication candidate is windows-feasibility.yml, triggered only by pushes to notepadpp-comparison.
 
 ## Files
 
@@ -10,7 +10,7 @@
 - `feasibility.py`: only A=Ru baseline plain text, B=stock NPP plain text, C=Ru baseline Markdown. Exact1M synthetic bytes; fresh per-arm runtime copy. Re-seals provenance before/after every run; closed inventories before/after launch; owns retained Popen and HWND/PID; no global input/injection.
 - `public_result.py`: fail-closed fixed-field numeric/hash projection. Includes Windows build, CPU count/identity hash, runner-image hash, NPP version, tool and runtime hashes; no raw context bytes/private paths.
 - `windows-feasibility.yml.template`: pinned actions, fixed source/compiler checkouts, independent branch guard, sequential build/acquire/seal/ABC steps. Review gate remains; artifact upload still requires separate review.
-- `test_*.py`:77 tests, including source/runtime/generated-code/native-key/compiler tampering, safe extraction, natural1/2Undo, stage/process budgets, async exit/no post-deadline grace, extraDLL/copy mutation, uncertain dispatch evidence and stop-next-arm.
+- `test_*.py`:82 tests, including source/runtime/generated-code/native-key/compiler tampering, safe extraction, natural1/2Undo, stage/process budgets, async exit/no post-deadline grace, extraDLL/copy mutation, uncertain dispatch evidence and stop-next-arm.
 
 ## Timing and completion
 
@@ -35,3 +35,27 @@ Acquisition diagnostics use only closed numeric stage/reason enums and bounded H
 The official package contains nonempty presence-flag markers (308/219 bytes). Extraction preserves those verified original bytes; missing flags alone are created empty. Closed inventory and pre/post hash verification still reject modified, removed, extra, nonregular, or reparse files.
 
 Real Windows preparation smoke precedes MinGW/build: verifies canonical paths, fixed clean source/compiler and NPP inventory, imports the fixed baseline protocol, and binds actual ctypes/user32 signatures without starting a GUI or sending input. Entry failure diagnostics are finite numeric stage/error/source IDs and line numbers; no exception text or traceback source is printed. The previous full seal succeeded but the feasibility entry failed before producing a result; this is not a performance observation.
+
+Run 39716727133 failed strict runtime inventory at entry before GUI launch.
+The cause is not yet established. Inventory mismatch diagnostics now emit only
+bounded counts and at most 16 fixed-shape numeric/hash rows: fixed public basename
+ID, exact/case-variant category, difference kind, and SHA-256 of path/content.
+No path or exception plaintext is emitted. Seal now invokes the identical strict
+runtime inventory gate before writing its private receipt. No name normalization
+or relaxed matching is applied. Local recovery helper source is not assumed to
+match the fixed remote baseline unless its Git blob is independently verified.
+
+Fixed build inventory and launched runtime inventory are separate. Verified 6aa
+`build.py` copies both RuSyntax and its WrongAbi negative-control helper, including
+their receipts: the complete original build directory therefore has exactly nine
+entries, not seven. A regression executes only the exact Git-blob-verified pure
+copy helper on synthetic files and reproduces this. The two fixed nonruntime
+entries are separately bound in private provenance, byte-hashed against their
+original build/native-helper copies, and their full negative-helper receipt is
+checked against the pinned compile recipe derived from the already verified
+production helper inputs. Seal/revalidation repeats these checks and rejects any
+tenth entry, missing/changed name, link, wrong origin or altered recipe. Original
+build output and product receipts are not renamed, deleted, or edited. Existing
+launch staging still copies exactly one EXE and three production DLLs, refuses
+any additional entry, and never copies or loads WrongAbi. Public runtime identity
+remains the original four files; no negative binary or private receipt is uploaded.
