@@ -73,7 +73,9 @@ class Test(unittest.TestCase):
             with self.assertRaises(ValueError):b.tool_file(root,'windres.exe')
     def test_tool_reparse_rejected(self):
         with tempfile.TemporaryDirectory() as d:
-            root=Path(d);target=root/'ar.exe';target.write_bytes(b'bytes');original=Path.lstat
+            # Windows temporary paths may contain 8.3 aliases; match the canonical path
+            # used by tool_file so the injected reparse attribute is actually exercised.
+            root=Path(d).resolve();target=root/'ar.exe';target.write_bytes(b'bytes');original=Path.lstat
             def inspect(path):
                 if path==target:return SimpleNamespace(st_file_attributes=0x400,st_mode=original(path).st_mode)
                 return original(path)
