@@ -61,10 +61,10 @@ def validate(x):
                         for n in v:integer(n,0,255)
                     else:integer(v)
             if s['mode_proof'] is not None:
-                q=s['mode_proof'];exact(q,'language_type lexer udl_menu_id udl_menu_checked plain_menu_checked file_count same_buffer')
+                q=s['mode_proof'];exact(q,'language_type lexer udl_menu_id udl_menu_checked plain_menu_checked total_buffer_count primary_buffer_count secondary_buffer_count current_view current_doc_index secondary_hidden single_visible_editor same_buffer')
                 for v in q.values():integer(v)
                 need(q['language_type']==(0 if i==0 else 15) and q['lexer'] in ((0,1) if i==0 else (152,)))
-                need(46181<=q['udl_menu_id']<=46210 and q['udl_menu_checked']==i and q['plain_menu_checked']==1-i and q['file_count']==1 and q['same_buffer']==1)
+                need(46181<=q['udl_menu_id']<=46210 and q['udl_menu_checked']==i and q['plain_menu_checked']==1-i and q['total_buffer_count']==2 and q['primary_buffer_count']==1 and q['secondary_buffer_count']==1 and q['current_view']==0 and q['current_doc_index']==0 and q['secondary_hidden']==1 and q['single_visible_editor']==1 and q['same_buffer']==1)
             if s['completed']:
                 need(s['mode_proof'] is not None and s['last'] is not None and s['wall_ms'] is not None and s['first_text_upper_ms'] is not None and s['first_common_upper_ms'] is not None)
                 v=s['last'];exact(v,'length dirty context_sha256 lexer endstyled fold_header styles')

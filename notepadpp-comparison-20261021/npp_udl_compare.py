@@ -33,7 +33,7 @@ def diagnostics(exc,stage):
 
 def mode_diagnostics(proof,mode):
     # No buffer ID/address, strings, or exception text can enter this record.
-    names=('language_type','lexer','udl_menu_id','udl_menu_checked','plain_menu_checked','file_count','same_buffer')
+    names=('language_type','lexer','udl_menu_id','udl_menu_checked','plain_menu_checked','total_buffer_count','same_buffer')
     limits=((0,255),(0,4096),(46181,46210),(0,1),(0,1),(0,1024),(0,1))
     values=[]
     for name,(lo,hi) in zip(names,limits):
@@ -78,7 +78,8 @@ def settings_unchanged(settings,udl):
     for p in settings.rglob('*'):
         relative=p.relative_to(settings).as_posix()
         if p.is_dir():
-            b.plain(p,directory=True);b.need(relative=='userDefineLangs')
+            b.plain(p,directory=True);b.need(relative in ('userDefineLangs','themes'))
+            if relative=='themes':b.need(not any(p.iterdir()))
         else:
             b.plain(p);b.need(relative in allowed and p.stat().st_size<=10485760)
     b.need(official_udl(settings/UDL_PATH)==udl)
@@ -160,17 +161,23 @@ class NppAPI:
         if self.buffer_id is None:self.buffer_id=current
         language=self.scalar(hwnd,2088,current);lexer=self.scalar(editor,4002)
         count=self.scalar(hwnd,2031,0,0)
+        primary=self.scalar(hwnd,2031,0,1);secondary=self.scalar(hwnd,2031,0,2)
+        view=self.scalar(hwnd,2112)
+        index=self.scalar(hwnd,2047,0,0)
+        hidden=int(ctypes.c_ssize_t(self.scalar(hwnd,2047,0,1)).value==-1)
+        visible=int(self.editor(hwnd)==editor)
         identifier,udl_checked,plain_checked=self.menu(hwnd,full=full_menu)
         proof=dict(language_type=language,lexer=lexer,udl_menu_id=identifier,udl_menu_checked=udl_checked,
-                   plain_menu_checked=plain_checked,file_count=count,same_buffer=int(current==self.buffer_id))
-        if not (current==self.buffer_id and count==1 and language==(15 if mode else 0) and
+                   plain_menu_checked=plain_checked,total_buffer_count=count,primary_buffer_count=primary,secondary_buffer_count=secondary,
+                   current_view=view,current_doc_index=index,secondary_hidden=hidden,single_visible_editor=visible,same_buffer=int(current==self.buffer_id))
+        if not (current==self.buffer_id and count==2 and primary==1 and secondary==1 and view==0 and index==0 and hidden==1 and visible==1 and language==(15 if mode else 0) and
                 lexer in ((152,) if mode else (0,1)) and udl_checked==mode and plain_checked==1-mode):
             values=mode_diagnostics(proof,mode)
             try:
-                primary=self.scalar(hwnd,2031,0,1);secondary=self.scalar(hwnd,2031,0,2)
                 print('NPP_VIEW_COUNTS='+json.dumps([x if type(x) is int and 0<=x<=1024 else 65535 for x in (primary,secondary)]),file=sys.stderr)
             except Exception:print('NPP_VIEW_COUNTS_UNAVAILABLE=1',file=sys.stderr)
             print('NPP_MODE_STATE='+json.dumps(values),file=sys.stderr)
+            print('NPP_VIEW_IDENTITY='+json.dumps([x if type(x) is int and 0<=x<=1024 else 65535 for x in (view,index,hidden,visible)]),file=sys.stderr)
             raise RuntimeError('actual selected mode mismatch')
         return proof
 

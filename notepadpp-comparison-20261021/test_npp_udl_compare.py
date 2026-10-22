@@ -18,7 +18,7 @@ class API(FakeAPI):
     def mode_proof(self,h,e,mode):
         self.proofs+=1
         if mode!=self.mode:raise RuntimeError('synthetic wrong selected mode')
-        return dict(language_type=15 if mode else 0,lexer=self.lexer,udl_menu_id=46181,udl_menu_checked=mode,plain_menu_checked=1-mode,file_count=1,same_buffer=1)
+        return dict(language_type=15 if mode else 0,lexer=self.lexer,udl_menu_id=46181,udl_menu_checked=mode,plain_menu_checked=1-mode,total_buffer_count=2,primary_buffer_count=1,secondary_buffer_count=1,current_view=0,current_doc_index=0,secondary_hidden=1,single_visible_editor=1,same_buffer=1)
 
 
 def report(mode_count=2):
@@ -57,7 +57,7 @@ class TestUDL(unittest.TestCase):
                 if not flags:i=next(j for j,x in enumerate(self.nodes[m]) if x[0]==i)
                 buffer.value=self.nodes[m][i][1];return len(buffer.value)
         api=object.__new__(n.NppAPI);api.user=User();api.deadline=f.Deadline(FakeClock());api.process=SimpleNamespace(pid=7)
-        api.base=SimpleNamespace(verify_owned_handles=lambda *args:None)
+        api.base=SimpleNamespace(verify_owned_handles=lambda *args:None,editor=lambda h:10)
         return api
     def test_menu_exact_unique_and_mutually_exclusive(self):
         api=self.menu_api();self.assertEqual(api.menu(9),(46181,0,1))
@@ -67,10 +67,10 @@ class TestUDL(unittest.TestCase):
         with self.assertRaises(RuntimeError):api.menu(9)
     def test_actual_scalar_mode_and_owned_buffer_checks(self):
         api=self.menu_api();api.buffer_id=None
-        values={2084:12345,2088:0,4002:1,2031:1}
-        api.base.scalar=lambda h,m,w=0,l=0:values[m]
+        values={2084:12345,2088:0,4002:1,(2031,0):2,(2031,1):1,(2031,2):1,2112:0,(2047,0):0,(2047,1):ctypes.c_size_t(-1).value}
+        api.base.scalar=lambda h,m,w=0,l=0:values[(m,l) if m in (2031,2047) else m]
         self.assertEqual(api.mode_proof(9,10,0)['same_buffer'],1)
-        for key,value in ((2084,12346),(2088,15),(4002,152),(2031,2)):
+        for key,value in ((2084,12346),(2088,15),(4002,152),((2031,0),1),((2031,1),2),((2031,2),2),(2112,1),((2047,0),1),((2047,1),0)):
             old=values[key];values[key]=value
             with self.assertRaises(RuntimeError):api.mode_proof(9,10,0)
             values[key]=old
@@ -154,13 +154,28 @@ class TestUDL(unittest.TestCase):
             extra.unlink();(root/'config.xml').write_text('synthetic config never published');n.settings_unchanged(root,data)
             target.write_bytes(data+b' ')
             with self.assertRaises(ValueError):n.settings_unchanged(root,data)
+    def test_only_exact_empty_plain_themes_directory_allowed(self):
+        data=synthetic_xml()
+        with tempfile.TemporaryDirectory() as tmp,patch.object(n,'UDL_CANONICAL',hashlib.sha256(data).hexdigest()):
+            root=Path(tmp)/'settings';n.configure_settings(root,data);themes=root/'themes';themes.mkdir()
+            n.settings_unchanged(root,data)
+            extra=themes/'unexpected.xml';extra.write_text('synthetic theme')
+            with self.assertRaises(ValueError):n.settings_unchanged(root,data)
+            extra.unlink();themes.rmdir();(root/'Themes').mkdir()
+            with self.assertRaises(ValueError):n.settings_unchanged(root,data)
+    def test_mode_requires_one_visible_owned_editor(self):
+        api=self.menu_api();api.buffer_id=None
+        values={2084:12345,2088:0,4002:1,(2031,0):2,(2031,1):1,(2031,2):1,2112:0,(2047,0):0,(2047,1):ctypes.c_size_t(-1).value}
+        api.base.scalar=lambda h,m,w=0,l=0:values[(m,l) if m in (2031,2047) else m]
+        api.base.editor=lambda h:11
+        with self.assertRaises(RuntimeError):api.mode_proof(9,10,0)
     def test_xml_links_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             real=Path(tmp)/'real';real.write_bytes(synthetic_xml());link=Path(tmp)/'link';os.link(real,link)
             with self.assertRaises(ValueError):n.official_udl(link)
     def test_public_valid_shapes_and_mode_evidence(self):
         x=report();p.validate(x)
-        for field,value in [('lexer',1),('language_type',0),('udl_menu_checked',0),('plain_menu_checked',1),('file_count',2),('same_buffer',0)]:
+        for field,value in [('lexer',1),('language_type',0),('udl_menu_checked',0),('plain_menu_checked',1),('total_buffer_count',1),('primary_buffer_count',2),('secondary_buffer_count',2),('current_view',1),('current_doc_index',1),('secondary_hidden',0),('single_visible_editor',0),('same_buffer',0)]:
             y=copy.deepcopy(x);y['runs'][1]['stages'][0]['mode_proof'][field]=value
             with self.assertRaises(ValueError):p.validate(y)
     def test_public_strict_numeric_hash_and_keys(self):
@@ -180,7 +195,7 @@ class TestUDL(unittest.TestCase):
         with self.assertRaises(ValueError):json.loads('{"schema":3,"schema":3}',object_pairs_hook=p.unique)
     def test_mode_diagnostics_closed_numbers_only(self):
         for bad in ('secret path',{'private key':42},True,float('nan'),float('inf'),-1,2**64):
-            row={k:bad for k in ('language_type','lexer','udl_menu_id','udl_menu_checked','plain_menu_checked','file_count','same_buffer')}
+            row={k:bad for k in ('language_type','lexer','udl_menu_id','udl_menu_checked','plain_menu_checked','total_buffer_count','same_buffer')}
             values=n.mode_diagnostics(row,bad)
             self.assertTrue(all(type(x) is int and 0<=x<=65535 for x in values))
             self.assertNotIn('secret',json.dumps(values))
