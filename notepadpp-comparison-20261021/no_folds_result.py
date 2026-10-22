@@ -1,11 +1,11 @@
-"""Closed numeric/hash-only schema4; no source, private paths or log uploads."""
+"""Closed numeric/hash-only schema5; no source, private paths or log uploads."""
 import json,sys
 from pathlib import Path
 from npp_udl_result import exact,integer,num,h,need,unique
 
 def validate(x):
-    exact(x,'schema observer_revision baseline_commit compiler_commit stages_seconds process_seconds poll_seconds order repetitions opening_compared disabled_marker_after_edits style_semantic_equivalence fixture_sha256 harness_sha256 receipt_sha256 runtime_sha256 udl_sha256 host runs')
-    for key,value in [('schema',4),('observer_revision',5),('repetitions',1),('opening_compared',0),('disabled_marker_after_edits',0),('style_semantic_equivalence',0)]:integer(x[key],value,value)
+    exact(x,'schema observer_revision fixture_plan baseline_commit compiler_commit stages_seconds process_seconds poll_seconds order repetitions opening_compared disabled_marker_after_edits style_semantic_equivalence fixture_sha256 harness_sha256 receipt_sha256 runtime_sha256 udl_sha256 host runs')
+    for key,value in [('schema',5),('observer_revision',6),('repetitions',1),('opening_compared',0),('disabled_marker_after_edits',0),('style_semantic_equivalence',0)]:integer(x[key],value,value)
     need(x['baseline_commit']=='6aa535d62c28cc9a03f33c3610fe99b3cf1bd14e' and x['compiler_commit']=='85c7821fda35aa79deeaf67b4d430f24ddd7f07f')
     need(x['poll_seconds']==[.005,.005,.250])
     need(x['stages_seconds']==30 and x['process_seconds']==120 and x['order']==[0,1,2])
@@ -22,10 +22,12 @@ def validate(x):
     need(type(x['host']['windows_version']) is list and len(x['host']['windows_version'])==3)
     for v in x['host']['windows_version']:integer(v)
     integer(x['host']['cpu_count'],1,4096);h(x['host']['cpu_identifier_sha256']);h(x['host']['runner_image_sha256'])
-    need(type(x['runs']) is list and 1<=len(x['runs'])<=6)
+    need(type(x['fixture_plan']) is list and x['fixture_plan'] in ([0,1],[1]))
+    for value in x['fixture_plan']:integer(value,0,1)
+    need(type(x['runs']) is list and 1<=len(x['runs'])<=3*len(x['fixture_plan']))
     for i,r in enumerate(x['runs']):
         exact(r,'arm fixture passed executed cleanup_unconfirmed runtime_unchanged fixture_unchanged provenance_unchanged error_kind stages')
-        integer(r['arm'],i%3,i%3);integer(r['fixture'],i//3,i//3)
+        integer(r['arm'],i%3,i%3);integer(r['fixture'],x['fixture_plan'][i//3],x['fixture_plan'][i//3])
         for k in ('passed','executed','cleanup_unconfirmed','runtime_unchanged','fixture_unchanged','provenance_unchanged'):integer(r[k],0,1)
         integer(r['error_kind'],0,99)
         if i<len(x['runs'])-1:need(r['passed']==1)

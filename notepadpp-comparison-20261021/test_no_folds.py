@@ -68,13 +68,22 @@ class SchemaTests(unittest.TestCase):
             row={};reference=c.stage(None,api,1,2,c.f.Deadline(),1,c.TEXT,c.fixture(0)[1],op,row,reference);rows.append(row)
         for row in rows:
             for v in row['rounds']:v['lexer']=98
-        return dict(schema=4,observer_revision=5,baseline_commit=c.b.BASELINE,compiler_commit=c.b.COMPILER,
+        return dict(schema=5,observer_revision=6,fixture_plan=[0,1],baseline_commit=c.b.BASELINE,compiler_commit=c.b.COMPILER,
           stages_seconds=30,process_seconds=120,poll_seconds=[.005,.005,.250],order=[0,1,2],repetitions=1,opening_compared=0,
           disabled_marker_after_edits=0,style_semantic_equivalence=0,fixture_sha256=[hashlib.sha256(c.fixture(k)[0]).hexdigest() for k in (0,1)],
           harness_sha256='a'*64,receipt_sha256='b'*64,udl_sha256='c'*64,
           runtime_sha256={'ru':{k:'a'*64 for k in ('ru_notepad.exe','Scintilla.dll','Lexilla.dll','RuSyntax.dll')},'npp':{'notepad++.exe':'b'*64}},
           host=dict(windows_version=[10,0,1],cpu_count=2,cpu_identifier_sha256='a'*64,runner_image_sha256='b'*64),
           runs=[dict(arm=0,fixture=0,passed=1,executed=1,cleanup_unconfirmed=0,runtime_unchanged=1,fixture_unchanged=1,provenance_unchanged=1,error_kind=0,stages=rows)])
+    def test_real_markdown_only_plan(self):
+        x=self.report();x['fixture_plan']=[1];run=x['runs'][0];run['fixture']=1
+        for row in run['stages']:
+            for v in row['rounds']:
+                v['length']-=1000000-14208;v['endstyled']=v['length'];v['styles'] += [6,2,19]
+        self.assertIsNotNone(r.validate(x))
+        x['fixture_plan']=[0,1]
+        with self.assertRaises(ValueError):r.validate(x)
+
     def test_schema_roundtrip(self):self.assertIsNotNone(r.validate(self.report()))
     def test_schema_rejects_fields_lengths_dirty_censor_and_budget(self):
         original=self.report()

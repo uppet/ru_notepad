@@ -78,7 +78,7 @@ jobs:
       - name: Same-job Ru off, official NPP UDL, Ru on diagnostic
         shell: pwsh
         run: |
-          python comparison/notepadpp-comparison-20261021/no_folds_compare.py --source-root "$env:GITHUB_WORKSPACE/baseline" --compiler "$env:GITHUB_WORKSPACE/compiler" --cc "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin/gcc.exe" --ru-dir "$env:GITHUB_WORKSPACE/baseline-release" --npp-dir "$env:GITHUB_WORKSPACE/npp" --npp-receipt "$env:GITHUB_WORKSPACE/npp-receipt.private.json" --receipt "$env:GITHUB_WORKSPACE/combined-receipt.private.json" --output-root "$env:GITHUB_WORKSPACE/comparison-results"
+          python comparison/notepadpp-comparison-20261021/no_folds_compare.py --fixture real-markdown --source-root "$env:GITHUB_WORKSPACE/baseline" --compiler "$env:GITHUB_WORKSPACE/compiler" --cc "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin/gcc.exe" --ru-dir "$env:GITHUB_WORKSPACE/baseline-release" --npp-dir "$env:GITHUB_WORKSPACE/npp" --npp-receipt "$env:GITHUB_WORKSPACE/npp-receipt.private.json" --receipt "$env:GITHUB_WORKSPACE/combined-receipt.private.json" --output-root "$env:GITHUB_WORKSPACE/comparison-results"
           if ($LASTEXITCODE -ne 0) { throw 'COMPARISON_FEASIBILITY_FAILED' }
       - name: Validate closed no-folds numeric result
         id: public

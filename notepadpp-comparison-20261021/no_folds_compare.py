@@ -193,7 +193,9 @@ def main():
     import no_folds_result as public
     ap=argparse.ArgumentParser()
     for name in ('source-root','compiler','cc','ru-dir','npp-dir','npp-receipt','receipt','output-root'):ap.add_argument('--'+name,type=Path,required=True)
+    ap.add_argument('--fixture',choices=('all','real-markdown'),default='all')
     a=ap.parse_args();b.host_guard()
+    fixture_plan=(0,1) if a.fixture=='all' else (1,)
     for key in ('source_root','compiler','ru_dir','npp_dir'):setattr(a,key,b.plain(getattr(a,key),directory=True))
     for key in ('npp_receipt','receipt'):setattr(a,key,b.plain(getattr(a,key)))
     a.cc=b.compiler_file(a.cc);a.output_root=Path(os.path.abspath(a.output_root));b.plain(a.output_root.parent,directory=True);b.need(not a.output_root.exists())
@@ -207,7 +209,7 @@ def main():
         b.need(n.official_udl(b.under(a.npp_dir,n.UDL_PATH))==udl)
         b.need({name:b.sha(b.plain(Path(__file__).with_name(name))) for name in harness_files}==harness)
     revalidate();ci=f.load_ci(a.source_root);a.output_root.mkdir()
-    report=dict(schema=4,observer_revision=5,baseline_commit=b.BASELINE,compiler_commit=b.COMPILER,
+    report=dict(schema=5,observer_revision=6,fixture_plan=list(fixture_plan),baseline_commit=b.BASELINE,compiler_commit=b.COMPILER,
       stages_seconds=f.STAGE,process_seconds=f.HARD,poll_seconds=[f.POLL,f.POLL,f.MARKDOWN_POLL],order=list(ORDER),repetitions=1,opening_compared=0,
       disabled_marker_after_edits=0,style_semantic_equivalence=0,
       fixture_sha256=[hashlib.sha256(fixture(k)[0]).hexdigest() for k in (0,1)],
@@ -216,7 +218,7 @@ def main():
       host=dict(windows_version=list(sys.getwindowsversion()[:3]),cpu_count=os.cpu_count() or 0,
         cpu_identifier_sha256=hashlib.sha256(os.environ.get('PROCESSOR_IDENTIFIER','').encode()).hexdigest(),
         runner_image_sha256=hashlib.sha256((os.environ.get('ImageOS','')+'|'+os.environ.get('ImageVersion','')).encode()).hexdigest()),runs=[])
-    for kind in (0,1):
+    for kind in fixture_plan:
         for arm in ORDER:
             revalidate();scratch=a.output_root/f'{kind}-{arm}';scratch.mkdir();data,_=fixture(kind)
             source=scratch/'fixture.md';source.write_bytes(data)

@@ -83,3 +83,20 @@ observed byte 18 (#)=6, byte 20 (Heading)=0, byte 40 (strong)=2 and byte 54
 18, retaining strict nondefault styles for heading marker, emphasis and code.
 No product property, fixture bytes, timing budget, order or repetition changes.
 The complete fixed six-process plan is rerun, not a best-of 1 MB sample.
+
+## Observer revision 6 / schema5: supplemental real-Markdown-only plan
+
+Run 39750935369 at 03d0362 passed 1 MB Ru-off and NPP UDL, then the normal
+folding arm's two-Undo stage hit its unchanged 30-second deadline. Its second
+Undo was acknowledged, but joint completion was not established. Preserve that
+censored result; do not retry 1 MB or choose favorable timings. Fail-stop meant
+none of the real-Markdown fixture arms ran.
+
+The supplemental workflow explicitly passes --fixture real-markdown. This selects
+only the unchanged 14,208-byte fixture, followed by all three fixed arms once,
+under the same 30/120-second bounds and fail-stop. Its purpose is to close the
+unexecuted nondefault-style/folding-disabled proof, not replace earlier evidence.
+CLI default --fixture all still selects the original [0,1] fixture plan. Schema5
+records fixture_plan=[1] for the supplement, or [0,1] for that original plan.
+No product, compiler, imported harness, fixture bytes, probes, style requirements,
+observation timing, native messages, cleanup or provenance logic changes.
