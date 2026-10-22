@@ -1,0 +1,66 @@
+name: wij development-only LLVM and incremental review
+on:
+  push:
+    branches: ['feature/wij-integration-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-wij-development:
+    name: Windows flag-on/off and unchanged 30s GUI gate (not bootstrap)
+    runs-on: windows-2022
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONOPTIMIZE: '0'
+    steps:
+      - name: Preserve exact source bytes
+        run: git config --global core.autocrlf false
+      - name: Check out exact review source and original GUI oracle
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out separate development compiler (formal product pin unchanged)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: uppet/ru-language
+          ref: b8a0e2b6b4a71408d518ae04c77b9dcbc36b4ae5
+          path: .ci/ru-wij-development
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install official MinGW tools for identical source-built DLLs
+        id: msys2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e
+        with:
+          msystem: MINGW64
+          update: true
+          cache: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+      - name: Reject weakened review contracts before native execution
+        run: python -I tools/test_review_markdown_wij.py -v
+      - name: Prepare pinned full LLVM14 and verify native link/run
+        run: python .ci/ru-wij-development/tools/prepare_workspace.py --with-llvm
+      - name: Verify real controls and same-source A/B without packaging
+        run: >-
+          python -I tools/review_markdown_wij.py
+          --ru-root .ci/ru-wij-development
+          --msys-root "${{ steps.msys2.outputs.msys2-location }}"
+          --expected-source "${{ github.sha }}"
+      - name: Upload bounded development receipts only (no executables or ZIP release)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wij-development-evidence-${{ github.sha }}
+          path: build/wij-development/evidence/*.json
+          if-no-files-found: warn
+          retention-days: 14

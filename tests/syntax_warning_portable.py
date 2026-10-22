@@ -94,8 +94,10 @@ _编辑们 取 {}. _序号 取 [0].
 算 _状态 柄: 得 _编辑们 其 查 (柄 其 句). 法
 """
 MD = """策 取 外言 './markdown_policy.ru'.
+增策 取 外言 './markdown_incremental.ru'.
 _编辑们 取 {}. _身份 取 [0].
 _批统计们 取 {}. _直属们 取 {}.
+_增量们 取 {}. _增量策略 取 {'enabled':假}.
 清理 取 [0,假].
 算 _线程: 得 'modeled-thread'. 法
 算 _同线程 柄: 得 真. 法
@@ -177,7 +179,7 @@ PROBE_MD = """柄 取 外言 './handle_stub.ru'.
 
 
 def prepare(directory, kind, parse):
-    for name in ('i18n.ru', 'i18n_catalog.ru', 'markdown_policy.ru'):
+    for name in ('i18n.ru', 'i18n_catalog.ru', 'markdown_policy.ru', 'markdown_ascii_kernel.ru', 'markdown_incremental.ru'):
         shutil.copyfile(ROOT / 'src' / name, directory / name)
     (directory / 'handle_stub.ru').write_text("句 取 'synthetic-editor'. 数 取 0.\n", encoding='utf-8', newline='\n')
     (directory / 'window_stub.ru').write_text(WINDOW, encoding='utf-8', newline='\n')
@@ -185,7 +187,7 @@ def prepare(directory, kind, parse):
     (directory / 'scanner_stub.ru').write_text(SCANNER + function_source(native, '初始化', parse), encoding='utf-8', newline='\n')
     path = ROOT / ('src/ru_syntax.ru' if kind == 'ru' else 'src/markdown_syntax.ru')
     names = (('_放点', '_放候', '_放态', '_警告', '_失败', '_初始化失败', '选择', '状态') if kind == 'ru'
-             else ('_建态', '_统计', '_丢弃', '撤销直属', '_警告', '_失败', '变化', '状态'))
+             else ('_建态', '_统计', '_增量', '_丢弃', '撤销直属', '_警告', '_失败', '变化', '状态'))
     source = SHARED + (RU if kind == 'ru' else MD)
     source += ''.join(function_source(path, name, parse) for name in names)
     source += PROBE_RU if kind == 'ru' else PROBE_MD
@@ -221,7 +223,7 @@ def source_snapshot():
     # Every copied source, extracted body, JSON oracle and host consumer is bound
     # before parsing, and checked again before publishing any successful receipt.
     names = ('src/i18n.ru', 'src/i18n_catalog.ru', 'src/markdown_policy.ru',
-             'src/ru_native_syntax.ru', 'src/ru_syntax.ru', 'src/markdown_syntax.ru',
+             'src/markdown_ascii_kernel.ru', 'src/markdown_incremental.ru', 'src/ru_native_syntax.ru', 'src/ru_syntax.ru', 'src/markdown_syntax.ru',
              'locales/errors.json', 'locales/ui.json', 'tests/syntax_warning_portable.py',
              'tools/test_i18n.py', 'tools/generate_i18n.py', 'tools/ru_cli_diagnostics.py')
     result = {}
