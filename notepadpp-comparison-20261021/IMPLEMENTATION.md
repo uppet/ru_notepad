@@ -1,6 +1,6 @@
 # Implementation status — 2026-10-22
 
-**86 Linux pure/mock/real-source-loading tests pass. Native Windows results are still required.** The retained local template has its historical gate; the reviewed publication candidate is windows-feasibility.yml, triggered only by pushes to notepadpp-comparison.
+**87 Linux pure/mock/real-source-loading tests pass. Native Windows results are still required.** The retained local template has its historical gate; the reviewed publication candidate is windows-feasibility.yml, triggered only by pushes to notepadpp-comparison.
 
 ## Files
 
@@ -10,7 +10,7 @@
 - `feasibility.py`: only A=Ru baseline plain text, B=stock NPP plain text, C=Ru baseline Markdown. Exact1M synthetic bytes; fresh per-arm runtime copy. Re-seals provenance before/after every run; closed inventories before/after launch; owns retained Popen and HWND/PID; no global input/injection.
 - `public_result.py`: fail-closed fixed-field numeric/hash projection. Includes Windows build, CPU count/identity hash, runner-image hash, NPP version, tool and runtime hashes; no raw context bytes/private paths.
 - `windows-feasibility.yml.template`: pinned actions, fixed source/compiler checkouts, independent branch guard, sequential build/acquire/seal/ABC steps. Review gate remains; artifact upload still requires separate review.
-- `test_*.py`:86 tests, including source/runtime/generated-code/native-key/compiler tampering, safe extraction, natural1/2Undo, stage/process budgets, async exit/no post-deadline grace, extraDLL/copy mutation, uncertain dispatch evidence and stop-next-arm.
+- `test_*.py`:87 tests, including source/runtime/generated-code/native-key/compiler tampering, safe extraction, natural1/2Undo, stage/process budgets, async exit/no post-deadline grace, extraDLL/copy mutation, uncertain dispatch evidence and stop-next-arm.
 
 ## Timing and completion
 
@@ -75,3 +75,12 @@ remain mandatory; unknown additions, missing/multiple logs, NPP logs and fallbac
 locations fail this gate. No LocalAppData/Temp search occurs. A/C remain separate
 owned runtime directories. The previous unknown hash is not retroactively claimed
 to be a diagnostic log: only the next live strict classification can establish it.
+
+Run 39720860179 confirmed the strict owned Ru log classification and A passed.
+NPP also completed editing, but its post-run check incorrectly compared top-level
+directory names to the recursive expected file keys. Existing packaged themes/
+plugins directories were consequently classified as extra before actual content
+comparison. A nested-file regression reproduces this harness bug. B now directly
+uses the identical recursive pre-launch `closed_manifest` after confirmed cleanup;
+there is no NPP log/XML exception and unknown, changed, missing, or linked files
+still fail. No NPP-only warm-up is added to the next fresh complete ABC job.

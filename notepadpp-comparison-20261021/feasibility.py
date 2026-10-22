@@ -257,6 +257,10 @@ def filetime_now():
 def post_runtime(root, expected, arm, pid, started, ended, cleanup_confirmed):
     if not cleanup_confirmed:raise ValueError('process not confirmed ended')
     root=provenance.plain(root,directory=True)
+    if arm=='B':
+        # NPP inventory is recursive; its existing parent directories are not extras.
+        # No output/log exception: exact same pre-launch recursive hash gate.
+        return closed_manifest(root,expected)
     extra=[p for p in root.iterdir() if p.name not in expected]
     allowed=dict(expected)
     if arm in ('A','C') and type(pid) is int and pid>0 and len(extra)!=1:

@@ -47,3 +47,21 @@ class PrivateDiagnostic(unittest.TestCase):
                         try:p.symlink_to(other)
                         except OSError:self.skipTest('symlink privilege unavailable')
                 with self.assertRaises(ValueError):f.post_runtime(root,expected,'A',pid,tick,tick,True)
+
+    def test_npp_recursive_original_inventory_without_output_exceptions(self):
+        for change in ('none','changed','extra','missing','link'):
+            with self.subTest(change=change):
+                root,expected,tick,pid=self.fresh()
+                folder=root/'themes';folder.mkdir();p=folder/'original.xml';p.write_bytes(b'original packaged settings')
+                expected['themes/original.xml']=f.digest(p)
+                if change=='changed':p.write_bytes(b'changed')
+                elif change=='extra':(folder/'new.xml').write_bytes(b'unknown')
+                elif change=='missing':p.unlink()
+                elif change=='link':
+                    other=root/'other';p.rename(other)
+                    try:p.symlink_to(other)
+                    except OSError:self.skipTest('symlink privilege unavailable')
+                with contextlib.redirect_stderr(io.StringIO()):
+                    if change=='none':f.post_runtime(root,expected,'B',pid,tick,tick,True)
+                    else:
+                        with self.assertRaises(ValueError):f.post_runtime(root,expected,'B',pid,tick,tick,True)
