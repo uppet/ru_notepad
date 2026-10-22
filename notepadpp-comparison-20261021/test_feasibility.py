@@ -197,3 +197,14 @@ class ArmDiagnostic(unittest.TestCase):
     def test_only_closed_numeric_fields(self):
         self.assertEqual(f.arm_failure_diagnostics('C',RuntimeError('/private/customer secret')),
                          'COMPARISON_ARM_FAILURE ARM=2 ERROR_KIND=2 SOURCE_ID=0 LINE=0')
+
+
+class TitleIdentity(unittest.TestCase):
+    def test_only_known_initial_titles_can_wait(self):
+        names={'ru_notepad','Untitled 1 · ru_notepad'};source=Path('fixture.md')
+        self.assertEqual(f.title_state('ru_notepad',source,names),0)
+        self.assertEqual(f.title_state('Untitled 1 · ru_notepad',source,names),0)
+        self.assertEqual(f.title_state('fixture.md · ru_notepad',source,names),1)
+        self.assertEqual(f.title_state('* fixture.md · ru_notepad',source,names),1)
+        for value in ('other.md · ru_notepad','Untitled 2 · ru_notepad','', '* Untitled 1 · ru_notepad'):
+            self.assertEqual(f.title_state(value,source,names),2)

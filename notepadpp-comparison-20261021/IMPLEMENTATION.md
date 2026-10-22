@@ -1,6 +1,6 @@
 # Implementation status — 2026-10-22
 
-**88 Linux pure/mock/real-source-loading tests pass. Native Windows results are still required.** The retained local template has its historical gate; the reviewed publication candidate is windows-feasibility.yml, triggered only by pushes to notepadpp-comparison.
+**89 Linux pure/mock/real-source-loading tests pass. Native Windows results are still required.** The retained local template has its historical gate; the reviewed publication candidate is windows-feasibility.yml, triggered only by pushes to notepadpp-comparison.
 
 ## Files
 
@@ -10,7 +10,7 @@
 - `feasibility.py`: only A=Ru baseline plain text, B=stock NPP plain text, C=Ru baseline Markdown. Exact1M synthetic bytes; fresh per-arm runtime copy. Re-seals provenance before/after every run; closed inventories before/after launch; owns retained Popen and HWND/PID; no global input/injection.
 - `public_result.py`: fail-closed fixed-field numeric/hash projection. Includes Windows build, CPU count/identity hash, runner-image hash, NPP version, tool and runtime hashes; no raw context bytes/private paths.
 - `windows-feasibility.yml.template`: pinned actions, fixed source/compiler checkouts, independent branch guard, sequential build/acquire/seal/ABC steps. Review gate remains; artifact upload still requires separate review.
-- `test_*.py`:88 tests, including source/runtime/generated-code/native-key/compiler tampering, safe extraction, natural1/2Undo, stage/process budgets, async exit/no post-deadline grace, extraDLL/copy mutation, uncertain dispatch evidence and stop-next-arm.
+- `test_*.py`:89 tests, including source/runtime/generated-code/native-key/compiler tampering, safe extraction, natural1/2Undo, stage/process budgets, async exit/no post-deadline grace, extraDLL/copy mutation, uncertain dispatch evidence and stop-next-arm.
 
 ## Timing and completion
 
@@ -92,3 +92,16 @@ precise cause was not captured. Runtime exceptions now emit only fixed numeric
 arm/error/source-ID/line diagnostics. No readiness condition or timing behavior
 is changed on speculation; the next live diagnostic must establish the failure
 site before any targeted compatibility correction.
+
+Run 39724378266 located the C failure exactly at the single title check
+(feasibility.py:353 in commit 4822cd0), before open observation or editing.
+Fixed baseline main.ru Git blob 272a6bbe3fe89c022f5c40ec277589e3a66657ed
+creates a first untitled page, then appends asynchronous input before registering
+and switching the completed page. Only the known initial `ru_notepad` title or
+localized untitled-page-1 titles from the pinned ui.json may now keep waiting
+inside the original non-reset opening deadline. Exact fixture title is required
+before proceeding; another document/unknown title still immediately fails.
+Failure output additionally records numeric startup phase (0 identity not ready,
+1 identity established), length-match and title-state (0 known initial, 1 exact,
+2 wrong) so startup identity timeouts cannot be described as Undo timing results.
+No warm-up, stage-budget reset or 1-second IPC limit change is introduced.

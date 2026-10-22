@@ -42,6 +42,8 @@ def load_ci(root):
     module = importlib.util.module_from_spec(spec)
     sys.dont_write_bytecode = True
     spec.loader.exec_module(module)
+    catalog=provenance.read(path.parents[1]/'locales/ui.json')['document.untitled']
+    module.comparison_initial_titles={'ru_notepad'}|{v.replace('{0}','1')+' · ru_notepad' for v in catalog.values()}
     if Path(module.portable.__file__).resolve() != path.with_name('package.py'):
         raise RuntimeError('wrong packaging module')
     return module
@@ -308,6 +310,12 @@ def cleanup_owned(process, hard, clock=time.perf_counter):
     return {'exit_code': code, 'cleanup_unconfirmed': code is None}
 
 
+def title_state(title, source, initial_titles):
+    if title.removeprefix('* ')==source.name+' · ru_notepad':return 1
+    if title in initial_titles:return 0
+    return 2
+
+
 def arm_failure_diagnostics(arm, exc):
     stage,kind,origin,line=failure_diagnostics(exc,10)
     return f'COMPARISON_ARM_FAILURE ARM={"ABC".index(arm)} ERROR_KIND={kind} SOURCE_ID={origin} LINE={line}'
@@ -322,6 +330,7 @@ def run_one(ci, arm, executable, source, scratch, inventory):
         argv += ['-multiInst', '-noPlugin', '-nosession', '-lnormal', '-settingsDir=' + str(settings)]
     argv += [str(source)]
     process = None; guard = None; started_filetime = None
+    startup_phase=0; startup_length_match=0; startup_title_state=0
     try:
         closed_manifest(executable.parent, inventory)
         started_filetime = filetime_now()
@@ -343,14 +352,16 @@ def run_one(ci, arm, executable, source, scratch, inventory):
                 hwnd = matches[0]
                 try: editor = api.editor(hwnd)
                 except RuntimeError: time.sleep(POLL); continue
-                if api.scalar(editor, 2006) == SIZE: break
+                startup_length_match=int(api.scalar(editor,2006)==SIZE)
+                if startup_length_match:
+                    startup_title_state=1 if arm=='B' else title_state(api.text(hwnd),source,ci.comparison_initial_titles)
+                    if startup_title_state==2:raise RuntimeError('wrong opened fixture')
+                    if startup_title_state==1:break
             time.sleep(POLL)
         if arm == 'B':
             buffer_id = api.scalar(hwnd, 2084)
             if api.scalar(hwnd, 2088, buffer_id) != 0: raise RuntimeError('NPP not plain text')
-        else:
-            if api.text(hwnd).removeprefix('* ') != source.name + ' · ru_notepad':
-                raise RuntimeError('wrong opened fixture')
+        startup_phase=1
         for operation in ('open', 'insert', 'backspace', 'undo'):
             if operation == 'open': stage = result['stages'][0]
             else:
@@ -359,6 +370,7 @@ def run_one(ci, arm, executable, source, scratch, inventory):
         result['passed'] = True
     except Exception as exc:
         print(arm_failure_diagnostics(arm,exc),file=sys.stderr)
+        print(f'COMPARISON_STARTUP_STATE PHASE={startup_phase} LENGTH_MATCH={startup_length_match} TITLE_STATE={startup_title_state}',file=sys.stderr)
         result['error_type'] = type(exc).__name__
         result['elapsed_upper_ms'] = (time.perf_counter() - deadline.started) * 1000
         result['timed_out'] = isinstance(exc, TimeoutError)
