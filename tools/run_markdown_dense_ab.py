@@ -12,6 +12,7 @@ from types import SimpleNamespace
 ORDER=(0,1,1,0,0,1,1,0)
 PAIRS=((0,1),(3,2),(4,5),(7,6))
 BINARY='build/markdown-dense-experiment/bin'
+BUILD_RECEIPTS=('ru_notepad.build.json','RuSyntax.native-build.json')
 ORIGIN='build/markdown-dense-native-origin.json'
 ZERO='0'*64
 LIMIT=256*1024
@@ -170,10 +171,32 @@ def check_generated_pair(roots):
 def must_stop(result):
     return (not result.get('diagnostic_complete') or result.get('cleanup_unconfirmed') or result.get('retained_output_unconfirmed') or result.get('drop_cleanup_failed'))
 
+def sealed_bundle(roots,seal,arm,p):
+    # The existing same-job seal binds this origin and both build receipts.
+    origin=under(roots[1],ORIGIN);data=p.base.bounded_read(origin,LIMIT)
+    need(hashlib.sha256(data).hexdigest()==seal['native_origin_sha256'])
+    helper=p.base.json_decode(data)['helper_receipt_sha256']
+    return {**seal['runtime_sha256'][arm],BUILD_RECEIPTS[0]:seal['build_receipt_sha256'][arm],BUILD_RECEIPTS[1]:helper}
+
+def copy_built_runtime(source,destination,expected,p):
+    # A build bundle is exactly four binaries plus two known receipts. An owned
+    # runtime is exactly the four binaries: never weaken the shared inventory.
+    source=plain(source,directory=True);names=set(p.base.RUNTIME_NAMES)|set(BUILD_RECEIPTS)
+    need(type(expected) is dict and set(expected)==names)
+    def verify_source():
+        need({x.name for x in source.iterdir()}==names)
+        for name in names:p.base.verify_hash(under(source,name),expected[name])
+    verify_source();destination.mkdir(mode=0o700);p.base.checked_path(destination,directory=True)
+    for name in p.base.RUNTIME_NAMES:
+        with p.base.safe_open(under(source,name)) as original,(destination/name).open('xb') as output:
+            shutil.copyfileobj(original,output,1024*1024)
+        p.base.verify_hash(destination/name,expected[name])
+    p.base.runtime_inventory(destination);verify_source()
+
 def run_release(root,expected,out,p,ci):
     need(not out.exists());out.mkdir();p.base.ensure_local_launcher_directory(out)
     data,styles,folds=p.base.fixture_bytes(ci);source=out/'unclosed-fence.md';p.base.write_new(source,data)
-    runtime=out/'release';p.base.copy_runtime(root/BINARY,runtime,expected)
+    runtime=out/'release';copy_built_runtime(root/BINARY,runtime,expected,p)
     result=p.edit.run_owned('release',runtime,source,ci,styles,folds)
     projected=p.edit.public_projection({'passed':False,'runs':[result],'receipt_sha256':sha(root/BINARY/'ru_notepad.build.json')},sha(root/'native/markdown_edit_profile.h'),ci)
     return result,projected
@@ -246,8 +269,8 @@ def measure(roots,seal,output,p,check,*,runner=run_release,ci=None):
     try:
         p.base.ensure_local_launcher_directory(private)
         for index,arm in enumerate(ORDER):
-            need(check()==seal);value['attempted'][index]=1;save(target,value,p)
-            raw,projected=runner(roots[arm],seal['runtime_sha256'][arm],private/('run-'+str(index)),p,ci)
+            need(check()==seal);expected=sealed_bundle(roots,seal,arm,p);value['attempted'][index]=1;save(target,value,p)
+            raw,projected=runner(roots[arm],expected,private/('run-'+str(index)),p,ci)
             value['results'][index]=projected;save(target,value,p)
             need(check()==seal)
             if must_stop(raw):break
