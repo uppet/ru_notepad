@@ -211,6 +211,7 @@ class SourceContracts(unittest.TestCase):
             self.assertIn('tools/ru_cli_diagnostics.py', initial)
             self.assertIn('locales/errors.json', initial)
             warning_initial = warning.source_snapshot()
+            self.assertIn('src/markdown_ascii_kernel.ru', warning_initial)
             for relative in sorted(set(initial) | set(warning_initial)):
                 path = fixture.root / relative
                 original = path.read_bytes()
@@ -227,6 +228,12 @@ class SourceContracts(unittest.TestCase):
                 with self.subTest(imported=imported), self.assertRaises(RuntimeError):
                     runner.source_snapshot()
 
+    def test_warning_snapshot_rejects_missing_kernel_dependency(self):
+        with sandbox() as fixture:
+            (fixture.root / 'src/markdown_ascii_kernel.ru').unlink()
+            with self.assertRaises(RuntimeError):
+                warning.source_snapshot()
+
     @unittest.skipUnless(ARGS.ru_root, 'pass --ru-root for real pinned frontend extraction')
     def test_real_extraction_is_utf8_lf_and_keeps_complete_production_bodies(self):
         compiler = ARGS.ru_root.resolve()
@@ -238,10 +245,12 @@ class SourceContracts(unittest.TestCase):
                     directory = Path(temporary).resolve()
                     source = warning.prepare(directory, kind, parse)
                     self.assertEqual(source.parent, directory)
+                    self.assertTrue((directory / 'markdown_ascii_kernel.ru').is_file())
                     for path in directory.glob('*.ru'):
                         data = path.read_bytes()
                         self.assertEqual(data.decode('utf-8').encode('utf-8'), data)
-                        if path.name in ('i18n.ru', 'i18n_catalog.ru', 'markdown_policy.ru'):
+                        if path.name in ('i18n.ru', 'i18n_catalog.ru', 'markdown_policy.ru',
+                                         'markdown_ascii_kernel.ru'):
                             self.assertEqual(data, (ROOT / 'src' / path.name).read_bytes())
                         else:
                             self.assertNotIn(b'\r', data)
@@ -372,7 +381,8 @@ class MarkdownStateContracts(unittest.TestCase):
         compiler = ARGS.ru_root.resolve()
         self.assertEqual(runner.compiler_snapshot(compiler), PIN)
         inputs = (ROOT / 'src/markdown_syntax.ru', ROOT / 'src/markdown_policy.ru',
-                  ROOT / 'tests/markdown_direct_native.ru', Path(__file__).resolve())
+                  ROOT / 'tests/markdown_direct_native.ru', Path(__file__).resolve(),
+                  ROOT / 'src/markdown_ascii_kernel.ru')
         before = {str(path): runner.file_sha256(path) for path in inputs}
         with patch.object(sys, 'path', [str(compiler), *sys.path]):
             from rulang.frontend import parse
@@ -386,6 +396,7 @@ class MarkdownStateContracts(unittest.TestCase):
         commands = []
         try:
             shutil.copyfile(inputs[1], directory / 'markdown_policy.ru')
+            shutil.copyfile(inputs[4], directory / 'markdown_ascii_kernel.ru')
             (directory / 'handle_stub.ru').write_text("句 取 'synthetic-editor'.\n",
                                                     encoding='utf-8', newline='\n')
             source = directory / 'probe.ru'
@@ -567,7 +578,8 @@ def sandbox():
         root = Path(temporary).resolve()
         for name in ('src', 'tools', 'tests', 'locales', 'compiler/rulang'):
             (root / name).mkdir(parents=True, exist_ok=True)
-        for name in ('i18n.ru', 'i18n_catalog.ru', 'markdown_policy.ru', 'ru_native_syntax.ru',
+        for name in ('i18n.ru', 'i18n_catalog.ru', 'markdown_policy.ru', 'markdown_ascii_kernel.ru',
+                     'ru_native_syntax.ru',
                      'ru_syntax.ru', 'markdown_syntax.ru'):
             (root / 'src' / name).write_text('# 中文 synthetic source\n', encoding='utf-8', newline='\n')
         (root / 'src/i18n.ru').write_text('甲 取 外言 "./i18n_catalog.ru".\n', encoding='utf-8', newline='\n')

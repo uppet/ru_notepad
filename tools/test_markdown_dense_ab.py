@@ -10,6 +10,10 @@ import run_markdown_phase_profile as base
 import test_markdown_edit_profile as fixtures
 import windows_ci as ci
 P=SimpleNamespace(edit=edit,base=base)
+def c_literal(value):
+    # Fixture producer: real generated C uses byte-wise octal string escaping.
+    # A raw Windows path is not a valid equivalent C string literal.
+    return '"'+''.join(chr(b) if 32<=b<=126 and b not in (34,92) else '\\%03o'%b for b in value.encode('utf-8'))+'"'
 def seal():return {'identity':{'job':{'run_id':'123','run_attempt':'1','source_commit':'a'*40},'source_sha256':'b'*64,'compiler_commit':'c'*40,'compiler_tree':'d'*40},'build_receipt_sha256':['a'*64,'b'*64],'activation_receipt_sha256':['c'*64,'d'*64],'manifest_sha256':'e'*64,'native_origin_sha256':'f'*64,'compiler_binary_sha256':'9'*64,'fixture_sha256':base.FIXTURE_SHA256,'fixture_bytes':base.FIXTURE_SIZE,'runtime_sha256':[{n:'2'*64 for n in base.RUNTIME_NAMES} for _ in range(2)]}
 def blank():
     v={'schema':1,'diagnostic_only':1,'product_acceptance_claimed':0,'windows_executed':0,'stage_deadline_seconds':30,'process_deadline_seconds':120,'seal':seal(),'order':list(a.ORDER),'attempted':[0]*8,'verified':[0]*8,'results':[edit.blank_public() for _ in a.ORDER]};a.recompute(v);return v
@@ -79,14 +83,30 @@ class Controls(unittest.TestCase):
         for key in env:
             bad=dict(env);bad[key]=''
             with patch.dict(os.environ,bad),self.assertRaises(Exception):a.job('a'*40)
+    def check_debug_normalization(self,t):
+        # Real coordinator inputs have already passed plain()/resolve().
+        roots=[(Path(t)/x).resolve() for x in ('a','b')]
+        for i,r in enumerate(roots):
+            (r/'src').mkdir(parents=True);(r/'build').mkdir();(r/'src/main.ru').write_text('');(r/'build/main.c').write_text('ru_source = '+c_literal(str(r/'src/main.ru'))+';\nv_fact('+str(i)+');\n')
+        a.check_generated_pair(roots);p=roots[1]/'build/main.c';p.write_text(p.read_text()+'unrelated();\n')
+        with self.assertRaises(Exception):a.check_generated_pair(roots)
+        literal=c_literal(str(roots[0]/'src/main.ru'));code='f('+literal+');\nru_source = '+literal+';';normalized,_=a.diagnostic_paths(code,roots[0]);self.assertIn('f('+literal+');',normalized)
     def test_debug_normalization_assignment_only(self):
+        with tempfile.TemporaryDirectory() as t:self.check_debug_normalization(t)
+    def test_debug_normalization_canonical_alias(self):
         with tempfile.TemporaryDirectory() as t:
-            roots=[Path(t)/x for x in ('a','b')]
-            for i,r in enumerate(roots):
-                (r/'src').mkdir(parents=True);(r/'build').mkdir();(r/'src/main.ru').write_text('');(r/'build/main.c').write_text('ru_source = "'+str(r/'src/main.ru')+'";\nv_fact('+str(i)+');\n')
-            a.check_generated_pair(roots);p=roots[1]/'build/main.c';p.write_text(p.read_text()+'unrelated();\n')
-            with self.assertRaises(Exception):a.check_generated_pair(roots)
-            code='f("'+str(roots[0]/'src/main.ru')+'");\nru_source = "'+str(roots[0]/'src/main.ru')+'";';normalized,_=a.diagnostic_paths(code,roots[0]);self.assertIn('f("'+str(roots[0]),normalized)
+            part=Path(t)/'part';part.mkdir()
+            self.check_debug_normalization(part/'..')
+    def test_debug_normalization_escaped_path_bytes(self):
+        self.assertEqual(c_literal('C:\\source'), '"C:\\134source"')
+        with tempfile.TemporaryDirectory(prefix='dense路径-') as t:
+            root=Path(t);(root/'src').mkdir();source=root/'src/main.ru';source.write_text('')
+            for spelling in (str(source.resolve()),source.resolve().as_posix()):
+                with self.subTest(spelling=spelling):
+                    code='ru_source = '+c_literal(spelling)+';'
+                    normalized,counts=a.diagnostic_paths(code,root)
+                    self.assertEqual(normalized,'ru_source = "<notepad>/src/main.ru";')
+                    self.assertEqual(counts,{'src/main.ru':1})
     def test_verified_barrier(self):
         v,_,_,_=self.run_case();v['verified'][0]=0;a.recompute(v)
         with self.assertRaises(Exception):a.validate_public(v,P)

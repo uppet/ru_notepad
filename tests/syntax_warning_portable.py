@@ -177,7 +177,7 @@ PROBE_MD = """柄 取 外言 './handle_stub.ru'.
 
 
 def prepare(directory, kind, parse):
-    for name in ('i18n.ru', 'i18n_catalog.ru', 'markdown_policy.ru'):
+    for name in ('i18n.ru', 'i18n_catalog.ru', 'markdown_policy.ru', 'markdown_ascii_kernel.ru'):
         shutil.copyfile(ROOT / 'src' / name, directory / name)
     (directory / 'handle_stub.ru').write_text("句 取 'synthetic-editor'. 数 取 0.\n", encoding='utf-8', newline='\n')
     (directory / 'window_stub.ru').write_text(WINDOW, encoding='utf-8', newline='\n')
@@ -221,6 +221,7 @@ def source_snapshot():
     # Every copied source, extracted body, JSON oracle and host consumer is bound
     # before parsing, and checked again before publishing any successful receipt.
     names = ('src/i18n.ru', 'src/i18n_catalog.ru', 'src/markdown_policy.ru',
+             'src/markdown_ascii_kernel.ru',
              'src/ru_native_syntax.ru', 'src/ru_syntax.ru', 'src/markdown_syntax.ru',
              'locales/errors.json', 'locales/ui.json', 'tests/syntax_warning_portable.py',
              'tools/test_i18n.py', 'tools/generate_i18n.py', 'tools/ru_cli_diagnostics.py')
