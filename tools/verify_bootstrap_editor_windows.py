@@ -24,7 +24,7 @@ import threading
 import uuid
 
 from bootstrap_provenance import require, sha, validate_toolchain
-from build_bootstrap_release import identity, snapshot, verify_gui_pe, verify_proof, verify_app_baseline
+from build_bootstrap_release import identity, snapshot, verify_gui_pe, verify_proof, verify_app_baseline, verify_linker_selection, verify_linker_probe
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = 'ru-notepad-bootstrap-gui-acceptance-v1'
@@ -70,6 +70,10 @@ def validate_receipts(config):
         proof = Path(config[key]).parent/'compile-proof.json'
         require(sha(proof) == receipt['compile_proof_sha256'], 'build proof changed')
         validate_toolchain(receipt['tool_paths'], receipt['tool_sha256'])
+        verify_linker_selection(receipt.get('final_linker_selection'), receipt['tool_paths'],
+            expected_command=receipt['commands'][-1], triple=receipt['target_triple'])
+        verify_linker_probe(receipt.get('linker_probe'), receipt['tool_paths'],
+            receipt['target_triple'], Path(config[key]).parent)
         app_root = Path(receipt['source_pins']['app_source']['path'])
         verify_app_baseline(app_root, receipt['app_baseline'], receipt['source_sha256']['app_source'])
         proof_data = read_json(proof)

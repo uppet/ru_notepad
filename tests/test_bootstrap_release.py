@@ -17,6 +17,13 @@ import prepare_bootstrap_dependencies as dependencies
 from bootstrap_provenance import InvalidProvenance
 
 
+def link_trace(args):
+    def quote(arg):
+        return '"'+''.join(('\\'+c if c in ('"','\\','$') else c) for c in arg)+'"'
+    return ('clang version 14.0.6\nTarget: x86_64-pc-windows-msvc\nThread model: posix\nInstalledDir: fixture\n '+
+            ' '.join(quote(arg) for arg in args)+'\r\n').encode('utf-8')
+
+
 class ReleaseTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -125,8 +132,13 @@ class ReleaseTests(unittest.TestCase):
         args.update(triple='triple', layout='layout', frozen=self.frozen, tools=tools)
         self.proof['toolchain'] = {'clang': [tools['clang']],
             'tools': {k: tools[k] for k in ('llvm-as','llvm-link','opt','llvm-dis','llc')},
-            'link_flags': ['-fuse-ld='+tools['linker']]}
+            'link_flags': b.explicit_linker_flags(b.identity(tools['linker']))}
         self.proof['linker'] = b.identity(tools['linker'])
+        triple = 'x86_64-pc-windows-msvc'
+        args['triple'] = self.proof['target_triple'] = triple
+        command = [tools['clang'], str(self.root/'p.obj'), '-o', str(self.root/'p.exe'), *b.explicit_linker_flags(self.proof['linker'])]
+        with patch.object(b.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout=b'', stderr=link_trace([tools['linker'], '-out:p.exe']))):
+            self.proof['linker_selection'] = b.inspect_linker_command(command, self.proof['linker'], {}, str(self.root))
         b.verify_proof(self.proof, **args)
         self.proof['toolchain']['tools']['llc'] = '/PATH/other-llc'
         self.assertRaises(InvalidProvenance, b.verify_proof, self.proof, **args)
@@ -265,6 +277,89 @@ class ReleaseTests(unittest.TestCase):
         dependency = {'archive':'fixture.zip','sha256':b.sha(archive),'folder':'fixture'}
         self.assertRaises(InvalidProvenance,dependencies.extract_sources,root,dependency)
         self.assertFalse((root/'escape.c').exists())
+
+
+
+class LinkerSelectionTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory();self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name).resolve()
+        self.linker = self.root/'sp ace 汉😀$'/'link.exe';self.linker.parent.mkdir();self.linker.write_bytes(b'linker')
+        self.tools = {'clang': '/locked/clang', 'linker': str(self.linker)}
+        self.record = b.identity(self.linker)
+        self.command = [self.tools['clang'],str(self.root/'a.obj'),'-o',str(self.root/'a.exe'),*b.explicit_linker_flags(self.record)]
+        self.raw = link_trace([str(self.linker), '-out:a.exe'])
+        with patch.object(b.subprocess, 'run', return_value=SimpleNamespace(returncode=0,stdout=b'',stderr=self.raw)):
+            self.selection = b.inspect_linker_command(self.command,self.record,{'OWNED':'yes'},str(self.root))
+
+    def test_complete_selection_validates_raw_bytes_and_exact_actual_command(self):
+        b.verify_linker_selection(self.selection,self.tools,expected_command=self.command,triple='x86_64-pc-windows-msvc')
+        self.assertEqual(self.selection['dry_run_stderr_utf8'].encode(),self.raw)
+        for field, value in [('command',self.command+['-other']), ('selected_command',[str(self.linker),'different']),
+                ('dry_run_stderr_sha256','0'*64), ('dry_run_command',self.command),
+                ('dry_run_stderr_utf8',self.raw.decode()+'clang: error: bad\n'), ('scope','OS process tracing')]:
+            candidate = dict(self.selection);candidate[field]=value
+            with self.subTest(field=field),self.assertRaises(InvalidProvenance):
+                b.verify_linker_selection(candidate,self.tools,expected_command=self.command,triple='x86_64-pc-windows-msvc')
+
+    def test_wrong_linker_path_is_not_rescued_by_expected_path_in_arguments(self):
+        other=self.root/'other'/'link.exe';other.parent.mkdir();other.write_bytes(b'linker')
+        for selected in (str(other),'x86_64-pc-windows-msvc-'+str(self.linker),'link.exe'):
+            candidate=dict(self.selection);raw=link_trace([selected,str(self.linker)])
+            candidate.update(dry_run_stderr_utf8=raw.decode(),dry_run_stderr_sha256=b.bytes_digest(raw),selected_command=[selected,str(self.linker)])
+            with self.subTest(selected=selected),self.assertRaises(InvalidProvenance):
+                b.verify_linker_selection(candidate,self.tools)
+
+    def test_trace_negative_grammar_and_diagnostics(self):
+        raw=self.raw
+        for invalid in (b'',raw+raw.splitlines()[-1]+b'\n',raw+b'clang: error: bad\n',
+                raw.replace(b'"-out:a.exe"',b'"@args.rsp"'),raw.replace(b'"-out:a.exe"',b'"bad\\n"'),
+                raw.replace(b'"-out:a.exe"',b'"broken'),raw+b'unknown diagnostic\n'):
+            with self.subTest(invalid=invalid[-50:]),self.assertRaises(ValueError):
+                b.parse_linker_trace(invalid)
+
+    def test_probe_runs_same_owned_unicode_object_link_and_revalidates_receipt(self):
+        calls=[]
+        def run(command,**kwargs):
+            calls.append((command,kwargs))
+            if '-c' in command:
+                Path(command[-1]).write_bytes(b'obj')
+            elif '-o' in command:
+                Path(command[command.index('-o')+1]).write_bytes(b'MZprobe')
+            return ''
+        def dry(command,**kwargs):
+            self.assertEqual(kwargs['cwd'],str(self.root))
+            self.assertEqual(kwargs['env'],{'OWNED':'yes'})
+            return SimpleNamespace(returncode=0,stdout=b'',stderr=link_trace([str(self.linker),str(self.root/'link probe 汉😀$.obj')]))
+        with patch.object(b.subprocess,'run',side_effect=dry):
+            receipt=b.linker_preflight(self.tools,self.root,'x86_64-pc-windows-msvc',{'OWNED':'yes'},run,self.record)
+        self.assertEqual(len(calls),3)
+        self.assertEqual(calls[-1][0],[str(self.root/'link probe 汉😀$.exe')])
+        b.verify_linker_probe(receipt,self.tools,'x86_64-pc-windows-msvc',self.root)
+        (self.root/'link probe 汉😀$.exe').write_bytes(b'changed')
+        self.assertRaises(InvalidProvenance,b.verify_linker_probe,receipt,self.tools,'x86_64-pc-windows-msvc',self.root)
+
+    def test_probe_mutations_cannot_be_resampled_as_new_baseline(self):
+        for phase in ('source', 'object', 'binary'):
+            with self.subTest(phase=phase):
+                calls=[]
+                def run(command,**kwargs):
+                    calls.append(command)
+                    if '-c' in command:
+                        Path(command[-1]).write_bytes(b'obj')
+                        if phase=='source':
+                            (self.root/'link probe 汉😀$.c').write_bytes(b'changed')
+                    elif '-o' in command:
+                        Path(command[command.index('-o')+1]).write_bytes(b'MZprobe')
+                        if phase=='object':
+                            (self.root/'link probe 汉😀$.obj').write_bytes(b'changed')
+                    elif phase=='binary':
+                        Path(command[0]).write_bytes(b'changed')
+                    return ''
+                with patch.object(b.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout=b'',stderr=link_trace([str(self.linker)]))):
+                    with self.assertRaises(InvalidProvenance):
+                        b.linker_preflight(self.tools,self.root,'x86_64-pc-windows-msvc',{},run,self.record)
+                self.assertEqual(len(calls),{'source':1,'object':2,'binary':3}[phase])
 
 
 if __name__ == '__main__':

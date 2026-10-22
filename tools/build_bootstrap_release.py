@@ -64,6 +64,123 @@ def identity(path):
     return {'path': str(path.resolve()), 'sha256': sha(path), 'size': path.stat().st_size}
 
 
+def bytes_digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def explicit_linker_flags(record):
+    path = Path(record['path'])
+    return ['-fuse-ld='+path.name, '-B'+str(path.parent)]
+
+
+def parse_linker_trace(raw):
+    """LLVM 14 Command::Print/printArg, not shell or Windows command parsing.
+
+    -### quotes every argument and escapes only quote, backslash and dollar.
+    This gate accepts only one pure-object link command, never response files.
+    """
+    if not isinstance(raw, bytes) or len(raw) > 1024 * 1024:
+        raise ValueError('invalid or oversized linker trace')
+    commands, header = [], []
+    for line in raw.decode('utf-8', errors='strict').splitlines():
+        line = line.strip()
+        if not line.startswith('"'):
+            if line:
+                header.append(line)
+            continue
+        args = []
+        while line:
+            if not line.startswith('"'):
+                raise ValueError('unquoted linker trace argument')
+            value, pos = '', 1
+            while pos < len(line) and line[pos] != '"':
+                char = line[pos]
+                if char == '\\':
+                    pos += 1
+                    if pos >= len(line) or line[pos] not in ('"', '\\', '$'):
+                        raise ValueError('unknown linker trace escape')
+                    char = line[pos]
+                if ord(char) < 32 or ord(char) == 127:
+                    raise ValueError('control character in linker trace')
+                value += char
+                pos += 1
+            if pos >= len(line):
+                raise ValueError('unterminated linker trace argument')
+            if value.startswith('@'):
+                raise ValueError('response files not supported by pinned linker gate')
+            args.append(value)
+            line = line[pos+1:]
+            if line and not line.startswith(' '):
+                raise ValueError('invalid linker trace argument boundary')
+            line = line.lstrip(' ')
+        commands.append(args)
+    if (len(header) != 4 or not re.fullmatch(r'clang version 14\.[^\r\n]+', header[0])
+            or not re.fullmatch(r'Target: x86_64-pc-windows-msvc(?:[0-9]+(?:\.[0-9]+)*)?', header[1])
+            or header[2] not in ('Thread model: posix', 'Thread model: win32')
+            or not header[3].startswith('InstalledDir: ') or not header[3][14:]):
+        raise ValueError('unexpected clang14 dry-run diagnostics/header')
+    if len(commands) != 1 or not commands[0] or not commands[0][0]:
+        raise ValueError('expected exactly one pure-object linker command')
+    return commands[0]
+
+
+def inspect_linker_command(command, record, environment, cwd, expected_triple=None):
+    command = list(map(str, command))
+    flags = explicit_linker_flags(record)
+    selectors = [arg for arg in command if arg.startswith(('-fuse-ld', '--ld-path', '-B'))]
+    if selectors != flags or '-###' in command or any(arg.startswith('@') for arg in command):
+        raise ValueError('conflicting or implicit linker selection')
+    if identity(record['path']) != record:
+        raise RuntimeError('linker input changed before dry run')
+    probe = subprocess.run(command+['-###'], capture_output=True, env=environment,
+                           cwd=cwd, timeout=120)
+    if probe.returncode:
+        raise RuntimeError('linker dry run failed: '+probe.stderr.decode('utf-8', errors='replace'))
+    selected = parse_linker_trace(probe.stderr)
+    if expected_triple is not None and ('Target: '+expected_triple) not in probe.stderr.decode('utf-8').splitlines():
+        raise ValueError('linker dry-run target differs from compilation target')
+    path = Path(selected[0])
+    if (not path.is_absolute() or path.resolve() != Path(record['path'])
+            or identity(path) != record):
+        raise ValueError('clang selected a different linker; fallback forbidden: '+json.dumps(selected, ensure_ascii=False))
+    if identity(record['path']) != record:
+        raise RuntimeError('linker input changed during dry run')
+    return {'schema': 'ru-pinned-linker-selection-v1', 'command': command,
+            'dry_run_command': command+['-###'], 'selected_command': selected,
+            'linker': record, 'cwd': str(Path(cwd).resolve()),
+            'environment_sha256': bytes_digest(json.dumps(sorted(environment.items()), ensure_ascii=False).encode('utf-8')),
+            'dry_run_stderr_utf8': probe.stderr.decode('utf-8', errors='strict'),
+            'dry_run_stderr_sha256': bytes_digest(probe.stderr),
+            'scope': 'driver dry-run selection; same argv/env/cwd execution and pre/post file identity; not OS process tracing or ABA protection'}
+
+
+def verify_linker_selection(selection, tools, *, expected_command=None, triple=None):
+    require(isinstance(selection, dict) and selection.get('schema') == 'ru-pinned-linker-selection-v1', 'missing linker selection evidence')
+    record = identity(tools['linker'])
+    command = selection.get('command')
+    require(isinstance(command, list) and command and command[0] == tools['clang']
+            and all(isinstance(arg, str) for arg in command), 'wrong linker driver argv')
+    require(expected_command is None or command == expected_command, 'linker evidence bound to different command')
+    require(selection.get('dry_run_command') == command+['-###'], 'dry-run argv differs from actual link')
+    require([arg for arg in command if arg.startswith(('-fuse-ld', '--ld-path', '-B'))] == explicit_linker_flags(record)
+            and '-###' not in command and not any(arg.startswith('@') for arg in command), 'linker selectors changed')
+    try:
+        raw = selection['dry_run_stderr_utf8'].encode('utf-8', errors='strict')
+        selected = parse_linker_trace(raw)
+    except (KeyError, TypeError, AttributeError, ValueError, UnicodeError):
+        require(False, 'invalid linker dry-run bytes')
+    require(selection.get('dry_run_stderr_sha256') == bytes_digest(raw)
+            and selection.get('selected_command') == selected, 'linker trace bytes differ from selected argv')
+    path = Path(selected[0])
+    require(path.is_absolute() and path.resolve() == Path(record['path'])
+            and identity(path) == record and selection.get('linker') == record, 'selected linker identity mismatch')
+    require(triple is None or ('Target: '+triple) in raw.decode('utf-8').splitlines(), 'linker dry-run target mismatch')
+    require(isinstance(selection.get('cwd'), str) and Path(selection['cwd']).is_absolute()
+            and re.fullmatch('[0-9a-f]{64}', selection.get('environment_sha256','')) is not None, 'missing execution context')
+    require(selection.get('scope') == 'driver dry-run selection; same argv/env/cwd execution and pre/post file identity; not OS process tracing or ABA protection', 'overstated linker identity scope')
+    return selection
+
+
 def verify_proof(proof, *, source, compiler, ir, binary, triple, layout, frozen, tools=None):
     require(proof.get('schema') == 'ru-bootstrap-build-proof-v1'
             and proof.get('native_protocol') == 'bootstrap-native-v1', 'native bootstrap proof required')
@@ -74,8 +191,10 @@ def verify_proof(proof, *, source, compiler, ir, binary, triple, layout, frozen,
         actual = proof.get('toolchain', {})
         require(actual.get('clang') == [tools['clang']], 'host selected different clang or flags')
         require(actual.get('tools') == {k: tools[k] for k in ('llvm-as', 'llvm-link', 'opt', 'llvm-dis', 'llc')}, 'host selected different LLVM tools')
-        require(actual.get('link_flags') == ['-fuse-ld='+tools['linker']], 'host linker not explicitly pinned')
+        require(actual.get('link_flags') == explicit_linker_flags(identity(tools['linker'])), 'host linker not explicitly pinned')
         require(proof.get('linker') == identity(tools['linker']), 'host linker identity missing or changed')
+        selection = verify_linker_selection(proof.get('linker_selection'), tools, triple=triple)
+        require(len(selection['command']) == 6 and selection['command'][2] == '-o', 'host link was not pure object to EXE')
     for key, file, digest_key in [('standalone_ir', ir, 'standalone_ir_sha256'), ('binary', binary, 'binary_sha256')]:
         require(proof.get('artifacts', {}).get(key) == {'path': str(file.resolve()), 'sha256': sha(file)}
                 and proof.get(digest_key) == sha(file), 'proof artifact mismatch: ' + key)
@@ -104,7 +223,7 @@ def link_commands(tools, ir, wrapper, app, stage, triple):
         [tools['clang'], '--target='+triple, '-std=c99', '-O2', '-c', str(wrapper), '-I', str(app/'packaging'), '-o', str(stage/'launcher.obj')],
         [tools['resource-compiler'], '/nologo', '/fo', str(stage/'application.res'), str(app/'packaging/app.rc')],
         [tools['clang'], '--target='+triple, str(stage/'application.obj'), str(stage/'launcher.obj'), str(stage/'application.res'),
-         '-o', str(stage/'ru_notepad.exe'), '-fuse-ld='+tools['linker'], '-Xlinker', '/SUBSYSTEM:WINDOWS',
+         '-o', str(stage/'ru_notepad.exe'), *explicit_linker_flags({'path': tools['linker']}), '-Xlinker', '/SUBSYSTEM:WINDOWS',
          '-Xlinker', '/ENTRY:wWinMainCRTStartup', '-Xlinker', '/MACHINE:X64', '-lshell32', '-luser32']]
 
 
@@ -117,6 +236,41 @@ def verify_gui_pe(path):
             and struct.unpack_from('<H', content, offset+24)[0] == 0x20b
             and struct.unpack_from('<H', content, offset+24+68)[0] == 2,
             'final PE must be Windows x64 PE32+ GUI subsystem')
+
+
+def verify_linker_probe(probe, tools, triple, directory):
+    require(isinstance(probe, dict) and probe.get('exit_code') == 0
+            and probe.get('scope') == 'fixed C toolchain probe only; not Ru frontend or GUI acceptance', 'missing fixed-C linker probe')
+    paths = {key: directory/('link probe 汉😀$'+suffix) for key, suffix in
+             [('source', '.c'), ('object', '.obj'), ('binary', '.exe')]}
+    require(all(probe.get(key) == identity(path) for key, path in paths.items()), 'linker probe artifacts changed')
+    require(paths['source'].read_bytes() == b'int main(void) { return 0; }\n', 'linker probe source changed')
+    command = [tools['clang'], '--target='+triple, str(paths['object']), '-o', str(paths['binary']),
+               *explicit_linker_flags(identity(tools['linker']))]
+    verify_linker_selection(probe.get('linker_selection'), tools, expected_command=command, triple=triple)
+
+
+def linker_preflight(tools, stage, triple, environment, run, linker_record):
+    # Fixed C tests the toolchain, never processes application Ru source.
+    source = stage/'link probe 汉😀$.c'
+    obj, binary = source.with_suffix('.obj'), source.with_suffix('.exe')
+    source.write_bytes(b'int main(void) { return 0; }\n')
+    inputs = {'source': identity(source)}
+    require(inputs['source']['sha256'] == bytes_digest(b'int main(void) { return 0; }\n'), 'fixed linker probe source differs')
+    run([tools['clang'], '--target='+triple, '-c', str(source), '-o', str(obj)])
+    require(identity(source) == inputs['source'], 'linker probe source changed during compilation')
+    inputs['object'] = identity(obj)
+    command = [tools['clang'], '--target='+triple, str(obj), '-o', str(binary),
+               *explicit_linker_flags(linker_record)]
+    selection = inspect_linker_command(command, linker_record, environment, str(stage), triple)
+    run(command, cwd=stage)
+    verify_linker_selection(selection, tools, expected_command=command, triple=triple)
+    require(inputs == {key: identity(record['path']) for key, record in inputs.items()}, 'linker probe input changed during linking')
+    before = {**inputs, 'binary': identity(binary)}
+    run([str(binary)], cwd=stage, timeout=60)
+    require(before == {key: identity(record['path']) for key, record in before.items()}, 'linker probe artifacts changed')
+    return {**before, 'linker_selection': selection, 'exit_code': 0,
+            'scope': 'fixed C toolchain probe only; not Ru frontend or GUI acceptance'}
 
 
 def build(config, staging):
@@ -133,6 +287,8 @@ def build(config, staging):
     require(entry in ENTRIES, 'unreviewed build entry')
     tools = {name: str(Path(path).resolve()) for name, path in config['tool_paths'].items()}
     validate_toolchain(tools, config['tool_sha256'])
+    linker_record = identity(tools['linker'])
+    require(linker_record['sha256'] == config['tool_sha256']['linker'], 'linker changed after tool validation')
     environment_spec = importlib.util.spec_from_file_location('_trusted_llvm_environment', ru/'rulang/toolchain_environment.py')
     environment_module = importlib.util.module_from_spec(environment_spec)
     environment_spec.loader.exec_module(environment_module)
@@ -142,7 +298,7 @@ def build(config, staging):
     def run(argv, **kwargs):
         argv = list(map(str, argv))
         commands.append(argv)
-        return subprocess.run(argv, check=True, capture_output=True, text=True, encoding='utf-8', timeout=600, env=environment, **kwargs).stdout
+        return subprocess.run(argv, check=True, capture_output=True, text=True, encoding='utf-8', timeout=kwargs.pop('timeout', 600), env=environment, **kwargs).stdout
     version = run([tools['clang'], '--version'])
     require(re.match(r'clang version 14\.', version) is not None, 'LLVM14 clang required')
     for name in ('llc', 'llvm-as', 'llvm-link', 'opt', 'llvm-dis'):
@@ -168,6 +324,7 @@ def build(config, staging):
     staging.mkdir(parents=True, exist_ok=False)
     # A failed build keeps diagnostics in its private directory but no success
     # receipt. Nothing here copies binaries into dist or invokes packaging.
+    linker_probe = linker_preflight(tools, staging, triple, environment, run, linker_record)
     ir, intermediate, proof_path = staging/'application.ll', staging/'intermediate-console.exe', staging/'compile-proof.json'
     frozen = {str((root/name).resolve()): digest for key, root in [('ru_source', ru), ('app_source', app)]
               for name, digest in sources[key].items()}
@@ -181,12 +338,17 @@ def build(config, staging):
     verify_proof(proof, source=source, compiler=compiler, ir=ir, binary=intermediate,
                  triple=triple, layout=layout, frozen=frozen, tools=tools)
     final_link_inputs = None
+    final_linker_selection = None
     plan = link_commands(tools, ir, wrapper, app, staging, triple)
     for index, command in enumerate(plan):
         require(sha(ir) == proof['standalone_ir_sha256'], 'IR changed before link step')
         if index == len(plan)-1:
             final_link_inputs = {p.name: identity(p) for p in (staging/'application.obj', staging/'launcher.obj', staging/'application.res')}
+        if index == len(plan)-1:
+            final_linker_selection = inspect_linker_command(command, linker_record, environment, str(app/'packaging'), triple)
         run(command, cwd=app/'packaging')
+        if index == len(plan)-1:
+            verify_linker_selection(final_linker_selection, tools, expected_command=command, triple=triple)
     require(final_link_inputs == {name: identity(staging/name) for name in final_link_inputs}, 'link inputs changed during final link')
     for key, root in [('ru_source', ru), ('app_source', app)]:
         pin = config[key]
@@ -198,6 +360,7 @@ def build(config, staging):
     verify_proof(proof, source=source, compiler=compiler, ir=ir, binary=intermediate,
                  triple=triple, layout=layout, frozen=frozen, tools=tools)
     verify_gui_pe(staging/'ru_notepad.exe')
+    verify_linker_probe(linker_probe, tools, triple, staging)
     receipt = {'schema': SCHEMA, 'status': 'built-not-runtime-accepted-not-publishable',
         'bootstrap': bootstrap, 'bootstrap_verification': identity(report),
         'toolchain_identity_scopes': {
@@ -207,11 +370,11 @@ def build(config, staging):
         'source_pins': {k: config[k] for k in ('ru_source', 'app_source')},
         'app_baseline': baseline, 'entry_source': entry,
         'source_sha256': sources, 'tool_paths': tools, 'tool_sha256': config['tool_sha256'], 'driver_inputs': local_inputs,
-        'commands': commands, 'target_triple': triple, 'data_layout': layout,
+        'linker_probe': linker_probe, 'commands': commands, 'target_triple': triple, 'data_layout': layout,
         'sdk_crt_environment': {k: v for k, v in environment.items() if k.upper() in
             {'PATH', 'INCLUDE', 'LIB', 'LIBPATH', 'WINDOWSSDKDIR', 'WINDOWSSDKVERSION', 'VCTOOLSINSTALLDIR', 'VCTOOLSVERSION'}},
         'compile_proof_sha256': sha(proof_path), 'standalone_ir_sha256': sha(ir),
-        'linked_inputs': final_link_inputs, 'host_python': identity(sys.executable),
+        'linked_inputs': final_link_inputs, 'final_linker_selection': final_linker_selection, 'host_python': identity(sys.executable),
         'final_binary': identity(staging/'ru_notepad.exe'), 'native_acceptance': False,
         'required_gates': ['GUI CRT startup and diagnostics', 'UTF16/UTF8 argv edge cases',
             'icon/version/common-controls manifest', 'exact Scintilla/Lexilla/RuSyntax DLL identity and MSVC-host ABI callbacks',
