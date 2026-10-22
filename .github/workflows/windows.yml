@@ -225,8 +225,9 @@ jobs:
           path: .ci/preview-policy
           persist-credentials: false
       - name: Require delivery policy negative controls
+        timeout-minutes: 3
         run: >-
-          python -I .ci/preview-policy/delivery/test_preview_policy.py
+          python -I -u .ci/preview-policy/delivery/test_preview_policy.py
           --product-root "$env:GITHUB_WORKSPACE"
       - name: Build, run native tests, smoke the GUI, and package tested binaries
         env:

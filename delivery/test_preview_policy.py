@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
 """Offline synthetic negative controls; no Windows execution claim."""
+import atexit
+import faulthandler
+import sys
+
+# Bound only this synthetic control process; never alter native acceptance.
+# Traceback contains code locations, not locals, environment values or file data.
+faulthandler.dump_traceback_later(60, repeat=False, exit=False)
+atexit.register(faulthandler.cancel_dump_traceback_later)
+print('[preview-policy-controls] imports begin', flush=True)
 import argparse
 import copy
 import hashlib
 import json
 from pathlib import Path
-import sys
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -18,10 +26,12 @@ sys.path.insert(0, str(Path(__file__).absolute().parent))
 import package_manual_preview as p
 import test_package_manual_preview as fixtures
 import preview_policy as policy
+print('[preview-policy-controls] imports complete', flush=True)
 
 
 class ExactPolicyTests(unittest.TestCase):
     def setUp(self):
+        print('[preview-policy-controls] fixture begin: ' + self._testMethodName, flush=True)
         self.f = fixtures.ManualPreviewTests('runTest')
         self.f.setUp()
         self.addCleanup(self.f.doCleanups)
@@ -39,6 +49,7 @@ class ExactPolicyTests(unittest.TestCase):
         self.source = {'app_commit': policy.PRODUCT_COMMIT, 'app_tree': policy.PRODUCT_TREE}
         self.app = {'ru_commit': policy.COMPILER_COMMIT, 'ru_tree': policy.COMPILER_TREE}
         self.guard = policy.Eligibility(p, self.source, self.app)
+        print('[preview-policy-controls] fixture complete: ' + self._testMethodName, flush=True)
 
     def known(self):
         stage = self.f.timeout(case_index=1, stage_index=3)
@@ -187,6 +198,7 @@ class DeliveryWorkflowTests(unittest.TestCase):
         self.assertIn('-RunAclTests', workflow[product:delivery])
         self.assertIn('if: always()', workflow[delivery:evidence])
         self.assertIn('build/windows-ci/delivery-preview/*.zip', workflow)
+        self.assertIn('      - name: Require delivery policy negative controls\n        timeout-minutes: 3\n', workflow)
         self.assertNotIn('build/windows-ci/bin/*', workflow)
         self.assertNotIn('git push', workflow)
 
@@ -202,4 +214,11 @@ class DeliveryWorkflowTests(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main(argv=[sys.argv[0], *rest], verbosity=2)
+    print('[preview-policy-controls] tests begin', flush=True)
+    try:
+        result = unittest.main(argv=[sys.argv[0], *rest], verbosity=2, exit=False)
+        print('[preview-policy-controls] tests complete', flush=True)
+        raise SystemExit(0 if result.result.wasSuccessful() else 1)
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+        print('[preview-policy-controls] traceback timer cancelled; exiting', flush=True)
