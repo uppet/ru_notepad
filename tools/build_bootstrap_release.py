@@ -194,7 +194,8 @@ def verify_proof(proof, *, source, compiler, ir, binary, triple, layout, frozen,
         require(actual.get('link_flags') == explicit_linker_flags(identity(tools['linker'])), 'host linker not explicitly pinned')
         require(proof.get('linker') == identity(tools['linker']), 'host linker identity missing or changed')
         selection = verify_linker_selection(proof.get('linker_selection'), tools, triple=triple)
-        require(len(selection['command']) == 6 and selection['command'][2] == '-o', 'host link was not pure object to EXE')
+        require(len(selection['command']) == 7 and selection['command'][1] == '--target='+triple
+                and selection['command'][3] == '-o', 'host link was not explicitly targeted pure object to EXE')
     for key, file, digest_key in [('standalone_ir', ir, 'standalone_ir_sha256'), ('binary', binary, 'binary_sha256')]:
         require(proof.get('artifacts', {}).get(key) == {'path': str(file.resolve()), 'sha256': sha(file)}
                 and proof.get(digest_key) == sha(file), 'proof artifact mismatch: ' + key)
@@ -325,6 +326,12 @@ def build(config, staging):
     # A failed build keeps diagnostics in its private directory but no success
     # receipt. Nothing here copies binaries into dist or invokes packaging.
     linker_probe = linker_preflight(tools, staging, triple, environment, run, linker_record)
+    verify_linker_probe(linker_probe, tools, triple, staging)
+    diagnostic = {'schema': 'ru-notepad-linker-probe-diagnostic-v1',
+                  'status': 'diagnostic-only-not-application-or-gui-acceptance',
+                  'target_triple': triple, 'probe': linker_probe}
+    with (staging/'linker-probe-diagnostic.json').open('x', encoding='utf-8', newline='\n') as stream:
+        stream.write(json.dumps(diagnostic, ensure_ascii=False, indent=2)+'\n')
     ir, intermediate, proof_path = staging/'application.ll', staging/'intermediate-console.exe', staging/'compile-proof.json'
     frozen = {str((root/name).resolve()): digest for key, root in [('ru_source', ru), ('app_source', app)]
               for name, digest in sources[key].items()}

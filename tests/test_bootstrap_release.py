@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
+from contextlib import ExitStack
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'tools'))
@@ -69,6 +70,27 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(fixture.root, fixture.root.resolve())
         finally:
             fixture.doCleanups()
+
+    def test_host_link_requires_exact_explicit_target_and_pure_object_shape(self):
+        tools={name:str(self.root/(name+'.exe')) for name in ('clang','linker','llvm-as','llvm-link','opt','llvm-dis','llc')}
+        for path in tools.values(): Path(path).write_bytes(b'locked-tool')
+        triple='x86_64-pc-windows-msvc'
+        record=b.identity(tools['linker'])
+        command=[tools['clang'],'--target='+triple,str(self.root/'a.obj'),'-o',str(self.root/'a.exe'),*b.explicit_linker_flags(record)]
+        self.proof.update(target_triple=triple,linker=record,toolchain={'clang':[tools['clang']],
+            'tools':{k:tools[k] for k in ('llvm-as','llvm-link','opt','llvm-dis','llc')},'link_flags':b.explicit_linker_flags(record)})
+        with patch.object(b.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout=b'',stderr=link_trace([tools['linker']]))):
+            selection=b.inspect_linker_command(command,record,{},str(self.root),triple)
+        def verify():
+            return b.verify_proof(self.proof,**{k:self.files[k] for k in ('source','compiler','ir','binary')},
+                                  triple=triple,layout='layout',frozen=self.frozen,tools=tools)
+        self.proof['linker_selection']=selection
+        verify()
+        for invalid in (command[:1]+command[2:],command[:1]+['--target='+triple+'19.99']+command[2:],
+                        command[:1]+['--target='+triple]+command[1:]):
+            candidate=dict(selection);candidate.update(command=invalid,dry_run_command=invalid+['-###'])
+            self.proof['linker_selection']=candidate
+            with self.subTest(command=invalid),self.assertRaises(InvalidProvenance): verify()
 
     def test_proof_valid_fixture(self):
         self.verify()
@@ -136,7 +158,7 @@ class ReleaseTests(unittest.TestCase):
         self.proof['linker'] = b.identity(tools['linker'])
         triple = 'x86_64-pc-windows-msvc'
         args['triple'] = self.proof['target_triple'] = triple
-        command = [tools['clang'], str(self.root/'p.obj'), '-o', str(self.root/'p.exe'), *b.explicit_linker_flags(self.proof['linker'])]
+        command = [tools['clang'], '--target='+triple, str(self.root/'p.obj'), '-o', str(self.root/'p.exe'), *b.explicit_linker_flags(self.proof['linker'])]
         with patch.object(b.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout=b'', stderr=link_trace([tools['linker'], '-out:p.exe']))):
             self.proof['linker_selection'] = b.inspect_linker_command(command, self.proof['linker'], {}, str(self.root))
         b.verify_proof(self.proof, **args)
@@ -360,6 +382,55 @@ class LinkerSelectionTests(unittest.TestCase):
                     with self.assertRaises(InvalidProvenance):
                         b.linker_preflight(self.tools,self.root,'x86_64-pc-windows-msvc',{},run,self.record)
                 self.assertEqual(len(calls),{'source':1,'object':2,'binary':3}[phase])
+
+    def test_later_real_build_failure_preserves_diagnostic_only_probe(self):
+        ru=self.root/'ru';app=self.root/'app';directory=self.root/'bootstrap';stage=self.root/'staging'
+        files={ru/'rulang/toolchain_environment.py':'def llvm_environment(): return {}\n',
+               ru/'tools/bootstrap_compare.py':'def compare_native(*args): return True\n',
+               app/'src/main.ru':'fixture',app/'packaging/bootstrap_gui_launcher.c':'fixture',
+               app/'tools/bootstrap_provenance.py':'fixture',directory/'stage3.exe':'compiler'}
+        for path,body in files.items(): path.parent.mkdir(parents=True,exist_ok=True);path.write_text(body)
+        tools={name:str(self.root/(name+'.exe')) for name in ('clang','llvm-as','llvm-link','opt','llvm-dis','llc','rc')}
+        for path in tools.values(): Path(path).write_bytes(b'tool')
+        tools['linker']=str(self.linker)
+        config={'schema':'ru-notepad-bootstrap-llvm-config-v1',
+                'ru_source':{'path':str(ru),'commit':'ru','tree':'rt'},'app_source':{'path':str(app),'commit':'app','tree':'at'},
+                'app_baseline':{},'tool_paths':tools,'tool_sha256':{k:b.sha(Path(v)) for k,v in tools.items()},
+                'bootstrap_directory':str(directory),'verification':str(self.root/'report.json')}
+        executed=[]
+        def process(command,**kwargs):
+            command=list(map(str,command));executed.append(command)
+            if command[0]==sys.executable:
+                self.assertTrue((stage/'linker-probe-diagnostic.json').is_file())
+                raise subprocess.CalledProcessError(9,command,stderr='later stage3 fixture failure')
+            if command[-1]=='-###': return SimpleNamespace(returncode=0,stdout=b'',stderr=link_trace([str(self.linker)]))
+            if command[-1]=='--version':
+                return SimpleNamespace(stdout='clang version 14.0.6' if command[0]==tools['clang'] else 'LLVM version 14.0.6')
+            if '-S' in command: return SimpleNamespace(stdout='target triple = "x86_64-pc-windows-msvc"\ntarget datalayout = "layout"\n')
+            if '-o' in command: Path(command[command.index('-o')+1]).write_bytes(b'obj' if '-c' in command else b'MZprobe')
+            return SimpleNamespace(stdout='')
+        with ExitStack() as stack:
+            for obj,name,value in [(b,'ROOT',app),(b.sys,'platform','win32')]: stack.enter_context(patch.object(obj,name,value))
+            stack.enter_context(patch.object(b.platform,'machine',return_value='AMD64'))
+            stack.enter_context(patch.object(b,'snapshot',return_value={}))
+            stack.enter_context(patch.object(b,'verify_app_baseline',return_value={}))
+            stack.enter_context(patch.object(b,'validate_toolchain'))
+            stack.enter_context(patch.object(b,'validate',return_value={'stage3_sha256':b.sha(directory/'stage3.exe')}))
+            stack.enter_context(patch.object(b.subprocess,'run',side_effect=process))
+            with self.assertRaises(subprocess.CalledProcessError): b.build(config,stage)
+        original_read_text=Path.read_text
+        def cp1252_default(path, *args, **kwargs):
+            if path.name=='linker-probe-diagnostic.json' and not args and kwargs.get('encoding') is None:
+                return path.read_bytes().decode('cp1252')
+            return original_read_text(path,*args,**kwargs)
+        with patch.object(Path,'read_text',cp1252_default):
+            diagnostic=json.loads((stage/'linker-probe-diagnostic.json').read_bytes())
+        self.assertEqual(diagnostic['status'],'diagnostic-only-not-application-or-gui-acceptance')
+        self.assertEqual(diagnostic['target_triple'],'x86_64-pc-windows-msvc')
+        b.verify_linker_probe(diagnostic['probe'],tools,diagnostic['target_triple'],stage)
+        self.assertFalse((stage/'build-receipt.json').exists())
+        self.assertFalse((stage/'compile-proof.json').exists())
+        self.assertTrue(any(x[0]==str(stage/'link probe 汉😀$.exe') for x in executed))
 
 
 if __name__ == '__main__':
