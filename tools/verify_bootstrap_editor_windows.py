@@ -223,8 +223,43 @@ def capture_missing_control(api, pid, state, process_alive, elapsed):
         'snapshot': owned_dialog_diagnostic(api, pid, state['hwnd'], process_alive)}
 
 
+
+def owned_ok_control(api, pid, hwnd):
+    """Select only the one observed MB_OK button, not a MessageBox return code."""
+    user = dialog_functions(api)
+    buttons, errors, seen = [], [], []
+    @api.callback_type
+    def visit(child, _):
+        try:
+            require(len(seen) < 32, 'startup child enumeration exceeds bound')
+            seen.append(child)
+            api.verify_owned_handles(pid, hwnd, child)
+            name = ctypes.create_unicode_buffer(64)
+            require(user.GetClassNameW(child, name, len(name)), 'startup child class unavailable')
+            if name.value == 'Button':
+                require(user.GetParent(child) == hwnd, 'startup button is not a direct child')
+                identifier = user.GetDlgCtrlID(child)
+                require(identifier in (1, 2), 'unobserved startup button ID')
+                require(user.IsWindowVisible(child) and user.IsWindowEnabled(child),
+                        'startup button is not visible and enabled')
+                require(api.text(child) == 'OK', 'unexpected startup button caption')
+                require(user.GetDlgItem(hwnd, identifier) == child, 'startup button lookup mismatch')
+                api.verify_owned_handles(pid, hwnd, child)
+                require(user.GetParent(child) == hwnd and user.GetDlgCtrlID(child) == identifier,
+                        'startup button changed during selection')
+                buttons.append((child, identifier))
+        except Exception as exc:
+            errors.append(str(exc))
+            return False
+        return True
+    user.EnumChildWindows(hwnd, visit, 0)
+    require(not errors, 'startup control enumeration: '+('; '.join(errors)))
+    require(len(buttons) <= 1, 'ambiguous startup buttons')
+    return buttons[0] if buttons else None
+
+
 def owned_dialog(api, pid, state):
-    """Wait for the exact owned IDOK control within the existing child deadline."""
+    """Wait for the unique owned OK control within the existing child deadline."""
     user = dialog_functions(api)
     if state['found']:
         hwnd = state['hwnd']
@@ -248,22 +283,25 @@ def owned_dialog(api, pid, state):
         api.verify_owned_handles(pid, hwnd)
         require(api.text(hwnd) == 'Ru Notepad startup error', 'unexpected startup dialog')
         state.update(found=True, hwnd=hwnd, dialog_parent=user.GetParent(hwnd))
-    button = user.GetDlgItem(hwnd, 1)
-    state['idok_lookup_result'] = int(button or 0)
-    if not button:
+    selected = owned_ok_control(api, pid, hwnd)
+    state['idok_lookup_result'] = int(user.GetDlgItem(hwnd, 1) or 0)
+    if selected is None:
         state['control_wait_polls'] = state.get('control_wait_polls', 0) + 1
-        return  # No sleep or new deadline here; run_child's original 60s cap owns this.
+        return  # The existing 60s watchdog owns this wait.
+    button, identifier = selected
     api.verify_owned_handles(pid, hwnd, button)
-    require(user.GetParent(button) == hwnd and user.GetDlgCtrlID(button) == 1,
-            'unexpected startup OK parent/control ID')
-    name = ctypes.create_unicode_buffer(64)
-    require(user.GetClassNameW(button, name, len(name)) and name.value == 'Button'
-            and user.IsWindowEnabled(button), 'unexpected startup OK control')
+    require(api.text(hwnd) == 'Ru Notepad startup error'
+            and user.GetParent(hwnd) == state['dialog_parent'], 'startup dialog changed before dispatch')
+    require(owned_ok_control(api, pid, hwnd) == selected, 'startup control changed before dispatch')
     api.verify_owned_handles(pid, hwnd, button)
-    require(api.text(hwnd) == 'Ru Notepad startup error' and user.GetParent(button) == hwnd
-            and user.GetDlgCtrlID(button) == 1, 'startup control changed before dispatch')
-    state.update(button=button, request_attempted=True)
-    state['message_result'] = api.scalar(hwnd, 0x0111, 1, button)
+    require(api.text(hwnd) == 'Ru Notepad startup error'
+            and user.GetParent(hwnd) == state['dialog_parent']
+            and user.GetParent(button) == hwnd and user.GetDlgCtrlID(button) == identifier
+            and user.GetDlgItem(hwnd, identifier) == button
+            and api.text(button) == 'OK' and user.IsWindowVisible(button)
+            and user.IsWindowEnabled(button), 'startup identity changed at dispatch')
+    state.update(button=button, button_control_id=identifier, request_attempted=True)
+    state['message_result'] = api.scalar(hwnd, 0x0111, identifier, button)
     state['dispatch_completed'] = True
     state['destroyed'] = not bool(user.IsWindow(hwnd))
 
@@ -326,7 +364,11 @@ class ProbeHandshake:
     def signal(self):
         require(self.kernel.SetEvent(self.handle), 'cannot acknowledge actual DLL identities')
     def close(self):
-        self.kernel.CloseHandle(self.handle)
+        return bool(self.kernel.CloseHandle(self.handle))
+
+
+class FunctionalDeadlineError(ValueError):
+    pass
 
 
 def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, required_dlls=()):
@@ -338,16 +380,49 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
     expired = threading.Event()
     handshake = None
     result = {'passed': False, 'executed': False, 'cleanup_killed': False}
+    observation = {'schema': 'ru-notepad-child-observation-v1', 'deadline_events': [],
+                   'first_error': None, 'nondeadline_errors': [], 'cleanup': {'pid': None, 'errors': [],
+                   'process_reaped': None, 'exit_code': None, 'windows_remaining': None,
+                   'handshake_closed': None, 'watchdog_stopped': None}}
+    result['observation'] = observation
+    phase = 'prepare'
+    observation_lock = threading.RLock()
+    def elapsed(): return max(0.0, time.monotonic()-started)
+    def record_error(exc, code='exception'):
+        with observation_lock:
+            row = {'code': code, 'phase': phase, 'elapsed_seconds': elapsed(),
+                   'exception_type': type(exc).__name__, 'message': str(exc)}
+            if code != 'deadline':
+                observation['nondeadline_errors'].append(row)
+            if observation['first_error'] is None:
+                observation['first_error'] = row
+            result.setdefault('error', str(exc))
+    def deadline_event(source, seconds):
+        observation['deadline_events'].append({'source': source,
+            'budget_seconds': DEADLINE_SECONDS, 'elapsed_seconds': seconds})
+    def cleanup_error(operation, exc):
+        observation['cleanup']['errors'].append({'operation': operation,
+            'exception_type': type(exc).__name__, 'message': str(exc)})
+        result['passed'] = False
+        record_error(exc)
     try:
         if required_dlls and not gui:
             handshake = ProbeHandshake()
             arguments = [*arguments, handshake.name]
         process = subprocess.Popen([str(binary), *arguments], cwd=directory, creationflags=0x00000008)
         result.update(executed=True, pid=process.pid)
+        observation['cleanup']['pid'] = process.pid
+        phase = 'runtime'
         def stop_owned_child():
-            expired.set()
-            if process.poll() is None:
-                process.kill()
+            with observation_lock:
+                deadline_event('watchdog', elapsed())
+                record_error(FunctionalDeadlineError('owned watchdog reached 60s functional deadline'), 'deadline')
+                expired.set()
+            try:
+                if process.poll() is None:
+                    process.kill()
+            except Exception as exc:
+                cleanup_error('watchdog-kill', exc)
         watchdog = threading.Timer(max(0, DEADLINE_SECONDS-(time.monotonic()-started)), stop_owned_child)
         watchdog.daemon = True
         watchdog.start()
@@ -359,7 +434,9 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
         observed = {}
         while process.poll() is None:
             poll_time = time.monotonic()
-            require(poll_time < deadline, '60s functional smoke deadline exceeded (not performance)')
+            if poll_time >= deadline:
+                deadline_event('poll-loop', poll_time-started)
+                raise FunctionalDeadlineError('60s functional smoke deadline exceeded (not performance)')
             if required_dlls:
                 for name, record in loaded_dlls(process.pid).items():
                     require(Path(record['path']).resolve() == (directory/name).resolve(), 'DLL loaded from outside owned snapshot')
@@ -384,6 +461,9 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
                             api.close(hwnd)
                             closed = True
             time.sleep(0.05)
+        if expired.is_set():
+            raise FunctionalDeadlineError('owned watchdog reached 60s functional deadline')
+        phase = 'acceptance'
         result['exit_code'] = process.returncode
         if invalid:
             dialog_state['process_exited'] = True
@@ -403,7 +483,7 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
         require(not api.windows(process.pid), 'owned windows remain after exit')
         result['passed'] = True
     except Exception as exc:
-        result['error'] = str(exc)
+        record_error(exc, 'deadline' if isinstance(exc, FunctionalDeadlineError) else 'exception')
         if invalid and process is not None:
             state = result.get('owned_startup_dialog', {})
             state['process_returncode_before_cleanup'] = process.poll()
@@ -412,20 +492,51 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
                     lambda: process.poll() is None)
             state['process_returncode_after_diagnostic'] = process.poll()
     finally:
+        phase = 'cleanup'
+        cleanup = observation['cleanup']
         if watchdog is not None:
-            watchdog.cancel()
-            watchdog.join()
+            try:
+                watchdog.cancel()
+                watchdog.join()
+                cleanup['watchdog_stopped'] = not watchdog.is_alive()
+                require(cleanup['watchdog_stopped'], 'owned watchdog stop not confirmed')
+            except Exception as exc:
+                cleanup_error('watchdog-stop', exc)
+        else:
+            cleanup['watchdog_stopped'] = True
         if handshake is not None:
-            handshake.close()
+            try:
+                cleanup['handshake_closed'] = handshake.close() is True
+                require(cleanup['handshake_closed'], 'owned handshake close not confirmed')
+            except Exception as exc:
+                cleanup_error('handshake-close', exc)
+        else:
+            cleanup['handshake_closed'] = True
         if expired.is_set():
-            result.update(passed=False, cleanup_killed=True, error='owned watchdog reached 60s functional deadline')
-        if process is not None and process.poll() is None:
-            process.kill()  # This Popen handle only, never global taskkill.
-            process.wait(timeout=5)
-            result.update(cleanup_killed=True, passed=False)
+            result.update(passed=False, cleanup_killed=True)
+            record_error(FunctionalDeadlineError('owned watchdog reached 60s functional deadline'), 'deadline')
+        if process is not None:
+            try:
+                if process.poll() is None:
+                    process.kill()  # Only this owned Popen handle.
+                    result.update(cleanup_killed=True, passed=False)
+                exit_code = process.wait(timeout=5)
+                cleanup['exit_code'] = exit_code
+                cleanup['process_reaped'] = isinstance(exit_code, int) and process.poll() is not None
+                require(cleanup['process_reaped'], 'owned process reap not confirmed')
+            except Exception as exc:
+                cleanup_error('process-reap', exc)
+            try:
+                windows = api.windows(process.pid)
+                cleanup['windows_remaining'] = [int(row[0]) for row in windows]
+                require(not windows, 'owned windows remain after cleanup')
+            except Exception as exc:
+                cleanup_error('windows-gone', exc)
         result['seconds'] = time.monotonic() - started
         if result['seconds'] > DEADLINE_SECONDS:
-            result.update(passed=False, error='60s functional smoke deadline exceeded (not performance)')
+            deadline_event('elapsed-postcheck', result['seconds'])
+            result['passed'] = False
+            record_error(FunctionalDeadlineError('60s functional smoke deadline exceeded (not performance)'), 'deadline')
     return result
 
 

@@ -14,6 +14,11 @@ sys.path.insert(0, str(ROOT/'tools'))
 import verify_bootstrap_editor_windows as gate
 
 
+def clock_ticks(values):
+    iterator = iter(values)
+    return lambda: next(iterator, values[-1])
+
+
 class GatePolicyTests(unittest.TestCase):
     def test_missing_failed_skipped_timeout_or_cleanup_cannot_pass(self):
         rows = {name: {'passed': True, 'executed': True, 'cleanup_killed': False} for name in gate.CASES}
@@ -123,16 +128,19 @@ class GatePolicyTests(unittest.TestCase):
             alive = True
             def IsWindow(self, hwnd): return self.alive
             def GetDlgItem(self, hwnd, identifier): return 456
+            def EnumChildWindows(self,h,callback,param): callback(456,0); return True
             def GetParent(self, hwnd): return 123
             def GetDlgCtrlID(self, hwnd): return 1
             def GetClassNameW(self, hwnd, name, count): name.value = 'Button'; return 6
             def IsWindowEnabled(self, hwnd): return True
+            def IsWindowVisible(self, hwnd): return True
         class API:
+            callback_type = staticmethod(lambda callback: callback)
             def __init__(self, title='Ru Notepad startup error'):
                 self.title, self.events, self.user = title, [], User()
             def windows(self, pid): return [(123, '#32770', True)]
             def verify_owned_handles(self, pid, *handles): self.events.append(('owned', pid, handles))
-            def text(self, hwnd): return self.title
+            def text(self, hwnd): return self.title if hwnd == 123 else 'OK'
             def control(self, hwnd, control): return 456
             def scalar(self, *args): self.events.append(('dispatch', args)); return 0
         def state():
@@ -154,7 +162,7 @@ class GatePolicyTests(unittest.TestCase):
                 def fail(*args): raise ValueError('injected ownership/dispatch failure')
                 if mutation == 'title': api.title = 'Unrelated dialog'
                 if mutation == 'parent': api.user.GetParent = lambda h: 789
-                if mutation == 'id': api.user.GetDlgCtrlID = lambda h: 2
+                if mutation == 'id': api.user.GetDlgCtrlID = lambda h: 3
                 if mutation == 'class': api.user.GetClassNameW = lambda *args: 0
                 if mutation == 'disabled': api.user.IsWindowEnabled = lambda h: False
                 if mutation == 'owner': api.verify_owned_handles = fail
@@ -162,6 +170,168 @@ class GatePolicyTests(unittest.TestCase):
                 with self.assertRaises(ValueError, msg=mutation): gate.owned_dialog(api, 71, record)
                 self.assertFalse(record['dispatch_completed'])
                 self.assertFalse(record['destroyed'])
+
+    def test_observed_ok_ids_and_strict_unique_owned_selection(self):
+        class User:
+            def __init__(self, identifier):
+                self.identifier,self.children,self.parent,self.caption = identifier,[456],123,'OK'
+                self.visible,self.enabled,self.alive = True,True,True
+            def IsWindow(self,h): return self.alive
+            def GetParent(self,h): return 0 if h == 123 else self.parent
+            def GetDlgCtrlID(self,h): return self.identifier
+            def GetDlgItem(self,h,i): return 456 if i == self.identifier else 0
+            def GetClassNameW(self,h,b,n): b.value='Button'; return 6
+            def IsWindowEnabled(self,h): return self.enabled
+            def IsWindowVisible(self,h): return self.visible
+            def EnumChildWindows(self,h,callback,param):
+                for c in self.children:
+                    if not callback(c,0): return False
+                return True
+        class API:
+            callback_type = staticmethod(lambda f:f)
+            def __init__(self,i): self.user,self.sent,self.enumerations = User(i),[],0
+            def windows(self,pid): return [(123,'#32770',True)]
+            def text(self,h): return 'Ru Notepad startup error' if h == 123 else self.user.caption
+            def verify_owned_handles(self,pid,*h):
+                if pid != 71 or any(x not in (123,456,457) for x in h): raise ValueError('foreign PID')
+            def scalar(self,*args): self.sent.append(args);return 0
+        def state(): return dict(found=False,request_attempted=False,dispatch_completed=False,destroyed=False)
+        with patch.object(gate,'dialog_functions',lambda api:api.user):
+            for identifier in (1,2):
+                api,record=API(identifier),state();gate.owned_dialog(api,71,record)
+                self.assertEqual(api.sent,[(123,0x111,identifier,456)])
+                self.assertEqual(record['button_control_id'],identifier)
+                self.assertFalse(record['destroyed'])
+                gate.owned_dialog(api,71,record);self.assertEqual(len(api.sent),1)
+            for mutation in ('duplicate','other-id','cancel','ampersand','suffix','hidden','disabled',
+                             'parent','foreign','lookup','change-between-selections','late-title','late-parent','late-lookup'):
+                api,record=API(2),state()
+                if mutation=='duplicate':
+                    api.user.children=[456,457]
+                    api.user.GetDlgItem=lambda h,i:456 if i==2 else 457
+                    api.user.GetDlgCtrlID=lambda h:2 if h==456 else 1
+                if mutation=='other-id': api.user.identifier=3
+                if mutation=='cancel': api.user.caption='Cancel'
+                if mutation=='ampersand': api.user.caption='&OK'
+                if mutation=='suffix': api.user.caption='OK malicious'
+                if mutation=='hidden': api.user.visible=False
+                if mutation=='disabled': api.user.enabled=False
+                if mutation=='parent': api.user.parent=789
+                if mutation=='foreign': api.user.children=[999]
+                if mutation=='lookup': api.user.GetDlgItem=lambda h,i:789
+                if mutation in ('late-title','late-parent','late-lookup'):
+                    original=api.user.EnumChildWindows
+                    def late(h,callback,param):
+                        api.enumerations+=1
+                        result=original(h,callback,param)
+                        if api.enumerations==2:
+                            if mutation=='late-title': api.text=lambda h:'Other' if h==123 else 'OK'
+                            if mutation=='late-parent': api.user.GetParent=lambda h:789 if h==123 else 123
+                            if mutation=='late-lookup': api.user.GetDlgItem=lambda h,i:789
+                        return result
+                    api.user.EnumChildWindows=late
+                if mutation=='change-between-selections':
+                    original=api.user.EnumChildWindows
+                    def changing(h,callback,param):
+                        api.enumerations+=1
+                        if api.enumerations==2: api.user.caption='Cancel'
+                        return original(h,callback,param)
+                    api.user.EnumChildWindows=changing
+                with self.assertRaises(ValueError,msg=mutation): gate.owned_dialog(api,71,record)
+                self.assertEqual(api.sent,[],mutation)
+                self.assertFalse(record['request_attempted'],mutation)
+
+    def test_structured_deadline_first_error_and_cleanup_evidence(self):
+        class Process:
+            pid=71
+            returncode=None
+            def poll(self): return self.returncode
+            def kill(self): self.returncode=-9
+            def wait(self,timeout): return self.returncode
+        class Timer:
+            def __init__(self,seconds,callback): self.callback=callback
+            def start(self):
+                if mode=='watchdog': self.callback()
+            def cancel(self): pass
+            def join(self):
+                if mode=='join-error': raise RuntimeError('join failed')
+            def is_alive(self): return False
+        class API:
+            def no_dialog(self,pid):
+                if mode in ('prior-error','join-error','kill-error','wait-error','windows-error'):
+                    raise ValueError('unknown runtime failure')
+                return []
+            def windows(self,pid):
+                if mode=='windows-error': raise RuntimeError('enumeration failed')
+                return []
+        class Handshake:
+            name='owned'
+            def close(self): return mode!='close-error'
+        for mode in ('poll','watchdog','prior-error','join-error','kill-error','wait-error','windows-error','close-error'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as temporary:
+                process=Process()
+                def fail(*args,**kw): raise RuntimeError('cleanup failed')
+                if mode=='kill-error': process.kill=fail
+                if mode=='wait-error': process.wait=fail
+                ticks=[0,0,61,61.1,62] if mode in ('poll','close-error') else [0,0,60,60.1,62] if mode=='watchdog' else [0,0,1,1.1,62]
+                with patch.object(gate.subprocess,'Popen',return_value=process), \
+                     patch.object(gate.threading,'Timer',Timer),patch.object(gate.time,'sleep'), \
+                     patch.object(gate.time,'monotonic',side_effect=clock_ticks(ticks)), \
+                     patch.object(gate,'ProbeHandshake',Handshake):
+                    row=gate.run_child(API(),Path(temporary)/'app.exe',[],required_dlls=('x',) if mode=='close-error' else ())
+                obs=row['observation']; cleanup=obs['cleanup']
+                self.assertFalse(row['passed'])
+                self.assertEqual(obs['schema'],'ru-notepad-child-observation-v1')
+                self.assertEqual(cleanup['pid'],71)
+                self.assertTrue(obs['deadline_events'])
+                expected='deadline' if mode in ('poll','watchdog','close-error') else 'exception'
+                self.assertEqual(obs['first_error']['code'],expected)
+                if expected=='exception':
+                    self.assertEqual(obs['first_error']['message'],'unknown runtime failure')
+                    self.assertEqual(row['error'],'unknown runtime failure')
+                if mode in ('poll','watchdog'):
+                    self.assertEqual(obs['nondeadline_errors'],[])
+                    self.assertEqual(cleanup,dict(pid=71,errors=[],process_reaped=True,exit_code=-9,
+                        windows_remaining=[],handshake_closed=True,watchdog_stopped=True))
+                else:
+                    if mode!='prior-error': self.assertTrue(cleanup['errors'])
+                if mode=='windows-error': self.assertIsNone(cleanup['windows_remaining'])
+                if mode=='close-error': self.assertFalse(cleanup['handshake_closed'])
+
+    def test_watchdog_and_unknown_error_preserve_actual_first_order(self):
+        class Process:
+            pid=71
+            returncode=None
+            def poll(self): return self.returncode
+            def kill(self): self.returncode=-9
+            def wait(self,timeout): return self.returncode
+        class Timer:
+            current=None
+            def __init__(self,seconds,callback): self.callback=callback;Timer.current=self
+            def start(self): pass
+            def cancel(self):
+                if order=='unknown-first': self.callback()
+            def join(self): pass
+            def is_alive(self): return False
+        class API:
+            def no_dialog(self,pid):
+                if order=='watchdog-first': Timer.current.callback()
+                raise ValueError('independent runtime error')
+            def windows(self,pid): return []
+        for order in ('watchdog-first','unknown-first'):
+            ticks=[0,0,1,60,60.1,62] if order=='watchdog-first' else [0,0,1,1.1,60,62]
+            with tempfile.TemporaryDirectory() as temporary, \
+                 patch.object(gate.subprocess,'Popen',return_value=Process()), \
+                 patch.object(gate.threading,'Timer',Timer), \
+                 patch.object(gate.time,'monotonic',side_effect=clock_ticks(ticks)):
+                row=gate.run_child(API(),Path(temporary)/'app.exe',[])
+            first=row['observation']['first_error']
+            self.assertEqual(first['code'],'deadline' if order=='watchdog-first' else 'exception')
+            if order=='unknown-first': self.assertEqual(first['message'],'independent runtime error')
+            self.assertFalse(row['passed'])
+            self.assertTrue(row['observation']['cleanup']['process_reaped'])
+            self.assertTrue(any(e['message']=='independent runtime error'
+                for e in row['observation']['nondeadline_errors']))
 
     def test_probe_projects_each_outcome_before_pointer_or_scalar_use(self):
         source = (ROOT/'tests/bootstrap_pipeline/dll_abi_probe.ru').read_text(encoding='utf-8')
@@ -184,6 +354,7 @@ class GatePolicyTests(unittest.TestCase):
             def kill(self): self.killed = True; self.returncode = -9
             def wait(self, timeout): return self.returncode
         class API:
+            callback_type = staticmethod(lambda callback: callback)
             def windows(self, pid): return []
         class User:
             def __init__(self, alive): self.alive = alive
@@ -217,6 +388,7 @@ class GatePolicyTests(unittest.TestCase):
             def GetClassNameW(self, h, name, count): name.value = '#32770' if h == 123 else 'Button'; return len(name.value)
             def GetDlgCtrlID(self,h): return 0 if h == 123 else 1
             def GetDlgItem(self,h,i): return 0
+            def EnumChildWindows(self,h,callback,param): return True
             def GetParent(self,h): return 0 if h == 123 else 123
             def IsChild(self,parent,h): return parent == 123 and h in self.children
             def IsWindowVisible(self,h): return True
@@ -285,8 +457,10 @@ class GatePolicyTests(unittest.TestCase):
     def test_missing_idok_waits_without_claiming_dispatch(self):
         class User:
             def GetDlgItem(self,h,i): return 0
+            def EnumChildWindows(self,h,callback,param): return True
             def GetParent(self,h): return 0
         class API:
+            callback_type = staticmethod(lambda callback: callback)
             user = User()
             def windows(self,pid): return [(123,'#32770',True)]
             def verify_owned_handles(self,pid,*handles): pass
@@ -313,6 +487,7 @@ class GatePolicyTests(unittest.TestCase):
             def start(self): pass
             def cancel(self): pass
             def join(self): pass
+            def is_alive(self): return False
         class User:
             def __init__(self, process, mode): self.process,self.mode,self.lookups = process,mode,0
             def IsWindow(self, hwnd): return self.process.poll() is None
@@ -320,25 +495,30 @@ class GatePolicyTests(unittest.TestCase):
             def GetDlgCtrlID(self, hwnd): return 1
             def GetClassNameW(self, hwnd, buffer, count): buffer.value = 'Button'; return 6
             def IsWindowEnabled(self, hwnd): return True
-            def GetDlgItem(self, hwnd, identifier):
+            def IsWindowVisible(self, hwnd): return True
+            def EnumChildWindows(self, hwnd, callback, param):
                 self.lookups += 1
                 if self.mode == 'early': self.process.returncode = 1
+                if self.mode == 'ready' and self.lookups > 1: callback(456,0)
+                return True
+            def GetDlgItem(self, hwnd, identifier):
                 return 456 if self.mode == 'ready' and self.lookups > 1 else 0
         class API:
+            callback_type = staticmethod(lambda callback: callback)
             def __init__(self, process, mode): self.user,self.process,self.sent = User(process,mode),process,[]
             def windows(self, pid): return [(123,'#32770',True)] if self.process.poll() is None else []
             def verify_owned_handles(self, pid, *handles):
                 if pid != 71 or any(h not in (123,456) for h in handles): raise ValueError('not owned')
-            def text(self, hwnd): return 'Ru Notepad startup error'
+            def text(self, hwnd): return 'Ru Notepad startup error' if hwnd == 123 else 'OK'
             def scalar(self, *args): self.sent.append(args); self.process.returncode = 1; return 0
         for mode in ('ready','early','missing'):
             with self.subTest(mode=mode),tempfile.TemporaryDirectory() as temporary:
                 process = Process(); api = API(process,mode)
-                ticks = [0,0,1,2,3] if mode == 'ready' else [0,0,1,2] if mode == 'early' else [0,0,1,2.1,61,62]
+                ticks = [0,0,1,2,3] if mode == 'ready' else [0,0,1,1.1,2] if mode == 'early' else [0,0,1,2.1,61,61.1,62]
                 with patch.object(gate,'dialog_functions',lambda api:api.user), \
                      patch.object(gate.subprocess,'Popen',return_value=process), \
                      patch.object(gate.threading,'Timer',Timer),patch.object(gate.time,'sleep'), \
-                     patch.object(gate.time,'monotonic',side_effect=ticks):
+                     patch.object(gate.time,'monotonic',side_effect=clock_ticks(ticks)):
                     result = gate.run_child(api,Path(temporary)/'app.exe',[],invalid=True)
                 self.assertEqual(result['passed'],mode == 'ready',result)
                 self.assertEqual(result['cleanup_killed'],mode == 'missing')
@@ -356,9 +536,11 @@ class GatePolicyTests(unittest.TestCase):
     def test_waiting_dialog_identity_changes_never_dispatch(self):
         class User:
             def GetDlgItem(self,h,i): return 0
+            def EnumChildWindows(self,h,callback,param): return True
             def GetParent(self,h): return 0
             def IsWindow(self,h): return True
         class API:
+            callback_type = staticmethod(lambda callback: callback)
             def __init__(self): self.user,self.sent = User(),[]
             def windows(self,pid): return [(123,'#32770',True)]
             def verify_owned_handles(self,pid,*handles): pass
@@ -386,10 +568,11 @@ class GatePolicyTests(unittest.TestCase):
             def kill(self): self.killed = True
             def wait(self, timeout): return -9
         class API:
+            callback_type = staticmethod(lambda callback: callback)
             def no_dialog(self, pid): return []
         process = Process()
         with tempfile.TemporaryDirectory() as temporary:
-            with patch.object(gate.subprocess, 'Popen', return_value=process), patch.object(gate.time, 'monotonic', side_effect=[0, 0, 61, 62]):
+            with patch.object(gate.subprocess, 'Popen', return_value=process), patch.object(gate.time, 'monotonic', side_effect=clock_ticks([0, 0, 61, 61.1, 62])):
                 result = gate.run_child(API(), Path(temporary)/'app.exe', [])
         self.assertTrue(process.killed)
         self.assertTrue(result['executed'])
@@ -409,7 +592,9 @@ class GatePolicyTests(unittest.TestCase):
             def start(self): self.callback()
             def cancel(self): pass
             def join(self): pass
+            def is_alive(self): return False
         class API:
+            callback_type = staticmethod(lambda callback: callback)
             def windows(self, pid): return []
         process = Process()
         with tempfile.TemporaryDirectory() as temporary:
@@ -431,6 +616,7 @@ class GatePolicyTests(unittest.TestCase):
         process = Process()
         test = self
         class API:
+            callback_type = staticmethod(lambda callback: callback)
             def no_dialog(self, pid):
                 # A GUI observation cannot starve the independent process cap.
                 test.assertTrue(process.killed.wait(timeout=1))
