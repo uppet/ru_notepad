@@ -146,6 +146,7 @@ def dialog_functions(api):
     from ctypes import wintypes as w
     for name, args, result in (
             ('IsWindow', [w.HWND], w.BOOL),
+            ('IsChild', [w.HWND, w.HWND], w.BOOL),
             ('IsWindowEnabled', [w.HWND], w.BOOL),
             ('GetParent', [w.HWND], w.HWND),
             ('GetDlgCtrlID', [w.HWND], ctypes.c_int)):
@@ -154,23 +155,90 @@ def dialog_functions(api):
     return api.user
 
 
+def owned_dialog_diagnostic(api, pid, hwnd, process_alive):
+    """Bounded read-only snapshot of this dialog's owned children, even on failure."""
+    from ctypes import wintypes as w
+    user = None
+    result = {'pid': pid, 'hwnd': hwnd, 'children': [], 'limit': 32,
+              'text_limit_utf16': 256, 'text_timeout_ms': 100, 'truncated': False}
+    def record(handle):
+        owner = w.DWORD()
+        thread = user.GetWindowThreadProcessId(handle, ctypes.byref(owner))
+        require(thread and owner.value == pid, 'diagnostic HWND no longer owned')
+        require(process_alive(), 'owned process exited during diagnostic')
+        require(handle == hwnd or user.IsChild(hwnd, handle), 'diagnostic child left owned dialog')
+        name = ctypes.create_unicode_buffer(256)
+        require(user.GetClassNameW(handle, name, len(name)), 'diagnostic class unavailable')
+        row = {'hwnd': handle, 'class': name.value, 'control_id': user.GetDlgCtrlID(handle),
+               'parent': int(user.GetParent(handle) or 0), 'visible': bool(user.IsWindowVisible(handle)),
+               'enabled': bool(user.IsWindowEnabled(handle))}
+        # WM_GETTEXT is a system message; no private-control pointer messages.
+        require(user.GetWindowThreadProcessId(handle, ctypes.byref(owner)) and owner.value == pid,
+                'diagnostic ownership changed before text query')
+        buffer = ctypes.create_unicode_buffer(257)
+        copied = ctypes.c_size_t()
+        sent = user.SendMessageTimeoutW(handle, 0x000D, len(buffer), ctypes.addressof(buffer),
+                                        3, 100, ctypes.byref(copied))
+        row.update(text_dispatch_completed=bool(sent), text_result=int(copied.value))
+        if sent:
+            require(copied.value <= 256, 'diagnostic text result exceeds bound')
+            row.update(text=buffer.value, text_may_be_truncated=copied.value == 256)
+        require(user.GetWindowThreadProcessId(handle, ctypes.byref(owner)) and owner.value == pid,
+                'diagnostic ownership changed after text query')
+        require(handle == hwnd or user.IsChild(hwnd, handle), 'diagnostic child moved after text query')
+        return row
+    try:
+        user = dialog_functions(api)
+        result['dialog'] = record(hwnd)
+        result['getdlgitem_idok_now'] = int(user.GetDlgItem(hwnd, 1) or 0)
+        @api.callback_type
+        def visit(child, _):
+            if len(result['children']) >= 32:
+                result['truncated'] = True
+                return False
+            try:
+                result['children'].append(record(child))
+            except Exception as exc:
+                result['error'] = str(exc)
+                return False
+            return True
+        result['enumeration_result'] = bool(user.EnumChildWindows(hwnd, visit, 0))
+    except Exception as exc:
+        result['error'] = str(exc)
+    result['process_alive_after'] = bool(process_alive())
+    return result
+
+
 def owned_dialog(api, pid, state):
-    """One owned control notification; dispatch is NOT proof of destruction."""
+    """Wait for the exact owned IDOK control within the existing child deadline."""
     user = dialog_functions(api)
     if state['found']:
-        if not user.IsWindow(state['hwnd']):
+        hwnd = state['hwnd']
+        if not user.IsWindow(hwnd):
             state['destroyed'] = True
-        else:
-            api.verify_owned_handles(pid, state['hwnd'])
-        return
-    dialogs = [h for h, name, visible in api.windows(pid) if name == '#32770' and visible]
-    require(len(dialogs) <= 1, 'unexpected multiple startup dialogs')
-    if not dialogs:
-        return
-    hwnd = dialogs[0]
-    api.verify_owned_handles(pid, hwnd)
-    require(api.text(hwnd) == 'Ru Notepad startup error', 'unexpected startup dialog')
-    button = api.control(hwnd, 1)
+            return
+        api.verify_owned_handles(pid, hwnd)
+        require([h for h, name, visible in api.windows(pid) if name == '#32770' and visible] == [hwnd],
+                'owned startup dialog identity changed')
+        require(api.text(hwnd) == 'Ru Notepad startup error', 'startup title changed while waiting')
+        require(user.GetParent(hwnd) == state['dialog_parent'], 'startup parent changed while waiting')
+        if state['dispatch_completed']:
+            return
+        require(not state['request_attempted'], 'startup notification already attempted')
+    else:
+        dialogs = [h for h, name, visible in api.windows(pid) if name == '#32770' and visible]
+        require(len(dialogs) <= 1, 'unexpected multiple startup dialogs')
+        if not dialogs:
+            return
+        hwnd = dialogs[0]
+        api.verify_owned_handles(pid, hwnd)
+        require(api.text(hwnd) == 'Ru Notepad startup error', 'unexpected startup dialog')
+        state.update(found=True, hwnd=hwnd, dialog_parent=user.GetParent(hwnd))
+    button = user.GetDlgItem(hwnd, 1)
+    state['idok_lookup_result'] = int(button or 0)
+    if not button:
+        state['control_wait_polls'] = state.get('control_wait_polls', 0) + 1
+        return  # No sleep or new deadline here; run_child's original 60s cap owns this.
     api.verify_owned_handles(pid, hwnd, button)
     require(user.GetParent(button) == hwnd and user.GetDlgCtrlID(button) == 1,
             'unexpected startup OK parent/control ID')
@@ -180,8 +248,7 @@ def owned_dialog(api, pid, state):
     api.verify_owned_handles(pid, hwnd, button)
     require(api.text(hwnd) == 'Ru Notepad startup error' and user.GetParent(button) == hwnd
             and user.GetDlgCtrlID(button) == 1, 'startup control changed before dispatch')
-    state.update(found=True, hwnd=hwnd, button=button, request_attempted=True)
-    # WM_COMMAND / BN_CLICKED / IDOK; lParam is the verified control, not menu zero.
+    state.update(button=button, request_attempted=True)
     state['message_result'] = api.scalar(hwnd, 0x0111, 1, button)
     state['dispatch_completed'] = True
     state['destroyed'] = not bool(user.IsWindow(hwnd))
@@ -321,6 +388,13 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
         result['passed'] = True
     except Exception as exc:
         result['error'] = str(exc)
+        if invalid and process is not None:
+            state = result.get('owned_startup_dialog', {})
+            state['process_returncode_before_cleanup'] = process.poll()
+            if state.get('found') and state.get('hwnd'):
+                state['failure_diagnostic'] = owned_dialog_diagnostic(api, process.pid, state['hwnd'],
+                    lambda: process.poll() is None)
+            state['process_returncode_after_diagnostic'] = process.poll()
     finally:
         if watchdog is not None:
             watchdog.cancel()

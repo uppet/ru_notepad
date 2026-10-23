@@ -122,6 +122,7 @@ class GatePolicyTests(unittest.TestCase):
         class User:
             alive = True
             def IsWindow(self, hwnd): return self.alive
+            def GetDlgItem(self, hwnd, identifier): return 456
             def GetParent(self, hwnd): return 123
             def GetDlgCtrlID(self, hwnd): return 1
             def GetClassNameW(self, hwnd, name, count): name.value = 'Button'; return 6
@@ -205,6 +206,142 @@ class GatePolicyTests(unittest.TestCase):
             self.assertFalse(result['cleanup_killed'])
             self.assertNotIn('owned_startup_dialog_dismissed', result)
             self.assertTrue(result['owned_startup_dialog']['process_exited'])
+
+    def test_owned_diagnostic_is_bounded_and_never_queries_foreign_pid(self):
+        class User:
+            def __init__(self):
+                self.children = [456,789]
+                self.foreign = set()
+                self.calls = []
+            def GetWindowThreadProcessId(self, h, owner): owner._obj.value = 99 if h in self.foreign else 71; return 1
+            def GetClassNameW(self, h, name, count): name.value = '#32770' if h == 123 else 'Button'; return len(name.value)
+            def GetDlgCtrlID(self,h): return 0 if h == 123 else 1
+            def GetDlgItem(self,h,i): return 0
+            def GetParent(self,h): return 0 if h == 123 else 123
+            def IsChild(self,parent,h): return parent == 123 and h in self.children
+            def IsWindowVisible(self,h): return True
+            def IsWindowEnabled(self,h): return True
+            def SendMessageTimeoutW(self,h,msg,count,address,flags,timeout,copied):
+                self.calls.append((h,msg,count,timeout))
+                buffer = gate.ctypes.create_unicode_buffer('owned title' if h == 123 else 'OK')
+                gate.ctypes.memmove(address, buffer, gate.ctypes.sizeof(buffer))
+                copied._obj.value = len(buffer.value)
+                return 1
+            def EnumChildWindows(self,h,callback,param):
+                for child in self.children:
+                    if not callback(child,param): return 0
+                return 1
+        class API:
+            callback_type = staticmethod(lambda callback: callback)
+            def __init__(self): self.user = User()
+        with patch.object(gate, 'dialog_functions', lambda api: api.user):
+            api = API(); result = gate.owned_dialog_diagnostic(api,71,123,lambda:True)
+            self.assertEqual(len(result['children']),2)
+            self.assertEqual(result['getdlgitem_idok_now'],0)
+            self.assertEqual(result['dialog']['text'],'owned title')
+            self.assertTrue(all(msg == 0xD and count == 257 and timeout == 100 for _,msg,count,timeout in api.user.calls))
+            api = API(); api.user.foreign.add(789)
+            result = gate.owned_dialog_diagnostic(api,71,123,lambda:True)
+            self.assertIn('no longer owned',result['error'])
+            self.assertFalse(any(h == 789 for h,*_ in api.user.calls))
+            api = API(); api.user.children = list(range(1000,1100))
+            result = gate.owned_dialog_diagnostic(api,71,123,lambda:True)
+            self.assertEqual(len(result['children']),32)
+            self.assertTrue(result['truncated'])
+            api = API(); result = gate.owned_dialog_diagnostic(api,71,123,lambda:False)
+            self.assertIn('process exited',result['error'])
+            self.assertEqual(api.user.calls,[])
+
+    def test_missing_idok_waits_without_claiming_dispatch(self):
+        class User:
+            def GetDlgItem(self,h,i): return 0
+            def GetParent(self,h): return 0
+        class API:
+            user = User()
+            def windows(self,pid): return [(123,'#32770',True)]
+            def verify_owned_handles(self,pid,*handles): pass
+            def text(self,h): return 'Ru Notepad startup error'
+        record = dict(found=False, request_attempted=False, dispatch_completed=False, destroyed=False)
+        with patch.object(gate,'dialog_functions',lambda api:api.user):
+            gate.owned_dialog(API(),71,record)
+        self.assertEqual(record['control_wait_polls'],1)
+        self.assertTrue(record['found'])
+        self.assertEqual(record['hwnd'],123)
+        self.assertEqual(record['idok_lookup_result'],0)
+        self.assertFalse(record['request_attempted'])
+        self.assertFalse(record['dispatch_completed'])
+
+    def test_delayed_idok_and_early_exit_keep_real_lifecycle_contract(self):
+        class Process:
+            pid = 71
+            returncode = None
+            def poll(self): return self.returncode
+            def kill(self): self.returncode = -9
+            def wait(self, timeout): return self.returncode
+        class Timer:
+            def __init__(self, seconds, callback): pass
+            def start(self): pass
+            def cancel(self): pass
+            def join(self): pass
+        class User:
+            def __init__(self, process, mode): self.process,self.mode,self.lookups = process,mode,0
+            def IsWindow(self, hwnd): return self.process.poll() is None
+            def GetParent(self, hwnd): return 123 if hwnd == 456 else 0
+            def GetDlgCtrlID(self, hwnd): return 1
+            def GetClassNameW(self, hwnd, buffer, count): buffer.value = 'Button'; return 6
+            def IsWindowEnabled(self, hwnd): return True
+            def GetDlgItem(self, hwnd, identifier):
+                self.lookups += 1
+                if self.mode == 'early': self.process.returncode = 1
+                return 456 if self.mode == 'ready' and self.lookups > 1 else 0
+        class API:
+            def __init__(self, process, mode): self.user,self.process,self.sent = User(process,mode),process,[]
+            def windows(self, pid): return [(123,'#32770',True)] if self.process.poll() is None else []
+            def verify_owned_handles(self, pid, *handles):
+                if pid != 71 or any(h not in (123,456) for h in handles): raise ValueError('not owned')
+            def text(self, hwnd): return 'Ru Notepad startup error'
+            def scalar(self, *args): self.sent.append(args); self.process.returncode = 1; return 0
+        for mode in ('ready','early','missing'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as temporary:
+                process = Process(); api = API(process,mode)
+                ticks = [0,0,1,2,3] if mode == 'ready' else [0,0,1,2] if mode == 'early' else [0,0,1,61,62]
+                with patch.object(gate,'dialog_functions',lambda api:api.user), \
+                     patch.object(gate.subprocess,'Popen',return_value=process), \
+                     patch.object(gate.threading,'Timer',Timer),patch.object(gate.time,'sleep'), \
+                     patch.object(gate.time,'monotonic',side_effect=ticks):
+                    result = gate.run_child(api,Path(temporary)/'app.exe',[],invalid=True)
+                self.assertEqual(result['passed'],mode == 'ready',result)
+                self.assertEqual(result['cleanup_killed'],mode == 'missing')
+                self.assertEqual(api.sent,[(123,0x111,1,456)] if mode == 'ready' else [])
+                if mode == 'ready':
+                    self.assertEqual(result['owned_startup_dialog']['control_wait_polls'],1)
+                    self.assertTrue(result['owned_startup_dialog']['destroyed'])
+                if mode == 'missing': self.assertIn('60s',result['error'])
+
+    def test_waiting_dialog_identity_changes_never_dispatch(self):
+        class User:
+            def GetDlgItem(self,h,i): return 0
+            def GetParent(self,h): return 0
+            def IsWindow(self,h): return True
+        class API:
+            def __init__(self): self.user,self.sent = User(),[]
+            def windows(self,pid): return [(123,'#32770',True)]
+            def verify_owned_handles(self,pid,*handles): pass
+            def text(self,h): return 'Ru Notepad startup error'
+            def scalar(self,*args): self.sent.append(args)
+        for mutation in ('pid','title','parent','other_dialog','hidden'):
+            api=API(); state=dict(found=False,request_attempted=False,dispatch_completed=False,destroyed=False)
+            with patch.object(gate,'dialog_functions',lambda api:api.user):
+                gate.owned_dialog(api,71,state)
+                def fail(*args): raise ValueError('PID ownership changed')
+                if mutation == 'pid': api.verify_owned_handles=fail
+                if mutation == 'title': api.text=lambda h:'Other'
+                if mutation == 'parent': api.user.GetParent=lambda h:99
+                if mutation == 'other_dialog': api.windows=lambda pid:[(789,'#32770',True)]
+                if mutation == 'hidden': api.windows=lambda pid:[(123,'#32770',False)]
+                with self.assertRaises(ValueError,msg=mutation): gate.owned_dialog(api,71,state)
+                self.assertFalse(state['request_attempted'])
+                self.assertEqual(api.sent,[])
 
     def test_timeout_kills_only_owned_child_and_cannot_pass(self):
         class Process:
