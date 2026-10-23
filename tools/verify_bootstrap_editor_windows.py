@@ -371,35 +371,49 @@ class FunctionalDeadlineError(ValueError):
     pass
 
 
+def await_owned_deadline(deadline, cancelled):
+    """A timer notification is not proof the original monotonic deadline passed."""
+    while not cancelled.is_set():
+        now = time.monotonic()
+        if now >= deadline:
+            return now
+        cancelled.wait(deadline-now)
+    return None
+
+
 def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, required_dlls=()):
     directory = binary.parent
     require(not list(directory.glob('ru_notepad-*.log')), 'stale launcher logs')
     started = time.monotonic()
+    deadline = started + DEADLINE_SECONDS
+    cancelled = threading.Event()
     process = None
     watchdog = None
     expired = threading.Event()
     handshake = None
     result = {'passed': False, 'executed': False, 'cleanup_killed': False}
-    observation = {'schema': 'ru-notepad-child-observation-v1', 'deadline_events': [],
+    observation = {'schema': 'ru-notepad-child-observation-v2',
+                   'clock': {'started_monotonic': started, 'deadline_monotonic': deadline,
+                             'budget_seconds': DEADLINE_SECONDS}, 'deadline_events': [],
                    'first_error': None, 'nondeadline_errors': [], 'cleanup': {'pid': None, 'errors': [],
                    'process_reaped': None, 'exit_code': None, 'windows_remaining': None,
                    'handshake_closed': None, 'watchdog_stopped': None}}
     result['observation'] = observation
     phase = 'prepare'
     observation_lock = threading.RLock()
-    def elapsed(): return max(0.0, time.monotonic()-started)
     def record_error(exc, code='exception'):
         with observation_lock:
-            row = {'code': code, 'phase': phase, 'elapsed_seconds': elapsed(),
+            now = time.monotonic()
+            row = {'code': code, 'phase': phase, 'observed_monotonic': now, 'elapsed_seconds': now-started,
                    'exception_type': type(exc).__name__, 'message': str(exc)}
             if code != 'deadline':
                 observation['nondeadline_errors'].append(row)
             if observation['first_error'] is None:
                 observation['first_error'] = row
             result.setdefault('error', str(exc))
-    def deadline_event(source, seconds):
-        observation['deadline_events'].append({'source': source,
-            'budget_seconds': DEADLINE_SECONDS, 'elapsed_seconds': seconds})
+    def deadline_event(source, now):
+        observation['deadline_events'].append({'source': source, 'observed_monotonic': now,
+            'budget_seconds': DEADLINE_SECONDS, 'elapsed_seconds': now-started})
     def cleanup_error(operation, exc):
         observation['cleanup']['errors'].append({'operation': operation,
             'exception_type': type(exc).__name__, 'message': str(exc)})
@@ -414,8 +428,13 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
         observation['cleanup']['pid'] = process.pid
         phase = 'runtime'
         def stop_owned_child():
+            now = await_owned_deadline(deadline, cancelled)
+            if now is None:
+                return
             with observation_lock:
-                deadline_event('watchdog', elapsed())
+                if cancelled.is_set():
+                    return
+                deadline_event('watchdog', now)
                 record_error(FunctionalDeadlineError('owned watchdog reached 60s functional deadline'), 'deadline')
                 expired.set()
             try:
@@ -423,10 +442,9 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
                     process.kill()
             except Exception as exc:
                 cleanup_error('watchdog-kill', exc)
-        watchdog = threading.Timer(max(0, DEADLINE_SECONDS-(time.monotonic()-started)), stop_owned_child)
+        watchdog = threading.Timer(max(0, deadline-time.monotonic()), stop_owned_child)
         watchdog.daemon = True
         watchdog.start()
-        deadline = started + DEADLINE_SECONDS
         dialog_state = dict(found=False, request_attempted=False, dispatch_completed=False, destroyed=False, process_exited=False)
         if invalid:
             result['owned_startup_dialog'] = dialog_state
@@ -435,7 +453,7 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
         while process.poll() is None:
             poll_time = time.monotonic()
             if poll_time >= deadline:
-                deadline_event('poll-loop', poll_time-started)
+                deadline_event('poll-loop', poll_time)
                 raise FunctionalDeadlineError('60s functional smoke deadline exceeded (not performance)')
             if required_dlls:
                 for name, record in loaded_dlls(process.pid).items():
@@ -493,6 +511,7 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
             state['process_returncode_after_diagnostic'] = process.poll()
     finally:
         phase = 'cleanup'
+        cancelled.set()
         cleanup = observation['cleanup']
         if watchdog is not None:
             try:
@@ -532,9 +551,11 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
                 require(not windows, 'owned windows remain after cleanup')
             except Exception as exc:
                 cleanup_error('windows-gone', exc)
-        result['seconds'] = time.monotonic() - started
-        if result['seconds'] > DEADLINE_SECONDS:
-            deadline_event('elapsed-postcheck', result['seconds'])
+        finished = time.monotonic()
+        observation['clock']['finished_monotonic'] = finished
+        result['seconds'] = finished - started
+        if finished > deadline:
+            deadline_event('elapsed-postcheck', finished)
             result['passed'] = False
             record_error(FunctionalDeadlineError('60s functional smoke deadline exceeded (not performance)'), 'deadline')
     return result

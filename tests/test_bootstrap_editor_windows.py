@@ -281,7 +281,7 @@ class GatePolicyTests(unittest.TestCase):
                     row=gate.run_child(API(),Path(temporary)/'app.exe',[],required_dlls=('x',) if mode=='close-error' else ())
                 obs=row['observation']; cleanup=obs['cleanup']
                 self.assertFalse(row['passed'])
-                self.assertEqual(obs['schema'],'ru-notepad-child-observation-v1')
+                self.assertEqual(obs['schema'],'ru-notepad-child-observation-v2')
                 self.assertEqual(cleanup['pid'],71)
                 self.assertTrue(obs['deadline_events'])
                 expected='deadline' if mode in ('poll','watchdog','close-error') else 'exception'
@@ -332,6 +332,63 @@ class GatePolicyTests(unittest.TestCase):
             self.assertTrue(row['observation']['cleanup']['process_reaped'])
             self.assertTrue(any(e['message']=='independent runtime error'
                 for e in row['observation']['nondeadline_errors']))
+
+    def test_absolute_watchdog_waits_original_deadline_and_cancels_early_wake(self):
+        import math
+        deadline=64.002
+        class Cancel:
+            def __init__(self,cancel=False): self.cancel,self.stopped,self.waits=cancel,False,[]
+            def is_set(self): return self.stopped
+            def wait(self,seconds):
+                self.waits.append(seconds)
+                if self.cancel: self.stopped=True
+        early=math.nextafter(deadline,float('-inf'))
+        stop=Cancel()
+        with patch.object(gate.time,'monotonic',side_effect=[early,deadline]):
+            self.assertEqual(gate.await_owned_deadline(deadline,stop),deadline)
+        self.assertEqual(stop.waits,[deadline-early])
+        self.assertGreater(stop.waits[0],0)
+        stop=Cancel(True)
+        with patch.object(gate.time,'monotonic',return_value=early):
+            self.assertIsNone(gate.await_owned_deadline(deadline,stop))
+        self.assertEqual(stop.waits,[deadline-early])
+        stop=Cancel();stop.stopped=True
+        with patch.object(gate.time,'monotonic',side_effect=AssertionError('cancelled must not observe')):
+            self.assertIsNone(gate.await_owned_deadline(deadline,stop))
+
+    def test_absolute_deadline_evidence_retains_exact_float_subtraction(self):
+        started=4.002;deadline=started+60
+        self.assertLess(deadline-started,60)  # Actual binary floating-point boundary.
+        class Process:
+            pid=71
+            returncode=None
+            def poll(self): return self.returncode
+            def kill(self): self.returncode=-9
+            def wait(self,timeout): return self.returncode
+        class Timer:
+            def __init__(self,seconds,callback): self.callback=callback
+            def start(self): self.callback()
+            def cancel(self): pass
+            def join(self): pass
+            def is_alive(self): return False
+        class API:
+            def windows(self,pid): return []
+        with tempfile.TemporaryDirectory() as temporary, \
+             patch.object(gate.subprocess,'Popen',return_value=Process()), \
+             patch.object(gate.threading,'Timer',Timer), \
+             patch.object(gate.time,'monotonic',side_effect=clock_ticks([started,started,deadline,deadline,deadline,deadline,deadline])):
+            row=gate.run_child(API(),Path(temporary)/'app.exe',[])
+        obs=row['observation'];event=obs['deadline_events'][0]
+        self.assertEqual(obs['schema'],'ru-notepad-child-observation-v2')
+        self.assertEqual(obs['clock'],dict(started_monotonic=started,deadline_monotonic=deadline,
+            finished_monotonic=deadline,budget_seconds=60))
+        self.assertEqual(event['observed_monotonic'],deadline)
+        self.assertEqual(event['elapsed_seconds'],deadline-started)
+        self.assertLess(event['elapsed_seconds'],60)
+        self.assertEqual(row['seconds'],deadline-started)
+        self.assertEqual(obs['first_error']['observed_monotonic'],deadline)
+        self.assertEqual(obs['nondeadline_errors'],[])
+        self.assertFalse(row['passed'])
 
     def test_probe_projects_each_outcome_before_pointer_or_scalar_use(self):
         source = (ROOT/'tests/bootstrap_pipeline/dll_abi_probe.ru').read_text(encoding='utf-8')
@@ -598,7 +655,7 @@ class GatePolicyTests(unittest.TestCase):
             def windows(self, pid): return []
         process = Process()
         with tempfile.TemporaryDirectory() as temporary:
-            with patch.object(gate.subprocess, 'Popen', return_value=process), patch.object(gate.threading, 'Timer', Timer):
+            with patch.object(gate.subprocess, 'Popen', return_value=process), patch.object(gate.threading, 'Timer', Timer), patch.object(gate.time,'monotonic',side_effect=clock_ticks([0,0,60,60,61,62])):
                 result = gate.run_child(API(), Path(temporary)/'app.exe', [])
         self.assertEqual(process.returncode, -9)
         self.assertFalse(result['passed'])
