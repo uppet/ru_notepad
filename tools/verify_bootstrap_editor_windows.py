@@ -209,6 +209,20 @@ def owned_dialog_diagnostic(api, pid, hwnd, process_alive):
     return result
 
 
+def capture_missing_control(api, pid, state, process_alive, elapsed):
+    """One read-only snapshot after 1s NULL, inside the unchanged watchdog."""
+    if (not state.get('found') or state.get('idok_lookup_result') != 0
+            or state.get('request_attempted') or not process_alive()):
+        return
+    since = state.setdefault('control_missing_since', elapsed)
+    if 'early_control_diagnostic' in state or elapsed-since < 1.0:
+        return
+    # Preserve this observation independently of late cleanup diagnostics.
+    state['early_control_diagnostic'] = {
+        'observed_elapsed_seconds': elapsed, 'trigger': 'owned-IDOK-still-null-after-1s',
+        'snapshot': owned_dialog_diagnostic(api, pid, state['hwnd'], process_alive)}
+
+
 def owned_dialog(api, pid, state):
     """Wait for the exact owned IDOK control within the existing child deadline."""
     user = dialog_functions(api)
@@ -344,7 +358,8 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
         closed = False
         observed = {}
         while process.poll() is None:
-            require(time.monotonic() < deadline, '60s functional smoke deadline exceeded (not performance)')
+            poll_time = time.monotonic()
+            require(poll_time < deadline, '60s functional smoke deadline exceeded (not performance)')
             if required_dlls:
                 for name, record in loaded_dlls(process.pid).items():
                     require(Path(record['path']).resolve() == (directory/name).resolve(), 'DLL loaded from outside owned snapshot')
@@ -354,6 +369,7 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
                     handshake.signal()
             if invalid:
                 owned_dialog(api, process.pid, dialog_state)
+                capture_missing_control(api, process.pid, dialog_state, lambda: process.poll() is None, poll_time-started)
             else:
                 windows = api.no_dialog(process.pid)
                 if gui and not closed:

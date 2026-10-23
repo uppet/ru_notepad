@@ -252,6 +252,36 @@ class GatePolicyTests(unittest.TestCase):
             self.assertIn('process exited',result['error'])
             self.assertEqual(api.user.calls,[])
 
+    def test_missing_control_captures_once_before_cleanup_without_granting_pass(self):
+        state = dict(found=True, hwnd=123, idok_lookup_result=0, request_attempted=False)
+        calls=[]
+        def observe(api,pid,hwnd,alive):
+            self.assertTrue(alive());calls.append((pid,hwnd))
+            return {'children':[{'hwnd':456,'control_id':2}], 'process_alive_after':True}
+        with patch.object(gate,'owned_dialog_diagnostic',observe):
+            for elapsed in (0.1,0.2,1.0,1.11,5.0,59.9):
+                gate.capture_missing_control(object(),71,state,lambda:True,elapsed)
+        self.assertEqual(calls,[(71,123)])
+        snapshot=state['early_control_diagnostic']
+        self.assertEqual(snapshot['observed_elapsed_seconds'],1.11)
+        self.assertEqual(snapshot['trigger'],'owned-IDOK-still-null-after-1s')
+        self.assertFalse(state['request_attempted'])
+        self.assertNotIn('passed',state)
+        state['failure_diagnostic']={'error':'HWND no longer owned','children':[]}
+        self.assertEqual(snapshot['snapshot']['children'][0]['control_id'],2)
+        with patch.object(gate,'owned_dialog_diagnostic',side_effect=AssertionError('must not observe')):
+            for changes in ({'found':False},{'request_attempted':True},{'idok_lookup_result':456}):
+                gate.capture_missing_control(object(),71,{**state,**changes},lambda:True,20)
+            gate.capture_missing_control(object(),71,state,lambda:False,20)
+        # Ownership/collection errors are evidence of failure, never a pass.
+        for error in ('PID changed','child reparented','text unavailable'):
+            failed=dict(found=True,hwnd=123,idok_lookup_result=0,request_attempted=False,control_missing_since=0)
+            with patch.object(gate,'owned_dialog_diagnostic',return_value={'error':error,'children':[]}):
+                gate.capture_missing_control(object(),71,failed,lambda:True,2)
+            self.assertEqual(failed['early_control_diagnostic']['snapshot']['error'],error)
+            self.assertFalse(failed['request_attempted'])
+            self.assertNotIn('passed',failed)
+
     def test_missing_idok_waits_without_claiming_dispatch(self):
         class User:
             def GetDlgItem(self,h,i): return 0
@@ -304,7 +334,7 @@ class GatePolicyTests(unittest.TestCase):
         for mode in ('ready','early','missing'):
             with self.subTest(mode=mode),tempfile.TemporaryDirectory() as temporary:
                 process = Process(); api = API(process,mode)
-                ticks = [0,0,1,2,3] if mode == 'ready' else [0,0,1,2] if mode == 'early' else [0,0,1,61,62]
+                ticks = [0,0,1,2,3] if mode == 'ready' else [0,0,1,2] if mode == 'early' else [0,0,1,2.1,61,62]
                 with patch.object(gate,'dialog_functions',lambda api:api.user), \
                      patch.object(gate.subprocess,'Popen',return_value=process), \
                      patch.object(gate.threading,'Timer',Timer),patch.object(gate.time,'sleep'), \
@@ -316,7 +346,12 @@ class GatePolicyTests(unittest.TestCase):
                 if mode == 'ready':
                     self.assertEqual(result['owned_startup_dialog']['control_wait_polls'],1)
                     self.assertTrue(result['owned_startup_dialog']['destroyed'])
-                if mode == 'missing': self.assertIn('60s',result['error'])
+                if mode == 'missing':
+                    self.assertIn('60s',result['error'])
+                    self.assertIn('early_control_diagnostic',result['owned_startup_dialog'])
+                    self.assertIn('failure_diagnostic',result['owned_startup_dialog'])
+                if mode == 'early':
+                    self.assertNotIn('early_control_diagnostic',result['owned_startup_dialog'])
 
     def test_waiting_dialog_identity_changes_never_dispatch(self):
         class User:
