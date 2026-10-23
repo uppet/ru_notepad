@@ -118,19 +118,93 @@ class GatePolicyTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 gate.verify_identity(record)
 
-    def test_dialog_checks_owned_pid_and_title_before_close(self):
+    def test_dialog_control_dispatch_is_not_destruction(self):
+        class User:
+            alive = True
+            def IsWindow(self, hwnd): return self.alive
+            def GetParent(self, hwnd): return 123
+            def GetDlgCtrlID(self, hwnd): return 1
+            def GetClassNameW(self, hwnd, name, count): name.value = 'Button'; return 6
+            def IsWindowEnabled(self, hwnd): return True
         class API:
-            def __init__(self, title): self.title, self.events = title, []
-            def windows(self, pid): self.events.append(('windows', pid)); return [(123, '#32770', True)]
-            def verify_owned_handles(self, pid, hwnd): self.events.append(('owned', pid, hwnd))
+            def __init__(self, title='Ru Notepad startup error'):
+                self.title, self.events, self.user = title, [], User()
+            def windows(self, pid): return [(123, '#32770', True)]
+            def verify_owned_handles(self, pid, *handles): self.events.append(('owned', pid, handles))
             def text(self, hwnd): return self.title
-            def command(self, hwnd, command): self.events.append(('command', hwnd, command))
-        api = API('Ru Notepad startup error')
-        self.assertTrue(gate.owned_dialog(api, 71))
-        self.assertEqual(api.events, [('windows', 71), ('owned', 71, 123), ('command', 123, 1)])
-        api = API('Unrelated dialog')
-        with self.assertRaises(ValueError): gate.owned_dialog(api, 71)
-        self.assertNotIn(('command', 123, 1), api.events)
+            def control(self, hwnd, control): return 456
+            def scalar(self, *args): self.events.append(('dispatch', args)); return 0
+        def state():
+            return dict(found=False, request_attempted=False, dispatch_completed=False, destroyed=False, process_exited=False)
+        with patch.object(gate, 'dialog_functions', lambda api: api.user):
+            api, record = API(), state()
+            gate.owned_dialog(api, 71, record)
+            self.assertTrue(record['dispatch_completed'])
+            self.assertFalse(record['destroyed'])
+            self.assertFalse(record['process_exited'])
+            self.assertIn(('dispatch', (123, 0x111, 1, 456)), api.events)
+            gate.owned_dialog(api, 71, record)
+            self.assertEqual(sum(event[0] == 'dispatch' for event in api.events), 1)
+            api.user.alive = False
+            gate.owned_dialog(api, 71, record)
+            self.assertTrue(record['destroyed'])
+            for mutation in ('title', 'parent', 'id', 'class', 'disabled', 'owner', 'dispatch'):
+                api, record = API(), state()
+                def fail(*args): raise ValueError('injected ownership/dispatch failure')
+                if mutation == 'title': api.title = 'Unrelated dialog'
+                if mutation == 'parent': api.user.GetParent = lambda h: 789
+                if mutation == 'id': api.user.GetDlgCtrlID = lambda h: 2
+                if mutation == 'class': api.user.GetClassNameW = lambda *args: 0
+                if mutation == 'disabled': api.user.IsWindowEnabled = lambda h: False
+                if mutation == 'owner': api.verify_owned_handles = fail
+                if mutation == 'dispatch': api.scalar = fail
+                with self.assertRaises(ValueError, msg=mutation): gate.owned_dialog(api, 71, record)
+                self.assertFalse(record['dispatch_completed'])
+                self.assertFalse(record['destroyed'])
+
+    def test_probe_projects_each_outcome_before_pointer_or_scalar_use(self):
+        source = (ROOT/'tests/bootstrap_pipeline/dll_abi_probe.ru').read_text(encoding='utf-8')
+        for expression in ('(开事件 其 调用 [1048576,0,名]) 其 值',
+                           '(等事件 其 调用 [事,50000]) 其 值',
+                           '(关事件 其 调用 [事]) 其 值'):
+            self.assertIn(expression, source)
+        self.assertLess(source.index('名 其 关闭'), source.index('若 事 其 为空'))
+        self.assertIn('(等 其 数) != 0 或 (关 其 数) == 0', source)
+        # Models only the documented Win32 result truth table, not runtime execution.
+        for wait, close, accepted in [(0,1,True), (258,1,False), (0xffffffff,1,False), (0,0,False)]:
+            self.assertEqual(wait == 0 and close != 0, accepted)
+
+    def test_invalid_utf16_requires_destroyed_natural_exit_and_no_side_effect(self):
+        class Process:
+            pid = 81
+            returncode = None
+            killed = False
+            def poll(self): return self.returncode
+            def kill(self): self.killed = True; self.returncode = -9
+            def wait(self, timeout): return self.returncode
+        class API:
+            def windows(self, pid): return []
+        class User:
+            def __init__(self, alive): self.alive = alive
+            def IsWindow(self, hwnd): return self.alive
+        for mode in ('good', 'not_destroyed', 'not_dispatched', 'zero_exit', 'side_effect'):
+            process = Process()
+            with tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                def dialog(api, pid, state):
+                    state.update(found=True, hwnd=123, request_attempted=True,
+                                 dispatch_completed=mode != 'not_dispatched')
+                    process.returncode = 0 if mode == 'zero_exit' else 1
+                    if mode == 'side_effect': (directory/'ru_notepad-owned.log').write_bytes(b'entered Ru')
+                with patch.object(gate.subprocess, 'Popen', return_value=process), \
+                        patch.object(gate, 'owned_dialog', dialog), \
+                        patch.object(gate, 'dialog_functions', return_value=User(mode == 'not_destroyed')), \
+                        patch.object(gate.time, 'sleep'):
+                    result = gate.run_child(API(), directory/'app.exe', [], invalid=True)
+            self.assertEqual(result['passed'], mode == 'good', mode)
+            self.assertFalse(result['cleanup_killed'])
+            self.assertNotIn('owned_startup_dialog_dismissed', result)
+            self.assertTrue(result['owned_startup_dialog']['process_exited'])
 
     def test_timeout_kills_only_owned_child_and_cannot_pass(self):
         class Process:

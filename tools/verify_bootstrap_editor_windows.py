@@ -142,18 +142,49 @@ def successful_log(directory, marker):
     return record
 
 
-def owned_dialog(api, pid):
-    """Dismiss only the expected startup MessageBox owned by this child PID."""
-    windows = api.windows(pid)
-    dialogs = [h for h, name, visible in windows if name == '#32770' and visible]
+def dialog_functions(api):
+    from ctypes import wintypes as w
+    for name, args, result in (
+            ('IsWindow', [w.HWND], w.BOOL),
+            ('IsWindowEnabled', [w.HWND], w.BOOL),
+            ('GetParent', [w.HWND], w.HWND),
+            ('GetDlgCtrlID', [w.HWND], ctypes.c_int)):
+        function = getattr(api.user, name)
+        function.argtypes, function.restype = args, result
+    return api.user
+
+
+def owned_dialog(api, pid, state):
+    """One owned control notification; dispatch is NOT proof of destruction."""
+    user = dialog_functions(api)
+    if state['found']:
+        if not user.IsWindow(state['hwnd']):
+            state['destroyed'] = True
+        else:
+            api.verify_owned_handles(pid, state['hwnd'])
+        return
+    dialogs = [h for h, name, visible in api.windows(pid) if name == '#32770' and visible]
     require(len(dialogs) <= 1, 'unexpected multiple startup dialogs')
     if not dialogs:
-        return False
+        return
     hwnd = dialogs[0]
     api.verify_owned_handles(pid, hwnd)
     require(api.text(hwnd) == 'Ru Notepad startup error', 'unexpected startup dialog')
-    api.command(hwnd, 1)  # IDOK; never SendInput/global close/taskkill
-    return True
+    button = api.control(hwnd, 1)
+    api.verify_owned_handles(pid, hwnd, button)
+    require(user.GetParent(button) == hwnd and user.GetDlgCtrlID(button) == 1,
+            'unexpected startup OK parent/control ID')
+    name = ctypes.create_unicode_buffer(64)
+    require(user.GetClassNameW(button, name, len(name)) and name.value == 'Button'
+            and user.IsWindowEnabled(button), 'unexpected startup OK control')
+    api.verify_owned_handles(pid, hwnd, button)
+    require(api.text(hwnd) == 'Ru Notepad startup error' and user.GetParent(button) == hwnd
+            and user.GetDlgCtrlID(button) == 1, 'startup control changed before dispatch')
+    state.update(found=True, hwnd=hwnd, button=button, request_attempted=True)
+    # WM_COMMAND / BN_CLICKED / IDOK; lParam is the verified control, not menu zero.
+    state['message_result'] = api.scalar(hwnd, 0x0111, 1, button)
+    state['dispatch_completed'] = True
+    state['destroyed'] = not bool(user.IsWindow(hwnd))
 
 
 def loaded_dlls(pid):
@@ -240,7 +271,9 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
         watchdog.daemon = True
         watchdog.start()
         deadline = started + DEADLINE_SECONDS
-        dialog_seen = False
+        dialog_state = dict(found=False, request_attempted=False, dispatch_completed=False, destroyed=False, process_exited=False)
+        if invalid:
+            result['owned_startup_dialog'] = dialog_state
         closed = False
         observed = {}
         while process.poll() is None:
@@ -253,7 +286,7 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
                 if handshake and set(required_dlls) <= set(observed):
                     handshake.signal()
             if invalid:
-                dialog_seen = owned_dialog(api, process.pid) or dialog_seen
+                owned_dialog(api, process.pid, dialog_state)
             else:
                 windows = api.no_dialog(process.pid)
                 if gui and not closed:
@@ -270,9 +303,13 @@ def run_child(api, binary, arguments, *, marker=None, invalid=False, gui=None, r
             time.sleep(0.05)
         result['exit_code'] = process.returncode
         if invalid:
-            require(process.returncode != 0 and dialog_seen, 'invalid UTF16 not explicitly rejected')
+            dialog_state['process_exited'] = True
+            if dialog_state['found']:
+                dialog_state['destroyed'] = not bool(dialog_functions(api).IsWindow(dialog_state['hwnd']))
+            require(process.returncode != 0 and all(dialog_state[key] for key in
+                    ('found', 'request_attempted', 'dispatch_completed', 'destroyed', 'process_exited')),
+                    'invalid UTF16 rejection/dialog lifecycle not confirmed')
             require(not list(directory.glob('ru_notepad-*.log')), 'invalid UTF16 reached diagnostic/Ru side effect')
-            result['owned_startup_dialog_dismissed'] = True
         else:
             require(process.returncode == 0, 'child returned failure')
             if gui:

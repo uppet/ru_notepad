@@ -25,11 +25,11 @@
     # Keep the real DLLs mapped until the parent observes their exact paths and
     # hashes. The event is unique to this run; never wait indefinitely.
     名 取 密 其 UTF16 参数[1].
-    事 取 开事件 其 调用 [1048576,0,名].
-    若 事 其 为空 则 卒 'FAIL: owned handshake event'. 然
-    等 取 等事件 其 调用 [事,50000].
-    关 取 关事件 其 调用 [事].
+    事 取 (开事件 其 调用 [1048576,0,名]) 其 值.
     名 其 关闭.
+    若 事 其 为空 则 卒 'FAIL: owned handshake event'. 然
+    等 取 (等事件 其 调用 [事,50000]) 其 值.
+    关 取 (关事件 其 调用 [事]) 其 值.
     若 (等 其 数) != 0 或 (关 其 数) == 0 则 卒 'FAIL: DLL load acknowledgement'. 然
     若 (库们 其 量) != 3 则 卒 'FAIL: retained DLL set'. 然
     显 'BOOTSTRAP_DLL_ABI_PASS:'+路.
