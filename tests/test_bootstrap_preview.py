@@ -2,6 +2,7 @@
 import copy
 import hashlib
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -24,6 +25,27 @@ class PreviewContracts(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name)
+
+    def test_workflow_job_env_contexts_and_runtime_output_initialization(self):
+        workflow=(Path(__file__).resolve().parents[1]/'.github/workflows/bootstrap-preview.yml').read_text()
+        def check_job_env(text):
+            # This workflow uses a block mapping at fixed job indentation; fail
+            # closed if its structure changes instead of silently skipping it.
+            blocks=re.findall(r'^    env:\n((?:^      .*\n)+)',text,re.M)
+            self.assertEqual(len(blocks),1)
+            allowed={'github','needs','strategy','matrix','vars','secrets','inputs'}
+            for expression in re.findall(r'\$\{\{(.*?)\}\}',blocks[0]):
+                roots=re.findall(r'\b([A-Za-z_][A-Za-z_0-9]*)\s*(?:\.|\[)',expression)
+                self.assertTrue(set(roots)<=allowed,expression)
+            self.assertNotIn('PREVIEW_OUTPUT:',blocks[0])
+        check_job_env(workflow)
+        for context in ('runner.temp','steps.pins.outputs.compiler_commit','env.TEMP','job.status'):
+            invalid=workflow.replace('    env:\n','    env:\n      INVALID: ${{ '+context+' }}\n',1)
+            with self.assertRaises(AssertionError):check_job_env(invalid)
+        first_step=workflow.split('    steps:\n',1)[1].split('      - ',2)[1]
+        self.assertIn("Join-Path $env:RUNNER_TEMP 'ru-bootstrap-preview'",first_step)
+        self.assertIn('"PREVIEW_OUTPUT=$previewOutput" >> $env:GITHUB_ENV',first_step)
+        self.assertIn('${{ runner.temp }}/ru-bootstrap-preview/',workflow)
 
     def test_reviewed_delta_requires_exact_before_after_and_every_change(self):
         def git(*args):

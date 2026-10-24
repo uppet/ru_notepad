@@ -1,7 +1,7 @@
 name: Bootstrap LLVM editor preview
 on:
   push:
-    branches: [feature/bootstrap-llvm-preview-20261024]
+    branches: [feature/bootstrap-llvm-preview-20261024, feature/bootstrap-llvm-preview-20261024-r1]
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,11 +22,16 @@ jobs:
       GIT_CONFIG_COUNT: '1'
       GIT_CONFIG_KEY_0: core.autocrlf
       GIT_CONFIG_VALUE_0: 'false'
-      PREVIEW_OUTPUT: ${{ runner.temp }}/ru-bootstrap-preview
     defaults:
       run:
         shell: pwsh
     steps:
+      - name: Initialize preview output from runner environment
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (!$env:RUNNER_TEMP) { throw 'RUNNER_TEMP unavailable' }
+          $previewOutput = Join-Path $env:RUNNER_TEMP 'ru-bootstrap-preview'
+          "PREVIEW_OUTPUT=$previewOutput" >> $env:GITHUB_ENV
       - name: Check out exact preview source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
