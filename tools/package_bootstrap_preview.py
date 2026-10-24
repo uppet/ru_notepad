@@ -2,8 +2,8 @@
 """Package only the exact GUI-tested bootstrap editor as a labelled preview.
 
 This does not call or fabricate the old all-native release validator. Independent
-C-native CI remains a separate prerequisite for delivery, not a claim about these
-bootstrap binaries. Source/proof/GUI identity is rechecked before and after ZIP.
+C-native CI remains separate baseline evidence, not substituted by these
+preview gates or a claim about these bootstrap binaries. Source/proof/GUI identity is rechecked before and after ZIP.
 """
 import argparse
 import json

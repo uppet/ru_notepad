@@ -61,6 +61,23 @@ def validate_product(report, ci):
     validate_recent_files_result(report['recent_files'], hashes)
 
 
+def collect_product_gui(ci, api, runtime, fixtures, evidence, report, save):
+    """Collect independent GUI evidence before evaluating any result verdict.
+
+    A returned failed Markdown result must not hide the independent MRU result.
+    Exceptions still abort (including failed registry isolation/cleanup), and
+    all original validators remain mandatory before a passed receipt is issued.
+    """
+    from verify_recent_files_windows import isolated_recent_settings, run_recent_files
+    for function in (ci.run_gui, ci.run_gui_file_entry, ci.run_gui_ru_syntax, ci.run_gui_markdown):
+        args = (api, runtime, evidence) if function is ci.run_gui else (api, runtime, fixtures, evidence)
+        with isolated_recent_settings():
+            report['gui_results'].append(function(*args))
+        save()
+    report['recent_files'] = run_recent_files(api, runtime, fixtures, evidence)
+    save()
+
+
 def verify(config, output):
     require(sys.platform == 'win32', 'native Windows product testing required')
     receipts = smoke.validate_receipts(config)
@@ -109,16 +126,7 @@ def verify(config, output):
         ci.validate_scanner_preflight(report['scanner_preflight'], hashes, ROOT)
         save()
         with tempfile.TemporaryDirectory(prefix='ru-bootstrap-product-') as fixtures:
-            for function in (ci.run_gui, ci.run_gui_file_entry, ci.run_gui_ru_syntax, ci.run_gui_markdown):
-                args = (api, runtime, evidence) if function is ci.run_gui else (api, runtime, fixtures, evidence)
-                from verify_recent_files_windows import isolated_recent_settings
-                with isolated_recent_settings():
-                    report['gui_results'].append(function(*args))
-                save()
-            validate_gui_results(ci, report['gui_results'], hashes)
-            from verify_recent_files_windows import run_recent_files, validate_recent_files_result
-            report['recent_files'] = run_recent_files(api, runtime, fixtures, evidence)
-            validate_recent_files_result(report['recent_files'], hashes)
+            collect_product_gui(ci, api, runtime, fixtures, evidence, report, save)
         smoke.validate_receipts(config)
         validate_receipt(Path(config['dependencies_receipt']))
         require(identity(smoke_path) == report['smoke_receipt'], 'smoke receipt changed')
@@ -134,12 +142,80 @@ def verify(config, output):
     return report
 
 
+DIAGNOSTIC_FILES = {'ru_notepad.exe', 'Scintilla.dll', 'Lexilla.dll', 'RuSyntax.dll'}
+
+
+def collect_diagnostic_runtime(config, product_receipt, output):
+    """Preserve reviewed runtime bytes for inspection, never issue acceptance."""
+    import package as legacy_package
+    product_receipt=Path(product_receipt);output=Path(output).absolute()
+    require(not output.exists() and not any(p.is_symlink() for p in output.parents), 'fresh unlinked diagnostic directory required')
+    require(not output.is_relative_to(ROOT), 'diagnostics must not dirty pinned source')
+    receipts=smoke.validate_receipts(config)
+    dependencies=validate_receipt(Path(config['dependencies_receipt']))
+    app=receipts['app_receipt'];report=smoke.read_json(product_receipt)
+    require(report.get('schema')==SCHEMA and report.get('status') in ('passed','failed'), 'invalid product collection receipt')
+    require(report['source_pins']==app['source_pins'], 'diagnostic source mismatch')
+    require(dependencies['app_source']==app['source_pins']['app_source']
+            and dependencies['source_sha256']==app['source_sha256']['app_source'], 'diagnostic dependency source mismatch')
+    inputs={'product_receipt':identity(product_receipt)}
+    for key in ('app_receipt','argv_probe_receipt','dll_probe_receipt','dependencies_receipt'):
+        inputs[key]=identity(Path(config[key]))
+        require(inputs[key]==report['build_receipts'][key], 'diagnostic build receipt changed')
+    for key in ('smoke_receipt','recent_fixtures_receipt'):
+        inputs[key]=identity(Path(config[key]))
+        require(inputs[key]==report[key], 'diagnostic test receipt changed')
+    runtime=Path(report['runtime_directory']);hashes=report['runtime_sha256']
+    require(set(hashes)==DIAGNOSTIC_FILES, 'diagnostic runtime must be exact whitelist')
+    require(hashes['ru_notepad.exe']==app['final_binary']['sha256'], 'diagnostic EXE differs from bootstrap build')
+    require(all(hashes[name]==dependencies['binaries'][name]['sha256'] for name in smoke.DLLS), 'diagnostic DLL differs from build')
+    files={name:identity(runtime/name) for name in DIAGNOSTIC_FILES}
+    require(all(record['sha256']==hashes[name] for name,record in files.items()), 'tested runtime bytes changed')
+    proof=Path(config['app_receipt']).parent/'compile-proof.json'
+    require(sha(proof)==app['compile_proof_sha256'], 'diagnostic compile proof changed')
+    files['compile-proof.json']=identity(proof)
+    require(sum(record['size'] for record in files.values())<=32*1024*1024, 'diagnostic runtime exceeds 32 MiB bound')
+    legacy_package.validate_dependency_sources(ROOT)
+    pe={name:legacy_package.inspect_pe(runtime/name,dependencies['tool_paths']['objdump']) for name in DIAGNOSTIC_FILES}
+    output.parent.mkdir(parents=True,exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='not-accepted-',dir=output.parent) as temporary:
+        stage=Path(temporary)
+        for name,record in files.items():
+            shutil.copyfile(smoke.verify_identity(record),stage/name)
+            require(sha(stage/name)==record['sha256'], 'diagnostic copy mismatch')
+        smoke.validate_receipts(config);validate_receipt(Path(config['dependencies_receipt']))
+        for record in inputs.values():smoke.verify_identity(record)
+        for record in files.values():smoke.verify_identity(record)
+        marker={'schema':'ru-notepad-not-accepted-runtime-v1','status':'NOT_ACCEPTED',
+            'user_delivery_authorized':False,'product_status':report['status'],
+            'product_receipt_sha256':inputs['product_receipt']['sha256'],
+            'source_pins':app['source_pins'],'stage3_sha256':app['bootstrap']['stage3_sha256'],
+            'files':{name:{'sha256':record['sha256'],'size':record['size']} for name,record in files.items()},
+            'pe_imports':{name:record['imports'] for name,record in pe.items()},
+            'notice':'Diagnostic evidence only. Not an accepted preview, release, or user delivery ZIP.'}
+        (stage/'NOT_ACCEPTED.json').write_text(json.dumps(marker,indent=2)+'\n',encoding='utf-8')
+        require({path.name for path in stage.iterdir()}==DIAGNOSTIC_FILES|{'compile-proof.json','NOT_ACCEPTED.json'}, 'diagnostic inventory changed')
+        # Only promote a complete verified directory; failed collection cannot
+        # leave an uploadable success marker or an accepted preview package.
+        for name,record in files.items():
+            require(sha(stage/name)==record['sha256'] and (stage/name).stat().st_size==record['size'], 'staged diagnostic bytes changed before promotion')
+        stage.rename(output)
+    return marker
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--collect-diagnostic', action='store_true')
+    parser.add_argument('--product-receipt', type=Path)
     args = parser.parse_args()
     try:
+        if args.collect_diagnostic:
+            require(args.product_receipt is not None, 'diagnostic product receipt required')
+            collect_diagnostic_runtime(smoke.read_json(args.config), args.product_receipt, args.output)
+            return 0
+        require(args.product_receipt is None, 'product receipt only accepted for diagnostic collection')
         result = verify(smoke.read_json(args.config), args.output)
     except Exception as exc:
         print(str(exc), file=sys.stderr)

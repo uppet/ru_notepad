@@ -1,7 +1,7 @@
 name: Bootstrap LLVM editor preview
 on:
   push:
-    branches: [feature/bootstrap-llvm-preview-20261024, feature/bootstrap-llvm-preview-20261024-r1, feature/bootstrap-llvm-preview-20261024-r2]
+    branches: [feature/bootstrap-llvm-preview-20261024, feature/bootstrap-llvm-preview-20261024-r1, feature/bootstrap-llvm-preview-20261024-r2, feature/bootstrap-llvm-preview-20261024-r3]
   workflow_dispatch:
 permissions:
   contents: read
@@ -111,6 +111,30 @@ jobs:
         run: python editor/tools/verify_bootstrap_product_windows.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --output "$env:PREVIEW_OUTPUT/product"
       - name: Package only the exact GUI-tested bootstrap preview and verify ZIP bytes
         run: python editor/tools/package_bootstrap_preview.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --product-receipt "$env:PREVIEW_OUTPUT/product/product-preview.json" --mingw-root "${{ steps.msys2.outputs.msys2-location }}/mingw64" --output "$env:PREVIEW_OUTPUT/dist/ru_notepad-bootstrap-llvm-preview-windows-x64.zip"
+      - name: Preserve exact tested runtime as NOT ACCEPTED diagnostic evidence
+        if: always()
+        id: diagnostic_runtime
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((Test-Path "$env:PREVIEW_OUTPUT/gate-config.json") -and (Test-Path "$env:PREVIEW_OUTPUT/product/product-preview.json")) {
+            python editor/tools/verify_bootstrap_product_windows.py --collect-diagnostic --config "$env:PREVIEW_OUTPUT/gate-config.json" --product-receipt "$env:PREVIEW_OUTPUT/product/product-preview.json" --output "$env:PREVIEW_OUTPUT/diagnostic-runtime"
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            "collected=true" >> $env:GITHUB_OUTPUT
+          }
+      - name: Upload NOT ACCEPTED runtime for independent inspection only
+        if: ${{ always() && steps.diagnostic_runtime.outputs.collected == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: NOT-ACCEPTED-diagnostic-runtime-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/ru-bootstrap-preview/diagnostic-runtime/ru_notepad.exe
+            ${{ runner.temp }}/ru-bootstrap-preview/diagnostic-runtime/Scintilla.dll
+            ${{ runner.temp }}/ru-bootstrap-preview/diagnostic-runtime/Lexilla.dll
+            ${{ runner.temp }}/ru-bootstrap-preview/diagnostic-runtime/RuSyntax.dll
+            ${{ runner.temp }}/ru-bootstrap-preview/diagnostic-runtime/compile-proof.json
+            ${{ runner.temp }}/ru-bootstrap-preview/diagnostic-runtime/NOT_ACCEPTED.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Preserve bounded synthetic build and GUI evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

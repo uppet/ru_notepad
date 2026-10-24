@@ -1,5 +1,6 @@
 """Portable policy/negative controls; not Windows acceptance evidence."""
 import copy
+from contextlib import nullcontext
 import hashlib
 import json
 import re
@@ -46,6 +47,115 @@ class PreviewContracts(unittest.TestCase):
         self.assertIn("Join-Path $env:RUNNER_TEMP 'ru-bootstrap-preview'",first_step)
         self.assertIn('"PREVIEW_OUTPUT=$previewOutput" >> $env:GITHUB_ENV',first_step)
         self.assertIn('${{ runner.temp }}/ru-bootstrap-preview/',workflow)
+
+    def test_failed_markdown_still_collects_mru_but_never_passes_product(self):
+        import verify_recent_files_windows as recent_gui
+        names=['main-gui-smoke','main-gui-file-entry','main-gui-ru-syntax','main-gui-markdown']
+        events=[]
+        functions=[]
+        for name in names:
+            def run(*args, name=name):
+                events.append(name)
+                return {'name':name,'passed':name!='main-gui-markdown','executed':True,
+                    'cleanup_killed':False,'exit_code':0,'main_hwnd_seen':True,
+                    'close_posted':True,'detached_from_console':True,'fixture_binary_sha256':{}}
+            functions.append(run)
+        ci=SimpleNamespace(**dict(zip(('run_gui','run_gui_file_entry','run_gui_ru_syntax','run_gui_markdown'),functions)))
+        ci.GUI_FILE_CHECKS=();ci.GUI_RU_CHECKS=();ci.GUI_MARKDOWN_CHECKS=()
+        ci.validate_gui_ru_timer=Mock();ci.validate_gui_ru_edits=Mock()
+        ci.validate_gui_markdown=Mock();ci.portable=SimpleNamespace(RUNTIME_NAMES=())
+        report={'gui_results':[]}
+        snapshots=[]
+        def run_recent(*args):
+            events.append('recent-files')
+            return {'passed':True}
+        with patch.object(recent_gui,'isolated_recent_settings',side_effect=lambda:nullcontext()), \
+                patch.object(recent_gui,'run_recent_files',side_effect=run_recent):
+            product.collect_product_gui(ci,None,self.root,self.root,self.root,report,
+                lambda:snapshots.append(copy.deepcopy(report)))
+        self.assertEqual(events,names+['recent-files'])
+        self.assertEqual(len(snapshots),5)
+        self.assertFalse(snapshots[-1]['gui_results'][-1]['passed'])
+        self.assertTrue(snapshots[-1]['recent_files']['passed'])
+        # Collection cannot turn the original failed verdict into acceptance.
+        with self.assertRaises(InvalidProvenance):product.validate_gui_results(ci,report['gui_results'],{})
+        report.update(schema=product.SCHEMA,status='passed',runtime_sha256={},
+            all_native_console_tests_bootstrap_compiled=False,full_release_acceptance=False)
+        with self.assertRaises(InvalidProvenance):product.validate_product(report,ci)
+
+    def test_diagnostic_runtime_is_bounded_whitelist_not_acceptance(self):
+        config={};root=self.root
+        for key in ('app_receipt','argv_probe_receipt','dll_probe_receipt','dependencies_receipt','smoke_receipt','recent_fixtures_receipt'):
+            path=root/(key+'.json');path.write_text('{}');config[key]=str(path)
+        proof=root/'compile-proof.json';proof.write_text('{"proof":"test"}')
+        runtime=root/'runtime';runtime.mkdir()
+        for name in product.DIAGNOSTIC_FILES:(runtime/name).write_bytes(name.encode())
+        (runtime/'private-config.json').write_text('must not be copied')
+        hashes={name:build.sha(runtime/name) for name in product.DIAGNOSTIC_FILES}
+        app={'source_pins':{'app_source':{'commit':'fixed'}},'source_sha256':{'app_source':{}},
+             'final_binary':build.identity(runtime/'ru_notepad.exe'),'compile_proof_sha256':build.sha(proof),
+             'bootstrap':{'stage3_sha256':'a'*64}}
+        dependencies={'app_source':app['source_pins']['app_source'],'source_sha256':{},
+             'binaries':{name:build.identity(runtime/name) for name in product.smoke.DLLS},'tool_paths':{'objdump':'fixed'}}
+        report={'schema':product.SCHEMA,'status':'failed','source_pins':app['source_pins'],
+             'runtime_directory':str(runtime),'runtime_sha256':hashes,
+             'build_receipts':{key:build.identity(Path(config[key])) for key in
+                ('app_receipt','argv_probe_receipt','dll_probe_receipt','dependencies_receipt')},
+             'smoke_receipt':build.identity(Path(config['smoke_receipt'])),
+             'recent_fixtures_receipt':build.identity(Path(config['recent_fixtures_receipt']))}
+        receipt=root/'product.json';receipt.write_text(json.dumps(report))
+        with patch.object(product.smoke,'validate_receipts',return_value={'app_receipt':app}), \
+             patch.object(product,'validate_receipt',return_value=dependencies), \
+             patch.object(package.legacy_package,'validate_dependency_sources'), \
+             patch.object(package.legacy_package,'inspect_pe',return_value={'imports':['kernel32.dll']}) as pe:
+            output=root/'diagnostic'
+            marker=product.collect_diagnostic_runtime(config,receipt,output)
+            self.assertEqual(marker['status'],'NOT_ACCEPTED');self.assertFalse(marker['user_delivery_authorized'])
+            self.assertEqual(marker['product_status'],'failed')
+            self.assertEqual({p.name for p in output.iterdir()},product.DIAGNOSTIC_FILES|{'compile-proof.json','NOT_ACCEPTED.json'})
+            self.assertEqual(pe.call_count,4)
+            self.assertFalse(list(root.rglob('*.zip')))
+            with self.assertRaises(InvalidProvenance):product.validate_product(marker,None)
+            pe.side_effect=InvalidProvenance('non-whitelisted PE dependency')
+            with self.assertRaises(InvalidProvenance):product.collect_diagnostic_runtime(config,receipt,root/'bad-pe')
+            self.assertFalse((root/'bad-pe').exists());pe.side_effect=None
+            for name in ('ru_notepad.exe','Scintilla.dll'):
+                file=runtime/name;original=file.read_bytes();file.write_bytes(b'changed')
+                with self.assertRaises(InvalidProvenance):product.collect_diagnostic_runtime(config,receipt,root/'bad-bytes')
+                self.assertFalse((root/'bad-bytes').exists());file.write_bytes(original)
+            original=(runtime/'ru_notepad.exe').read_bytes()
+            calls=[0]
+            def changed_after_copy(_):
+                calls[0]+=1
+                if calls[0]==2:(runtime/'ru_notepad.exe').write_bytes(b'post-copy mutation')
+                return {'app_receipt':app}
+            with patch.object(product.smoke,'validate_receipts',side_effect=changed_after_copy):
+                with self.assertRaises(InvalidProvenance):product.collect_diagnostic_runtime(config,receipt,root/'changed-after-copy')
+            self.assertFalse((root/'changed-after-copy').exists())
+            (runtime/'ru_notepad.exe').write_bytes(original)
+            calls=[0]
+            def changed_stage_after_copy(_):
+                calls[0]+=1
+                if calls[0]==2:
+                    stages=list(root.glob('not-accepted-*/ru_notepad.exe'))
+                    self.assertEqual(len(stages),1)
+                    stages[0].write_bytes(b'changed staged executable')
+                return {'app_receipt':app}
+            with patch.object(product.smoke,'validate_receipts',side_effect=changed_stage_after_copy):
+                with self.assertRaises(InvalidProvenance):product.collect_diagnostic_runtime(config,receipt,root/'changed-stage')
+            self.assertFalse((root/'changed-stage').exists())
+            original_identity=product.identity
+            def oversized_identity(path):
+                record=original_identity(path)
+                if Path(path)==runtime/'ru_notepad.exe':record['size']=32*1024*1024+1
+                return record
+            with patch.object(product,'identity',side_effect=oversized_identity):
+                with self.assertRaises(InvalidProvenance):product.collect_diagnostic_runtime(config,receipt,root/'oversized')
+            self.assertFalse((root/'oversized').exists())
+            report['runtime_sha256']['private-config.json']=build.sha(runtime/'private-config.json')
+            receipt.write_text(json.dumps(report))
+            with self.assertRaises(InvalidProvenance):product.collect_diagnostic_runtime(config,receipt,root/'bad-inventory')
+            self.assertFalse((root/'bad-inventory').exists())
 
     def test_reviewed_delta_requires_exact_before_after_and_every_change(self):
         def git(*args):
