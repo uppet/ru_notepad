@@ -1250,7 +1250,7 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
     然
     试
         取近函数 取 A 其 查 'recentReader'.
-        近果 取 取近函数.
+        近果 取 取近函数().
         A 其 增 'recentItems' 近果['items'].
         A 其 增 'recentError' 近果['error'].
     救 原因

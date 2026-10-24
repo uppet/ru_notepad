@@ -49,7 +49,7 @@ def package(config, product_receipt, output, mingw_root):
         require(record == identity(Path(config[key])), 'product build receipt changed')
     require(report['smoke_receipt'] == identity(Path(config['smoke_receipt'])), 'smoke receipt changed')
     require(report['recent_fixtures_receipt'] == identity(Path(config['recent_fixtures_receipt'])), 'recent fixtures receipt changed')
-    from verify_bootstrap_recent_policies import validate_report, compiler_from_receipt
+    from verify_bootstrap_recent_policies import CASES, validate_report, compiler_from_receipt
     validate_report(smoke.read_json(Path(config['recent_fixtures_receipt'])), receipts['app_receipt'],
                     compiler_from_receipt(receipts['app_receipt'], config['app_receipt']))
     runtime = Path(report['runtime_directory'])
@@ -105,7 +105,7 @@ def package(config, product_receipt, output, mingw_root):
             'product_receipt_sha256': inputs['product_receipt']['sha256'],
             'smoke_receipt_sha256': inputs['smoke_receipt']['sha256'],
             'gui_gates': sorted(product.GUI_NAMES), 'recent_files_gui': True,
-            'stage3_recent_fixtures': {'recent_files_policy':25, 'recent_files_native':22},
+            'stage3_recent_fixtures': dict(CASES),
             'recent_fixtures_receipt_sha256': inputs['recent_fixtures_receipt']['sha256'],
             'experimental_wij_enabled': False}
         (stage/'preview-provenance.json').write_text(json.dumps(provenance, indent=2)+'\n', encoding='utf-8')

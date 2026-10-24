@@ -1,7 +1,7 @@
 name: Bootstrap LLVM editor preview
 on:
   push:
-    branches: [feature/bootstrap-llvm-preview-20261024, feature/bootstrap-llvm-preview-20261024-r1]
+    branches: [feature/bootstrap-llvm-preview-20261024, feature/bootstrap-llvm-preview-20261024-r1, feature/bootstrap-llvm-preview-20261024-r2]
   workflow_dispatch:
 permissions:
   contents: read

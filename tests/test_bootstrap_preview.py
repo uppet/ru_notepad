@@ -202,19 +202,24 @@ class PreviewContracts(unittest.TestCase):
             return build.verify_proof(proof,**kwargs)
         with patch.object(recent_fixtures,'validate_toolchain'),patch.object(recent_fixtures,'verify_proof',side_effect=verify_fields) as verifier:
             recent_fixtures.validate_report(report,app,compiler)
-            self.assertEqual(verifier.call_count,2)
+            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10})
+            self.assertEqual(verifier.call_count,3)
+            for missing in recent_fixtures.CASES:
+                bad=copy.deepcopy(report);del bad['results'][missing]
+                with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler)
             bad=copy.deepcopy(report);bad['stage3_sha256']='0'*64
             with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler)
-            name='recent_files_policy';proof_path=Path(report['results'][name]['proof']['path'])
-            for mutate in ('source','compiler','binary'):
-                wrong=copy.deepcopy(originals[name])
-                if mutate=='source':wrong['source']=str(root/'tests/recent_files_native.ru')
-                elif mutate=='compiler':wrong['compiler']=build.identity(host)
-                else:wrong['artifacts']['binary']={'path':str(root/'recent_files_native.exe'),'sha256':build.sha(root/'recent_files_native.exe')}
-                proof_path.write_text(json.dumps(wrong));bad=copy.deepcopy(report)
-                bad['results'][name]['proof']=build.identity(proof_path)
-                with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler)
-            proof_path.write_text(json.dumps(originals[name]))
+            for name in recent_fixtures.CASES:
+                proof_path=Path(report['results'][name]['proof']['path'])
+                for mutate in ('source','compiler','binary'):
+                    wrong=copy.deepcopy(originals[name])
+                    if mutate=='source':wrong['source']=str(root/'tests/not-the-fixed-entry.ru')
+                    elif mutate=='compiler':wrong['compiler']=build.identity(host)
+                    else:wrong['artifacts']['binary']={'path':str(host),'sha256':build.sha(host)}
+                    proof_path.write_text(json.dumps(wrong));bad=copy.deepcopy(report)
+                    bad['results'][name]['proof']=build.identity(proof_path)
+                    with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler)
+                proof_path.write_text(json.dumps(originals[name]))
 
     def test_recent_fixtures_require_exact_individual_assertions_and_total(self):
         good=b'PASS: a\nPASS: b\nTOTAL PASS: 2\n'

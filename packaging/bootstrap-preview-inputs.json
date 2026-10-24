@@ -15,7 +15,7 @@
     },
     "docs/bootstrap-llvm-preview.md": {
       "before": null,
-      "after": "622e65e36422a1f3c08e233d95814d79159a924f3b22c326375943e4826ca3f6"
+      "after": "040e3b6373c41cc83b09e4fc9a04b6638ee3128255c63919a67a89ae80990c97"
     },
     "docs/recent-files.md": {
       "before": null,
@@ -31,7 +31,7 @@
     },
     "src/main.ru": {
       "before": "3dcb97ca641f2fb8068785517aedcbbda6d3c65ca179683601f76508d71dd734",
-      "after": "fbdd60675a489b375f760a21c57f493678e46c3501383c5d1ce2af05c2c287cf"
+      "after": "318fbb20a50b62c9bd5df9cdca12906b64624182cdf6a32d92a5d7e520635295"
     },
     "src/recent_files.ru": {
       "before": null,
@@ -45,6 +45,10 @@
       "before": "55ef54e61a4eeeb1a651c0a78200f8b9393fa6717bd2d15ce99268dcea7dfd81",
       "after": "5af69e5c36af54a4f01e8297489040afe170b42079fac9565f6fd5a80140c031"
     },
+    "tests/recent_files_callbacks.ru": {
+      "before": null,
+      "after": "e4d3cdf7cdaadb7133cc8ef41767f3be873949f2f00328870aa77ef4210b63ef"
+    },
     "tests/recent_files_native.ru": {
       "before": null,
       "after": "538e58e6472da1d579bdda623003fc5fcb4e1d9c260b33cefa4e14efd58b8ef0"
@@ -55,7 +59,7 @@
     },
     "tests/test_recent_files.py": {
       "before": null,
-      "after": "04477fe547c8026415782ea0bad8d0a5556207bc5983549194b93a3bcaa7bcd7"
+      "after": "e078a8b4dac97c63423910f925583f1ebb8a9138a682c6a14e44cffa84652b5f"
     },
     "tools/test_i18n_models.py": {
       "before": "507b687a6d1c6e98f9287beb168eb10b2eb7648457ca9e60f1aae51d089531cc",

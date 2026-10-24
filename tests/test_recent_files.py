@@ -10,6 +10,16 @@ import verify_recent_files_windows as recent
 
 
 class RecentEvidenceTests(unittest.TestCase):
+    def test_callback_fixture_uses_exact_production_control_flow(self):
+        root = Path(__file__).resolve().parents[1]
+        main = (root / 'src/main.ru').read_text(encoding='utf-8')
+        fixture = (root / 'tests/recent_files_callbacks.ru').read_text(encoding='utf-8')
+        reader = main[main.index('    试\n        取近函数'):main.index("    A 其 增 'visible'")]
+        writer = main[main.index('算 持久最近:'):main.index('算 记最近 ')]
+        self.assertIn('近果 取 取近函数().', reader)
+        self.assertEqual(fixture.count(reader), 1)
+        self.assertEqual(fixture.count(writer), 1)
+
     def good(self):
         hashes = {n: 'a' * 64 for n in ('ru_notepad.exe', 'Scintilla.dll', 'Lexilla.dll', 'RuSyntax.dll')}
         record = {'name': 'main-gui-recent-files', 'passed': True, 'executed': True,
