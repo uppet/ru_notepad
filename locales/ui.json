@@ -1069,5 +1069,41 @@
     "es": "Búsqueda circular",
     "ru": "По кругу",
     "it": "Ricerca circolare"
+  },
+  "recent.heading": {
+    "en": "Recent files",
+    "zh-CN": "最近打开的文件",
+    "ja": "最近開いたファイル",
+    "ko": "최근에 연 파일",
+    "es": "Archivos recientes",
+    "ru": "Недавние файлы",
+    "it": "File recenti"
+  },
+  "recent.empty": {
+    "en": "(No recent files)",
+    "zh-CN": "（无最近文件）",
+    "ja": "（履歴なし）",
+    "ko": "(최근 파일 없음)",
+    "es": "(Sin archivos recientes)",
+    "ru": "(Нет недавних файлов)",
+    "it": "(Nessun file recente)"
+  },
+  "recent.clear": {
+    "en": "Clear recent files",
+    "zh-CN": "清空最近文件列表",
+    "ja": "履歴を消去",
+    "ko": "최근 파일 목록 지우기",
+    "es": "Borrar archivos recientes",
+    "ru": "Очистить список",
+    "it": "Cancella elenco recenti"
+  },
+  "recent.persistence_failed": {
+    "en": "The recent-file list could not be saved. Your open documents are unchanged.",
+    "zh-CN": "无法保存最近文件列表。已打开的文档不受影响。",
+    "ja": "最近開いたファイルの一覧を保存できませんでした。開いている文書に変更はありません。",
+    "ko": "최근 파일 목록을 저장할 수 없습니다. 열려 있는 문서는 변경되지 않았습니다.",
+    "es": "No se pudo guardar la lista de archivos recientes. Los documentos abiertos no han cambiado.",
+    "ru": "Не удалось сохранить список недавних файлов. Открытые документы не изменены.",
+    "it": "Impossibile salvare l’elenco dei file recenti. I documenti aperti non sono stati modificati."
   }
 }

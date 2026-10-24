@@ -6,6 +6,20 @@ A small Windows text editor written mostly in **Ru**. Open a file, edit it in a 
 
 This new candidate adds previous-match search (Shift+F3), whole-word matching and an optional wrap-around setting. Its Windows acceptance is pending; the earlier baseline result does not validate these additions. See [literal search behavior](docs/literal-search.md).
 
+## Bootstrap LLVM preview candidate
+
+The current candidate adds a **File > Recent files** list and a native-bootstrap
+LLVM build of the editor. Fresh validation is still required before delivery;
+older preview results do not certify this candidate. The actual bootstrap-built
+executable must pass the product GUI checks and recent-file flows, and its ZIP
+must preserve the tested binary identities. The existing C-built native fixture
+suite remains separate baseline evidence, not a claim that every fixture was
+compiled with bootstrap LLVM. See [preview scope and evidence](docs/bootstrap-llvm-preview.md).
+
+The experimental `wij` Markdown dense/incremental implementation is intentionally
+not included. Interpreter explicit-stack work is also separate and does not block
+this preview's build plan.
+
 ## Interface languages
 
 English, Simplified Chinese, Japanese, Korean, Spanish, Russian and Italian are included. UI language is separate from syntax language. Automated baseline acceptance passed; actual IME and different-DPI experience still needs manual validation. See [interface language behavior and acceptance](docs/internationalization.md).
@@ -13,6 +27,7 @@ English, Simplified Chinese, Japanese, Korean, Spanish, Russian and Italian are 
 ## What is included
 
 - A standalone Windows x64 app with Scintilla, Lexilla and the application-owned RuSyntax DLL; Python is not needed to run them
+- [Recent files](docs/recent-files.md) in the File menu, with a bounded per-user history and clear command
 - Tabs, undo/redo, and prompts before closing unsaved documents
 - UTF-8, UTF-8 BOM, UTF-16 LE/BE, explicit Windows-1252, and GBK
 - Save-conflict checks and lossless-encoding checks

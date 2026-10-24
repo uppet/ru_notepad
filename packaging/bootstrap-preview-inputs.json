@@ -1,0 +1,69 @@
+{
+  "schema": "ru-notepad-reviewed-preview-inputs-v1",
+  "compiler": {
+    "commit": "ee60e2b649093b4efcc839af3743bab27bb5fa97",
+    "tree": "41792cfa9014ea453780febfc432a01fd99f1837"
+  },
+  "baseline": {
+    "commit": "d964ea9f7e27065aa5bbcced8d6c7526a6224dd1",
+    "tree": "2522d03114c808480e42911be850b75e0ae14206"
+  },
+  "reviewed_changes": {
+    "README.md": {
+      "before": "4fec039d9e1f3129d90c9662c2202fca8809d9c1e340dae429130cfe41cf9c7c",
+      "after": "f84ef7c9406b5f6c3bdd3f8c5e718e1c90dea27058224acc717075f3f4c29805"
+    },
+    "docs/bootstrap-llvm-preview.md": {
+      "before": null,
+      "after": "622e65e36422a1f3c08e233d95814d79159a924f3b22c326375943e4826ca3f6"
+    },
+    "docs/recent-files.md": {
+      "before": null,
+      "after": "619fc606be39a908db9761110c41bfa8f66b6d8bbbc80a6e30481839e2329395"
+    },
+    "locales/ui.json": {
+      "before": "954dcda145db13b05b3f753c43eba56223f09479cf93955edb5944d571b2fb35",
+      "after": "a0410306f2244a9937e11fe56d5424fd1306569b8802788ec04d76536f2c3702"
+    },
+    "src/i18n_catalog.ru": {
+      "before": "e2b6d48d25529c7d631652980ec45d6a5dc837467e505e58fbe581a352fe84db",
+      "after": "b7ed44914d2b1ae14e255eff9574a0aeb8a45cb26bbf8bccdb69620dce5c93a9"
+    },
+    "src/main.ru": {
+      "before": "3dcb97ca641f2fb8068785517aedcbbda6d3c65ca179683601f76508d71dd734",
+      "after": "fbdd60675a489b375f760a21c57f493678e46c3501383c5d1ce2af05c2c287cf"
+    },
+    "src/recent_files.ru": {
+      "before": null,
+      "after": "d0f454ecfc8b02cb75fa5150ffd2b0b6df986dac13bf4a48c84037209e55d95a"
+    },
+    "src/recent_files_policy.ru": {
+      "before": null,
+      "after": "326374b9b89ac63dc107330907c79ed213b37903e46ca913874956a0c7bb8e2c"
+    },
+    "tests/app_i18n_native.ru": {
+      "before": "55ef54e61a4eeeb1a651c0a78200f8b9393fa6717bd2d15ce99268dcea7dfd81",
+      "after": "5af69e5c36af54a4f01e8297489040afe170b42079fac9565f6fd5a80140c031"
+    },
+    "tests/recent_files_native.ru": {
+      "before": null,
+      "after": "538e58e6472da1d579bdda623003fc5fcb4e1d9c260b33cefa4e14efd58b8ef0"
+    },
+    "tests/recent_files_policy.ru": {
+      "before": null,
+      "after": "94b14fb1192666000407cc222c7e53249216dd959613c13bdbf71b0cf3ab8b7c"
+    },
+    "tests/test_recent_files.py": {
+      "before": null,
+      "after": "04477fe547c8026415782ea0bad8d0a5556207bc5983549194b93a3bcaa7bcd7"
+    },
+    "tools/test_i18n_models.py": {
+      "before": "507b687a6d1c6e98f9287beb168eb10b2eb7648457ca9e60f1aae51d089531cc",
+      "after": "31208bd1185b511759f9b2582a13571af94bd46e11665bed6ad08f3ac01b4bea"
+    },
+    "tools/verify_recent_files_windows.py": {
+      "before": null,
+      "after": "5b04e4b7b398afc6befca05e629f92ac247607f57ee13ed862e334cc31802692"
+    }
+  }
+}

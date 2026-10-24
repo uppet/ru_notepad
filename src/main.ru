@@ -2,6 +2,8 @@
 密 取 外言 '如:密'.
 本地 取 外言 'i18n.ru'.
 偏好 取 外言 'i18n_settings.ru'.
+最近 取 外言 'recent_files.ru'.
+近策 取 外言 'recent_files_policy.ru'.
 布局策 取 外言 'i18n_layout.ru'.
 窗 取 外言 'win32.ru'.
 编 取 外言 'editor.ru'.
@@ -14,7 +16,7 @@
 关联 取 外言 'associations.ru'.
 拖放 取 外言 'file_drop.ru'.
 修改头 取 密 其 结构 [['header',窗 其 NMHDR],['position',窗 其 IP],['ch',窗 其 I],['modifiers',窗 其 I],['modificationType',窗 其 I],['text',窗 其 PTR],['length',窗 其 IP],['linesAdded',窗 其 IP],['message',窗 其 I],['wParam',窗 其 UP],['lParam',窗 其 IP],['line',窗 其 IP],['foldLevelNow',窗 其 I],['foldLevelPrev',窗 其 I],['margin',窗 其 I]].
-A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'system','docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'previous':空,'whole':空,'searchWrap':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
+A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'system','docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'previous':空,'whole':空,'searchWrap':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
 
 # Syntax work is deferred out of Scintilla callbacks, with one shared UI budget.
 # Pure cache update shared by periodic sampling and an already-required final refresh.
@@ -657,6 +659,44 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'syste
     终
     得 真.
 法
+# Only completed opens reach this hook. History is a best-effort preference,
+# never part of the document transaction or a reason to discard its editor.
+算 空最近:
+    得 {'items':[],'error':0}.
+法
+算 不存最近 项们 为 阵:
+    得 0.
+法
+算 持久最近:
+    码盒 取 [0].
+    试
+        存近函数 取 A 其 查 'recentWriter'.
+        若 存近函数 != 空 则 码盒[0] 取 存近函数 (A 其 查 'recentItems'). 然
+    救 原因
+        码盒[0] 取 13.
+    终
+    A 其 增 'recentError' 码盒[0].
+    若 码盒[0] != 0 则 显 '[recent] preference write failed: '+(码盒[0] 为 句). 然
+    得 码盒[0] == 0.
+法
+算 记最近 路 为 句, 编码 为 数:
+    试
+        A 其 增 'recentItems' (最近 其 更新 (A 其 查 'recentItems') 路 编码).
+        持久最近.
+        若 非 ((A 其 查 'window') 其 为空) 则 菜单. 然
+    救 原因
+        A 其 增 'recentError' 13.
+        显 '[recent] preference update unavailable.'.
+    终
+    得 空.
+法
+算 清最近:
+    A 其 增 'recentItems' ([]).
+    持久最近.
+    菜单.
+    若 (A 其 查 'recentError') != 0 则 提示 (本地 其 文本 'recent.persistence_failed'). 然
+    得 空.
+法
 算 打开 路 为 句, 代码页:
     得 入队 [路] 代码页.
 法
@@ -677,6 +717,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'syste
             A 其 增 'operation' 空.
             切页 位.
             A 其 增 'lastOutcome' 'duplicate'.
+            记最近 读态['path'] (文们[位] 其 查 'encoding').
             得 空.
         然
         位 取 位+1.
@@ -755,6 +796,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'syste
         A 其 增 'operation' 空.
         A 其 增 'lastOutcome' 'opened'.
         显 '[operation] open completed'.
+        记最近 读态['path'] 读态['encoding'].
         柄 取 文档 其 查 'editor'.
         (A 其 查 'locks') 其 增 [柄,0].
         窗 其 发送 柄 2171 1 0.
@@ -901,6 +943,13 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'syste
         切界面 (['system','en','zh-CN','ja','ko','es','ru','it'][号-850]) 真.
         得 空.
     然
+    若 号 >= 1200 且 号 < 1210 则
+        项们 取 A 其 查 'recentItems'.
+        位 取 号-1200.
+        若 位 < (项们 其 量) 则 打开 项们[位][0] 项们[位][1]. 然
+        得 空.
+    然
+    若 号 == 1210 则 清最近. 得 空. 然
     若 号 == 101 则 新页 '' '' 65001 假 ''. 得 空. 然
     若 号 == 102 或 号 == 108 或 号 == 109 则
         代码页 取 0.
@@ -1013,6 +1062,20 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'syste
     刷新.
     得 空.
 法
+算 近期菜单 子:
+    窗 其 菜单项 子 2048 0 ''.
+    窗 其 菜单项 子 3 0 (本地 其 文本 'recent.heading').
+    近们 取 A 其 查 'recentItems'.
+    若 (近们 其 量) == 0 则 窗 其 菜单项 子 3 0 (本地 其 文本 'recent.empty'). 然
+    近位 取 0.
+    循 近们 其 量 次
+        窗 其 菜单项 子 0 (1200+近位) (近策 其 标签 近们[近位][0]).
+        近位 取 近位+1.
+    环
+    清旗 取 0. 若 (近们 其 量) == 0 则 清旗 取 3. 然
+    窗 其 菜单项 子 清旗 1210 (本地 其 文本 'recent.clear').
+    得 空.
+法
 算 菜单:
     # Parallel primitive arrays keep the pinned compiler's ABI analysis bounded.
     组键们 取 ['menu.file', 'menu.edit', 'menu.search', 'menu.encoding', 'menu.language', 'menu.view', 'menu.settings', 'menu.ui_language', 'menu.help'].
@@ -1036,6 +1099,7 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'syste
                 窗 其 菜单项 子 标记 号 (本地 其 文本 键们[位]).
                 位 取 位+1.
             环
+            若 组位 == 0 则 近期菜单 子. 然
             窗 其 菜单项 主 16 ((窗 其 UP) 其 重释 子) (本地 其 文本 组键们[组位]).
             # The root now owns this submenu; cleanup must not free it twice.
             子 取 空.
@@ -1174,6 +1238,25 @@ A 取 {'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'syste
     若 设['value'] == '' 则 A 其 增 'uiPreference' 'system'. 然
     若 设['value'] != '' 且 设['value'] != 'system' 且 非 (本地 其 有语言 设['value']) 则 A 其 增 'uiPreference' 'en'. 然
     本地 其 设置 (偏好 其 决定 设['value'] (偏好 其 系统语言)).
+    # Hidden native fixtures must not acquire new per-user persistence effects.
+    # Explicit test readers/writers still permit isolated registry verification.
+    若 (A 其 查 'recentReader') == 空 则
+        若 显示 则 A 其 增 'recentReader' (算 最近 其 载入).
+        另 A 其 增 'recentReader' (算 空最近). 然
+    然
+    若 (A 其 查 'recentWriter') == 空 则
+        若 显示 则 A 其 增 'recentWriter' (算 最近 其 保存).
+        另 A 其 增 'recentWriter' (算 不存最近). 然
+    然
+    试
+        取近函数 取 A 其 查 'recentReader'.
+        近果 取 取近函数.
+        A 其 增 'recentItems' 近果['items'].
+        A 其 增 'recentError' 近果['error'].
+    救 原因
+        A 其 增 'recentItems' ([]).
+        A 其 增 'recentError' 13.
+    终
     A 其 增 'visible' 显示.
     A 其 增 'confirmLarge' (算 询大文件).
     A 其 增 'confirmClose' (算 询问关闭).

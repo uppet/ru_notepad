@@ -291,7 +291,13 @@ _布局钩 取 {'window':空,'callback':空,'calls':0,'maxX':0,'maxY':0}.
         键 取 菜单名[位].
         确认 ((菜单字 菜 位 1024) == (词 代码 键)) (代码+' native '+键+' matches catalog').
         子 取 窗 其 成功 (_GetSubMenu 其 调用 [菜,位]) 'GetSubMenu(i18n fixture)'.
-        确认 ((窗 其 结果 (_GetMenuItemCount 其 调用 [子])) 其 数 == 菜单数[位]) (代码+' native '+键+' preserves all command entries').
+        预期数 取 菜单数[位].
+        若 位 == 0 则
+            近数 取 ((应用 其 A) 其 查 'recentItems') 其 量.
+            若 近数 == 0 则 近数 取 1. 然
+            预期数 取 预期数+3+近数.
+        然
+        确认 ((窗 其 结果 (_GetMenuItemCount 其 调用 [子])) 其 数 == 预期数) (代码+' native '+键+' preserves all command entries').
         循 菜单数[位] 次
             确认 ((菜单字 子 命令号[总位] 0) == (词 代码 命令键[总位])) (代码+' command '+(命令号[总位] 为 句)+' has exact catalog text and shortcut').
             总位 取 总位+1.
