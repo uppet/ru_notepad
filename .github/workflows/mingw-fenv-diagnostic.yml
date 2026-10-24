@@ -1,0 +1,39 @@
+name: MinGW fenv linker diagnostic only
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/mingw-fenv-diagnostic-20261024]
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e
+        id: msys2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+      - name: Collect fixed probe matrix without changing product or installed tools
+        shell: pwsh
+        run: python tools/diagnose_mingw_fenv.py --mingw-root '${{ steps.msys2.outputs.msys2-location }}/mingw64' --output "$env:RUNNER_TEMP/mingw-fenv-diagnostic"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: mingw-fenv-diagnostic-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/mingw-fenv-diagnostic/*.json
+            ${{ runner.temp }}/mingw-fenv-diagnostic/*.log
+            ${{ runner.temp }}/mingw-fenv-diagnostic/*.cpp
+          if-no-files-found: warn
+          retention-days: 14
