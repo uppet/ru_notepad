@@ -2,7 +2,7 @@ name: MinGW fenv linker diagnostic only
 on:
   workflow_dispatch:
   push:
-    branches: [feature/mingw-fenv-diagnostic-20261024]
+    branches: [feature/mingw-fenv-diagnostic-20261024-r1]
 permissions:
   contents: read
 jobs:

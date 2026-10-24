@@ -25,6 +25,21 @@ int main() { return probe(); }
 '''
 
 
+# No main and no FE_DFL_ENV token: only a saved environment crosses fesetenv.
+SAVED_SOURCE = r'''#include <fenv.h>
+extern "C" __declspec(dllexport) int probe() {
+    fenv_t saved;
+    if (fesetround(FE_UPWARD)) return 10;
+    if (fegetenv(&saved)) return 11;
+    if (fesetround(FE_DOWNWARD)) return 12;
+    if (fegetround() != FE_DOWNWARD) return 17;
+    if (fesetenv(&saved)) return 15;
+    if (fegetround() != FE_UPWARD) return 16;
+    return 0;
+}
+'''
+
+
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -99,6 +114,28 @@ def main():
         run(name+'-imports',[tools['objdump'],'-p',binary])
         if suffix=='.exe':run(name+'-execute',[binary])
         else:run(name+'-execute',[sys.executable,'-I','-c','import ctypes,sys; d=ctypes.CDLL(sys.argv[1]); d.probe.restype=ctypes.c_int; sys.exit(d.probe())',binary])
+    # Separate object compilation makes the unresolved inputs to the linker
+    # observable. Original three arms above are retained without alteration.
+    saved_source=out/'saved-only-probe.cpp';saved_source.write_bytes(SAVED_SOURCE.encode())
+    report['saved_source_sha256']=sha(saved_source)
+    saved_object=out/'saved-only-probe.o'
+    compiled,_=run('saved-only-compile',[tools['gxx'],'--std=c++17','-O3','-c',saved_source,'-o',saved_object])
+    if compiled['returncode']==0 and saved_object.is_file():
+        run('saved-only-object-symbols',[tools['nm'],'-A',saved_object])
+        dll_arms=[('saved-dll-default',[]),('saved-dll-extra-mingw32',['-lmingw32'])]
+        if 'CRT_fp10.o' in paths:dll_arms.append(('saved-dll-explicit-crt10',[str(paths['CRT_fp10.o'])]))
+        scintilla_libs=['-lgdi32','-luser32','-limm32','-lole32','-luuid','-loleaut32','-ladvapi32','-lstdc++']
+        for name,extra in dll_arms:
+            binary=out/(name+'.dll')
+            cmd=[tools['gxx'],'-shared','-static','-mwindows','-o',binary,'-s',saved_object,
+                 *scintilla_libs,*extra,'-Wl,-Map,'+str(out/(name+'.map.log')),
+                 '-Wl,--trace-symbol,__mingw_fe_dfl_env','-Wl,--trace-symbol,_fpreset']
+            run(name+'-link-plan',[*cmd,'-###'])
+            linked,_=run(name+'-link',cmd)
+            if linked['returncode']!=0 or not binary.is_file():continue
+            report.setdefault('binaries',{})[name]={'path':binary.name,'sha256':sha(binary)}
+            run(name+'-imports',[tools['objdump'],'-p',binary])
+            run(name+'-execute',[sys.executable,'-I','-c','import ctypes,sys; d=ctypes.CDLL(sys.argv[1]); d.probe.restype=ctypes.c_int; sys.exit(d.probe())',binary])
     report['collection_complete']=True
     save()
 
