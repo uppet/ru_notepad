@@ -26,6 +26,63 @@ import windows_ci as ci
 import build as builder
 
 
+class MarkdownPhaseObservationTests(unittest.TestCase):
+    def test_text_and_two_serial_undo_fold_observations_are_separate(self):
+        timing = {'length_savepoint_observed_ms': None, 'status_complete_observed': []}
+        ci.observe_markdown_phase(timing, 100, 9, True, 8, False, False, 1)
+        self.assertIsNone(timing['length_savepoint_observed_ms'])
+        ci.observe_markdown_phase(timing, 12000, 9, True, 8, False, True, 1)
+        ci.observe_markdown_phase(timing, 12250, 9, True, 8, False, True, 1)
+        ci.observe_markdown_phase(timing, 12300, 8, False, 8, False, False, 2)
+        self.assertEqual(timing['length_savepoint_observed_ms'], 12300)
+        ci.observe_markdown_phase(timing, 24000, 8, False, 8, False, True, 2)
+        self.assertEqual(timing['status_complete_observed'], [
+            {'undo_commands': 1, 'elapsed_ms': 12000},
+            {'undo_commands': 2, 'elapsed_ms': 24000}])
+        self.assertEqual(timing['length_savepoint_observed_ms'], 12300)
+
+
+    def test_phase_schema_integrates_with_complete_markdown_receipt(self):
+        ci.validate_gui_markdown(markdown_evidence())
+
+    def test_phase_validator_rejects_missing_nonfinite_and_inconsistent_observations(self):
+        mutations = ('missing', 'null', 'nan', 'negative', 'late', 'bool_time',
+                     'duplicate', 'wrong_id', 'bool_id', 'status_before_return',
+                     'status_after_next_return', 'return_count', 'reversed_returns',
+                     'missing_final_status', 'unknown_field', 'wrong_kind')
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                record = markdown_evidence()
+                stage = record['cases'][0]['stages'][-1]
+                timing = stage['phase_timing']
+                if mutation == 'missing': del stage['phase_timing']
+                elif mutation == 'null': timing['length_savepoint_observed_ms'] = None
+                elif mutation == 'nan': timing['max_wm_null_probe_ms'] = float('nan')
+                elif mutation == 'negative': timing['length_savepoint_observed_ms'] = -1
+                elif mutation == 'late': timing['length_savepoint_observed_ms'] = 101
+                elif mutation == 'bool_time': timing['max_wm_null_probe_ms'] = True
+                elif mutation == 'duplicate': timing['status_complete_observed'][1]['undo_commands'] = 1
+                elif mutation == 'wrong_id': timing['status_complete_observed'][1]['undo_commands'] = 3
+                elif mutation == 'bool_id': timing['status_complete_observed'][0]['undo_commands'] = True
+                elif mutation == 'status_before_return': timing['status_complete_observed'][0]['elapsed_ms'] = 0
+                elif mutation == 'status_after_next_return': timing['status_complete_observed'][0]['elapsed_ms'] = 12
+                elif mutation == 'return_count': timing['undo_returned_ms'].pop()
+                elif mutation == 'reversed_returns': timing['undo_returned_ms'].reverse()
+                elif mutation == 'missing_final_status': timing['status_complete_observed'].pop()
+                elif mutation == 'unknown_field': timing['exact_text_done'] = True
+                elif mutation == 'wrong_kind': timing['status_complete_observed'] = {}
+                with self.assertRaises(RuntimeError):
+                    ci.validate_gui_markdown(record)
+
+    def test_non_undo_has_no_command_returns_and_one_status_observation(self):
+        record = markdown_evidence()
+        stage = record['cases'][0]['stages'][0]
+        ci.validate_markdown_phase_timing(stage['phase_timing'], 100, 'open', 0)
+        stage['phase_timing']['undo_returned_ms'] = [1.0]
+        with self.assertRaises(RuntimeError):
+            ci.validate_gui_markdown(record)
+
+
 class SyntheticWindowText(ci.Windows):
     """Controlled WM_GETTEXT payloads; no native API or platform override."""
     def __init__(self, before, after, reported_count=None):
@@ -108,6 +165,12 @@ def markdown_evidence():
                 'source_sha256': case['source_sha256'], 'wall_ms': 100.0, 'probes': 1, 'observer': observer,
                 'responsiveness': response, 'undo_commands': 2 if operation == 'undo' else 0,
                 'collapsed_before_edit': kind == 'many-lines' and dirty,
+                'phase_timing': {'length_savepoint_observed_ms': 20.0,
+                    'status_complete_observed': ([{'undo_commands': 1, 'elapsed_ms': 10.0},
+                        {'undo_commands': 2, 'elapsed_ms': 20.0}] if operation == 'undo' else
+                        [{'undo_commands': 0, 'elapsed_ms': 20.0}]),
+                    'undo_returned_ms': [1.0, 11.0] if operation == 'undo' else [],
+                    'max_wm_null_probe_ms': 1.0},
                 'memory': {'measurement': ci.GUI_MARKDOWN_MEMORY_MEASUREMENT, 'sample_count': 1,
                     'sampledWorkingSetPeak': 1048576, 'processPeakWorkingSet': 2097152,
                     'query_wall_ms': 0.1, 'max_query_ms': 0.1, 'samples': [{'start_ms': 10.0,
@@ -406,7 +469,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'syntax_native': r'^TOTAL PASS: 144\s*$',
             'app_ru_native': r'^TOTAL PASS: 73\s*$',
             'app_ru_timer_native': r'^TOTAL PASS: 8\s*$',
-            'ru_lexical_policy': r'^TOTAL PASS: 380\s*$',
+            'ru_lexical_policy': r'^TOTAL PASS: 422\s*$',
             'ru_syntax_native': r'^TOTAL PASS: 149\s*$',
             'ru_direct_styling_native': r'^TOTAL PASS: 36\s*$',
             'markdown_policy': r'^TOTAL PASS: 221\s*$',
@@ -578,7 +641,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             '    # close anything. The batch prefix duplicates only this exact transition;\n'
             '    # tools/test_ru_policy_fast.py guards both copies and the original fallback.\n',
             '    # close anything. Keep this shortcut inside the sole shared grammar policy.\n')
-        for old, new, count in reversed(proof.ELIF_SOURCE_REPLACEMENTS):
+        for old, new, count in reversed(proof.ELIF_SOURCE_REPLACEMENTS + proof.CONTINUE_SOURCE_REPLACEMENTS):
             self.assertEqual(before.count(new), count)
             before = before.replace(new, old)
         self.assertEqual(proof.sha(before.encode()), proof.BASE_SOURCE_SHA256)
@@ -590,7 +653,11 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         for source in (before + '\n', adapted, before.replace("'非':36", "'非':35", 1)):
             with self.assertRaises(AssertionError):
                 proof.adapt_baseline(source)
-        for old, new, _ in proof.ELIF_SOURCE_REPLACEMENTS:
+        for old, new, _ in proof.ELIF_SOURCE_REPLACEMENTS + proof.CONTINUE_SOURCE_REPLACEMENTS:
+            if (old, new, _) in proof.ELIF_SOURCE_REPLACEMENTS:
+                for previous, current, count in proof.CONTINUE_SOURCE_REPLACEMENTS:
+                    new = new.replace(previous, current)
+            self.assertIn(new, candidate)
             with self.assertRaises(AssertionError):
                 proof.verify_transition(adapted, candidate.replace(new, old, 1))
 
@@ -1349,12 +1416,12 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                  'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}
         prior = [test for test in summary['tests'] if test['name'] not in added]
         self.assertEqual(len(prior), 33)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487 + 90 + 6 + 103 + 42)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487 + 90 + 6 + 103 + 42 + 42)
         baseline = [test for test in summary['tests'] if test['name'] not in
                     {'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
         self.assertEqual(len(baseline), 39)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in baseline), 2077 + 103 + 42)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 2077 + 103 + 289 + 69 + 1606 + 42)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in baseline), 2077 + 103 + 42 + 42)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 2077 + 103 + 289 + 69 + 1606 + 42 + 42)
 
     def test_direct_style_fixture_is_built_packaged_and_required(self):
         name = 'ru_direct_styling_native'
@@ -3167,7 +3234,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         prior = [t for t in summary['tests'] if t['name'] not in
                  {'markdown_direct_native', 'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
         self.assertEqual(len(prior), 38)
-        self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1867 + 90 + 6 + 103 + 42)
+        self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1867 + 90 + 6 + 103 + 42 + 42)
         self.assertEqual(direct['assertions_passed'], 114)
         self.assertEqual(ci.console_command('markdown_direct_native', self.root, self.root),
                          [str(self.root / 'markdown_direct_native.exe')])

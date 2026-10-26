@@ -312,8 +312,8 @@ class PreviewContracts(unittest.TestCase):
             return build.verify_proof(proof,**kwargs)
         with patch.object(recent_fixtures,'validate_toolchain'),patch.object(recent_fixtures,'verify_proof',side_effect=verify_fields) as verifier:
             recent_fixtures.validate_report(report,app,compiler)
-            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10})
-            self.assertEqual(verifier.call_count,3)
+            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221})
+            self.assertEqual(verifier.call_count,5)
             for missing in recent_fixtures.CASES:
                 bad=copy.deepcopy(report);del bad['results'][missing]
                 with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler)

@@ -89,12 +89,17 @@ LOCALIZED_BRIDGE_SHA256 = {
 # The historical optimization remains isolated from the new language feature.
 # Apply exactly the reviewed grammar delta to the immutable historical policy;
 # this is an adapted baseline, never a claim about the original revision's output.
-GRAMMAR_ADAPTATION = 'ru-0.23.0-elif-v1'
-ADAPTED_BASE_SOURCE_SHA256 = '1887d1daceeb71f6c046c962142ef1b99ffe3a0b73770686dd4f9b3025e9b8ae'
+GRAMMAR_ADAPTATION = 'ru-0.24.0-elif-continue-v1'
+ELIF_ADAPTED_BASE_SOURCE_SHA256 = '1887d1daceeb71f6c046c962142ef1b99ffe3a0b73770686dd4f9b3025e9b8ae'
 ELIF_FIXTURE_BLOCK_SHA256 = '5f331cab22f4e472bf99325ca3a44a484c060951b54017cb964e25b06507d237'
 ELIF_FIXTURE_NAMES = frozenset(('elif-chain', 'elif-crlf', 'legacy-else-nested',
                                'elif-identifiers', 'elif-string', 'elif-comment'))
 ELIF_SOURCE_REPLACEMENTS = (("'另':4, '然':4", "'另':4, '另若':4, '然':4", 1), ("'非':36, '段':50", "'非':36, '另若':37, '段':50", 1), ('词 > 36', '词 > 37', 2), ('                                    若 词 == 10 且 顶词 == 27 且 态[13] 则 态[13] 取 真. 另', '                                    # 另若 shares the current if frame; its condition is expression context.\n                                    若 (词 == 10 或 词 == 37) 且 顶词 == 27 且 态[13] 则 态[13] 取 词 == 10. 另', 1))
+
+CONTINUE_SOURCE_REPLACEMENTS = (("'破':4,", "'破':4, '续':4,", 1), ("'另若':37, '段':50", "'另若':37, '续':38, '段':50", 1), ('词 > 37', '词 > 38', 2), ('词 == 13 或 词 == 30 或 词 == 33', '词 == 13 或 词 == 30 或 词 == 38 或 词 == 33', 1))
+ADAPTED_BASE_SOURCE_SHA256 = '2b76ccb2b389bba0675e832a1a4a2b7fab6e1769067adf0cbf33e1e73b4c560c'
+CONTINUE_FIXTURE_BLOCK_SHA256 = 'eeac7bf017fa23e51eca08d104d668562b91f5fabd8514580164462138b7d3db'
+CONTINUE_FIXTURE_NAMES = frozenset(('continue-loop', 'continue-finish', 'continue-identifiers', 'continue-string', 'continue-comment', 'continue-tentative-body'))
 
 
 def adapt_baseline(source):
@@ -102,11 +107,21 @@ def adapt_baseline(source):
     for old, new, count in ELIF_SOURCE_REPLACEMENTS:
         assert source.count(old) == count, 'exact grammar patch occurrence'
         source = source.replace(old, new)
+    assert sha(source.encode('utf-8')) == ELIF_ADAPTED_BASE_SOURCE_SHA256, 'elif adapted baseline grammar'
+    for old, new, count in CONTINUE_SOURCE_REPLACEMENTS:
+        assert source.count(old) == count, 'exact continue grammar patch occurrence'
+        source = source.replace(old, new)
     assert sha(source.encode('utf-8')) == ADAPTED_BASE_SOURCE_SHA256, 'adapted baseline grammar'
     return source
 
 
 def historical_fixture(data):
+    marker = b'\n# Ru 0.24.0 continue is a statement keyword, never a fold delimiter.\n'
+    assert data.count(marker) == 1, 'exact continue fixture marker'
+    start = data.index(marker)
+    end = data.index("\n显 'TOTAL PASS: '".encode('utf-8'), start)
+    assert sha(data[start:end]) == CONTINUE_FIXTURE_BLOCK_SHA256, 'exact continue fixtures'
+    data = data[:start] + data[end:]
     marker = b'\n\n# Ru 0.23.0 sibling branches never open another conditional frame.\n'
     assert data.count(marker) == 1, 'exact additional fixture marker'
     start = data.index(marker)
@@ -600,11 +615,13 @@ def boundary_cases():
 
 
 def cases():
-    # These six independently exercised new-language fixtures do not mutate the
+    # These twelve independently exercised new-language fixtures do not mutate the
     # historical 196-case input plan. Unknown additions still fail its hash gate.
     supplied = scanner.fixtures()
     assert {name for name, _ in supplied if name in ELIF_FIXTURE_NAMES} == ELIF_FIXTURE_NAMES
-    out = [(name, text) for name, text in supplied if name not in ELIF_FIXTURE_NAMES]
+    assert {name for name, _ in supplied if name in CONTINUE_FIXTURE_NAMES} == CONTINUE_FIXTURE_NAMES
+    out = [(name, text) for name, text in supplied
+           if name not in ELIF_FIXTURE_NAMES | CONTINUE_FIXTURE_NAMES]
     rng = random.Random(0x213)
     atoms = ['算','作','为','若','然','真','取','得','典','成','段','落','终','解.',
              '释。','批.','#','//',"'",'“','”','\\','1e-2','0x12','(',')','[',']',
@@ -871,7 +888,7 @@ def main():
               'fixture_compaction':{'original_batches':totals['batches'],'encoded_records':encoded_count,
                                     'python_exact_roundtrip':True,'canonical_input_plan_matched':True,
                                     'ru_per_case_input_checksum':True},
-              'scope':'Actual interpreter and ordinary generated host C, with the same explicit Ru 0.23.0 elif grammar adaptation on the historical baseline. Not the original historical baseline output; no Windows/GUI speed claim.'}
+              'scope':'Actual interpreter and ordinary generated host C, with the same explicit Ru 0.24.0 elif/continue grammar adaptation on the historical baseline. Not the original historical baseline output; no Windows/GUI speed claim.'}
     (OUT/'report.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8',newline='\n')
     print('POLICY_FAST_EXECUTION_PASS cases=196 batches=19627 events=2554 transitions=21504 shards=4 edits=4 boundaries=13 mutations=12',flush=True)
 

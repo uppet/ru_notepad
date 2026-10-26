@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile and execute exactly three reviewed recent-file fixtures with stage3.
+"""Compile and execute five reviewed editor fixtures with stage3.
 
 These are additional native feature tests, not the historical 39-fixture C
 acceptance. All input, emitted IR, linked binary and executed binary identities
@@ -21,8 +21,9 @@ from bootstrap_provenance import require, sha, validate_toolchain
 from build_bootstrap_release import identity, verify_proof
 import verify_bootstrap_editor_windows as smoke
 
-CASES = {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10}
-SCHEMA = 'ru-notepad-bootstrap-recent-fixtures-v1'
+CASES = {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10,
+         'ru_lexical_policy':422, 'markdown_policy':221}
+SCHEMA = 'ru-notepad-bootstrap-editor-fixtures-v2'
 
 
 def exact_assertions(stdout, stderr, returncode, count):

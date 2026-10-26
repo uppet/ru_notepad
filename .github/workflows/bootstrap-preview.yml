@@ -1,7 +1,7 @@
 name: Bootstrap LLVM editor preview
 on:
   push:
-    branches: [feature/bootstrap-llvm-preview-20261024, feature/bootstrap-llvm-preview-20261024-r1, feature/bootstrap-llvm-preview-20261024-r2, feature/bootstrap-llvm-preview-20261024-r3]
+    branches: [feature/bootstrap-llvm-preview-20261024, feature/bootstrap-llvm-preview-20261024-r1, feature/bootstrap-llvm-preview-20261024-r2, feature/bootstrap-llvm-preview-20261024-r3, feature/notepad-024-responsive-preview-20261026]
   workflow_dispatch:
 permissions:
   contents: read
@@ -103,7 +103,7 @@ jobs:
         run: python editor/tools/prepare_bootstrap_dependencies.py --config "$env:PREVIEW_OUTPUT/base-config.json" --output "$env:PREVIEW_OUTPUT/dependencies"
       - name: Compile editor and probes using actual stage3 LLVM backend
         run: python editor/tools/prepare_bootstrap_preview.py build --output "$env:PREVIEW_OUTPUT"
-      - name: Actual stage3 recent-file policy and isolated registry native fixtures
+      - name: Actual stage3 recent-file, Ru lexical and Markdown policy fixtures
         run: python editor/tools/verify_bootstrap_recent_policies.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --output "$env:PREVIEW_OUTPUT/recent-fixtures"
       - name: B7 functional smoke only
         run: python editor/tools/verify_bootstrap_editor_windows.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --output "$env:PREVIEW_OUTPUT/smoke-acceptance.json"

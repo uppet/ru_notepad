@@ -74,7 +74,7 @@ NATIVE_CONSOLE_TESTS = (
     ('syntax_native', r'^TOTAL PASS: 144\s*$'),
     ('app_ru_native', r'^TOTAL PASS: 73\s*$'),
     ('app_ru_timer_native', r'^TOTAL PASS: 8\s*$'),
-    ('ru_lexical_policy', r'^TOTAL PASS: 380\s*$'),
+    ('ru_lexical_policy', r'^TOTAL PASS: 422\s*$'),
     ('ru_syntax_native', r'^TOTAL PASS: 149\s*$'),
     ('ru_direct_styling_native', r'^TOTAL PASS: 36\s*$'),
     ('markdown_policy', r'^TOTAL PASS: 221\s*$'),
@@ -2244,7 +2244,7 @@ GUI_MARKDOWN_MEASUREMENT = ('Detached production GUI; a 100 KB/5000-newline coll
     'per-call owned plan/result capacity, not live process memory or total Ru/helper stack memory. '
     'bulkUs cumulatively measures the typed Apply FFI and result-wrapper interval per scan identity.')
 GUI_MARKDOWN_STAGE_FIELDS = {'operation', 'length', 'dirty', 'source_sha256', 'wall_ms',
-    'probes', 'observer', 'responsiveness', 'last_probe', 'last_progress', 'undo_commands', 'collapsed_before_edit', 'memory'}
+    'probes', 'observer', 'responsiveness', 'last_probe', 'last_progress', 'undo_commands', 'collapsed_before_edit', 'memory', 'phase_timing'}
 
 
 def gui_markdown_fixture(kind):
@@ -2528,6 +2528,8 @@ def validate_gui_markdown(record, *, require_windows_clock=False):
                     type(stage['undo_commands']) is not int or
                     (not 1 <= stage['undo_commands'] <= 2 if operation == 'undo' else stage['undo_commands'] != 0)):
                 raise RuntimeError('Markdown GUI bounded stage metadata is invalid')
+            validate_markdown_phase_timing(stage['phase_timing'], stage['wall_ms'],
+                                           operation, stage['undo_commands'])
             validate_markdown_progress(stage['last_progress'], complete=True, expected_length=len(expected), expected_dirty=dirty)
             last = stage['last_probe']
             if (not isinstance(last, dict) or set(last) != {'length', 'dirty', 'end_styled', 'status_done',
@@ -2559,6 +2561,60 @@ def validate_gui_markdown(record, *, require_windows_clock=False):
                 raise RuntimeError('Unexpected Markdown GUI input/paint stage')
 
 
+def validate_markdown_phase_timing(timing, wall_ms, operation, undo_commands):
+    """Validate sampled diagnostic timings without replacing completion proofs.
+
+    Length/savepoint is not byte equality. Status text is not a complete fold or
+    paint proof. Undo timestamps are command returns (not dispatch times), and
+    WM_NULL durations are synchronous response samples, not user-input latency.
+    """
+    fields = {'length_savepoint_observed_ms', 'status_complete_observed',
+              'undo_returned_ms', 'max_wm_null_probe_ms'}
+    if not isinstance(timing, dict) or set(timing) != fields:
+        raise RuntimeError('Markdown phase timing schema is invalid')
+    for key in ('length_savepoint_observed_ms', 'max_wm_null_probe_ms'):
+        if not finite_nonnegative(timing[key]) or timing[key] > wall_ms:
+            raise RuntimeError('Markdown phase timing is outside the stage')
+    returned = timing['undo_returned_ms']
+    expected_ids = list(range(1, undo_commands + 1)) if operation == 'undo' else [0]
+    count = undo_commands if operation == 'undo' else 0
+    if (not isinstance(returned, list) or len(returned) != count or
+            any(not finite_nonnegative(value) or value > wall_ms for value in returned) or
+            returned != sorted(returned)):
+        raise RuntimeError('Markdown Undo command-return timings are invalid')
+    observed = timing['status_complete_observed']
+    if not isinstance(observed, list) or len(observed) != len(expected_ids):
+        raise RuntimeError('Markdown status observations are incomplete')
+    previous = 0.0
+    for item, identity in zip(observed, expected_ids):
+        if (not isinstance(item, dict) or set(item) != {'undo_commands', 'elapsed_ms'} or
+                type(item['undo_commands']) is not int or item['undo_commands'] != identity or
+                not finite_nonnegative(item['elapsed_ms']) or
+                not previous <= item['elapsed_ms'] <= wall_ms):
+            raise RuntimeError('Markdown status observation timing is invalid')
+        stamp = item['elapsed_ms']
+        if operation == 'undo' and (stamp < returned[identity - 1] or
+                (identity < undo_commands and stamp > returned[identity])):
+            raise RuntimeError('Markdown Undo status/command ordering is invalid')
+        previous = stamp
+
+
+def observe_markdown_phase(timings, elapsed_ms, length, dirty, expected_length,
+                           expected_dirty, done, undo_commands):
+    """Record sampled phases, not exact native completion or latency bounds.
+
+    Uses the existing snapshot only: no extra native messages, changed actions,
+    timer budget, timeout, or acceptance condition. Undo command counts stay distinct.
+    These are sampled length/savepoint and status-text observations only; neither
+    certifies document bytes, complete fold state, natural paint, or input latency.
+    """
+    if length == expected_length and dirty == expected_dirty and timings['length_savepoint_observed_ms'] is None:
+        timings['length_savepoint_observed_ms'] = round(elapsed_ms, 3)
+    if done and not any(item['undo_commands'] == undo_commands for item in timings['status_complete_observed']):
+        timings['status_complete_observed'].append({'undo_commands': undo_commands,
+                                        'elapsed_ms': round(elapsed_ms, 3)})
+
+
 def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, action):
     clock = PerformanceClock()
     original, _, _ = gui_markdown_fixture(kind)
@@ -2571,7 +2627,9 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
         source_sha256=hashlib.sha256(original).hexdigest(), wall_ms=0.0, probes=0,
         observer=gui_ru_observer_record(), responsiveness={}, last_probe={},
         last_progress={'opened': False, 'length': None, 'dirty': None, 'status': 'not-open', 'tail_requested': False, 'diagnostic': None},
-        undo_commands=0, collapsed_before_edit=False, memory=markdown_memory_record())
+        undo_commands=0, collapsed_before_edit=False, memory=markdown_memory_record(),
+        phase_timing={'length_savepoint_observed_ms': None, 'status_complete_observed': [],
+                      'undo_returned_ms': [], 'max_wm_null_probe_ms': 0.0})
     editor = status_handle = None
     tail_requested = False
     opened = False
@@ -2590,6 +2648,7 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
             action()
             if operation == 'undo':
                 stage['undo_commands'] = 1
+                stage['phase_timing']['undo_returned_ms'].append(round((clock() - started) * 1000, 3))
             def snapshot():
                 nonlocal editor, status_handle, tail_requested, input_started, paint_started, navigation_before, opened
                 memory.sample()
@@ -2616,6 +2675,8 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
                     raise
                 validate_markdown_progress(stage['last_progress'])
                 done = markdown_status_complete(status)
+                observe_markdown_phase(stage['phase_timing'], (clock() - started) * 1000,
+                    length, dirty, len(expected), stage['dirty'], done, stage['undo_commands'])
                 if stage['dirty'] and not response and pending and length == len(expected):
                     # Capture pending before each request. Do not require it to
                     # remain pending when queued work completes on a fast host.
@@ -2638,6 +2699,7 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
                             raise RuntimeError('Markdown edit lost its undo history')
                         api.command(hwnd, 201)
                         stage['undo_commands'] += 1
+                        stage['phase_timing']['undo_returned_ms'].append(round((clock() - started) * 1000, 3))
                         tail_requested = False
                     return False
                 if not tail_requested:
@@ -2684,7 +2746,11 @@ def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, a
                 if now - started > GUI_MARKDOWN_TIMEOUT_SECONDS:
                     raise RuntimeError('Markdown GUI open/edit exceeded its original 30-second deadline')
                 if now >= next_response:
+                    probe_started = clock()
                     api.responsive(hwnd)
+                    stage['phase_timing']['max_wm_null_probe_ms'] = max(
+                        stage['phase_timing']['max_wm_null_probe_ms'],
+                        round((clock() - probe_started) * 1000, 3))
                     stage['probes'] += 1
                     next_response = clock() + 0.05
                 if response and len(response['navigation']) < 2:

@@ -12,7 +12,7 @@ The lexical/folding policy was originally derived from the Ru 0.21.3 language so
 The complete reserved-word set is:
 
 ```text
-显 取 为 得 完 破 若 则 另若 另 然 循 次 环 算 作 法 其
+显 取 为 得 完 破 续 若 则 另若 另 然 循 次 环 算 作 法 其
 且 或 非 空 真 假 典 成 对 形 象 如 新 外言 尽取 尽 试 救 卒
 ```
 
@@ -27,6 +27,12 @@ ASCII and Chinese full-width punctuation follow the exact frontend aliases. `:=`
 `另若` is one complete reserved word, not two nested openers. A chain shares one `然`; `另 若` remains a nested `若` and needs its own closer. Longer names such as `另若值` are not split. The branch condition enters expression context until `则`; it does not push an additional fold frame. Strings and comments do not create branches.
 
 This update changes editing vocabulary and structural policy only. The native scanner consumes the same Ru-provided table, so its C ABI and implementation do not change. The application continues to compile its existing syntax with the pinned Ru compiler; highlighting a Ru 0.23.0 file does not upgrade the compiler or prove the document executes. No application code is migrated to the new syntax.
+
+## Ru 0.24.0 continue editing support
+
+`续` is one complete statement keyword. It is colored like `破` and `完`, but does not open or close a folding frame. The enclosing `循 … 环` remains the fold boundary. The existing `完` styling and procedure-closing `为` behavior are unchanged. A statement-position `续` can confirm a previously tentative callable body, just like the other statement-only keywords; it is not accepted as a callable parameter name or type.
+
+Longer names such as `续值`, `_续` and `续2` remain ordinary names; strings and comments containing `续` do not create syntax or folds. Pure-Ru and native-scanner tests exercise single-byte UTF-8 feeds as well as whole-input scans. Native vocabulary still comes from the Ru-owned table, with no C scanner ABI change. This is editing support, not a claim that malformed or out-of-loop uses compile.
 
 ## Comments and incomplete input
 

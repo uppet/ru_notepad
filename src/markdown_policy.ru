@@ -179,8 +179,6 @@
 算 _行 态 列:
     行 取 态[0].
     深 取 态[3] 其 量.
-    级 取 _标题 态.
-    文 取 态[11].
     # A raw block remains opaque even on its closing line.
     若 态[8] != '' 则
         _完段 态 列. _证头 态 列.
@@ -201,6 +199,8 @@
         若 态[5] 则 态[22] 取 真. 然
         得 空.
     然
+    级 取 _标题 态.
+    文 取 态[11].
     # Containers are deliberately under-recognized: zero-column ATX exits;
     # otherwise require a blank boundary and a zero-column non-container line.
     容 取 _容器 文.
@@ -293,7 +293,14 @@
                 窗 取 文[窗始:窗末].
             然
             字 取 窗[位-窗始]. 位 取 位+1.
-            态[23] 取 态[23]+(_宽 字).
+            # Inline the scalar width in the hot scan loop: no per-character
+            # algorithm call, same exact UTF-8 accounting for every return.
+            宽 取 1.
+            若 字 >= '' 则
+                宽 取 2.
+                若 字 >= 'ࠀ' 则 宽 取 3. 若 字 >= '𐀀' 则 宽 取 4. 然 然
+            然
+            态[23] 取 态[23]+宽.
             若 字 == '\n' 且 态[1] 则
                 态[1] 取 假.
             另
@@ -335,7 +342,14 @@
                 窗 取 文[窗始:窗末].
             然
             字 取 窗[位-窗始]. 位 取 位+1.
-            态[23] 取 态[23]+(_宽 字).
+            # Inline the scalar width in the hot scan loop: no per-character
+            # algorithm call, same exact UTF-8 accounting for every return.
+            宽 取 1.
+            若 字 >= '' 则
+                宽 取 2.
+                若 字 >= 'ࠀ' 则 宽 取 3. 若 字 >= '𐀀' 则 宽 取 4. 然 然
+            然
+            态[23] 取 态[23]+宽.
             若 字 == '\n' 且 态[1] 则
                 态[1] 取 假.
             另
