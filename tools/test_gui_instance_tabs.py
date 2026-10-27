@@ -33,21 +33,43 @@ class ReceiptTests(unittest.TestCase):
             with self.subTest(mutation=i):
                 with self.assertRaises(ValueError):subject.validate_result(r,HASHES)
 class BusyBeforeIdleAPI:
-    """Model the production order: register tabs, then later clear busy/locks."""
+    """Model registration, fixed controls, and dynamic native editor lifetime."""
     def __init__(self,busy=True):
-        self.busy=busy;self.active=2;self.ignored=0
+        self.busy=busy;self.active=2;self.ignored=0;self.main=1;self.pid=123
         self.docs=[('Untitled · ru_notepad',b''),('一 😀.txt · ru_notepad',b'one'),('二 空格.txt · ru_notepad',b'two')]
-        self.user=Mock()
+        self.user=Mock();self.callback_type=lambda f:f
+        self.handles={100,101,102,20010,20011,20901};self.foreign=set()
+        self.user.IsWindow.side_effect=lambda h:h==self.main or h in self.handles
         self.user.IsWindowEnabled.side_effect=lambda handle:not self.busy
-        self.user.IsWindowVisible.side_effect=lambda handle:self.busy if handle==901 else True
-    def control(self,hwnd,identifier):return identifier
+        self.user.IsWindowVisible.side_effect=self.visible
+        self.user.GetParent.side_effect=lambda h:0 if h==self.main else self.main
+        self.user.GetWindowThreadProcessId.side_effect=self.owner
+        self.user.GetClassNameW.side_effect=self.classname
+        self.user.EnumChildWindows.side_effect=self.enumerate
+    def visible(self,h):
+        if h==20901:return self.busy
+        if h in (100,101,102):return h==100+self.active and h in self.handles
+        return h==self.main or h in self.handles
+    def owner(self,h,out):
+        import ctypes
+        value=(999 if h in self.foreign else self.pid) if h==self.main or h in self.handles else 0
+        if out:ctypes.cast(out,ctypes.POINTER(subject.wintypes.DWORD)).contents.value=value
+        return 7 if value else 0
+    def classname(self,h,buffer,size):
+        name=subject.ci.MAIN_CLASS if h==self.main else {20010:'SysTabControl32',20011:'Static',20901:'Button'}.get(h,'Scintilla')
+        buffer.value=name;return len(name)
+    def enumerate(self,hwnd,callback,unused):
+        for h in sorted(self.handles):
+            if not callback(h,0):return 0
+        return 1
+    def control(self,hwnd,identifier):return 20000+identifier
     def editor(self,hwnd):return 100+self.active
     def scalar(self,handle,message,*args):
         if message==0x1304:return 3
         if message==2140:return int(self.busy)
         raise AssertionError('Unexpected fake API scalar '+str(message))
     def text(self,handle):
-        if handle==11:return subject.ci._STATUS_PREFIXES['status.opening'][0]+' 100/100' if self.busy else 'Ln 1 Col 1'
+        if handle==20011:return subject.ci._STATUS_PREFIXES['status.opening'][0]+' 100/100' if self.busy else 'Ln 1 Col 1'
         return 'Untitled · ru_notepad' if self.busy else self.docs[self.active][0]
     def editor_bytes(self,hwnd):return self.docs[self.active][1]
     def command(self,hwnd,command):
@@ -66,7 +88,7 @@ class ReadyContractTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'did not display every synthetic file'):
             subject.ci.verify_gui_documents(api,1,expected)
         self.assertEqual(api.ignored,3)
-        process=Mock(pid=77);process.poll.return_value=None
+        process=Mock(pid=123);process.poll.return_value=None
         observations={}
         with patch.object(subject.time,'sleep',side_effect=lambda _:setattr(api,'busy',False)) as sleep:
             subject._wait_ready(api,process,1,3,'handoff',observations)
@@ -99,7 +121,7 @@ class ReadyContractTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):subject.ci.verify_gui_documents(api,1,broken)
 
     def test_ready_keeps_original_thirty_second_deadline(self):
-        api=BusyBeforeIdleAPI();process=Mock(pid=7);process.poll.return_value=None
+        api=BusyBeforeIdleAPI();process=Mock(pid=123);process.poll.return_value=None
         with patch.object(subject.time,'monotonic',side_effect=[0,15,30]),patch.object(subject.time,'sleep'):
             with self.assertRaisesRegex(RuntimeError,'Timed out: blocked'):
                 subject._wait_ready(api,process,1,3,'blocked')
@@ -452,7 +474,7 @@ class PhysicalPopupTests(unittest.TestCase):
 
 class ScalarFailureDiagnosticsTests(unittest.TestCase):
     def test_ready_failure_records_exact_stale_editor_request_without_retry(self):
-        api=BusyBeforeIdleAPI(False);original=api.scalar;failure=RuntimeError('Synthetic GUI query did not respond within 5 seconds')
+        api=BusyBeforeIdleAPI(False);api.main=10;original=api.scalar;failure=RuntimeError('Synthetic GUI query did not respond within 5 seconds')
         calls=[]
         def query(hwnd,message,wparam=0,lparam=0):
             calls.append((hwnd,message,wparam,lparam))
@@ -464,7 +486,7 @@ class ScalarFailureDiagnosticsTests(unittest.TestCase):
              patch.object(subject.time,'perf_counter',side_effect=[0,1,1.002]), \
              patch.object(subject,'_scalar_window_state',return_value={'target_exists':False}), \
              self.assertRaises(RuntimeError) as raised:
-            subject._wait_ready(api,p,10,5,'menu current',observed)
+            subject._wait_ready(api,p,10,3,'menu current',observed)
         self.assertIs(raised.exception,failure);self.assertIs(api.scalar,query)
         row=observed['scalar failure menu current']
         self.assertEqual((row['message'],row['target_hwnd'],row['last_error'],row['elapsed_ms']),(2140,102,1400,2.0))
@@ -515,5 +537,133 @@ class ScalarFailureDiagnosticsTests(unittest.TestCase):
             record=json.loads(path.read_text())
             self.assertEqual(record['observations']['popup 2 0'][0]['popups'][0]['items'][0]['rect'],[11,22,33,44])
             self.assertFalse(record['accepted'])
+
+
+class StableEditorReadinessTests(unittest.TestCase):
+    def process(self):
+        p=Mock(pid=123);p.poll.return_value=None;return p
+
+    def test_zero_or_multiple_visible_editors_are_pending_then_one_is_stable(self):
+        for initial in ([],[100,102]):
+            api=BusyBeforeIdleAPI(False);visible=list(initial);normal=api.visible
+            api.user.IsWindowVisible.side_effect=lambda h: h in visible if h in (100,101,102) else normal(h)
+            observed={}
+            with patch.object(subject.time,'sleep',side_effect=lambda _:visible.__setitem__(slice(None),[102])) as sleep:
+                subject._wait_ready(api,self.process(),1,3,'close transition',observed)
+            sleep.assert_called_once_with(.01)
+            row=observed['close transition']
+            self.assertTrue(row['snapshot_stable']);self.assertEqual(row['editor_candidates'],[102])
+            self.assertEqual(row['transient_count'],1)
+            self.assertEqual(row['last_transient']['editor_candidate_count'],len(initial))
+            self.assertEqual(row['last_transient']['transient_reason'],'editor-inventory-not-stable')
+
+    def test_wrong_tab_count_or_fixed_busy_state_does_not_touch_dynamic_editor(self):
+        for expected,busy in ((4,False),(3,True)):
+            api=BusyBeforeIdleAPI(busy)
+            api.user.EnumChildWindows.side_effect=AssertionError('Dynamic query before static ready')
+            original=api.scalar
+            api.scalar=Mock(side_effect=original)
+            row=subject._readiness(api,1,expected,123)
+            self.assertFalse(row['snapshot_stable']);self.assertEqual(row['transient_reason'],'fixed-state-not-ready')
+            self.assertFalse(any(c.args[1]==2140 for c in api.scalar.call_args_list))
+
+    def test_destroyed_editor_query_is_pending_but_valid_hang_is_not_retried(self):
+        api=BusyBeforeIdleAPI(False);original=api.scalar;calls=[]
+        def destroyed(hwnd,msg,*args):
+            calls.append((hwnd,msg))
+            if hwnd==102 and msg==2140:
+                api.handles.remove(102);api.active=1
+                raise RuntimeError('Same generic scalar error')
+            return original(hwnd,msg,*args)
+        api.scalar=destroyed;observed={}
+        with patch.object(subject.time,'sleep'):
+            subject._wait_ready(api,self.process(),1,3,'destroyed',observed)
+        self.assertEqual(observed['destroyed']['last_transient']['transient_reason'],'editor-replaced-during-query')
+        self.assertEqual(observed['destroyed']['editor_candidates'],[101])
+        self.assertEqual(calls.count((102,2140)),1)
+        api=BusyBeforeIdleAPI(False);original=api.scalar;failure=RuntimeError('Same generic scalar error')
+        def hanging(hwnd,msg,*args):
+            if msg==2140:raise failure
+            return original(hwnd,msg,*args)
+        api.scalar=Mock(side_effect=hanging)
+        with patch.object(subject.time,'sleep') as sleep,self.assertRaises(RuntimeError) as raised:
+            subject._wait_ready(api,self.process(),1,3,'valid hang',{})
+        self.assertIs(raised.exception,failure);sleep.assert_not_called()
+        self.assertEqual(sum(c.args[1]==2140 for c in api.scalar.call_args_list),1)
+
+    def test_successful_read_with_identity_or_count_change_is_not_a_stable_snapshot(self):
+        for change in ('identity','count'):
+            api=BusyBeforeIdleAPI(False);original=api.scalar;count=[3]
+            def changing(hwnd,msg,*args):
+                if msg==0x1304:return count[0]
+                if msg==2140:
+                    if change=='identity':api.active=1
+                    else:count[0]=4
+                return original(hwnd,msg,*args)
+            api.scalar=changing
+            row=subject._readiness(api,1,3,123)
+            self.assertFalse(row['snapshot_stable']);self.assertEqual(row['transient_reason'],'editor-epoch-changed')
+            self.assertFalse(subject._is_ready(row,3))
+
+    def test_foreign_pid_wrong_parent_and_missing_fixed_controls_are_fatal(self):
+        for mode in ('foreign-editor','foreign-main','missing-main','missing-tab','missing-status','missing-cancel','wrong-parent'):
+            api=BusyBeforeIdleAPI(False)
+            if mode=='foreign-editor':api.foreign.add(102)
+            elif mode=='foreign-main':api.foreign.add(1)
+            elif mode=='missing-main':api.user.IsWindow.side_effect=lambda h:h in api.handles
+            elif mode=='missing-tab':api.handles.remove(20010)
+            elif mode=='missing-status':api.handles.remove(20011)
+            elif mode=='missing-cancel':api.handles.remove(20901)
+            else:api.user.GetParent.side_effect=lambda h:99 if h==102 else (0 if h==1 else 1)
+            with self.subTest(mode=mode),patch.object(subject.time,'sleep') as sleep,self.assertRaises(RuntimeError):
+                subject._wait_ready(api,self.process(),1,3,'fatal',{})
+            sleep.assert_not_called()
+
+    def test_valid_editor_failure_is_not_swallowed_just_because_another_is_visible(self):
+        api=BusyBeforeIdleAPI(False);original=api.scalar;more=[False];normal=api.visible
+        api.user.IsWindowVisible.side_effect=lambda h:True if more[0] and h==101 else normal(h)
+        failure=RuntimeError('valid editor failed')
+        def query(hwnd,msg,*args):
+            if msg==2140:more[0]=True;raise failure
+            return original(hwnd,msg,*args)
+        api.scalar=query
+        with self.assertRaises(RuntimeError) as raised:subject._readiness(api,1,3,123)
+        self.assertIs(raised.exception,failure)
+
+    def test_permanent_zero_or_multiple_visible_editors_fail_at_original_deadline(self):
+        for editors in ([],[100,101]):
+            api=BusyBeforeIdleAPI(False);normal=api.visible
+            api.user.IsWindowVisible.side_effect=lambda h:h in editors if h in (100,101,102) else normal(h)
+            now=[0.0];observed={}
+            with patch.object(subject.time,'monotonic',side_effect=lambda:now[0]), \
+                 patch.object(subject.time,'sleep',side_effect=lambda _:now.__setitem__(0,now[0]+1)), \
+                 self.assertRaisesRegex(RuntimeError,'Timed out: permanent'):
+                subject._wait_ready(api,self.process(),1,3,'permanent',observed)
+            self.assertEqual(now[0],30)
+            self.assertFalse(observed['permanent']['snapshot_stable'])
+            self.assertEqual(observed['permanent']['editor_candidate_count'],len(editors))
+
+
+    def test_final_fixed_flags_and_text_must_belong_to_same_snapshot(self):
+        for change in ('tabs-disabled','cancel-visible','title','status'):
+            api=BusyBeforeIdleAPI(False);original_scalar=api.scalar;original_text=api.text
+            changing=[False]
+            api.user.IsWindowEnabled.side_effect=lambda h:not (changing[0] and change=='tabs-disabled' and h==20010)
+            normal=api.visible
+            api.user.IsWindowVisible.side_effect=lambda h:True if changing[0] and change=='cancel-visible' and h==20901 else normal(h)
+            def query(hwnd,msg,*args):
+                value=original_scalar(hwnd,msg,*args)
+                if msg==2140:changing[0]=True
+                return value
+            def text(hwnd):
+                if changing[0] and ((change=='title' and hwnd==1) or (change=='status' and hwnd==20011)):
+                    return 'changed during snapshot'
+                return original_text(hwnd)
+            api.scalar=query;api.text=text
+            row=subject._readiness(api,1,3,123)
+            with self.subTest(change=change):
+                self.assertFalse(row['snapshot_stable'])
+                self.assertEqual(row['transient_reason'],'fixed-epoch-changed')
+                self.assertFalse(subject._is_ready(row,3))
 
 if __name__=='__main__':unittest.main()

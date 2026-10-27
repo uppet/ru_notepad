@@ -288,22 +288,127 @@ def _post_command(api,hwnd,command):
 def _tabs(api,hwnd):return api.scalar(api.control(hwnd,10),0x1304)
 
 
-def _readiness(api,hwnd):
-    # A registered tab is not a completed open: production keeps busy, its
-    # editors read-only and the tab strip disabled until EndWork refreshes UI.
-    tabs=api.control(hwnd,10);editor=api.editor(hwnd)
-    api.user.IsWindowEnabled.argtypes=[wintypes.HWND]
-    api.user.IsWindowEnabled.restype=wintypes.BOOL
-    return {'tab_count':_tabs(api,hwnd),'title':api.text(hwnd),
-            'status':api.text(api.control(hwnd,11)),
-            'tabs_enabled':bool(api.user.IsWindowEnabled(tabs)),
-            'editor_enabled':bool(api.user.IsWindowEnabled(editor)),
-            'cancel_visible':bool(api.user.IsWindowVisible(api.control(hwnd,901))),
-            'editor_readonly':api.scalar(editor,2140)}
+def _readiness_handle(api,handle,pid=None):
+    """Read-only HWND identity. Missing dynamic editors are not fixed controls."""
+    u=api.user
+    u.IsWindow.argtypes=[wintypes.HWND];u.IsWindow.restype=wintypes.BOOL
+    u.IsWindowEnabled.argtypes=[wintypes.HWND];u.IsWindowEnabled.restype=wintypes.BOOL
+    u.GetParent.argtypes=[wintypes.HWND];u.GetParent.restype=wintypes.HWND
+    result={'hwnd':int(handle),'exists':bool(u.IsWindow(handle))}
+    if not result['exists']:return result
+    actual=wintypes.DWORD();thread=u.GetWindowThreadProcessId(handle,ctypes.byref(actual))
+    if not thread or (pid is not None and actual.value!=pid):
+        if not u.IsWindow(handle):return {'hwnd':int(handle),'exists':False}
+        raise RuntimeError('Readiness HWND belongs to another process or has no valid owner')
+    name=ctypes.create_unicode_buffer(128)
+    if not u.GetClassNameW(handle,name,len(name)):
+        if not u.IsWindow(handle):return {'hwnd':int(handle),'exists':False}
+        raise RuntimeError('Cannot identify live readiness HWND class')
+    result.update(pid=actual.value,**{'class':name.value},parent=int(u.GetParent(handle) or 0),
+                  visible=bool(u.IsWindowVisible(handle)),enabled=bool(u.IsWindowEnabled(handle)))
+    return result
+
+
+def _fixed_readiness(api,hwnd,pid,previous=None):
+    main=_readiness_handle(api,hwnd,pid)
+    if not main['exists'] or main['class']!=ci.MAIN_CLASS or not main['visible']:
+        raise RuntimeError('Fixed readiness main window disappeared or changed')
+    handles={};states={}
+    for identifier,kind in ((10,'systabcontrol32'),(11,'static'),(901,'button')):
+        handle=api.control(hwnd,identifier)
+        if previous is not None and handle!=previous[identifier]:
+            raise RuntimeError('Fixed readiness control identity changed')
+        state=_readiness_handle(api,handle,pid)
+        if not state['exists'] or state['class'].lower()!=kind or state['parent']!=hwnd:
+            raise RuntimeError('Fixed readiness control disappeared or changed')
+        handles[identifier]=handle;states[identifier]=state
+    return handles,states
+
+
+def _visible_readiness_editors(api,hwnd,pid):
+    candidates=[];errors=[];unstable=[False];count=[0]
+    @api.callback_type
+    def visit(child,_):
+        try:
+            count[0]+=1
+            if count[0]>128:raise RuntimeError('Readiness child inventory exceeds bound')
+            state=_readiness_handle(api,child,pid)
+            if not state['exists']:unstable[0]=True;return True
+            if state['class']=='Scintilla':
+                if state['parent']!=hwnd:raise RuntimeError('Readiness editor has the wrong parent')
+                if state['visible']:candidates.append(state)
+            return True
+        except Exception as exc:errors.append(exc);return False
+    api.user.EnumChildWindows(hwnd,visit,0)
+    if errors:raise errors[0]
+    return candidates,unstable[0]
+
+
+def _readiness(api,hwnd,expected_count=None,pid=None):
+    # Fixed controls must always be valid. Inspect them before obtaining a
+    # dynamic editor handle; close operations destroy/switch those HWNDs.
+    if pid is None:
+        main=_readiness_handle(api,hwnd)
+        if not main['exists']:raise RuntimeError('Fixed readiness main window disappeared')
+        pid=main['pid']
+    fixed,states=_fixed_readiness(api,hwnd,pid)
+    observed={'tab_count':api.scalar(fixed[10],0x1304),'title':api.text(hwnd),
+              'status':api.text(fixed[11]),'tabs_enabled':states[10]['enabled'],
+              'cancel_visible':states[901]['visible'],'editor_enabled':False,
+              'editor_readonly':None,'snapshot_stable':False}
+    def pending(reason,candidates=None):
+        observed['transient_reason']=reason
+        if candidates is not None:
+            observed['editor_candidate_count']=len(candidates)
+            observed['editor_candidates']=[item['hwnd'] for item in candidates]
+        _fixed_readiness(api,hwnd,pid,fixed)  # A missing fixed window is never transient.
+        return observed
+    if ((expected_count is not None and observed['tab_count']!=expected_count) or
+            not observed['tabs_enabled'] or observed['cancel_visible'] or
+            ci.status_startswith(observed['status'],'status.opening')):
+        return pending('fixed-state-not-ready')
+    candidates,changed=_visible_readiness_editors(api,hwnd,pid)
+    if changed or len(candidates)!=1:return pending('editor-inventory-not-stable',candidates)
+    before=candidates[0];editor=before['hwnd']
+    immediate=_readiness_handle(api,editor,pid)
+    if (not immediate['exists'] or immediate.get('class')!='Scintilla' or
+            immediate.get('parent')!=hwnd or not immediate.get('visible')):
+        return pending('editor-changed-before-query',candidates)
+    try:
+        readonly=api.scalar(editor,2140)
+    except Exception:
+        # Never catch by error-string or turn a still-valid editor timeout into
+        # polling. Only directly observed destruction/replacement permits it.
+        after=_readiness_handle(api,editor,pid)
+        current,_=_visible_readiness_editors(api,hwnd,pid)
+        replaced=(not after['exists'] or after.get('class')!='Scintilla' or
+                  after.get('parent')!=hwnd or
+                  (not after.get('visible') and len(current)==1 and current[0]['hwnd']!=editor))
+        if replaced:return pending('editor-replaced-during-query',current)
+        raise
+    _fixed_readiness(api,hwnd,pid,fixed)
+    final_count=api.scalar(fixed[10],0x1304)
+    final_title=api.text(hwnd);final_status=api.text(fixed[11])
+    _,final_states=_fixed_readiness(api,hwnd,pid,fixed)
+    current,changed=_visible_readiness_editors(api,hwnd,pid)
+    after=_readiness_handle(api,editor,pid)
+    if (changed or final_count!=observed['tab_count'] or len(current)!=1 or
+            current[0]['hwnd']!=editor or not after['exists'] or after.get('class')!='Scintilla' or
+            after.get('parent')!=hwnd or not after.get('visible')):
+        return pending('editor-epoch-changed',current)
+    if (final_states[10]['enabled']!=observed['tabs_enabled'] or
+            final_states[901]['visible']!=observed['cancel_visible'] or
+            final_title!=observed['title'] or final_status!=observed['status']):
+        observed.update(tabs_enabled=final_states[10]['enabled'],cancel_visible=final_states[901]['visible'],
+                        title=final_title,status=final_status)
+        return pending('fixed-epoch-changed',current)
+    observed.update(editor_enabled=after['enabled'],editor_readonly=readonly,
+                    editor_candidate_count=1,editor_candidates=[editor],snapshot_stable=True)
+    return observed
 
 
 def _is_ready(observed,count,title=None):
-    return (observed['tab_count']==count and observed['tabs_enabled'] and
+    return (observed.get('snapshot_stable') is True and observed['tab_count']==count and observed['tabs_enabled'] and
             observed['editor_enabled'] and not observed['cancel_visible'] and
             observed['editor_readonly']==0 and
             not ci.status_startswith(observed['status'],'status.opening') and
@@ -368,8 +473,14 @@ def _scalar_failure_evidence(api,process,main,observations,label):
 
 
 def _wait_ready(api,process,hwnd,count,description,observations=None,title=None):
+    transient_count=0;last_transient=None
     def ready():
-        observed=_readiness(api,hwnd)
+        nonlocal transient_count,last_transient
+        observed=_readiness(api,hwnd,count,process.pid)
+        if not observed['snapshot_stable']:
+            transient_count+=1
+            last_transient={key:observed[key] for key in ('transient_reason','editor_candidate_count','editor_candidates') if key in observed}
+        observed.update(transient_count=transient_count,last_transient=last_transient)
         if observations is not None:observations[description]=observed
         return _is_ready(observed,count,title)
     # Same 30-second wait budget, not an added sleep or a relaxed acceptance.
