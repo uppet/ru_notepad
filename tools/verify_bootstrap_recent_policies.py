@@ -25,7 +25,7 @@ import verify_bootstrap_editor_windows as smoke
 
 CASES = {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10,
          'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16,
-         'single_instance_policy':39, 'single_instance_settings_native':11, 'app_tabs_native':53}
+         'single_instance_policy':39, 'single_instance_settings_native':11, 'app_tabs_native':53, 'single_instance_native':15}
 SCHEMA = 'ru-notepad-bootstrap-editor-fixtures-v3'
 
 

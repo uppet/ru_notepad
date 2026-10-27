@@ -16,19 +16,25 @@ exact source and executable. This document is a plan, not a passing test receipt
   executable identities are recorded. No Python compiler or generated-C route
   may silently replace the bootstrap LLVM editor build.
 - The actual preview executable must pass the bootstrap pipeline smoke checks,
-  all four existing GUI product gates, and the recent-files tests. Existing
-  deadlines and assertions remain unchanged.
+  all four existing GUI product gates, the recent-files tests, and the actual
+  two-process single-instance / tab-menu GUI tests. Existing deadlines and
+  assertions remain unchanged.
 - Five real-stage3 fixtures cover recent-file policy (25 assertions), native
   registry/encoding boundaries (22), actual main-module callback control flow
   (10), Ru lexical policy including 续 (422), and Markdown policy (221). These
-  original 700 assertions remain required. Four additional fixtures cover tab
+  original 700 assertions remain required. Five additional fixtures cover tab
   close policy (16), single-instance protocol/settings policy (39), isolated
-  native registry roundtrip (11), and native tab callbacks (53): nine fixtures,
-  819 assertions. Receipt schema v3 rejects the former five-fixture/v2 receipt.
+  native registry roundtrip (11), native tab callbacks (53), and actual enabled
+  single-instance lifecycle (15): ten fixtures, 834 assertions. Receipt schema v3 rejects the former five-fixture/v2 receipt.
   The exact three dependency DLLs are copied beside the fixture executables;
   original and copied identities are checked before/after execution and again
   at product/package consumption. No PATH-only DLL substitution is accepted.
   These fixtures do not substitute for starting and testing the editor.
+- Before expensive compilation, five complete production single-instance state
+  functions run in the interpreter and generated C with explicit controlled OS
+  boundaries. Dictionary-write, ACK/NACK, timeout and discovery mutations must
+  fail. This is control-flow evidence, not Windows ABI or IPC acceptance; the
+  native lifecycle and actual two-process GUI checks remain mandatory.
 - The existing C-built native fixture suite remains separate baseline evidence.
   Its passing result does not claim those fixture executables were built with
   bootstrap LLVM, nor does a bootstrap smoke check replace product validation.
@@ -68,7 +74,7 @@ reported as a successful complete release suite.
 
 The editor-owned `compile_bootstrap_native.py` calls the exact reviewed 26cc
 `compile_native` API with native support and retained frontend evidence. During
-main, probe and all nine fixture compilations it poisons seven Python application
+main, probe and all ten fixture compilations it poisons seven Python application
 frontend entry points (including the native emitter's source alias). Attempts,
 even caught ones, fail the build. This does not replace stage3, the six frozen
 LLVM executable identities, linker/source checks, native fixtures or GUI gates.

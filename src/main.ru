@@ -1645,7 +1645,7 @@ A 取 {'modalDepth':0,'singlePreference':真,'singleState':空,'singleDeferredSh
         然
         # Admit own argv before publishing/showing, so reentrant external opens cannot displace it.
         若 交果 == 'local' 且 (参数 其 量) > 0 则 入队 参数 0. 然
-        若 单态['owner'] 且 非 (单例 其 发布 单态 (A 其 查 'window')) 则 单态['error'] 取 'Single-instance window publication failed.'. 然
+        若 单态['owner'] 且 非 (单例 其 发布 单态 (A 其 查 'window')) 则 单态 其 增 'error' 'Single-instance window publication failed.'. 然
         A 其 增 'singleDeferredShow' 假.
         窗 其 结果 ((窗 其 ShowWindow) 其 调用 [(A 其 查 'window'),5]).
         窗 其 结果 ((窗 其 UpdateWindow) 其 调用 [(A 其 查 'window')]).

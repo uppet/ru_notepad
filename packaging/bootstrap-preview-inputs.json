@@ -15,7 +15,7 @@
     },
     "docs/bootstrap-llvm-preview.md": {
       "before": null,
-      "after": "e304e5b11aa163f0781d025b0691f4c16f15ec6880843ffa503bfceaf47d5862"
+      "after": "0383231c0b4631df0b75c0f63b09500293af496d3614319401e926065ee98e85"
     },
     "docs/recent-files.md": {
       "before": null,
@@ -31,7 +31,7 @@
     },
     "src/main.ru": {
       "before": "3dcb97ca641f2fb8068785517aedcbbda6d3c65ca179683601f76508d71dd734",
-      "after": "6024343ff260703a94758598289068dcd4c22212b4ea6e9f4a546bd7d91c807f"
+      "after": "a18f370e34a70c4a2caa2437c4b7f1ee96de55d016eb212b0905a3592e9160eb"
     },
     "src/recent_files.ru": {
       "before": null,
@@ -159,11 +159,11 @@
     },
     "src/single_instance.ru": {
       "before": null,
-      "after": "d77f656640d3af6ae563c8a88b60658c39d86155f47035c720371a4aa6e90be3"
+      "after": "451ade6e9779bdcd46fef638feafe51c86e7a7f9f9708179aa085727fa5b51d4"
     },
     "packaging/application-native-oracle.json": {
       "before": null,
-      "after": "f17ee57e7869cdcb5eeab995ed0db88bc38cbfe2be8e430049c04dd2413ddabe"
+      "after": "e79244a690a93b791192b34d21b84de4bad7001a7ae0294276f9a827391b7c38"
     },
     "locales/instance_tabs.json": {
       "before": null,
@@ -200,6 +200,18 @@
     "tests/test_bootstrap_receipt_integration.py": {
       "before": null,
       "after": "5093eeb2740cf670e786466c6f353884ef8b8e0ec5bbb1f00365a1bf112fc190"
+    },
+    "tests/single_instance_native.ru": {
+      "before": null,
+      "after": "6c1ed73748a520ca7d8fbc8218a5bf5f26be239c39daeec23d79791b89dc4c90"
+    },
+    "tools/test_single_instance_state.py": {
+      "before": null,
+      "after": "ab045a06d607d556633f7f21dfaf36b13e7ba597223e628ea1d61185aa2877ba"
+    },
+    ".github/workflows/windows.yml": {
+      "before": "f82e3e45e0cf4f0522fdd6d2a516e6ec91cc0a000fbff503ca954f0e37dfaf57",
+      "after": "0680b6b9a3ce69b512387a2bdaf11ea5a131dd8965b877b3e56d9fc50ab684af"
     }
   }
 }

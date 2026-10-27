@@ -79,20 +79,20 @@ _名称 取 'RuNotepad.SingleInstance.v1'.
     名 取 密 其 UTF16 ('Local\\'+态['property']+'.'+态['identity']).
     果 取 _CreateMutexW 其 调用 [空,0,名]. 名 其 关闭.
     柄 取 窗 其 结果 果.
-    若 柄 其 为空 则 态['error'] 取 'Single-instance mutex unavailable: '+((果 其 错误码) 为 句). 得 假. 然
+    若 柄 其 为空 则 态 其 增 'error' ('Single-instance mutex unavailable: '+((果 其 错误码) 为 句)). 得 假. 然
     若 果 其 错误码 == 183 则 _CloseHandle 其 调用 [柄]. 得 假. 然
-    态['mutex'] 取 柄. 态['owner'] 取 真. 得 真.
+    态 其 增 'mutex' 柄. 态 其 增 'owner' 真. 得 真.
 法
 算 准备 启用 为 事实:
     态 取 {'enabled':启用,'owner':假,'mutex':空,'identity':'','window':空,'error':'','property':_名称}.
     若 非 启用 则 得 态. 然
     试
         后缀 取 设 其 命名空间.
-        若 后缀 != '' 则 态['property'] 取 _名称+'.test.'+后缀. 然
-        态['identity'] 取 _身份 (((_GetCurrentProcessId 其 调用 []) 其 值) 其 数).
+        若 后缀 != '' 则 态 其 增 'property' (_名称+'.test.'+后缀). 然
+        态 其 增 'identity' (_身份 (((_GetCurrentProcessId 其 调用 []) 其 值) 其 数)).
         _占用 态.
     救 原因
-        态['enabled'] 取 假. 态['error'] 取 原因 为 句.
+        态 其 增 'enabled' 假. 态 其 增 'error' (原因 为 句).
     终
     得 态.
 法
@@ -101,15 +101,15 @@ _名称 取 'RuNotepad.SingleInstance.v1'.
     名 取 密 其 UTF16 态['property'].
     果 取 _SetProp 其 调用 [窗口,名,(P 其 值 1)]. 名 其 关闭.
     若 (果 其 值) 其 为空 则 得 假. 然
-    态['window'] 取 窗口. 得 真.
+    态 其 增 'window' 窗口. 得 真.
 法
 作 关闭 态:
     若 非 (态['window'] == 空) 则
         名 取 密 其 UTF16 态['property']. _RemoveProp 其 调用 [态['window'],名]. 名 其 关闭.
-        态['window'] 取 空.
+        态 其 增 'window' 空.
     然
-    若 非 (态['mutex'] == 空) 则 _CloseHandle 其 调用 [态['mutex']]. 态['mutex'] 取 空. 然
-    态['owner'] 取 假.
+    若 非 (态['mutex'] == 空) 则 _CloseHandle 其 调用 [态['mutex']]. 态 其 增 'mutex' 空. 然
+    态 其 增 'owner' 假.
 为
 算 _目标 态:
     类 取 密 其 UTF16 'RuNotepad.Main.0.1'. 名 取 密 其 UTF16 态['property'].

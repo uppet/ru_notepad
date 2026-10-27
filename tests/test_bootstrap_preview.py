@@ -358,8 +358,8 @@ class PreviewContracts(unittest.TestCase):
             return build.verify_proof(proof,**kwargs)
         with patch.object(recent_fixtures,'validate_toolchain'),patch.object(recent_fixtures,'verify_proof',side_effect=verify_fields) as verifier:
             recent_fixtures.validate_report(report,app,compiler,dependencies)
-            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16, 'single_instance_policy':39, 'single_instance_settings_native':11, 'app_tabs_native':53})
-            self.assertEqual(verifier.call_count,9)
+            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16, 'single_instance_policy':39, 'single_instance_settings_native':11, 'app_tabs_native':53, 'single_instance_native':15})
+            self.assertEqual(verifier.call_count,10)
             for schema in ('ru-notepad-bootstrap-editor-fixtures-v1', 'ru-notepad-bootstrap-editor-fixtures-v2'):
                 bad=copy.deepcopy(report);bad['schema']=schema
                 with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)
@@ -405,9 +405,10 @@ class PreviewContracts(unittest.TestCase):
                         'python editor/tools/test_package.py -v',
                         'python editor/tools/test_gui_instance_tabs.py -v',
                         'python editor/tools/test_i18n.py --catalog-only',
-                        'python editor/tools/test_i18n_models.py'):
+                        'python editor/tools/test_i18n_models.py',
+                        'python editor/tools/test_single_instance_state.py --ru-root language --output "$env:PREVIEW_OUTPUT/instance-state-controls"'):
             self.assertIn(command+'\n          if ($LASTEXITCODE) { exit $LASTEXITCODE }',body)
-        self.assertEqual(body.count('if ($LASTEXITCODE)'),6)
+        self.assertEqual(body.count('if ($LASTEXITCODE)'),7)
 
     def test_recent_fixtures_require_exact_individual_assertions_and_total(self):
         good=b'PASS: a\nPASS: b\nTOTAL PASS: 2\n'
