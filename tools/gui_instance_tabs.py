@@ -88,7 +88,168 @@ def _wait(api,process,predicate,description,timeout=30,dialogs=False):
     raise RuntimeError('Timed out: '+description)
 
 
-def _button(api,process,identifier,timeout=10,exclude=None):
+def _owned_pid(api,process_id,hwnd):
+    """Observation may include hidden HWNDs; ownership does not imply visible."""
+    actual=wintypes.DWORD()
+    if not api.user.GetWindowThreadProcessId(hwnd,ctypes.byref(actual)) or actual.value!=process_id:
+        raise RuntimeError('Observed HWND does not belong to the fixture process')
+    return actual.value
+
+
+def _modal_observation(api,process,identifier):
+    """Bounded read-only owned-window snapshot, never a modal success oracle."""
+    result={'expected_pid':process.pid,'requested_button':identifier,'windows':[]}
+    try:
+        u=api.user
+        u.GetWindowTextW.argtypes=[wintypes.HWND,wintypes.LPWSTR,ctypes.c_int]
+        u.GetWindowTextW.restype=ctypes.c_int
+        u.IsWindowEnabled.argtypes=[wintypes.HWND];u.IsWindowEnabled.restype=wintypes.BOOL
+        u.GetWindow.argtypes=[wintypes.HWND,wintypes.UINT];u.GetWindow.restype=wintypes.HWND
+        for hwnd,kind,visible in api.windows(process.pid)[:16]:
+            _owned_pid(api,process.pid,hwnd)
+            caption=ctypes.create_unicode_buffer(257)
+            u.GetWindowTextW(hwnd,caption,len(caption))
+            actual_pid=wintypes.DWORD();u.GetWindowThreadProcessId(hwnd,ctypes.byref(actual_pid))
+            owner=u.GetWindow(hwnd,4)  # GW_OWNER; never follow it for caption/control reads.
+            owner_pid=wintypes.DWORD()
+            if owner:u.GetWindowThreadProcessId(owner,ctypes.byref(owner_pid))
+            row={'hwnd':int(hwnd),'pid':actual_pid.value,'owner_hwnd':int(owner or 0),
+                 'owner_pid':owner_pid.value,'class':kind[:128],'visible':bool(visible),
+                 'enabled':bool(u.IsWindowEnabled(hwnd)),'caption':caption.value[:256],'buttons':{}}
+            result['windows'].append(row)
+            if kind=='#32770':
+                for key in (1,2,6,7):
+                    button=u.GetDlgItem(hwnd,key)
+                    item={'present':bool(button),'visible':False,'enabled':False}
+                    if button:
+                        _owned_pid(api,process.pid,button)
+                        item.update(visible=bool(u.IsWindowVisible(button)),enabled=bool(u.IsWindowEnabled(button)))
+                    row['buttons'][str(key)]=item
+    except Exception as exc:
+        result['observation_error']=type(exc).__name__
+    return result
+
+
+def _registry_observation(registry):
+    # Only this run's generated isolated namespace; no normal user preference reads.
+    prefix='Software\\ru_notepad\\SingleInstanceTests\\gui_'
+    if not registry.startswith(prefix) or len(registry[len(prefix):])!=32 or any(c not in '0123456789abcdef' for c in registry[len(prefix):]):
+        return {'observation_error':'invalid isolated namespace'}
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,registry) as key:
+            value,kind=winreg.QueryValueEx(key,'SingleInstance')
+        return {'type':kind,'value':value if type(value) is int else None,
+                'value_is_integer':type(value) is int}
+    except Exception as exc:
+        return {'observation_error':type(exc).__name__,'winerror':getattr(exc,'winerror',None)}
+
+
+def _toggle_preference(api,process,hwnd,registry,observations,label):
+    observations[label+' registry before']=_registry_observation(registry)
+    try:
+        _post_command(api,hwnd,805)
+        _information_button(api,process,hwnd,observations=observations,label=label)
+    finally:
+        observations[label+' registry after']=_registry_observation(registry)
+
+
+def _information_shape(dialog,owner,expected_bodies):
+    """Only the command-805 informational box; never a generic ID2=OK alias."""
+    if (dialog['owner']!=owner or dialog['caption']!='ru_notepad' or
+            not dialog['visible'] or not dialog['enabled']):return None
+    controls=dialog['controls']
+    buttons=[c for c in controls if c['class']=='Button']
+    # Count hidden/disabled buttons too: a second actionable choice is not MB_OK.
+    if len(buttons)!=1:return None
+    button=buttons[0]
+    if button['id'] not in (1,2) or button['control_type'] not in (0,1) or not button['visible'] or not button['enabled']:return None
+    if any(c['class'] not in ('Static','Button') for c in controls):return None
+    if any(c['class']=='Static' and c['control_type'] not in (0,1,2,3,11,12,14) for c in controls):return None
+    # SS_ICON/SS_BITMAP are decorative images, not text payloads. Unknown static types fail closed.
+    texts=[c['text'] for c in controls if c['class']=='Static' and c['control_type'] in (0,1,2,11,12) and c['visible'] and c['text']]
+    if len(texts)!=1 or texts[0] not in expected_bodies:return None
+    return button['hwnd']
+
+
+def _information_text(api,hwnd,deadline):
+    # Read control text with a bounded message, never an unbounded GetDlgItemText.
+    remaining=int((deadline-time.monotonic())*1000)
+    if remaining<=0:raise RuntimeError('Timed out: command805 information box')
+    buffer=ctypes.create_unicode_buffer(2049);copied=ctypes.c_size_t()
+    if not api.user.SendMessageTimeoutW(hwnd,0x000D,len(buffer),ctypes.addressof(buffer),3,
+                                       min(100,remaining),ctypes.byref(copied)):
+        raise RuntimeError('Information box text query did not respond')
+    if copied.value>=2048:raise RuntimeError('Information box text exceeds bound')
+    return buffer.value
+
+
+def _information_dialog(api,process,dialog,deadline):
+    u=api.user
+    u.GetWindow.argtypes=[wintypes.HWND,wintypes.UINT];u.GetWindow.restype=wintypes.HWND
+    u.GetDlgCtrlID.argtypes=[wintypes.HWND];u.GetDlgCtrlID.restype=ctypes.c_int
+    u.GetWindowLongPtrW.argtypes=[wintypes.HWND,ctypes.c_int];u.GetWindowLongPtrW.restype=ctypes.c_ssize_t
+    u.IsWindowEnabled.argtypes=[wintypes.HWND];u.IsWindowEnabled.restype=wintypes.BOOL
+    _owned_pid(api,process.pid,dialog)
+    controls=[];errors=[]
+    @api.callback_type
+    def visit(child,_):
+        try:
+            if len(controls)>=32:raise RuntimeError('Information dialog control inventory exceeds bound')
+            _owned_pid(api,process.pid,child)
+            name=ctypes.create_unicode_buffer(128)
+            if not u.GetClassNameW(child,name,len(name)):raise RuntimeError('Cannot read information control class')
+            style=int(u.GetWindowLongPtrW(child,-16))
+            controls.append({'hwnd':int(child),'class':name.value,'id':u.GetDlgCtrlID(child),
+                             'control_type':style & (31 if name.value=='Static' else 15),
+                             'visible':bool(u.IsWindowVisible(child)),'enabled':bool(u.IsWindowEnabled(child)),
+                             'text':''})
+            return True
+        except Exception as exc:
+            errors.append(exc);return False
+    u.EnumChildWindows(dialog,visit,0)
+    if errors:raise errors[0]
+    for control in controls:
+        if control['visible'] and (control['class']=='Button' or
+                (control['class']=='Static' and control['control_type'] in (0,1,2,11,12))):
+            control['text']=_information_text(api,control['hwnd'],deadline)
+    return {'owner':int(u.GetWindow(dialog,4) or 0),'caption':_information_text(api,dialog,deadline),
+            'visible':bool(u.IsWindowVisible(dialog)),'enabled':bool(u.IsWindowEnabled(dialog)),
+            'controls':controls}
+
+
+def _information_button(api,process,owner,timeout=10,*,observations=None,label=None):
+    # MessageBox documents the return IDOK, not the internal child ID. Our
+    # three real Windows diagnostics observed only child ID2 in this box.
+    # Single-button dialogs can use IDCANCEL to support Esc. This exception
+    # is restricted to exact command805 text/owner/one-button shape; the generic
+    # save/cancel/Yes/No helper below retains its original exact ID contract.
+    catalog=json.loads((Path(__file__).resolve().parents[1]/'locales'/'instance_tabs.json').read_text(encoding='utf-8'))
+    expected_bodies=set(catalog['instance.next_launch'].values())
+    deadline=time.monotonic()+timeout
+    try:
+        while time.monotonic()<deadline:
+            if process.poll() is not None:raise RuntimeError('GUI exited: command805 information box')
+            ds=[h for h,c,v in api.windows(process.pid) if c=='#32770' and v]
+            if len(ds)==1:
+                dialog=_information_dialog(api,process,ds[0],deadline)
+                if observations is not None:observations['information '+str(label or '805')]=dialog
+                button=_information_shape(dialog,owner,expected_bodies)
+                if button is not None:
+                    api.verify_owned_handles(process.pid,owner,ds[0],button)
+                    if time.monotonic()>=deadline:break
+                    if not api.user.PostMessageW(button,0xF5,0,0):raise ctypes.WinError(ctypes.get_last_error())
+                    _wait(api,process,lambda:not api.user.IsWindowVisible(ds[0]),'clicked dialog dismissed',timeout,dialogs=True)
+                    return ds[0]
+            time.sleep(.01)
+        raise RuntimeError('Timed out: command805 information box')
+    except Exception:
+        if observations is not None:
+            observations['modal '+str(label or '805')]=_modal_observation(api,process,1)
+        raise
+
+
+def _button(api,process,identifier,timeout=10,exclude=None,*,observations=None,label=None):
     found=[]
     def find():
         ds=[h for h,c,v in api.windows(process.pid) if c=='#32770' and v and h!=exclude]
@@ -97,9 +258,16 @@ def _button(api,process,identifier,timeout=10,exclude=None):
         if child and api.user.IsWindowVisible(child):
             api.verify_owned_handles(process.pid,ds[0],child);found.append((ds[0],child));return True
         return False
-    _wait(api,process,find,'actual modal button '+str(identifier),timeout,dialogs=True)
-    if not api.user.PostMessageW(found[0][1],0xF5,0,0):raise ctypes.WinError(ctypes.get_last_error())
-    _wait(api,process,lambda:not api.user.IsWindowVisible(found[0][0]),'clicked dialog dismissed',timeout,dialogs=True)
+    try:
+        _wait(api,process,find,'actual modal button '+str(identifier),timeout,dialogs=True)
+        if observations is not None:
+            observations['modal '+str(label or identifier)+' found']=_modal_observation(api,process,identifier)
+        if not api.user.PostMessageW(found[0][1],0xF5,0,0):raise ctypes.WinError(ctypes.get_last_error())
+        _wait(api,process,lambda:not api.user.IsWindowVisible(found[0][0]),'clicked dialog dismissed',timeout,dialogs=True)
+    except Exception:
+        if observations is not None:
+            observations['modal '+str(label or identifier)]=_modal_observation(api,process,identifier)
+        raise
     return found[0][0]
 
 
@@ -120,35 +288,204 @@ def _post_command(api,hwnd,command):
 def _tabs(api,hwnd):return api.scalar(api.control(hwnd,10),0x1304)
 
 
-def _readiness(api,hwnd):
-    # A registered tab is not a completed open: production keeps busy, its
-    # editors read-only and the tab strip disabled until EndWork refreshes UI.
-    tabs=api.control(hwnd,10);editor=api.editor(hwnd)
-    api.user.IsWindowEnabled.argtypes=[wintypes.HWND]
-    api.user.IsWindowEnabled.restype=wintypes.BOOL
-    return {'tab_count':_tabs(api,hwnd),'title':api.text(hwnd),
-            'status':api.text(api.control(hwnd,11)),
-            'tabs_enabled':bool(api.user.IsWindowEnabled(tabs)),
-            'editor_enabled':bool(api.user.IsWindowEnabled(editor)),
-            'cancel_visible':bool(api.user.IsWindowVisible(api.control(hwnd,901))),
-            'editor_readonly':api.scalar(editor,2140)}
+def _readiness_handle(api,handle,pid=None):
+    """Read-only HWND identity. Missing dynamic editors are not fixed controls."""
+    u=api.user
+    u.IsWindow.argtypes=[wintypes.HWND];u.IsWindow.restype=wintypes.BOOL
+    u.IsWindowEnabled.argtypes=[wintypes.HWND];u.IsWindowEnabled.restype=wintypes.BOOL
+    u.GetParent.argtypes=[wintypes.HWND];u.GetParent.restype=wintypes.HWND
+    result={'hwnd':int(handle),'exists':bool(u.IsWindow(handle))}
+    if not result['exists']:return result
+    actual=wintypes.DWORD();thread=u.GetWindowThreadProcessId(handle,ctypes.byref(actual))
+    if not thread or (pid is not None and actual.value!=pid):
+        if not u.IsWindow(handle):return {'hwnd':int(handle),'exists':False}
+        raise RuntimeError('Readiness HWND belongs to another process or has no valid owner')
+    name=ctypes.create_unicode_buffer(128)
+    if not u.GetClassNameW(handle,name,len(name)):
+        if not u.IsWindow(handle):return {'hwnd':int(handle),'exists':False}
+        raise RuntimeError('Cannot identify live readiness HWND class')
+    result.update(pid=actual.value,**{'class':name.value},parent=int(u.GetParent(handle) or 0),
+                  visible=bool(u.IsWindowVisible(handle)),enabled=bool(u.IsWindowEnabled(handle)))
+    return result
+
+
+def _fixed_readiness(api,hwnd,pid,previous=None):
+    main=_readiness_handle(api,hwnd,pid)
+    if not main['exists'] or main['class']!=ci.MAIN_CLASS or not main['visible']:
+        raise RuntimeError('Fixed readiness main window disappeared or changed')
+    handles={};states={}
+    for identifier,kind in ((10,'systabcontrol32'),(11,'static'),(901,'button')):
+        handle=api.control(hwnd,identifier)
+        if previous is not None and handle!=previous[identifier]:
+            raise RuntimeError('Fixed readiness control identity changed')
+        state=_readiness_handle(api,handle,pid)
+        if not state['exists'] or state['class'].lower()!=kind or state['parent']!=hwnd:
+            raise RuntimeError('Fixed readiness control disappeared or changed')
+        handles[identifier]=handle;states[identifier]=state
+    return handles,states
+
+
+def _visible_readiness_editors(api,hwnd,pid):
+    candidates=[];errors=[];unstable=[False];count=[0]
+    @api.callback_type
+    def visit(child,_):
+        try:
+            count[0]+=1
+            if count[0]>128:raise RuntimeError('Readiness child inventory exceeds bound')
+            state=_readiness_handle(api,child,pid)
+            if not state['exists']:unstable[0]=True;return True
+            if state['class']=='Scintilla':
+                if state['parent']!=hwnd:raise RuntimeError('Readiness editor has the wrong parent')
+                if state['visible']:candidates.append(state)
+            return True
+        except Exception as exc:errors.append(exc);return False
+    api.user.EnumChildWindows(hwnd,visit,0)
+    if errors:raise errors[0]
+    return candidates,unstable[0]
+
+
+def _readiness(api,hwnd,expected_count=None,pid=None):
+    # Fixed controls must always be valid. Inspect them before obtaining a
+    # dynamic editor handle; close operations destroy/switch those HWNDs.
+    if pid is None:
+        main=_readiness_handle(api,hwnd)
+        if not main['exists']:raise RuntimeError('Fixed readiness main window disappeared')
+        pid=main['pid']
+    fixed,states=_fixed_readiness(api,hwnd,pid)
+    observed={'tab_count':api.scalar(fixed[10],0x1304),'title':api.text(hwnd),
+              'status':api.text(fixed[11]),'tabs_enabled':states[10]['enabled'],
+              'cancel_visible':states[901]['visible'],'editor_enabled':False,
+              'editor_readonly':None,'snapshot_stable':False}
+    def pending(reason,candidates=None):
+        observed['transient_reason']=reason
+        if candidates is not None:
+            observed['editor_candidate_count']=len(candidates)
+            observed['editor_candidates']=[item['hwnd'] for item in candidates]
+        _fixed_readiness(api,hwnd,pid,fixed)  # A missing fixed window is never transient.
+        return observed
+    if ((expected_count is not None and observed['tab_count']!=expected_count) or
+            not observed['tabs_enabled'] or observed['cancel_visible'] or
+            ci.status_startswith(observed['status'],'status.opening')):
+        return pending('fixed-state-not-ready')
+    candidates,changed=_visible_readiness_editors(api,hwnd,pid)
+    if changed or len(candidates)!=1:return pending('editor-inventory-not-stable',candidates)
+    before=candidates[0];editor=before['hwnd']
+    immediate=_readiness_handle(api,editor,pid)
+    if (not immediate['exists'] or immediate.get('class')!='Scintilla' or
+            immediate.get('parent')!=hwnd or not immediate.get('visible')):
+        return pending('editor-changed-before-query',candidates)
+    try:
+        readonly=api.scalar(editor,2140)
+    except Exception:
+        # Never catch by error-string or turn a still-valid editor timeout into
+        # polling. Only directly observed destruction/replacement permits it.
+        after=_readiness_handle(api,editor,pid)
+        current,_=_visible_readiness_editors(api,hwnd,pid)
+        replaced=(not after['exists'] or after.get('class')!='Scintilla' or
+                  after.get('parent')!=hwnd or
+                  (not after.get('visible') and len(current)==1 and current[0]['hwnd']!=editor))
+        if replaced:return pending('editor-replaced-during-query',current)
+        raise
+    _fixed_readiness(api,hwnd,pid,fixed)
+    final_count=api.scalar(fixed[10],0x1304)
+    final_title=api.text(hwnd);final_status=api.text(fixed[11])
+    _,final_states=_fixed_readiness(api,hwnd,pid,fixed)
+    current,changed=_visible_readiness_editors(api,hwnd,pid)
+    after=_readiness_handle(api,editor,pid)
+    if (changed or final_count!=observed['tab_count'] or len(current)!=1 or
+            current[0]['hwnd']!=editor or not after['exists'] or after.get('class')!='Scintilla' or
+            after.get('parent')!=hwnd or not after.get('visible')):
+        return pending('editor-epoch-changed',current)
+    if (final_states[10]['enabled']!=observed['tabs_enabled'] or
+            final_states[901]['visible']!=observed['cancel_visible'] or
+            final_title!=observed['title'] or final_status!=observed['status']):
+        observed.update(tabs_enabled=final_states[10]['enabled'],cancel_visible=final_states[901]['visible'],
+                        title=final_title,status=final_status)
+        return pending('fixed-epoch-changed',current)
+    observed.update(editor_enabled=after['enabled'],editor_readonly=readonly,
+                    editor_candidate_count=1,editor_candidates=[editor],snapshot_stable=True)
+    return observed
 
 
 def _is_ready(observed,count,title=None):
-    return (observed['tab_count']==count and observed['tabs_enabled'] and
+    return (observed.get('snapshot_stable') is True and observed['tab_count']==count and observed['tabs_enabled'] and
             observed['editor_enabled'] and not observed['cancel_visible'] and
             observed['editor_readonly']==0 and
             not ci.status_startswith(observed['status'],'status.opening') and
             (title is None or observed['title']==title))
 
 
+def _scalar_window_state(api,process,main,target):
+    """No synchronous messages: distinguish stale HWND from a nonresponsive owner."""
+    result={'expected_pid':process.pid,'main_hwnd':int(main),'target_hwnd':int(target)}
+    try:
+        result['process_exit_code']=process.poll()
+        u=api.user
+        u.IsWindow.argtypes=[wintypes.HWND];u.IsWindow.restype=wintypes.BOOL
+        u.IsWindowEnabled.argtypes=[wintypes.HWND];u.IsWindowEnabled.restype=wintypes.BOOL
+        result['target_exists']=bool(u.IsWindow(target))
+        pid=wintypes.DWORD();tid=u.GetWindowThreadProcessId(target,ctypes.byref(pid))
+        result.update(target_pid=pid.value,target_thread=int(tid),target_owned=pid.value==process.pid,
+                      target_visible=bool(u.IsWindowVisible(target)),target_enabled=bool(u.IsWindowEnabled(target)))
+        if result['target_exists'] and result['target_owned']:
+            name=ctypes.create_unicode_buffer(128)
+            u.GetClassNameW(target,name,len(name));result['target_class']=name.value
+        main_pid=wintypes.DWORD();main_tid=u.GetWindowThreadProcessId(main,ctypes.byref(main_pid))
+        result.update(main_exists=bool(u.IsWindow(main)),main_pid=main_pid.value)
+        if main_tid and main_pid.value==process.pid:
+            u.GetGUIThreadInfo.argtypes=[ctypes.c_uint32,ctypes.POINTER(_GUIThreadInfo)]
+            u.GetGUIThreadInfo.restype=wintypes.BOOL
+            info=_GUIThreadInfo();info.cbSize=ctypes.sizeof(info)
+            if u.GetGUIThreadInfo(main_tid,ctypes.byref(info)):
+                result['gui_thread']={'flags':info.flags,'active':int(info.hwndActive or 0),
+                    'focus':int(info.hwndFocus or 0),'capture':int(info.hwndCapture or 0),
+                    'menu_owner':int(info.hwndMenuOwner or 0)}
+            else:result['gui_thread_error']='GetGUIThreadInfo failed'
+    except Exception as exc:result['observation_error']=type(exc).__name__
+    return result
+
+
+@contextmanager
+def _scalar_failure_evidence(api,process,main,observations,label):
+    original=api.scalar
+    def measured(target,message,wparam=0,lparam=0):
+        # Clear ctypes' thread-local saved error only; the original call and its
+        # unchanged 5000 ms timeout remain the sole operation under measurement.
+        clear=getattr(ctypes,'set_last_error',None)
+        if clear:clear(0)
+        started=time.perf_counter()
+        try:return original(target,message,wparam,lparam)
+        except Exception as original_error:
+            try:
+                get_error=getattr(ctypes,'get_last_error',None)
+                last_error=get_error() if get_error else None
+                elapsed=(time.perf_counter()-started)*1000
+                if observations is not None:
+                    detail={'message':int(message),'target_hwnd':int(target),'wparam':int(wparam),
+                            'declared_timeout_ms':5000,'elapsed_ms':round(elapsed,3),'last_error':last_error}
+                    # Do not record lparam: some queries carry a local buffer pointer.
+                    detail['window']=_scalar_window_state(api,process,main,target)
+                    observations['scalar failure '+label]=detail
+            except Exception as diagnostic_error:
+                original_error.add_note('Scalar failure observation failed: '+type(diagnostic_error).__name__)
+            raise
+    with patch.object(api,'scalar',measured):yield
+
+
 def _wait_ready(api,process,hwnd,count,description,observations=None,title=None):
+    transient_count=0;last_transient=None
     def ready():
-        observed=_readiness(api,hwnd)
+        nonlocal transient_count,last_transient
+        observed=_readiness(api,hwnd,count,process.pid)
+        if not observed['snapshot_stable']:
+            transient_count+=1
+            last_transient={key:observed[key] for key in ('transient_reason','editor_candidate_count','editor_candidates') if key in observed}
+        observed.update(transient_count=transient_count,last_transient=last_transient)
         if observations is not None:observations[description]=observed
         return _is_ready(observed,count,title)
     # Same 30-second wait budget, not an added sleep or a relaxed acceptance.
-    _wait(api,process,ready,description,timeout=30)
+    with _scalar_failure_evidence(api,process,hwnd,observations,description):
+        _wait(api,process,ready,description,timeout=30)
 
 
 @contextmanager
@@ -159,8 +496,11 @@ def _failure_evidence(evidence,result,observations,expected):
         # Diagnostic only, never consumed as a passing acceptance receipt.
         # Preserve partial child/phase records even when run() raises.
         def bounded(value,depth=0):
-            if depth>8:return '[depth limit]'
+            # Bound scalar leaves before container depth so nested menu RECT
+            # coordinates survive without allowing deeper lists/dicts.
+            if value is None or type(value) in (int,float,bool):return value
             if isinstance(value,str):return value[:2048]
+            if depth>8:return '[depth limit]'
             if isinstance(value,dict):return {str(k)[:128]:bounded(v,depth+1) for k,v in list(value.items())[:64]}
             if isinstance(value,(list,tuple)):return [bounded(v,depth+1) for v in value[:64]]
             if value is None or type(value) in (int,float,bool):return value
@@ -219,26 +559,168 @@ def _item_rect(api,process,tabs,index):
         k.CloseHandle(handle)
 
 
-def _context(api,process,hwnd,index,menu_index):
-    u=api.user;tabs=api.control(hwnd,10);rect=_item_rect(api,process,tabs,index)
-    point=wintypes.POINT((rect.left+rect.right)//2,(rect.top+rect.bottom)//2)
-    local=(point.x&0xffff)|((point.y&0xffff)<<16)
-    u.GetCursorPos.argtypes=[ctypes.POINTER(wintypes.POINT)];u.GetCursorPos.restype=wintypes.BOOL
-    u.SetCursorPos.argtypes=[ctypes.c_int,ctypes.c_int];u.SetCursorPos.restype=wintypes.BOOL
-    u.ClientToScreen.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.POINT)];u.ClientToScreen.restype=wintypes.BOOL
-    original=wintypes.POINT()
-    if not u.GetCursorPos(ctypes.byref(original)) or not u.ClientToScreen(tabs,ctypes.byref(point)):raise ctypes.WinError(ctypes.get_last_error())
+# Fixed Win32 widths also keep portable ABI tests meaningful on LP64 Linux.
+class _MouseInput(ctypes.Structure):
+    _fields_=[('dx',ctypes.c_int32),('dy',ctypes.c_int32),('mouseData',ctypes.c_uint32),
+              ('dwFlags',ctypes.c_uint32),('time',ctypes.c_uint32),('dwExtraInfo',ctypes.c_size_t)]
+class _InputValue(ctypes.Union):
+    _fields_=[('mi',_MouseInput)]
+class _Input(ctypes.Structure):
+    _fields_=[('type',ctypes.c_uint32),('value',_InputValue)]
+class _Point(ctypes.Structure):
+    _fields_=[('x',ctypes.c_int32),('y',ctypes.c_int32)]
+class _Rect(ctypes.Structure):
+    _fields_=[('left',ctypes.c_int32),('top',ctypes.c_int32),('right',ctypes.c_int32),('bottom',ctypes.c_int32)]
+class _GUIThreadInfo(ctypes.Structure):
+    _fields_=[('cbSize',ctypes.c_uint32),('flags',ctypes.c_uint32),
+              *[(name,ctypes.c_void_p) for name in ('hwndActive','hwndFocus','hwndCapture','hwndMenuOwner','hwndMoveSize','hwndCaret')],
+              ('rcCaret',_Rect)]
+class _MenuBarInfo(ctypes.Structure):
+    _fields_=[('cbSize',ctypes.c_uint32),('rcBar',_Rect),('hMenu',ctypes.c_void_p),
+              ('hwndMenu',ctypes.c_void_p),('focusFlags',ctypes.c_uint32)]
+
+
+def _menu_api(api):
+    u=api.user
+    signatures={
+        'GetCursorPos':([ctypes.POINTER(_Point)],wintypes.BOOL),
+        'SetCursorPos':([ctypes.c_int,ctypes.c_int],wintypes.BOOL),
+        'ClientToScreen':([wintypes.HWND,ctypes.POINTER(_Point)],wintypes.BOOL),
+        'WindowFromPoint':([_Point],wintypes.HWND),
+        'GetForegroundWindow':([],wintypes.HWND),
+        'SetForegroundWindow':([wintypes.HWND],wintypes.BOOL),
+        'GetAsyncKeyState':([ctypes.c_int],ctypes.c_int16),
+        'SendInput':([ctypes.c_uint32,ctypes.POINTER(_Input),ctypes.c_int],ctypes.c_uint32),
+        'GetGUIThreadInfo':([ctypes.c_uint32,ctypes.POINTER(_GUIThreadInfo)],wintypes.BOOL),
+        'GetMenuBarInfo':([wintypes.HWND,ctypes.c_int32,ctypes.c_int32,ctypes.POINTER(_MenuBarInfo)],wintypes.BOOL),
+        'GetMenuItemCount':([ctypes.c_void_p],ctypes.c_int),
+        'GetMenuItemID':([ctypes.c_void_p,ctypes.c_int],ctypes.c_uint32),
+        'GetMenuState':([ctypes.c_void_p,ctypes.c_uint32,ctypes.c_uint32],ctypes.c_uint32),
+        'GetMenuItemRect':([wintypes.HWND,ctypes.c_void_p,ctypes.c_uint32,ctypes.POINTER(_Rect)],wintypes.BOOL),
+        'GetMenuStringW':([ctypes.c_void_p,ctypes.c_uint32,wintypes.LPWSTR,ctypes.c_int,ctypes.c_uint32],ctypes.c_int),
+        'IsWindow':([wintypes.HWND],wintypes.BOOL)}
+    for name,(args,result) in signatures.items():
+        fn=getattr(u,name);fn.argtypes=args;fn.restype=result
+
+
+def _popup_state(api,process,hwnd):
+    u=api.user;state={'pid':process.pid,'foreground':int(u.GetForegroundWindow() or 0),'popups':[]}
     try:
-        if not u.SetCursorPos(point.x,point.y):raise ctypes.WinError(ctypes.get_last_error())
-        for message,wparam in ((0x204,2),(0x205,0)):
-            if not u.PostMessageW(tabs,message,wparam,local):raise ctypes.WinError(ctypes.get_last_error())
-        _wait(api,process,lambda:any(c=='#32768' and v for _,c,v in api.windows(process.pid)),'actual native tab popup')
-        # Select actual popup item; no direct product close WM_COMMAND is sent.
-        for key in [0x24]+[0x28]*menu_index+[0x0d]:
-            for message,lparam in ((0x100,1),(0x101,0xc0000001)):
-                if not u.PostMessageW(hwnd,message,key,lparam):raise ctypes.WinError(ctypes.get_last_error())
-        _wait(api,process,lambda:not any(c=='#32768' and v for _,c,v in api.windows(process.pid)),'popup selection',dialogs=True)
-    finally:u.SetCursorPos(original.x,original.y)
+        _owned_pid(api,process.pid,hwnd)
+        tid=u.GetWindowThreadProcessId(hwnd,None)
+        info=_GUIThreadInfo();info.cbSize=ctypes.sizeof(info)
+        if not u.GetGUIThreadInfo(tid,ctypes.byref(info)):raise RuntimeError('Cannot query fixture GUI thread')
+        state.update(flags=info.flags,menu_owner=int(info.hwndMenuOwner or 0),focus=int(info.hwndFocus or 0),capture=int(info.hwndCapture or 0))
+        for popup,kind,visible in api.windows(process.pid):
+            if kind!='#32768' or not visible:continue
+            _owned_pid(api,process.pid,popup)
+            row={'hwnd':int(popup),'items':[]};state['popups'].append(row)
+            menu=_MenuBarInfo();menu.cbSize=ctypes.sizeof(menu)
+            if not u.GetMenuBarInfo(popup,-4,0,ctypes.byref(menu)) or not menu.hMenu:
+                raise RuntimeError('Cannot inspect actual popup HMENU')
+            row['hmenu']=int(menu.hMenu);count=u.GetMenuItemCount(menu.hMenu);row['count']=count
+            if count!=6:raise RuntimeError('Tab popup item inventory differs')
+            for index in range(count):
+                rect=_Rect();text=ctypes.create_unicode_buffer(257)
+                # NULL asks Windows to locate this displayed popup's menu window.
+                if not u.GetMenuItemRect(None,menu.hMenu,index,ctypes.byref(rect)):
+                    raise RuntimeError('Cannot inspect popup item rectangle')
+                length=u.GetMenuStringW(menu.hMenu,index,text,len(text),0x400)
+                if length<=0 or length>=256:raise RuntimeError('Popup item label is missing or unbounded')
+                row['items'].append({'id':int(u.GetMenuItemID(menu.hMenu,index)),
+                    'state':int(u.GetMenuState(menu.hMenu,index,0x400)),'label':text.value,
+                    'rect':[rect.left,rect.top,rect.right,rect.bottom]})
+    except Exception as exc:state['observation_error']=str(exc)[:256]
+    return state
+
+
+def _popup_target(state,hwnd,index,labels):
+    if state.get('observation_error') or state.get('menu_owner')!=hwnd or not state.get('flags',0)&4:
+        return None
+    if len(state['popups'])!=1:return None
+    popup=state['popups'][0]
+    if popup.get('count')!=6 or [item['id'] for item in popup['items']]!=list(range(1300,1306)):return None
+    if any(item['label'] not in labels[i] for i,item in enumerate(popup['items'])):return None
+    target=popup['items'][index];left,top,right,bottom=target['rect']
+    if target['state']==0xffffffff or target['state']&3 or right<=left or bottom<=top:return None
+    return popup['hwnd'],_Point((left+right)//2,(top+bottom)//2)
+
+
+def _physical_click(api,process,main,target,point,right,pending):
+    u=api.user
+    if u.GetForegroundWindow()!=main:raise RuntimeError('Refusing input outside foreground fixture')
+    _owned_pid(api,process.pid,main);_owned_pid(api,process.pid,target)
+    if not u.SetCursorPos(point.x,point.y):raise RuntimeError('Cannot position mouse over fixture')
+    # Recheck after positioning; never inject into an occluding/foreign window.
+    if u.WindowFromPoint(point)!=target or u.GetForegroundWindow()!=main:
+        raise RuntimeError('Mouse target is not the owned fixture control')
+    down,up=(8,16) if right else (2,4)
+    inputs=(_Input*2)();inputs[0].value.mi.dwFlags=down;inputs[1].value.mi.dwFlags=up
+    # Track before the API: a partial/uncertain batch may have pressed our button.
+    pending.add(up)
+    sent=u.SendInput(2,inputs,ctypes.sizeof(_Input))
+    if sent==0:pending.remove(up)  # No event was inserted, so this test pressed nothing.
+    if sent!=2:raise RuntimeError('SendInput did not deliver both fixture mouse events')
+    pending.remove(up)
+
+
+def _context(api,process,hwnd,index,menu_index,observations=None):
+    _menu_api(api);u=api.user
+    if u.GetAsyncKeyState(1)&0x8000 or u.GetAsyncKeyState(2)&0x8000:
+        raise RuntimeError('Refusing mouse test while a pre-existing button is held')
+    tabs=api.control(hwnd,10);rect=_item_rect(api,process,tabs,index)
+    point=_Point((rect.left+rect.right)//2,(rect.top+rect.bottom)//2)
+    original=_Point();previous=u.GetForegroundWindow();pending=set()
+    if not u.GetCursorPos(ctypes.byref(original)) or not u.ClientToScreen(tabs,ctypes.byref(point)):
+        raise RuntimeError('Cannot locate owned tab on screen')
+    catalog=json.loads((Path(__file__).resolve().parents[1]/'locales'/'instance_tabs.json').read_text(encoding='utf-8'))
+    labels=[set(catalog['tab.close_'+name].values()) for name in ('current','others','left','right','saved','all')]
+    trace=[]
+    if observations is not None:observations['popup '+str(index)+' '+str(menu_index)]=trace
+    def observe(stage):
+        state=_popup_state(api,process,hwnd)
+        row={'stage':stage,**state}
+        if trace and trace[-1]['stage']==stage:trace[-1]=row
+        elif len(trace)<16:trace.append(row)
+        return state
+    try:
+        if previous!=hwnd and not u.SetForegroundWindow(hwnd):raise RuntimeError('Cannot foreground owned fixture')
+        observe('before right click')
+        _physical_click(api,process,hwnd,tabs,point,True,pending)  # Normal DOWN+UP, no held-button workaround.
+        selected=[];saw_popup=[False]
+        def popup_ready():
+            state=observe('after right click')
+            if state['popups']:saw_popup[0]=True
+            elif saw_popup[0]:raise RuntimeError('Popup disappeared after normal right-button release')
+            target=_popup_target(state,hwnd,menu_index,labels)
+            if target:selected.append(target);return True
+            return False
+        _wait(api,process,popup_ready,'actual native tab popup with exact items')
+        popup,point=selected[0]
+        # Capture the same visible menu immediately before input, not a stale item rectangle.
+        target=_popup_target(observe('before left click'),hwnd,menu_index,labels)
+        if target is None or target[0]!=popup:raise RuntimeError('Popup disappeared before ordinary selection')
+        _physical_click(api,process,hwnd,popup,target[1],False,pending)
+        _wait(api,process,lambda:not any(c=='#32768' and v for _,c,v in api.windows(process.pid)),
+              'popup selection',dialogs=True)
+        observe('after left click')
+    finally:
+        # Only release buttons this test may have pressed; never touch pre-held user keys.
+        cleanup_errors=[]
+        for up in pending:
+            release=(_Input*1)();release[0].value.mi.dwFlags=up
+            if u.SendInput(1,release,ctypes.sizeof(_Input))!=1:
+                cleanup_errors.append('Could not release fixture-injected mouse button')
+        if not u.SetCursorPos(original.x,original.y):cleanup_errors.append('Could not restore original cursor')
+        if previous and previous!=hwnd and u.IsWindow(previous):
+            if not u.SetForegroundWindow(previous) and u.GetForegroundWindow()!=previous:
+                cleanup_errors.append('Could not restore original foreground window')
+        if cleanup_errors:
+            if observations is not None:observations['popup input cleanup errors']=cleanup_errors
+            import sys
+            original_error=sys.exception()
+            if original_error is not None:original_error.add_note('; '.join(cleanup_errors))
+            else:raise RuntimeError('; '.join(cleanup_errors))
 
 
 def run(api,binary_dir,fixtures,evidence):
@@ -318,11 +800,11 @@ def run(api,binary_dir,fixtures,evidence):
             ready(p,h,3,'duplicate activation',paths[0].name+' · ru_notepad')
             if _tabs(api,h)!=3:raise RuntimeError('Duplicate path created tab')
             checks['duplicate_activates_existing']=True
-            _post_command(api,h,805);_button(api,p,1)
+            _toggle_preference(api,p,h,registry,observations,'disable')
             if not persisted(0):raise RuntimeError('Disable DWORD missing')
             child('disabled',[paths[2]],True,lambda cp,ch:child_documents(cp,ch,paths[2],'disabled file'))
             checks['persistent_disable_creates_window']=True
-            _post_command(api,h,805);_button(api,p,1)
+            _toggle_preference(api,p,h,registry,observations,'reenable')
             if not persisted(1):raise RuntimeError('Enable DWORD missing')
             child('reenabled',[paths[2]],False);ready(p,h,4,'reenabled handoff')
             documents(h,{x.name:x.read_bytes() for x in paths[:3]},'reenabled exact documents')
@@ -341,7 +823,7 @@ def run(api,binary_dir,fixtures,evidence):
                     saved_expected=(api.text(h),api.editor_bytes(h))
                 before=_snapshot(api,h)
                 api.command(h,111)  # active 3, deliberately not clicked tab 2
-                _context(api,p,h,2,menu_index)
+                _context(api,p,h,2,menu_index,observations)
                 count={'current':4,'others':1,'left':3,'right':3,'saved':1,'all':1}[mode]
                 ready(p,h,count,'menu '+mode);actual=_snapshot(api,h)
                 names={'current':[0,2,3],'others':[1],'left':[1,2,3],'right':[0,1],'saved':[],'all':[]}[mode]
@@ -364,7 +846,7 @@ def run(api,binary_dir,fixtures,evidence):
             for _ in range(3):api.command(h,111)
             editor=api.editor(h)
             api.user.PostMessageW(editor,0x102,ord('x'),1);_wait(api,p,lambda:api.scalar(editor,2159)==1,'dirty edit')
-            before=_snapshot(api,h);_context(api,p,h,2,5);_button(api,p,2)
+            before=_snapshot(api,h);_context(api,p,h,2,5,observations);_button(api,p,2,observations=observations,label='dirty cancel')
             ready(p,h,5,'cancel dismissal and unlocked documents')
             if _snapshot(api,h)!=before:raise RuntimeError('Cancel partially closed documents')
             checks['dirty_batch_cancel_preserves_all']=True
@@ -376,7 +858,7 @@ def run(api,binary_dir,fixtures,evidence):
                 api.command(h,112)
             api.user.PostMessageW(api.editor(h),0x102,ord('z'),1)
             _wait(api,p,lambda:api.scalar(api.editor(h),2159)==1,'untitled dirty edit')
-            before=_snapshot(api,h);_context(api,p,h,2,5);prompt=_button(api,p,6);_button(api,p,2,exclude=prompt)
+            before=_snapshot(api,h);_context(api,p,h,2,5,observations);prompt=_button(api,p,6,observations=observations,label='save yes');_button(api,p,2,exclude=prompt,observations=observations,label='save-as cancel')
             ready(p,h,5,'save-as cancelled and unlocked documents')
             if _snapshot(api,h)!=before:raise RuntimeError('Save As cancellation partially closed documents')
             checks['save_as_cancel_preserves_all']=True
@@ -456,7 +938,7 @@ def run(api,binary_dir,fixtures,evidence):
             sd=root/'timeout-sender';_copy_runtime(binary_dir,sd,hashes)
             sp=subprocess.Popen([str(sd/'ru_notepad.exe'),paths[3].name],cwd=root,creationflags=8);timeout_procs.append((sp,sd))
             timeout_record['executed']=True
-            prompt=_button(api,sp,7,timeout=15)  # No: never automatically reopen uncertain paths.
+            prompt=_button(api,sp,7,timeout=15,observations=observations,label='uncertain no')  # No: never automatically reopen uncertain paths.
             if k.ResumeThread(thread)!=1:raise RuntimeError('Owned fixture UI thread resume state differs')
             suspended=False
             _wait(api,sp,lambda:visible_main(sp) is not None,'uncertain sender remains visible')
@@ -473,7 +955,7 @@ def run(api,binary_dir,fixtures,evidence):
             timeout_record['owner_delivery_count']=delivered
             if _tabs(api,sh)!=1 or api.editor_bytes(sh)!=b'':raise RuntimeError('Uncertain handoff automatically opened files locally')
             checks['timeout_uncertain_no_automatic_open']=True
-            _post_command(api,sh,113);_button(api,sp,6)
+            _post_command(api,sh,113);_button(api,sp,6,observations=observations,label='pending yes')
             ready(sp,sh,2,'explicit open of retained uncertain paths')
             documents(sh,{paths[3].name:paths[3].read_bytes()},'pending exact documents')
             if _tabs(api,oh)!=delivered+1:raise RuntimeError('Explicit local open resent original IPC')
