@@ -25,7 +25,7 @@ from bootstrap_provenance import InvalidProvenance
 class PreviewContracts(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
-        self.root=Path(self.tmp.name)
+        self.root=Path(self.tmp.name).resolve()
 
     def test_preview_package_documents_instance_tabs_acceptance(self):
         self.assertEqual(package.PREVIEW_DOCS,('bootstrap-llvm-preview.md','recent-files.md','single-instance-and-tabs.md'))
@@ -404,9 +404,10 @@ class PreviewContracts(unittest.TestCase):
                         'python editor/tools/test_windows_ci.py -v',
                         'python editor/tools/test_package.py -v',
                         'python editor/tools/test_gui_instance_tabs.py -v',
-                        'python editor/tools/test_i18n.py --catalog-only'):
+                        'python editor/tools/test_i18n.py --catalog-only',
+                        'python editor/tools/test_i18n_models.py'):
             self.assertIn(command+'\n          if ($LASTEXITCODE) { exit $LASTEXITCODE }',body)
-        self.assertEqual(body.count('if ($LASTEXITCODE)'),5)
+        self.assertEqual(body.count('if ($LASTEXITCODE)'),6)
 
     def test_recent_fixtures_require_exact_individual_assertions_and_total(self):
         good=b'PASS: a\nPASS: b\nTOTAL PASS: 2\n'

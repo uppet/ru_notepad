@@ -59,7 +59,7 @@ class NativeWrapperTests(unittest.TestCase):
 
     def test_retained_metadata_and_frontend_ir_exact_identity(self):
         with tempfile.TemporaryDirectory() as tmp:
-            output=Path(tmp)/'app.exe';proof={'artifacts':{}}
+            output=Path(tmp).resolve()/'app.exe';proof={'artifacts':{}}
             for name,suffix,digest in [('metadata','.metadata.c','metadata_sha256'),('frontend_ir','.frontend.ll','source_ir_sha256')]:
                 path=output.with_name(output.name+suffix);path.write_text(name)
                 proof['artifacts'][name]={'path':str(path.resolve()),'sha256':native.sha(path)};proof[digest]=native.sha(path)
@@ -69,17 +69,26 @@ class NativeWrapperTests(unittest.TestCase):
                 with self.assertRaises(InvalidProvenance):native.validate_retained(wrong,output)
                 wrong=copy.deepcopy(proof);wrong['artifacts'][name]['sha256']='0'*64
                 with self.assertRaises(InvalidProvenance):native.validate_retained(wrong,output)
+                # Same existing file via an unresolved parent alias is not the
+                # canonical producer identity. This test exercises a .. alias;
+                # Windows short-path aliases likewise require canonicalization.
+                original=Path(proof['artifacts'][name]['path'])
+                alias=original.parent/original.parent.name/'..'/original.name
+                (original.parent/original.parent.name).mkdir(exist_ok=True)
+                self.assertEqual(alias.resolve(),original)
+                wrong=copy.deepcopy(proof);wrong['artifacts'][name]['path']=str(alias)
+                with self.assertRaises(InvalidProvenance):native.validate_retained(wrong,output)
 
     def test_wrapper_receipt_requires_exact_poison_and_all_retained_identities(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp);binary=root/'app.exe'
+            root=Path(tmp).resolve();binary=root/'app.exe'
             paths={key:root/name for key,name in {'source':'main.ru','compiler':'stage3.exe','proof':'proof.json',
                    'metadata':'app.exe.metadata.c','frontend_ir':'app.exe.frontend.ll'}.items()}
             for path in paths.values():path.write_text('synthetic bytes')
             paths['driver']=Path(native.__file__).resolve()
             proof={'artifacts':{},'metadata_sha256':native.sha(paths['metadata']),'source_ir_sha256':native.sha(paths['frontend_ir'])}
             for key in ('metadata','frontend_ir'):
-                proof['artifacts'][key]={'path':str(paths[key]),'sha256':native.sha(paths[key])}
+                proof['artifacts'][key]={'path':str(paths[key].resolve()),'sha256':native.sha(paths[key])}
             receipt={'schema':native.SCHEMA,'compiler_commit':native.CORE_COMMIT,'compiler_tree':native.CORE_TREE,
                      'poison_entries':list(native.POISON_ENTRIES),'python_frontend_attempts':[],
                      **{key:native.identity(path) for key,path in paths.items()}}
@@ -117,7 +126,7 @@ class NativeWrapperTests(unittest.TestCase):
     def test_independent_oracle_binds_complete_dependencies_and_frozen_bytes(self):
         import hashlib
         with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp);app=root/'app';core=root/'core';app.mkdir();core.mkdir()
+            root=Path(tmp).resolve();app=root/'app';core=root/'core';app.mkdir();core.mkdir()
             source=app/'src/main.ru';source.parent.mkdir();source.write_text('source fixture')
             oracle_path=app/oracle.ORACLE_PATH;oracle_path.parent.mkdir()
             data=source.read_bytes()
@@ -133,8 +142,8 @@ class NativeWrapperTests(unittest.TestCase):
             meta.write_text(metadata());frontend.write_text('synthetic IR')
             proof={'source':str(source.resolve()),'dependencies':[native.identity(source)],
                    'metadata_sha256':native.sha(meta),'source_ir_sha256':native.sha(frontend),
-                   'artifacts':{'metadata':{'path':str(meta),'sha256':native.sha(meta)},
-                                'frontend_ir':{'path':str(frontend),'sha256':native.sha(frontend)}}}
+                   'artifacts':{'metadata':{'path':str(meta.resolve()),'sha256':native.sha(meta)},
+                                'frontend_ir':{'path':str(frontend.resolve()),'sha256':native.sha(frontend)}}}
             result=oracle.verify_application_oracle(proof,app,core,frozen,binary)
             self.assertEqual((result['modules'],result['shapes'],result['callbacks']),(1,1,1))
             for mutation in ('missing','extra','duplicate','hash','wrong-entry','metadata'):

@@ -99,6 +99,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python editor/tools/test_i18n.py --catalog-only
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_i18n_models.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Fresh three-stage self-compilation and fixed point
         working-directory: language
         run: python tools/bootstrap.py verify --directory bin/bootstrap/preview-ci

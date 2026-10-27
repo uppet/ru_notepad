@@ -63,7 +63,7 @@
     },
     "tools/test_i18n_models.py": {
       "before": "507b687a6d1c6e98f9287beb168eb10b2eb7648457ca9e60f1aae51d089531cc",
-      "after": "31208bd1185b511759f9b2582a13571af94bd46e11665bed6ad08f3ac01b4bea"
+      "after": "563050aedd73c191fbf26e4a14ddaa06042864ba037ea7ce3d7705db4b44f34c"
     },
     "tools/verify_recent_files_windows.py": {
       "before": null,
@@ -191,7 +191,7 @@
     },
     "tests/test_bootstrap_native_wrapper.py": {
       "before": null,
-      "after": "6649545a7db3309c79afdca632a602b8aebc658011e8189d235d3aac1c961435"
+      "after": "4994893f9f751c0c59b082712db71cd970749f02fa700741e9729a40617d767b"
     }
   }
 }

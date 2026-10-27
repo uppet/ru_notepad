@@ -7,8 +7,8 @@ The old menu IDs/order and every old Lexilla style/colour pair were reviewed
 against src/main.ru and src/syntax.ru at 5a619410ea93ec0b8fb5197a4780b615a308e4f9.
 The constants below deliberately do not read git, import the catalog generator,
 or derive expected values from the production arrays. The eight UI-language
-commands and Find Previous are the explicit additions to the original 42
-commands. English labels anchor the catalog keys' meanings as well as their ID/group associations.
+commands, Find Previous, Open Pending Shell Files and Single Instance are the
+explicit additions to the original 42 commands (53 total). English labels anchor the catalog keys' meanings as well as their ID/group associations.
 
 This is source-model and consumer-wiring verification, not a Ru interpreter,
 compiler-budget check, native Windows execution, or GUI acceptance test.
@@ -38,6 +38,7 @@ EXPECTED_MENUS = (
         (105, 'command.close_tab', '&Close tab\tCtrl+W'),
         (111, 'command.previous_tab', '&Previous tab\tCtrl+Shift+Tab'),
         (112, 'command.next_tab', 'Next &tab\tCtrl+Tab'),
+        (113, 'command.open_pending_shell', 'Open Pending Shell Files… (&Q)'),
         (106, 'command.exit', 'E&xit'),
     )),
     ('menu.edit', '&Edit', (
@@ -83,6 +84,7 @@ EXPECTED_MENUS = (
         (802, 'command.default_apps', 'Choose &defaults in Windows Settings...'),
         (803, 'command.unregister_association', '&Unregister this copy...'),
         (804, 'command.registration_status', 'Registration &status'),
+        (805, 'command.single_instance', 'Single instance (next launch) (&I)'),
     )),
     ('menu.ui_language', '&UI language', (
         (850, 'language.system', 'System &default'),
@@ -305,38 +307,54 @@ class FlatModelTests(unittest.TestCase):
             changed = replace_array(changed, name, value)
         return self.syntax.replace(section, changed, 1)
 
-    def test_exact_nine_groups_and_fifty_one_command_mappings(self):
+    def test_exact_nine_groups_and_fifty_three_command_mappings(self):
         model = validate_menu(self.main)
         self.assertEqual(len(model), 9)
         commands = [command for _, group in model for command in group]
-        self.assertEqual(len(commands), 51)
-        self.assertEqual(len({number for number, _ in commands}), 51)
-        self.assertEqual(len({key for _, key in commands}), 51)
+        self.assertEqual(len(commands), 53)
+        self.assertEqual(len({number for number, _ in commands}), 53)
+        self.assertEqual(len({key for _, key in commands}), 53)
 
     def test_all_original_command_ids_keep_their_group_and_order(self):
-        original = tuple((group, tuple(number for number, _ in commands if number != 308))
+        original = tuple((group, tuple(number for number, _ in commands if number not in (308, 113, 805)))
                          for group, commands in validate_menu(self.main)
                          if group != 'menu.ui_language')
         self.assertEqual(original, LEGACY_COMMAND_GROUPS)
         self.assertEqual(sum(len(ids) for _, ids in original), 42)
 
+    def test_new_instance_commands_missing_wrong_group_or_duplicate_rejected(self):
+        for number, source_group, wrong_group in ((113, 0, 6), (805, 6, 0)):
+            for mutation in ('missing', 'wrong-group', 'duplicate'):
+                model = [(group, list(commands)) for group, commands in decode_menu(self.menu_arrays)]
+                command = next(row for row in model[source_group][1] if row[0] == number)
+                if mutation != 'duplicate':
+                    model[source_group][1].remove(command)
+                if mutation != 'missing':
+                    model[wrong_group][1].append(command)
+                arrays = {'组键们': [group for group, _ in model],
+                          '组量们': [len(commands) for _, commands in model],
+                          '号们': [item[0] for _, commands in model for item in commands],
+                          '键们': [item[1] for _, commands in model for item in commands]}
+                with self.subTest(number=number, mutation=mutation), self.assertRaises(ValueError):
+                    validate_menu(self.mutated_menu(**arrays))
+
     def test_catalog_keys_have_the_reviewed_command_and_group_meanings(self):
         validate_menu_catalog(self.catalog)
 
     def test_menu_arrays_are_primitive_with_exact_group_boundaries(self):
-        self.assertEqual(self.menu_arrays['组量们'], [10, 6, 4, 6, 5, 7, 4, 8, 1])
+        self.assertEqual(self.menu_arrays['组量们'], [11, 6, 4, 6, 5, 7, 5, 8, 1])
         for name, kind in MENU_ARRAY_TYPES.items():
             self.assertTrue(all(type(value) is kind for value in self.menu_arrays[name]))
 
     def test_every_changed_command_id_is_rejected(self):
-        for index in range(51):
+        for index in range(53):
             ids = self.menu_arrays['号们'].copy()
             ids[index] += 1000
             with self.subTest(index=index), self.assertRaises(ValueError):
                 validate_menu(self.mutated_menu(号们=ids))
 
     def test_every_command_key_misassignment_is_rejected(self):
-        for index in range(51):
+        for index in range(53):
             keys = self.menu_arrays['键们'].copy()
             following = (index + 1) % len(keys)
             keys[index], keys[following] = keys[following], keys[index]
@@ -344,7 +362,7 @@ class FlatModelTests(unittest.TestCase):
                 validate_menu(self.mutated_menu(键们=keys))
 
     def test_every_removed_command_is_rejected_even_with_consistent_lengths(self):
-        for index in range(51):
+        for index in range(53):
             arrays = deepcopy(self.menu_arrays)
             del arrays['号们'][index]
             del arrays['键们'][index]
@@ -358,7 +376,7 @@ class FlatModelTests(unittest.TestCase):
                 validate_menu(self.mutated_menu(**arrays))
 
     def test_every_adjacent_command_reordering_is_rejected(self):
-        for index in range(50):
+        for index in range(52):
             arrays = deepcopy(self.menu_arrays)
             for name in ('号们', '键们'):
                 array = arrays[name]
