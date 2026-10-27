@@ -17,8 +17,9 @@ exact source and executable. This document is a plan, not a passing test receipt
   may silently replace the bootstrap LLVM editor build.
 - The actual preview executable must pass the bootstrap pipeline smoke checks,
   all four existing GUI product gates, the recent-files tests, and the actual
-  two-process single-instance / tab-menu GUI tests. Existing deadlines and
-  assertions remain unchanged.
+  two-process single-instance / tab-menu GUI tests. Active deadlines and
+  correctness assertions remain required. The one explicitly deprecated
+  Markdown case below is not executed by default and is not recorded as passed.
 - Five real-stage3 fixtures cover recent-file policy (25 assertions), native
   registry/encoding boundaries (22), actual main-module callback control flow
   (10), Ru lexical policy including 续 (422), and Markdown policy (221). These
@@ -95,3 +96,44 @@ frontend LLVM IR stays in CI evidence and its SHA-256 is recorded in the ZIP;
 compiler executables and environment configuration are not packaged. Portable
 negative controls validate contracts only; successful producer compilation and
 Windows GUI execution must come from this candidate's actual CI run.
+
+## Deprecated case and TODO (2026-10-27)
+
+At the user's explicit request, only the **1,000,000-byte unclosed-fence
+Markdown serial two-Undo folding-completion case** is retired from blocking
+acceptance. Default acceptance does not execute that stage. Its record must say
+`deprecated`, not executed and not passed; missing or forged retirement evidence
+is not acceptance. The corpus's open, insert and Backspace stages remain required,
+as do both other corpora's Undo stages, all their original 30-second limits,
+style/fold/context checks, responsiveness, source preservation and normal cleanup.
+No timeout is enlarged. The synthetic document left dirty after Backspace must
+be explicitly discarded through the real confirmation flow, not marked clean
+with a synthetic savepoint or described as successful Undo.
+
+**TODO:** profile and optimize whole-document folding/recovery for this retired
+case when time permits; restore a measured completion requirement only after
+reviewed evidence. Text restoration and background-fold convergence are different
+results. WM_NULL response samples do not measure input or frame latency.
+
+Historical failure is preserved: exact editor commit
+`5262c085f473474ba94cfe0d73fa2b025c42a123`, compiler
+`26cc8a210d5cef2bd8ab37b6c270833884ea39a5`,
+[Windows run 40467458570](https://github.com/uppet/ru_notepad/actions/runs/40467458570),
+reported this stage at **30,007.113 ms**, still folding. The first fold status
+completed at 16,503.333 ms, the second Undo returned at 16,508.560 ms, and
+length/savepoint restoration was first observed at 16,765.055 ms. Open completed
+in 26,739.650 ms and passed. These historical measurements are neither rewritten
+as passes nor proof of full-byte restoration or eventual convergence. That run
+also failed a separate single-instance GUI check and produced no accepted ZIP.
+
+An explicit diagnostic call `run_gui_markdown(..., reproduce_deprecated=True)`
+retains the original twelve-stage sequence and historical receipt contract. It
+is not used by default acceptance or accepted by the current default validator.
+The deterministic reproduction also remains in that exact historical source:
+`gui_markdown_fixture('unclosed-fence')` has SHA-256
+`2d9f79ee715b217c00792cf18a67485cdec96a14ea2ac86689156941a022c719`,
+and `run_gui_markdown_stage` performs the original serial Undo actions and
+30-second observations. The historical source, reports and failed CI are retained
+for investigation; reproducing them is opt-in, not part of default acceptance.
+The separate old Ru 0.22 C-native lane's signature-analysis complexity failure
+remains a disclosed limitation, not a passed gate or a budget increase.

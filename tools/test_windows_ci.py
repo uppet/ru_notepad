@@ -83,6 +83,75 @@ class MarkdownPhaseObservationTests(unittest.TestCase):
             ci.validate_gui_markdown(record)
 
 
+class MarkdownDeprecatedCaseTests(unittest.TestCase):
+    def test_default_inventory_is_eleven_and_legacy_requires_explicit_opt_in(self):
+        record = markdown_evidence()
+        self.assertEqual([len(c['stages']) for c in record['cases']], [4, 4, 3])
+        self.assertIsNone(record['deprecated'][0]['passed'])
+        ci.validate_gui_markdown(record)
+        old = markdown_evidence(legacy=True)
+        ci.validate_gui_markdown(old, legacy=True)
+        with self.assertRaises(RuntimeError): ci.validate_gui_markdown(old)
+        with self.assertRaises(RuntimeError): ci.validate_gui_markdown(record, legacy=True)
+        old['cases'][2]['stages'][3]['wall_ms'] = 30000.01
+        with self.assertRaises(RuntimeError): ci.validate_gui_markdown(old, legacy=True)
+
+    def test_deprecation_does_not_relax_any_active_stage_budget_or_correctness(self):
+        for case_id, case in enumerate(markdown_evidence()['cases']):
+            for stage_id in range(len(case['stages'])):
+                for field, value in [('wall_ms', 30000.01), ('length', 0), ('source_sha256', '0'*64)]:
+                    record = markdown_evidence()
+                    record['cases'][case_id]['stages'][stage_id][field] = value
+                    with self.subTest(case=case_id, stage=stage_id, field=field), self.assertRaises(RuntimeError):
+                        ci.validate_gui_markdown(record)
+
+    def test_deprecated_and_cleanup_metadata_are_exact_and_never_inferred_pass(self):
+        for section, field, value in [('deprecated', 'case', 'singleline'), ('deprecated', 'operation', 'open'),
+                ('deprecated', 'passed', True), ('deprecated', 'passed', False),
+                ('deprecated', 'executed', True), ('deprecated', 'executed', 0),
+                ('deprecated', 'blocking', True), ('deprecated', 'original_budget_ms', 60000),
+                ('teardown', 'dirty_before', False), ('teardown', 'discard_confirmed', False),
+                ('teardown', 'method', 'set-savepoint'), ('teardown', 'source_sha256', '0'*64)]:
+            record = markdown_evidence()
+            (record[section][0] if section == 'deprecated' else record[section])[field] = value
+            with self.subTest(section=section, field=field, value=value), self.assertRaises(RuntimeError):
+                ci.validate_gui_markdown(record)
+        for field in ('schema', 'deprecated', 'teardown'):
+            record = markdown_evidence(); del record[field]
+            with self.assertRaises(RuntimeError): ci.validate_gui_markdown(record)
+        record = markdown_evidence(); record['teardown'] = {}
+        with self.assertRaises(RuntimeError): ci.validate_gui_markdown(record)
+        record = markdown_evidence(); record['cases'][2]['stages'].append(markdown_evidence(legacy=True)['cases'][2]['stages'][3])
+        with self.assertRaises(RuntimeError): ci.validate_gui_markdown(record)
+
+    def test_real_discard_uses_owned_modal_no_and_requires_dirty_and_count_change(self):
+        import gui_instance_tabs as tabs
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'unclosed-fence.md'
+            source.write_bytes(ci.gui_markdown_fixture('unclosed-fence')[0])
+            api = Mock(); api.editor.return_value = 2; api.control.return_value = 3
+            api.text.return_value = '* ' + source.name + ' · ru_notepad'
+            state = {'dirty': True, 'count': 4}
+            api.scalar.side_effect = lambda hwnd, msg: state['dirty'] if msg == 2159 else state['count']
+            def no(*args):
+                self.assertEqual(args[-1], 7)
+                state.update(dirty=False, count=3)
+            with patch.object(tabs, '_post_command') as post, patch.object(tabs, '_button', side_effect=no), \
+                 patch.object(ci, 'wait_gui', side_effect=lambda api, proc, predicate, why: self.assertTrue(predicate())):
+                self.assertEqual(ci.discard_deprecated_markdown(api, Mock(), 1, source), ci.gui_markdown_teardown())
+                post.assert_called_once_with(api, 1, 105)
+            with patch.object(tabs, '_post_command') as post, self.assertRaises(RuntimeError):
+                ci.discard_deprecated_markdown(api, Mock(), 1, source)
+            post.assert_not_called()
+            state.update(dirty=True, count=4)
+            def timeout(api, proc, predicate, why):
+                self.assertFalse(predicate())
+                raise RuntimeError(why)
+            with patch.object(tabs, '_post_command'), patch.object(tabs, '_button'), \
+                 patch.object(ci, 'wait_gui', side_effect=timeout), self.assertRaises(RuntimeError):
+                ci.discard_deprecated_markdown(api, Mock(), 1, source)
+
+
 class SyntheticWindowText(ci.Windows):
     """Controlled WM_GETTEXT payloads; no native API or platform override."""
     def __init__(self, before, after, reported_count=None):
@@ -133,17 +202,20 @@ def observer_evidence():
             'head_style_measurement': ci.GUI_RU_HEAD_MEASUREMENT}
 
 
-def markdown_evidence():
+def markdown_evidence(*, legacy=False):
     """Synthetic schema fixture only; never evidence of running the GUI."""
     record = {'measurement': ci.GUI_MARKDOWN_MEASUREMENT, 'clock': {
         'clock_name': 'perf_counter', 'implementation': 'QueryPerformanceCounter()',
         'resolution': 1e-7, 'monotonic': True, 'adjustable': False}, 'cases': []}
+    if not legacy:
+        record.update(schema=ci.GUI_MARKDOWN_SCHEMA, deprecated=ci.gui_markdown_deprecated(),
+                      teardown=ci.gui_markdown_teardown())
     for kind in ('many-lines', 'singleline', 'unclosed-fence'):
         data, probes, folds = ci.gui_markdown_fixture(kind)
         case = {'kind': kind, 'size': len(data), 'source_sha256': hashlib.sha256(data).hexdigest(),
                 'style_probes': probes, 'fold_probes': folds, 'stages': []}
         record['cases'].append(case)
-        for operation in ('open', 'insert', 'backspace', 'undo'):
+        for operation in ci.gui_markdown_operations(kind, legacy=legacy):
             expected, styles, _ = ci.markdown_expected(kind, operation)
             style_positions = [position for probe in styles
                                for position in range(probe['offset'], probe['offset'] + probe['length'])]

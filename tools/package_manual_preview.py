@@ -384,8 +384,14 @@ def validate_timeout(test, summary):
     require(test.get('fixture_binary_sha256') == {n: summary['tested_binary_sha256'][n]
         for n in portable.RUNTIME_NAMES}, 'Markdown fixture binary binding mismatch')
     record = test.get('markdown_performance')
-    require(isinstance(record, dict) and set(record) == {'measurement', 'clock', 'cases'} and
-        record['measurement'] == ci.GUI_MARKDOWN_MEASUREMENT and isinstance(record['cases'], list)
+    require(isinstance(record, dict), 'Invalid timeout case prefix')
+    legacy = set(record) == {'measurement', 'clock', 'cases'}
+    if not legacy:
+        require(set(record) == {'schema', 'measurement', 'clock', 'cases', 'deprecated', 'teardown'}
+                and record['schema'] == ci.GUI_MARKDOWN_SCHEMA
+                and json.dumps(record['deprecated'], sort_keys=True) == json.dumps(ci.gui_markdown_deprecated(), sort_keys=True)
+                and record['teardown'] == {}, 'Invalid current timeout scope or fabricated teardown')
+    require(record['measurement'] == ci.GUI_MARKDOWN_LEGACY_MEASUREMENT and isinstance(record['cases'], list)
         and 1 <= len(record['cases']) <= 3, 'Invalid timeout case prefix')
     ci.validate_performance_clock(record['clock'], require_windows=True)
     for case_index, case in enumerate(record['cases']):
@@ -397,10 +403,12 @@ def validate_timeout(test, summary):
             and all(type(p[k]) is int for p in case['style_probes'] for k in ('offset', 'length', 'style'))
             and all(type(p['line']) is int and type(p['header']) is bool for p in case['fold_probes'])
             and isinstance(case['stages'], list) and 1 <= len(case['stages']) <= 4, 'Invalid Markdown timeout corpus')
+        operations = ci.gui_markdown_operations(kind, legacy=legacy)
+        require(len(case['stages']) <= len(operations), 'Retired stage cannot enter default timeout prefix')
         final_case = case_index == len(record['cases']) - 1
-        require(final_case or len(case['stages']) == 4, 'Incomplete stage before timeout case')
+        require(final_case or len(case['stages']) == len(operations), 'Incomplete stage before timeout case')
         for stage_index, stage in enumerate(case['stages']):
-            operation = ('open', 'insert', 'backspace', 'undo')[stage_index]
+            operation = operations[stage_index]
             final = final_case and stage_index == len(case['stages']) - 1
             if not final:
                 validate_complete_stage(stage, kind, operation, case['source_sha256'])
@@ -458,9 +466,15 @@ def validate_summary(summary, root, binaries):
                 'Contradictory formal acceptance status')
         validate_other_test(markdown, summary)
         ci.validate_acceptance(summary, root)
-        return {'formal_acceptance': 'passed', 'markdown_performance': 'passed', 'timeout': None}
+        return {'formal_acceptance': 'passed', 'markdown_performance': 'passed', 'timeout': None,
+                'markdown_scope': {'schema': ci.GUI_MARKDOWN_SCHEMA, 'active_stages': 11,
+                                   'deprecated': markdown['markdown_performance']['deprecated']}}
     timeout = validate_timeout(markdown, summary)
-    return {'formal_acceptance': 'failed', 'markdown_performance': 'performance_not_passed', 'timeout': timeout}
+    return {'formal_acceptance': 'failed', 'markdown_performance': 'performance_not_passed', 'timeout': timeout,
+            'markdown_scope': ({'schema': ci.GUI_MARKDOWN_SCHEMA, 'active_stages': 11,
+                                'deprecated': markdown['markdown_performance']['deprecated']}
+                               if markdown['markdown_performance'].get('schema') == ci.GUI_MARKDOWN_SCHEMA else
+                               {'schema': 'legacy-12-stage', 'active_stages': 12, 'deprecated': []})}
 
 
 def validate_logs(root, summary):
@@ -517,7 +531,11 @@ def manual_text(eligibility):
         '已知问题：本轮 Markdown 大文件任务超过原定 30 秒时限，正式验收失败。\n'
         '其余必需原生、文件安全、ABI 和 GUI 组通过；超时 GUI 被测试工具强制清理，不能称为正常退出。\n'
         '超时后的 Markdown 阶段没有完成，也不能视为通过。实际等待时间可能更长。')
-    return ('ru_notepad Windows x64 人工体验预览\n\n' + outcome + '\n\n'
+    scope = eligibility.get('markdown_scope', {})
+    note = ('当前 Markdown 默认门禁为 11 个有效阶段；1 MB 未闭合围栏串行双撤销已废弃并列为 TODO，未执行、不算通过。\n'
+            if scope.get('schema') == ci.GUI_MARKDOWN_SCHEMA else
+            '本记录保留历史 12 阶段合同；原有超时/失败不因案例废弃而改写为通过。\n')
+    return ('ru_notepad Windows x64 人工体验预览\n\n' + outcome + '\n' + note + '\n'
         '1. 完整解压 ZIP，保持 ru_notepad.exe 和三个 DLL 在同一目录，再运行程序。\n'
         '2. 用 Ctrl+O 打开 samples/fence.md；它是同一验收使用的 1,000,000 字节未闭合围栏样本。\n'
         '3. 观察打开及折叠等待时间；尝试移动光标、输入、退格、撤销和标题折叠。\n'

@@ -34,14 +34,17 @@ One local exploratory GCC run alternated baseline/candidate on the same syntheti
 and calls matched. This is a narrow parser experiment, not a pure-C algorithm
 control, Windows measurement, Undo measurement or proof the 30 s failure is fixed.
 
-## Acceptance remains unchanged
+## Active acceptance and the retired case
 
-The original Undo stage waits for first-fold completion before issuing a second
-Undo when still dirty; both scans share its original 30 s wall deadline. This
-candidate does not replace it with back-to-back Undo, widen its timeout, or infer
-natural recovery from a timed-out/killed process. UI responsiveness and background
-fold convergence are different results. Historical wij/dense exclusions remain.
+All active correctness and original 30-second stage deadlines remain required.
+On 2026-10-27 the user explicitly retired only the 1 MB unclosed-fence serial
+two-Undo folding-completion case from blocking/default execution. It is recorded
+as deprecated and unexecuted, never as passed. The other two Undo corpora and
+all open/insert/Backspace stages remain. See the precise scope, historical
+30,007.113 ms failure, reproduction and TODO in
+[bootstrap preview scope](bootstrap-llvm-preview.md#deprecated-case-and-todo-2026-10-27).
 
-Next evidence: exact compiler/app/source identity, bootstrap + LLVM build, actual
-Windows native DLL and same-binary GUI tests, then an explicitly scoped preview.
-If the original gate still fails, retain its known-limit label and phase evidence.
+This does not substitute back-to-back Undo, enlarge a timeout, or infer recovery
+from a killed process. UI responsiveness and background convergence differ.
+Historical wij/dense exclusions remain. Native lifecycle and real Windows
+single-instance/tab-menu validation are still required for the exact binaries.

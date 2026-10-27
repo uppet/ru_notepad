@@ -1,8 +1,10 @@
 from copy import deepcopy
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 import ast
 from pathlib import Path
+import tempfile
+import json
 import gui_instance_tabs as subject
 HASHES={n:'a'*64 for n in ('ru_notepad.exe','Scintilla.dll','Lexilla.dll','RuSyntax.dll')}
 def receipt():
@@ -30,4 +32,115 @@ class ReceiptTests(unittest.TestCase):
             r=deepcopy(receipt());mutate(r)
             with self.subTest(mutation=i):
                 with self.assertRaises(ValueError):subject.validate_result(r,HASHES)
+class BusyBeforeIdleAPI:
+    """Model the production order: register tabs, then later clear busy/locks."""
+    def __init__(self,busy=True):
+        self.busy=busy;self.active=2;self.ignored=0
+        self.docs=[('Untitled · ru_notepad',b''),('一 😀.txt · ru_notepad',b'one'),('二 空格.txt · ru_notepad',b'two')]
+        self.user=Mock()
+        self.user.IsWindowEnabled.side_effect=lambda handle:not self.busy
+        self.user.IsWindowVisible.side_effect=lambda handle:self.busy if handle==901 else True
+    def control(self,hwnd,identifier):return identifier
+    def editor(self,hwnd):return 100+self.active
+    def scalar(self,handle,message,*args):
+        if message==0x1304:return 3
+        if message==2140:return int(self.busy)
+        raise AssertionError('Unexpected fake API scalar '+str(message))
+    def text(self,handle):
+        if handle==11:return subject.ci._STATUS_PREFIXES['status.opening'][0]+' 100/100' if self.busy else 'Ln 1 Col 1'
+        return 'Untitled · ru_notepad' if self.busy else self.docs[self.active][0]
+    def editor_bytes(self,hwnd):return self.docs[self.active][1]
+    def command(self,hwnd,command):
+        if command!=112:raise AssertionError('unexpected command')
+        if self.busy:self.ignored+=1
+        else:self.active=(self.active+1)%3
+    def no_dialog(self,pid):return []
+
+
+class ReadyContractTests(unittest.TestCase):
+    def test_registered_tabs_are_not_open_completion(self):
+        api=BusyBeforeIdleAPI();expected={'一 😀.txt':b'one','二 空格.txt':b'two'}
+        self.assertEqual(subject._tabs(api,1),3)
+        # Reproduce the old count-only acceptance: commands are ignored while
+        # busy and the original exact-name validator rejects this state.
+        with self.assertRaisesRegex(RuntimeError,'did not display every synthetic file'):
+            subject.ci.verify_gui_documents(api,1,expected)
+        self.assertEqual(api.ignored,3)
+        process=Mock(pid=77);process.poll.return_value=None
+        observations={}
+        with patch.object(subject.time,'sleep',side_effect=lambda _:setattr(api,'busy',False)) as sleep:
+            subject._wait_ready(api,process,1,3,'handoff',observations)
+        sleep.assert_called_once_with(.01)
+        self.assertTrue(subject._is_ready(observations['handoff'],3))
+        subject.ci.verify_gui_documents(api,1,expected)
+        self.assertEqual(api.ignored,3)  # none ignored after ready
+
+    def test_every_ready_signal_remains_required(self):
+        good=subject._readiness(BusyBeforeIdleAPI(False),1)
+        self.assertTrue(subject._is_ready(good,3))
+        for key,value in [('tab_count',2),('tabs_enabled',False),('editor_enabled',False),
+                          ('cancel_visible',True),('editor_readonly',1),
+                          ('status',subject.ci._STATUS_PREFIXES['status.opening'][0]+' 1/1')]:
+            with self.subTest(signal=key):
+                broken=dict(good);broken[key]=value
+                self.assertFalse(subject._is_ready(broken,3))
+        self.assertFalse(subject._is_ready(good,3,'wrong title'))
+        # Empty startup status is not a fictitious additional gate.
+        good['status']='';self.assertTrue(subject._is_ready(good,3))
+
+    def test_idle_does_not_waive_names_bytes_or_count(self):
+        expected={'一 😀.txt':b'one','二 空格.txt':b'two'}
+        api=BusyBeforeIdleAPI(False)
+        self.assertTrue(subject._is_ready(subject._readiness(api,1),3))
+        for broken in ({'wrong.txt':b'one','二 空格.txt':b'two'},
+                       {'一 😀.txt':b'WRONG','二 空格.txt':b'two'},
+                       {'一 😀.txt':b'one'}):
+            api.active=2
+            with self.assertRaises(RuntimeError):subject.ci.verify_gui_documents(api,1,broken)
+
+    def test_ready_keeps_original_thirty_second_deadline(self):
+        api=BusyBeforeIdleAPI();process=Mock(pid=7);process.poll.return_value=None
+        with patch.object(subject.time,'monotonic',side_effect=[0,15,30]),patch.object(subject.time,'sleep'):
+            with self.assertRaisesRegex(RuntimeError,'Timed out: blocked'):
+                subject._wait_ready(api,process,1,3,'blocked')
+        with patch.object(subject,'_wait') as wait:
+            subject._wait_ready(api,process,1,3,'budget')
+            self.assertEqual(wait.call_args.kwargs,{'timeout':30})
+
+    def test_no_tab_count_only_waits_remain(self):
+        tree=ast.parse(Path(subject.__file__).read_text())
+        for node in ast.walk(tree):
+            if not isinstance(node,ast.Call):continue
+            name=node.func.id if isinstance(node.func,ast.Name) else node.func.attr if isinstance(node.func,ast.Attribute) else ''
+            if name not in ('_wait','wait_gui'):continue
+            for arg in node.args:
+                if isinstance(arg,ast.Lambda):
+                    for inner in ast.walk(arg.body):
+                        self.assertFalse(isinstance(inner,ast.Call) and isinstance(inner.func,ast.Name) and inner.func.id=='_tabs','tab-only open wait bypasses ready contract')
+
+    def test_failure_diagnostics_preserve_failure_and_partial_processes(self):
+        record=receipt();record.update(passed=False,exit_code=None)
+        record['phases']=record['phases'][:1];record['phases'][0]['passed']=False
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(RuntimeError,'exact title mismatch'):
+                with subject._failure_evidence(tmp,record,{'handoff':{'title':'actual wrong','tab_count':3}}, {'一.txt':{'sha256':'a'*64}}):
+                    raise RuntimeError('exact title mismatch')
+            path=Path(tmp)/'instance-tabs-partial.json';self.assertLessEqual(path.stat().st_size,131073)
+            diagnostic=json.loads(path.read_text())
+            self.assertIs(diagnostic['accepted'],False)
+            self.assertEqual(diagnostic['record']['secondary_processes'],record['secondary_processes'])
+            self.assertEqual(diagnostic['observations']['handoff']['title'],'actual wrong')
+            self.assertIn('src/main.ru',diagnostic['source_sha256'])
+            with self.assertRaises(ValueError):subject.validate_result(diagnostic,HASHES)
+        with tempfile.TemporaryDirectory() as tmp:
+            not_directory=Path(tmp)/'file';not_directory.write_text('fixture')
+            with self.assertRaisesRegex(RuntimeError,'original failure') as raised:
+                with subject._failure_evidence(not_directory,record,{},{}):
+                    raise RuntimeError('original failure')
+            self.assertIn('Could not retain',raised.exception.__notes__[0])
+        # Success does not create a diagnostic or alter the exact success schema.
+        with tempfile.TemporaryDirectory() as tmp:
+            with subject._failure_evidence(tmp,receipt(),{},{}):pass
+            self.assertFalse((Path(tmp)/'instance-tabs-partial.json').exists())
+
 if __name__=='__main__':unittest.main()

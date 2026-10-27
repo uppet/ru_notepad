@@ -1,7 +1,7 @@
 name: Bootstrap LLVM editor preview
 on:
   push:
-    branches: [feature/bootstrap-llvm-preview-20261024, feature/bootstrap-llvm-preview-20261024-r1, feature/bootstrap-llvm-preview-20261024-r2, feature/bootstrap-llvm-preview-20261024-r3, feature/notepad-024-responsive-preview-20261026]
+    branches: [feature/bootstrap-llvm-preview-20261024, feature/bootstrap-llvm-preview-20261024-r1, feature/bootstrap-llvm-preview-20261024-r2, feature/bootstrap-llvm-preview-20261024-r3, feature/notepad-024-responsive-preview-20261026, wip]
   workflow_dispatch:
 permissions:
   contents: read
@@ -122,7 +122,7 @@ jobs:
         run: python editor/tools/verify_bootstrap_recent_policies.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --output "$env:PREVIEW_OUTPUT/recent-fixtures"
       - name: B7 functional smoke only
         run: python editor/tools/verify_bootstrap_editor_windows.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --output "$env:PREVIEW_OUTPUT/smoke-acceptance.json"
-      - name: Same-binary original product GUI budgets and recent-file acceptance
+      - name: Same-binary active GUI budgets, recent files and instance/tab acceptance
         run: python editor/tools/verify_bootstrap_product_windows.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --output "$env:PREVIEW_OUTPUT/product"
       - name: Package only the exact GUI-tested bootstrap preview and verify ZIP bytes
         run: python editor/tools/package_bootstrap_preview.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --product-receipt "$env:PREVIEW_OUTPUT/product/product-preview.json" --mingw-root "${{ steps.msys2.outputs.msys2-location }}/mingw64" --output "$env:PREVIEW_OUTPUT/dist/ru_notepad-bootstrap-llvm-preview-windows-x64.zip"

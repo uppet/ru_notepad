@@ -15,7 +15,7 @@
     },
     "docs/bootstrap-llvm-preview.md": {
       "before": null,
-      "after": "0383231c0b4631df0b75c0f63b09500293af496d3614319401e926065ee98e85"
+      "after": "a7aeaa5f02363088376181f80de94a5f06a7a3435fd677b79567d923053e6484"
     },
     "docs/recent-files.md": {
       "before": null,
@@ -99,15 +99,15 @@
     },
     "tools/test_windows_ci.py": {
       "before": "b28733251662cd749c961fda95d912a1638794857fbb07015b5fb6363c28ec3b",
-      "after": "5ee997f53fc5b2c2841dcbba035971f8f370cd809a7ee434a83556e61207c168"
+      "after": "f74535cb9c050447e24d2bea17ffb5b376f56e85c4424fea46e6e5ded94b2418"
     },
     "tools/windows_ci.py": {
       "before": "c1a793bf7d96267adc47d70bd459b3c050cb54f67c9768a57041cad5a732142a",
-      "after": "bfc09e5649d88599aee35832ba61175635282b79dacd92c3987f5233b90deaa3"
+      "after": "ab27c36dc6076ec6a2d1cec5554ca33e75e91102b7e91a3b3d50c5dfa0a33f79"
     },
     "docs/preview-024-candidate.md": {
       "before": null,
-      "after": "7b68338f52575cdc58a447c1d420a3f6447880548f126a01b0334472f0628e22"
+      "after": "ece66d3616ea559dab273afcfef9385ef1f2e39cb162217d81a7ca2db2d6dd25"
     },
     "tools/verify_ru_policy_fast_outputs.py": {
       "before": "32b4fdcec098114f9a211456058ebc46ba78e7138cdbf556b346570167c7903b",
@@ -115,11 +115,11 @@
     },
     "tools/test_package.py": {
       "before": "8f163a5d8d59740f0a285bbe49c5e6405d26bc906c70a25438bfee27b2dcd289",
-      "after": "490301eca634f84405507ac4445b7cb42659875cfa04f3d31d89ddc0263d6783"
+      "after": "825000a96bd87e82f8dc14ed90919b907758b50a49889bca709766127614db1e"
     },
     "tools/test_gui_instance_tabs.py": {
       "before": null,
-      "after": "7eab1b5e0a997fe44dec88732d676b9ce90eb0afe77e826e15ccc09e1239a1d7"
+      "after": "38c167e4560f54ec34aef1ef45a55458c18da2fa0ba45fdd75089222300921bb"
     },
     "tools/compile_bootstrap_native.py": {
       "before": null,
@@ -131,7 +131,7 @@
     },
     "tools/gui_instance_tabs.py": {
       "before": null,
-      "after": "4de2f94a531e6693da99304f7a5a4bfa0635644ab08001b509ce2cd2b048d890"
+      "after": "8c0f99f983dce3fd787aa915dc9cf938a8c4082282cc992afd6248d62ce610e2"
     },
     "tools/verify_bootstrap_application_oracle.py": {
       "before": null,
@@ -139,7 +139,7 @@
     },
     "docs/single-instance-and-tabs.md": {
       "before": null,
-      "after": "e5fb724dffdaadaa50d0a4cb9e3abeb849ad5abb0a570e5b55dd24c89c8e31c6"
+      "after": "42afd22067f4b01f200a1b20e63a4174cb333bb030694ff6eab23c851289a3c9"
     },
     "src/tab_context.ru": {
       "before": null,
@@ -212,6 +212,18 @@
     ".github/workflows/windows.yml": {
       "before": "f82e3e45e0cf4f0522fdd6d2a516e6ec91cc0a000fbff503ca954f0e37dfaf57",
       "after": "0680b6b9a3ce69b512387a2bdaf11ea5a131dd8965b877b3e56d9fc50ab684af"
+    },
+    "docs/markdown-editing.md": {
+      "before": "b1185eee1c70ab93956932fe820381c101df94950237acf4f95b9d18a78467bf",
+      "after": "ff3b0e454f75d22cf6bc48618ae9075ca42346bcb8cb036456ffbd4f034eebee"
+    },
+    "tools/package_manual_preview.py": {
+      "before": "ca2dc35586d1642debf6a5111fa282d881bad43cee4d55138427ad90d954939e",
+      "after": "053d3fc9b1e15341bd2ad790b8b9457a756ac61df400d0e37ca29f2a6f2f0b05"
+    },
+    "tools/test_package_manual_preview.py": {
+      "before": "8f91b1d4ca223b329be5a5ac75f1e338c79cc3140abf4258179210c7fd80e34e",
+      "after": "409c246733a25a0dcea2dbbe1db49813c66ca3cbf5a86c6dbd9a2a798687b7a9"
     }
   }
 }

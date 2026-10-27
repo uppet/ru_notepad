@@ -8,6 +8,8 @@ import ctypes
 from ctypes import wintypes
 from contextlib import contextmanager
 import os
+import json
+import hashlib
 from pathlib import Path
 import shutil
 import subprocess
@@ -118,6 +120,71 @@ def _post_command(api,hwnd,command):
 def _tabs(api,hwnd):return api.scalar(api.control(hwnd,10),0x1304)
 
 
+def _readiness(api,hwnd):
+    # A registered tab is not a completed open: production keeps busy, its
+    # editors read-only and the tab strip disabled until EndWork refreshes UI.
+    tabs=api.control(hwnd,10);editor=api.editor(hwnd)
+    api.user.IsWindowEnabled.argtypes=[wintypes.HWND]
+    api.user.IsWindowEnabled.restype=wintypes.BOOL
+    return {'tab_count':_tabs(api,hwnd),'title':api.text(hwnd),
+            'status':api.text(api.control(hwnd,11)),
+            'tabs_enabled':bool(api.user.IsWindowEnabled(tabs)),
+            'editor_enabled':bool(api.user.IsWindowEnabled(editor)),
+            'cancel_visible':bool(api.user.IsWindowVisible(api.control(hwnd,901))),
+            'editor_readonly':api.scalar(editor,2140)}
+
+
+def _is_ready(observed,count,title=None):
+    return (observed['tab_count']==count and observed['tabs_enabled'] and
+            observed['editor_enabled'] and not observed['cancel_visible'] and
+            observed['editor_readonly']==0 and
+            not ci.status_startswith(observed['status'],'status.opening') and
+            (title is None or observed['title']==title))
+
+
+def _wait_ready(api,process,hwnd,count,description,observations=None,title=None):
+    def ready():
+        observed=_readiness(api,hwnd)
+        if observations is not None:observations[description]=observed
+        return _is_ready(observed,count,title)
+    # Same 30-second wait budget, not an added sleep or a relaxed acceptance.
+    _wait(api,process,ready,description,timeout=30)
+
+
+@contextmanager
+def _failure_evidence(evidence,result,observations,expected):
+    try:
+        yield
+    except Exception as exc:
+        # Diagnostic only, never consumed as a passing acceptance receipt.
+        # Preserve partial child/phase records even when run() raises.
+        def bounded(value,depth=0):
+            if depth>8:return '[depth limit]'
+            if isinstance(value,str):return value[:2048]
+            if isinstance(value,dict):return {str(k)[:128]:bounded(v,depth+1) for k,v in list(value.items())[:64]}
+            if isinstance(value,(list,tuple)):return [bounded(v,depth+1) for v in value[:64]]
+            if value is None or type(value) in (int,float,bool):return value
+            return str(value)[:2048]
+        try:
+            root=Path(__file__).resolve().parents[1]
+            sources=('tools/gui_instance_tabs.py','tools/windows_ci.py','src/main.ru','src/single_instance.ru',
+                     'src/single_instance_policy.ru','src/single_instance_settings.ru')
+            payload={'schema':'ru-notepad-instance-tabs-partial-v1','accepted':False,'error':str(exc),
+                     'record':result,'observations':observations,'expected_documents':expected,
+                     'source_sha256':{name:ci.sha(root/name) for name in sources}}
+            encoded=json.dumps(bounded(payload),ensure_ascii=False,indent=2).encode('utf-8')
+            if len(encoded)>131072:
+                payload={'schema':'ru-notepad-instance-tabs-partial-v1','accepted':False,
+                         'error':str(exc)[:2048],'diagnostic_truncated':True,
+                         'fixture_binary_sha256':result.get('fixture_binary_sha256'),
+                         'partial_record_sha256':hashlib.sha256(encoded).hexdigest()}
+                encoded=json.dumps(payload,ensure_ascii=False,indent=2).encode('utf-8')
+            (Path(evidence)/'instance-tabs-partial.json').write_bytes(encoded+b'\n')
+        except OSError as diagnostic_error:
+            exc.add_note('Could not retain bounded GUI diagnostic: '+str(diagnostic_error))
+        raise
+
+
 def _snapshot(api,hwnd):
     result=[]
     for _ in range(_tabs(api,hwnd)):
@@ -184,6 +251,29 @@ def run(api,binary_dir,fixtures,evidence):
     hashes={n:ci.sha(binary_dir/n) for n in ci.portable.RUNTIME_NAMES}
     result={'schema':'ru-notepad-instance-tabs-gui-v1','name':'main-gui-instance-tabs','passed':False,'executed':False,'cleanup_killed':False,'exit_code':None,'checks':{},'phases':[],'fixture_binary_sha256':hashes,'secondary_processes':[]}
     checks=result['checks']
+    observations={}
+    expected_documents={p.name:{'bytes':p.stat().st_size,'sha256':ci.sha(p)} for p in paths}
+    def ready(process,hwnd,count,label,title=None):
+        _wait_ready(api,process,hwnd,count,label,observations,title)
+    def documents(hwnd,expected,label):
+        # Keep original exact Unicode-title/UTF8-byte validator unchanged. This
+        # proxy records only bounded fixture metadata, not arbitrary user text.
+        observed=[]
+        class RecordingAPI:
+            def __getattr__(self,name):return getattr(api,name)
+            def text(self,handle):
+                value=api.text(handle)
+                if handle==hwnd:observed.append({'title':value})
+                return value
+            def editor_bytes(self,handle):
+                value=api.editor_bytes(handle)
+                if observed:observed[-1].update(bytes=len(value),sha256=hashlib.sha256(value).hexdigest())
+                return value
+        observations[label]={'expected':{n:{'bytes':len(v),'sha256':hashlib.sha256(v).hexdigest()} for n,v in expected.items()},'observed':observed}
+        ci.verify_gui_documents(RecordingAPI(),hwnd,expected)
+    def child_documents(process,hwnd,path,label):
+        ready(process,hwnd,2,label)
+        documents(hwnd,{path.name:path.read_bytes()},label+' exact documents')
     def phase(label,exercise,args=()):
         target=root/label;_copy_runtime(binary_dir,target,hashes)
         item=ci.run_gui(api,target,evidence,name='main-gui-instance-'+label,arguments=args,exercise=exercise,log_prefix='instance-'+label)
@@ -215,34 +305,35 @@ def run(api,binary_dir,fixtures,evidence):
             row['cleanup_killed']=ci.cleanup_process(p);result['cleanup_killed']|=row['cleanup_killed']
             for i,log in enumerate(sorted(target.glob('ru_notepad-*.log'))[:2]):
                 ci.cap_log(log);shutil.copyfile(log,evidence/f'instance-{purpose}-{i}.log')
-    with isolated_settings() as registry:
+    with _failure_evidence(evidence,result,observations,expected_documents), isolated_settings() as registry:
         def persisted(expected):
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER,registry) as key:v,t=winreg.QueryValueEx(key,'SingleInstance')
             return t==winreg.REG_DWORD and v==expected
         def handoff(p,h):
             child('multi-path',[paths[0].name,paths[1].name],False)
-            _wait(api,p,lambda:_tabs(api,h)==3,'owner exact two paths')
-            ci.verify_gui_documents(api,h,{x.name:x.read_bytes() for x in paths[:2]})
+            ready(p,h,3,'owner exact two paths')
+            documents(h,{x.name:x.read_bytes() for x in paths[:2]},'handoff exact documents')
             checks.update(unicode_relative_multi_path_handoff=True,secondary_ack_normal_exit=True,no_secondary_visible_window=True,no_owner_extra_blank_tab=True)
             child('duplicate',[paths[0]],False)
-            _wait(api,p,lambda:api.text(h)==paths[0].name+' · ru_notepad','duplicate activation')
+            ready(p,h,3,'duplicate activation',paths[0].name+' · ru_notepad')
             if _tabs(api,h)!=3:raise RuntimeError('Duplicate path created tab')
             checks['duplicate_activates_existing']=True
             _post_command(api,h,805);_button(api,p,1)
             if not persisted(0):raise RuntimeError('Disable DWORD missing')
-            child('disabled',[paths[2]],True,lambda cp,ch:ci.wait_gui(api,cp,lambda:_tabs(api,ch)==2,'disabled file'))
+            child('disabled',[paths[2]],True,lambda cp,ch:child_documents(cp,ch,paths[2],'disabled file'))
             checks['persistent_disable_creates_window']=True
             _post_command(api,h,805);_button(api,p,1)
             if not persisted(1):raise RuntimeError('Enable DWORD missing')
-            child('reenabled',[paths[2]],False);_wait(api,p,lambda:_tabs(api,h)==4,'reenabled handoff')
+            child('reenabled',[paths[2]],False);ready(p,h,4,'reenabled handoff')
+            documents(h,{x.name:x.read_bytes() for x in paths[:3]},'reenabled exact documents')
             checks['persistent_reenable_handoff']=True
-            child('explicit-multi',['--multi-instance',paths[3]],True,lambda cp,ch:ci.wait_gui(api,cp,lambda:_tabs(api,ch)==2,'multi file'))
+            child('explicit-multi',['--multi-instance',paths[3]],True,lambda cp,ch:child_documents(cp,ch,paths[3],'multi file'))
             checks['explicit_multi_instance_creates_window']=True
             return {}
         phase('handoff',handoff)
         for menu_index,mode in enumerate(('current','others','left','right','saved','all')):
             def exercise(p,h,mode=mode,menu_index=menu_index):
-                _wait(api,p,lambda:_tabs(api,h)==5,'four menu files')
+                ready(p,h,5,'four menu files '+mode)
                 saved_expected=None
                 if mode=='saved':
                     editor=api.editor(h);api.user.PostMessageW(editor,0x102,ord('s'),1)
@@ -252,7 +343,7 @@ def run(api,binary_dir,fixtures,evidence):
                 api.command(h,111)  # active 3, deliberately not clicked tab 2
                 _context(api,p,h,2,menu_index)
                 count={'current':4,'others':1,'left':3,'right':3,'saved':1,'all':1}[mode]
-                _wait(api,p,lambda:_tabs(api,h)==count,'menu '+mode);actual=_snapshot(api,h)
+                ready(p,h,count,'menu '+mode);actual=_snapshot(api,h)
                 names={'current':[0,2,3],'others':[1],'left':[1,2,3],'right':[0,1],'saved':[],'all':[]}[mode]
                 expected=[(paths[i].name+' · ru_notepad',paths[i].read_bytes()) for i in names]
                 if mode in ('current','right'):expected += [x for x in before if not any(x[0]==q.name+' · ru_notepad' for q in paths)]
@@ -267,14 +358,14 @@ def run(api,binary_dir,fixtures,evidence):
                 return {}
             phase('menu-'+mode,exercise,paths)
         def cancel(p,h):
-            _wait(api,p,lambda:_tabs(api,h)==5,'dirty fixtures')
+            ready(p,h,5,'dirty fixtures')
             # Dirty tab 1, not highest tab 4: a partial-close algorithm would
             # already have destroyed clean tabs 4/3/2 before this Cancel.
             for _ in range(3):api.command(h,111)
             editor=api.editor(h)
             api.user.PostMessageW(editor,0x102,ord('x'),1);_wait(api,p,lambda:api.scalar(editor,2159)==1,'dirty edit')
             before=_snapshot(api,h);_context(api,p,h,2,5);_button(api,p,2)
-            _wait(api,p,lambda:not any(c=='#32770' and v for _,c,v in api.windows(p.pid)),'cancel dismissal',dialogs=True)
+            ready(p,h,5,'cancel dismissal and unlocked documents')
             if _snapshot(api,h)!=before:raise RuntimeError('Cancel partially closed documents')
             checks['dirty_batch_cancel_preserves_all']=True
             for _ in range(5):
@@ -286,7 +377,7 @@ def run(api,binary_dir,fixtures,evidence):
             api.user.PostMessageW(api.editor(h),0x102,ord('z'),1)
             _wait(api,p,lambda:api.scalar(api.editor(h),2159)==1,'untitled dirty edit')
             before=_snapshot(api,h);_context(api,p,h,2,5);prompt=_button(api,p,6);_button(api,p,2,exclude=prompt)
-            _wait(api,p,lambda:not any(c=='#32770' and v for _,c,v in api.windows(p.pid)),'save-as cancelled',dialogs=True)
+            ready(p,h,5,'save-as cancelled and unlocked documents')
             if _snapshot(api,h)!=before:raise RuntimeError('Save As cancellation partially closed documents')
             checks['save_as_cancel_preserves_all']=True
             for _ in range(5):
@@ -319,8 +410,8 @@ def run(api,binary_dir,fixtures,evidence):
                 time.sleep(.02)
             if owner is None:raise RuntimeError('Simultaneous startup did not converge to one acknowledged owner')
             rp,rh=owner
-            _wait(api,rp,lambda:_tabs(api,rh)==3,'race owner accepts both original paths')
-            ci.verify_gui_documents(api,rh,{q.name:q.read_bytes() for q in paths[:2]})
+            ready(rp,rh,3,'race owner accepts both original paths')
+            documents(rh,{q.name:q.read_bytes() for q in paths[:2]},'race exact documents')
             checks['startup_race_single_owner']=True;checks['startup_race_all_paths_once']=True
             api.close(rh)
             for rp,d in race_procs:
@@ -378,12 +469,13 @@ def run(api,binary_dir,fixtures,evidence):
                 api.no_dialog(op.pid);api.no_dialog(sp.pid);time.sleep(.02)
             delivered=_tabs(api,oh)-1
             if delivered not in (0,1):raise RuntimeError('Timed-out request was delivered more than once')
+            ready(op,oh,delivered+1,'late timeout owner delivery settled')
             timeout_record['owner_delivery_count']=delivered
             if _tabs(api,sh)!=1 or api.editor_bytes(sh)!=b'':raise RuntimeError('Uncertain handoff automatically opened files locally')
             checks['timeout_uncertain_no_automatic_open']=True
             _post_command(api,sh,113);_button(api,sp,6)
-            _wait(api,sp,lambda:_tabs(api,sh)==2,'explicit open of retained uncertain paths')
-            ci.verify_gui_documents(api,sh,{paths[3].name:paths[3].read_bytes()})
+            ready(sp,sh,2,'explicit open of retained uncertain paths')
+            documents(sh,{paths[3].name:paths[3].read_bytes()},'pending exact documents')
             if _tabs(api,oh)!=delivered+1:raise RuntimeError('Explicit local open resent original IPC')
             checks['timeout_pending_explicit_open']=True
             api.close(sh);api.close(oh)

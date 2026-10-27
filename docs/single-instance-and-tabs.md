@@ -87,8 +87,10 @@ are original implementations.
 
 ## Regression evidence required
 
-The original four GUI gates and unchanged 30-second Markdown stage limits remain
-mandatory, as does recent-file acceptance. New stage3 fixtures cover close policy,
+The four GUI gate groups, active 30-second Markdown stage limits and recent-file
+acceptance remain mandatory. Only the 1 MB unclosed-fence serial two-Undo stage
+is explicitly deprecated, unexecuted by default and not passed; see the
+[scope and TODO](bootstrap-llvm-preview.md#deprecated-case-and-todo-2026-10-27). New stage3 fixtures cover close policy,
 routing policy, isolated settings and real Win32 close/save/cancel behavior.
 Visible tests exercise real second processes, configuration persistence, Unicode
 relative paths, duplicate identity activation, six actual popup actions, and

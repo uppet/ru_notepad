@@ -139,7 +139,7 @@ class ManualPreviewTests(unittest.TestCase):
     def markdown(self):
         return next(t for t in self.summary['tests'] if t['name'] == preview.MD_NAME)
 
-    def timeout(self, case_index=0, stage_index=0):
+    def timeout(self, case_index=0, stage_index=0, *, legacy=True):
         self.summary.update(passed=False, native_tests_passed=False, run_error=preview.RUN_ERROR)
         test = self.markdown()
         for name in ci.GUI_MARKDOWN_CHECKS:
@@ -147,7 +147,9 @@ class ManualPreviewTests(unittest.TestCase):
         test.pop('exit_code')
         test.update(passed=False, cleanup_killed=True, close_posted=False, source_bytes_preserved=True,
             error='Markdown GUI open/edit exceeded its original 30-second deadline')
-        record = test['markdown_performance']
+        record = test['markdown_performance'] = fixtures.markdown_evidence(legacy=legacy)
+        if not legacy:
+            record['teardown'] = {}
         record['cases'] = record['cases'][:case_index + 1]
         case = record['cases'][-1]
         case['stages'] = case['stages'][:stage_index + 1]
@@ -237,6 +239,44 @@ class ManualPreviewTests(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         preview.validate_summary(self.summary, self.root, self.summary['tested_binary_sha256'])
                 self.summary = original
+
+    def test_current_timeout_prefix_keeps_all_eleven_active_stage_checks(self):
+        original=copy.deepcopy(self.summary)
+        positions=[(case_index,stage_index) for case_index,kind in enumerate(('many-lines','singleline','unclosed-fence'))
+                   for stage_index in range(len(ci.gui_markdown_operations(kind)))]
+        self.assertEqual(len(positions),11)
+        for case_index,stage_index in positions:
+            self.summary=copy.deepcopy(original)
+            self.timeout(case_index,stage_index,legacy=False)
+            result=preview.validate_summary(self.summary,self.root,self.summary['tested_binary_sha256'])
+            self.assertEqual(result['formal_acceptance'],'failed')
+            self.assertEqual(result['markdown_scope']['deprecated'],ci.gui_markdown_deprecated())
+        self.summary=copy.deepcopy(original)
+
+    def test_current_deprecation_cannot_hide_failure_or_forge_teardown(self):
+        self.timeout(2,2,legacy=False)
+        original=copy.deepcopy(self.summary)
+        for change in ('missing','wrong-case','executed','passed','budget','teardown','extra-retired-stage'):
+            self.summary=copy.deepcopy(original);record=self.markdown()['markdown_performance']
+            if change=='missing':record.pop('deprecated')
+            elif change=='wrong-case':record['deprecated'][0]['case']='singleline'
+            elif change=='executed':record['deprecated'][0]['executed']=True
+            elif change=='passed':record['deprecated'][0]['passed']=True
+            elif change=='budget':record['deprecated'][0]['original_budget_ms']=60000
+            elif change=='teardown':record['teardown']=ci.gui_markdown_teardown()
+            else:record['cases'][2]['stages'].append(fixtures.markdown_evidence(legacy=True)['cases'][2]['stages'][3])
+            with self.subTest(change=change),self.assertRaises(RuntimeError):
+                preview.validate_summary(self.summary,self.root,self.summary['tested_binary_sha256'])
+        self.summary=original
+
+    def test_historical_double_undo_timeout_stays_failed_not_current_pass(self):
+        self.timeout(2,3)
+        result=preview.validate_summary(self.summary,self.root,self.summary['tested_binary_sha256'])
+        self.assertEqual(result['formal_acceptance'],'failed')
+        self.assertEqual(result['markdown_scope'],{'schema':'legacy-12-stage','active_stages':12,'deprecated':[]})
+        self.assertEqual(result['timeout']['operation'],'undo')
+        self.assertIn('不因案例废弃而改写为通过',preview.manual_text(result))
+        with self.assertRaises(RuntimeError):ci.validate_gui_markdown(fixtures.markdown_evidence(legacy=True))
 
     def test_first_undo_pending_allows_only_the_exact_intermediate_state(self):
         stage = self.timeout(2, 3)

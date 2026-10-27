@@ -72,6 +72,25 @@ def collect_native_evidence(config, app):
     return records
 
 
+def markdown_acceptance_scope(report, ci):
+    require(isinstance(report.get('gui_results'), list), 'missing product GUI inventory')
+    rows=[row for row in report['gui_results'] if row.get('name') == 'main-gui-markdown']
+    require(len(rows) == 1, 'exact Markdown product receipt required')
+    record=rows[0]['markdown_performance']
+    ci.validate_gui_markdown(record, require_windows_clock=True)
+    require(record.get('schema') == 'ru-notepad-markdown-v2'
+            and sum(len(case['stages']) for case in record['cases']) == 11,
+            'current Markdown acceptance scope required')
+    return {'schema':record['schema'], 'active_stages':11,
+            'deprecated':json.loads(json.dumps(record['deprecated']))}
+
+
+def validate_markdown_provenance(provenance, report, ci):
+    expected=markdown_acceptance_scope(report, ci)
+    require(json.dumps(provenance.get('markdown_acceptance'), sort_keys=True) == json.dumps(expected, sort_keys=True),
+            'packaged Markdown scope differs from product receipt')
+
+
 def package(config, product_receipt, output, mingw_root):
     pending = output.with_name(output.name + '.pending')
     require(not output.exists() and not pending.exists(), 'refuse overwrite preview ZIP or pending output')
@@ -80,6 +99,7 @@ def package(config, product_receipt, output, mingw_root):
     report = smoke.read_json(product_receipt)
     ci = smoke.load_windows_harness(ROOT)
     product.validate_product(report, ci)
+    markdown_scope = markdown_acceptance_scope(report, ci)
     require(report['source_pins'] == receipts['app_receipt']['source_pins'], 'product tested another source')
     for key, record in report['build_receipts'].items():
         require(record == identity(Path(config[key])), 'product build receipt changed')
@@ -125,7 +145,9 @@ def package(config, product_receipt, output, mingw_root):
             'ru_notepad — bootstrap LLVM Windows x64 PREVIEW\n\n'
             'The included editor was compiled by the native bootstrap compiler through LLVM IR.\n'
             'The same EXE and DLL bytes passed B7 functional smoke, the four existing product GUI\n'
-            'gates (unchanged budgets), recent-file checks, and the instance_tabs GUI gate.\n'
+            'gates (active-stage budgets unchanged), recent-file checks, and the instance_tabs GUI gate.\n'
+            'Markdown checks cover 11 active stages. The 1 MB unclosed-fence serial double-Undo\n'
+            'case is deprecated/TODO: not executed and not counted as passed.\n'
             'Single-instance routing is configurable in Settings; changes affect later launches.\n'
             'Shell opens create tabs in the existing owner; --multi-instance bypasses once.\n'
             'Right-click a tab for Close, Others, Left, Right, Unmodified, or All.\n'
@@ -150,6 +172,7 @@ def package(config, product_receipt, output, mingw_root):
             'runtime_sha256': expected, 'pe_imports': {name: row['imports'] for name, row in pe.items()},
             'product_receipt_sha256': inputs['product_receipt']['sha256'],
             'smoke_receipt_sha256': inputs['smoke_receipt']['sha256'],
+            'markdown_acceptance': markdown_scope,
             'gui_gates': sorted(product.GUI_NAMES), 'recent_files_gui': True, 'instance_tabs_gui': True,
             'stage3_recent_fixtures': dict(CASES),
             'recent_fixtures_receipt_sha256': inputs['recent_fixtures_receipt']['sha256'],
@@ -157,6 +180,7 @@ def package(config, product_receipt, output, mingw_root):
             'native_evidence_sha256':{name:row['sha256'] for name,row in native_evidence.items()},
             'frontend_ir_sha256':receipts['app_receipt']['frontend_ir_sha256'],
             'frontend_ir_delivery':'retained in CI evidence; SHA-bound here, not duplicated in ZIP'}
+        validate_markdown_provenance(provenance, report, ci)
         (stage/'preview-provenance.json').write_text(json.dumps(provenance, indent=2)+'\n', encoding='utf-8')
         files = {p.relative_to(stage).as_posix(): {'sha256': sha(p), 'size': p.stat().st_size}
                  for p in sorted(stage.rglob('*')) if p.is_file()}

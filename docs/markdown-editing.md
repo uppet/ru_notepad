@@ -61,3 +61,12 @@ The CI-only `--markdown-phase-diagnostics` switch now projects existing numeric 
 Fields are sequence, origin (`via=0` for a periodic sample, `via=1` for an existing completion refresh), state identity, generation, revision, phase, pending, document byte length, bytes fed, published-line cursor, and the existing process-cumulative tick/work/gap counters. Phase codes are 0 (prepare), 1 (scan), 2 (queued fold ranges), 3 (visibility cleanup), and 4 (no pending fold work, including disabled folding). A phase is a sampled remaining-work category, not a measurement of time spent in that phase. Sequence and counters are process-cumulative, not per-operation totals. The completion-refresh record uses the preceding completed tick totals because the current callback has not yet committed its totals; it does not invent a sample timestamp or advance those counters. A cached sample can lag while work is pending; GUI completion requires a terminal numeric marker together with the original style/fold/context/status/visibility requirements.
 
 The diagnostic uses the scheduler's existing QPC result. Its additional status write and slightly larger status read have real cost: the write occurs after the existing work counter is sampled, so its cost is in GUI wall time and the next in-burst gap when one exists. A final write after the timer stops has no subsequent in-burst gap. This is bounded diagnostic overhead, not a zero-overhead profile. The original 8 ms work budget, 10 ms timer, all three corpora, style expectations and 30 s per-operation deadline are unchanged. Thirteen native diagnostic controls bring the required console total to 1,845 across the same 38 product results; actual Windows phase evidence is still pending.
+
+## Current acceptance exception (2026-10-27)
+
+The earlier unchanged-deadline statements above describe historical experiments.
+The user has now retired exactly the 1 MB unclosed-fence serial two-Undo folding
+case from blocking/default acceptance and requested a TODO for later optimization.
+It is not a pass or a performance fix. All other active stages, source/style/fold
+correctness and UI checks remain required at their original limits. See
+[the exact deprecated case, retained failure and TODO](bootstrap-llvm-preview.md#deprecated-case-and-todo-2026-10-27).

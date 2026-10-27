@@ -36,6 +36,38 @@ class PreviewContracts(unittest.TestCase):
             self.assertIn(text,source)
         self.assertIn("validate_result(report.get('instance_tabs'), hashes)",Path(product.__file__).read_text())
 
+    def test_package_markdown_scope_binds_current_product_deprecation(self):
+        import test_package as fixtures
+        ci=fixtures.ci
+        record=fixtures.markdown_evidence()
+        report={'gui_results':[{'name':'main-gui-markdown','passed':True,'markdown_performance':record}]}
+        result=package.markdown_acceptance_scope(report,ci)
+        self.assertEqual(result,{'schema':ci.GUI_MARKDOWN_SCHEMA,'active_stages':11,'deprecated':ci.gui_markdown_deprecated()})
+        self.assertIsNone(result['deprecated'][0]['passed'])
+        provenance={'markdown_acceptance':copy.deepcopy(result)}
+        package.validate_markdown_provenance(provenance,report,ci)
+        for mutation in ('missing','stage-count','case','fake-pass','numeric-false'):
+            bad=copy.deepcopy(provenance)
+            if mutation=='missing':bad.pop('markdown_acceptance')
+            elif mutation=='stage-count':bad['markdown_acceptance']['active_stages']=12
+            elif mutation=='case':bad['markdown_acceptance']['deprecated'][0]['case']='singleline'
+            elif mutation=='fake-pass':bad['markdown_acceptance']['deprecated'][0]['passed']=True
+            else:bad['markdown_acceptance']['deprecated'][0]['executed']=0
+            with self.subTest(provenance=mutation),self.assertRaises(InvalidProvenance):package.validate_markdown_provenance(bad,report,ci)
+        result['deprecated'][0]['passed']=True
+        self.assertIsNone(record['deprecated'][0]['passed']) # output cannot mutate source receipt
+        for mutation in ('old','missing','other-case','fake-pass','failed-active'):
+            bad=copy.deepcopy(report);performance=bad['gui_results'][0]['markdown_performance']
+            if mutation=='old':bad['gui_results'][0]['markdown_performance']=fixtures.markdown_evidence(legacy=True)
+            elif mutation=='missing':performance.pop('deprecated')
+            elif mutation=='other-case':performance['deprecated'][0]['case']='singleline'
+            elif mutation=='fake-pass':performance['deprecated'][0]['passed']=True
+            else:performance['cases'][0]['stages'][0]['wall_ms']=30001
+            with self.subTest(mutation=mutation),self.assertRaises(RuntimeError):package.markdown_acceptance_scope(bad,ci)
+        text=Path(package.__file__).read_text()
+        self.assertIn('not executed and not counted as passed',text)
+        self.assertIn("'markdown_acceptance': markdown_scope",text)
+
     def test_native_package_evidence_exact_inventory_and_fail_closed(self):
         expected={'application.metadata.c','native-wrapper.json','application-native-oracle.json',
                   'application-oracle-validation.json','compile-proof.json'}
@@ -64,6 +96,25 @@ class PreviewContracts(unittest.TestCase):
                 with self.assertRaises(InvalidProvenance):package.collect_native_evidence(config,app)
             (self.root/'application-oracle-validation.json').write_text('{}')
             with self.assertRaises(InvalidProvenance):package.collect_native_evidence(config,app)
+
+    def test_wip_push_runs_fresh_preview_without_cancelling_existing_run(self):
+        workflow=(Path(__file__).resolve().parents[1]/'.github/workflows/bootstrap-preview.yml').read_text()
+        expected=['feature/bootstrap-llvm-preview-20261024','feature/bootstrap-llvm-preview-20261024-r1',
+                  'feature/bootstrap-llvm-preview-20261024-r2','feature/bootstrap-llvm-preview-20261024-r3',
+                  'feature/notepad-024-responsive-preview-20261026','wip']
+        def verify(text):
+            match=re.search(r'^  push:\n    branches: \[(.*?)\]$',text,re.M)
+            self.assertIsNotNone(match)
+            branches=[name.strip() for name in match.group(1).split(',')]
+            self.assertEqual(branches,expected)
+            self.assertNotIn('main',branches)
+            self.assertIn('  cancel-in-progress: false\n',text)
+            self.assertIn('    timeout-minutes: 60\n',text)
+        verify(workflow)
+        for bad in (workflow.replace(', wip]',']'),workflow.replace(', wip]',', wip, main]'),
+                    workflow.replace('cancel-in-progress: false','cancel-in-progress: true'),
+                    workflow.replace('timeout-minutes: 60','timeout-minutes: 90')):
+            with self.assertRaises(AssertionError):verify(bad)
 
     def test_workflow_job_env_contexts_and_runtime_output_initialization(self):
         workflow=(Path(__file__).resolve().parents[1]/'.github/workflows/bootstrap-preview.yml').read_text()
@@ -279,6 +330,7 @@ class PreviewContracts(unittest.TestCase):
         with self.assertRaises(InvalidProvenance):package.verify_zip(path,files)
 
     def test_package_entry_refuses_changed_receipts_runtime_or_failed_gui_before_zip(self):
+        import test_package as fixtures
         runtime=self.root/'runtime';runtime.mkdir()
         names=('ru_notepad.exe','Scintilla.dll','Lexilla.dll','RuSyntax.dll')
         for name in names:(runtime/name).write_bytes(('tested '+name).encode())
@@ -288,6 +340,7 @@ class PreviewContracts(unittest.TestCase):
             file=self.root/(key+'.json');file.write_text('{}');config[key]=str(file)
         source_pins={'app_source':{'commit':'a'*40},'ru_source':{'commit':'b'*40}}
         report={'source_pins':source_pins, 'runtime_directory':str(runtime),'runtime_sha256':hashes,
+                'gui_results':[{'name':'main-gui-markdown','passed':True,'markdown_performance':fixtures.markdown_evidence()}],
                 'build_receipts':{key:build.identity(Path(value)) for key,value in config.items() if key!='smoke_receipt'},
                 'smoke_receipt':build.identity(Path(config['smoke_receipt'])),
                 'recent_fixtures_receipt':build.identity(Path(config['recent_fixtures_receipt']))}
@@ -299,7 +352,7 @@ class PreviewContracts(unittest.TestCase):
             stack.enter_context(patch.object(package.smoke,'validate_receipts',return_value=receipts))
             stack.enter_context(patch.object(package,'validate_receipt',return_value=dependency))
             reader=stack.enter_context(patch.object(package.smoke,'read_json',return_value=report))
-            stack.enter_context(patch.object(package.smoke,'load_windows_harness',return_value=object()))
+            stack.enter_context(patch.object(package.smoke,'load_windows_harness',return_value=fixtures.ci))
             stack.enter_context(patch.object(recent_fixtures,'validate_report'))
             stack.enter_context(patch.object(recent_fixtures,'compiler_from_receipt',return_value=self.root/'stage3.exe'))
             validator=stack.enter_context(patch.object(package.product,'validate_product'))

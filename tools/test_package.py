@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Portable packaging regressions use fake PE files; no Windows pass is claimed."""
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -42,17 +43,19 @@ def observer_evidence():
             'head_style_measurement': ci.GUI_RU_HEAD_MEASUREMENT}
 
 
-def markdown_evidence():
+def markdown_evidence(*, legacy=False):
     """Synthetic schema fixture only; never evidence of running the GUI."""
     record = {'measurement': ci.GUI_MARKDOWN_MEASUREMENT, 'clock': {
         'clock_name': 'perf_counter', 'implementation': 'QueryPerformanceCounter()',
         'resolution': 1e-7, 'monotonic': True, 'adjustable': False}, 'cases': []}
+    if not legacy:
+        record.update(schema=ci.GUI_MARKDOWN_SCHEMA, deprecated=ci.gui_markdown_deprecated(), teardown=ci.gui_markdown_teardown())
     for kind in ('many-lines', 'singleline', 'unclosed-fence'):
         data, probes, folds = ci.gui_markdown_fixture(kind)
         case = {'kind': kind, 'size': len(data), 'source_sha256': hashlib.sha256(data).hexdigest(),
                 'style_probes': probes, 'fold_probes': folds, 'stages': []}
         record['cases'].append(case)
-        for operation in ('open', 'insert', 'backspace', 'undo'):
+        for operation in ci.gui_markdown_operations(kind, legacy=legacy):
             expected, styles, _ = ci.markdown_expected(kind, operation)
             style_positions = [position for probe in styles
                                for position in range(probe['offset'], probe['offset'] + probe['length'])]
@@ -770,6 +773,23 @@ class PackageTests(unittest.TestCase):
             self.assertIn(name + '.exe', tests)
         self.assertIn('native-test-evidence/main-markdown-launcher-0.log', tests)
         self.assertFalse(any(name.startswith('native-test-evidence/') for name in runtime))
+
+    def test_current_markdown_inventory_is_eleven_with_explicit_unexecuted_deprecation(self):
+        record=markdown_evidence()
+        self.assertEqual([len(case['stages']) for case in record['cases']],[4,4,3])
+        self.assertEqual(record['deprecated'],ci.gui_markdown_deprecated())
+        self.assertIsNone(record['deprecated'][0]['passed'])
+        self.assertIs(record['deprecated'][0]['executed'],False)
+        ci.validate_gui_markdown(record,require_windows_clock=True)
+        for mutation in ('missing-deprecated','executed','passed','wrong-case','teardown','legacy'):
+            bad=copy.deepcopy(record)
+            if mutation=='missing-deprecated':bad.pop('deprecated')
+            elif mutation=='executed':bad['deprecated'][0]['executed']=True
+            elif mutation=='passed':bad['deprecated'][0]['passed']=True
+            elif mutation=='wrong-case':bad['deprecated'][0]['case']='many-lines'
+            elif mutation=='teardown':bad['teardown']={}
+            else:bad=markdown_evidence(legacy=True)
+            with self.subTest(mutation=mutation),self.assertRaises(RuntimeError):ci.validate_gui_markdown(bad,require_windows_clock=True)
 
     def test_markdown_gui_schema_is_rechecked_at_packaging_boundary(self):
         for mutation in ('missing', 'late', 'pending', 'source', 'collapse', 'observer', 'clock', 'progress-missing', 'diagnostic-missing', 'diagnostic-malformed', 'phase-missing', 'phase-invalid'):
