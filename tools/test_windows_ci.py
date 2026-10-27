@@ -634,6 +634,11 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
 
     def test_prefix_proof_elif_adaptation_is_exact_and_preserves_old_guards(self):
         import test_ru_policy_fast as proof
+        import verify_ru_policy_fast_outputs as verifier
+        self.assertEqual(verifier.GRAMMAR_ADAPTATION, proof.GRAMMAR_ADAPTATION)
+        self.assertEqual(verifier.ADAPTED_BASE_SOURCE_SHA256, proof.ADAPTED_BASE_SOURCE_SHA256)
+        self.assertIn("'scope':" + repr(verifier.SCOPE),
+                      (ci.ROOT / 'tools/test_ru_policy_fast.py').read_text(encoding='utf-8'))
         candidate = (ci.ROOT / 'src/ru_lexical.ru').read_text(encoding='utf-8')
         before = candidate.replace(proof.PREFIX_SOURCE, '', 1).replace(
             '    循 ((事件 其 量)-位) 次\n', '    循 事件 其 量 次\n', 1)

@@ -20,14 +20,14 @@ BASE_COMMIT = 'a5f5fd825767cd5af662cba792f5ce352991c21e'
 BASE_TREE = 'e8a402fb3eb551bfe416b8aee0aaaf942d2d4f4a'
 BASE_POLICY_BLOB = '876a99f76db706cfd76427b9341ee5f05180ce0d'
 BASE_SOURCE_SHA256 = 'f78589e247186890855526f7bb3624d34e4004bb8fbc69587c96d38c826a602c'
-GRAMMAR_ADAPTATION = 'ru-0.23.0-elif-v1'
-ADAPTED_BASE_SOURCE_SHA256 = '1887d1daceeb71f6c046c962142ef1b99ffe3a0b73770686dd4f9b3025e9b8ae'
+GRAMMAR_ADAPTATION = 'ru-0.24.0-elif-continue-v1'
+ADAPTED_BASE_SOURCE_SHA256 = '2b76ccb2b389bba0675e832a1a4a2b7fab6e1769067adf0cbf33e1e73b4c560c'
 RU_COMMIT = '85c7821fda35aa79deeaf67b4d430f24ddd7f07f'
 RU_TREE = 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba'
 CANONICAL_PLAN_SHA256 = 'a712c3b5c70e5bfe4ae09900d928f594c2c88bb49448d40ca15422b09a015e90'
 PLAN_CONTENT_SHA256 = '0183679cfac0583d3a160e7ab7549967fe6b53b87b605647f2da3ce09c171616'
 TOTALS = {'cases':196,'batches':19627,'events':2554,'context_transitions':21504}
-SCOPE = 'Actual interpreter and ordinary generated host C, with the same explicit Ru 0.23.0 elif grammar adaptation on the historical baseline. Not the original historical baseline output; no Windows/GUI speed claim.'
+SCOPE = 'Actual interpreter and ordinary generated host C, with the same explicit Ru 0.24.0 elif/continue grammar adaptation on the historical baseline. Not the original historical baseline output; no Windows/GUI speed claim.'
 LOG_NAMES = ('interpreter.log',)+tuple(f'host-c-{i}.log' for i in range(4))
 PUBLIC_FILE_LIMITS = {'report.json':64*1024,'fixture-manifest.json':256*1024,
                       'ordered-output-validation.json':16*1024,

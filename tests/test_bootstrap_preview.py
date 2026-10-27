@@ -339,6 +339,93 @@ class PreviewContracts(unittest.TestCase):
                 (good+b'SKIP: x\n',b'',0)]:
             with self.assertRaises(InvalidProvenance):recent_fixtures.exact_assertions(stdout,stderr,rc,2)
 
+    def native_preflight_tree(self):
+        root=self.root/'language'
+        for name in prepare.NATIVE_PREFLIGHT_FILES:
+            path=root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text('# fixture\n')
+        help_text='usage: bootstrap.py build ...\n\noptions:\n'+''.join(
+            '  '+flag+(' '+argument if argument else '')+'\n'
+            for flag,argument in prepare.NATIVE_BUILD_OPTIONS.items())
+        return root,help_text
+
+    def test_native_preflight_accepts_exact_options_without_building_source(self):
+        root,help_text=self.native_preflight_tree()
+        with patch.object(prepare.subprocess,'run',return_value=SimpleNamespace(
+                returncode=0,stdout=help_text,stderr='')) as run:
+            prepare.native_preflight(root)
+        run.assert_called_once_with(
+            [sys.executable,str(root/'tools/bootstrap.py'),'build','--help'],
+            cwd=root,capture_output=True,text=True,encoding='utf-8',errors='strict',
+            timeout=30,check=False)
+
+    def test_native_preflight_rejects_each_missing_file_before_execution(self):
+        root,_=self.native_preflight_tree()
+        with patch.object(prepare.subprocess,'run') as run:
+            for name in prepare.NATIVE_PREFLIGHT_FILES:
+                path=root/name;data=path.read_bytes();path.unlink()
+                with self.subTest(name=name), self.assertRaisesRegex(InvalidProvenance,'missing input'):
+                    prepare.native_preflight(root)
+                path.write_bytes(data)
+        run.assert_not_called()
+
+    def test_native_preflight_rejects_linked_file_and_ancestor(self):
+        root,_=self.native_preflight_tree()
+        target=root/'bootstrap/native_emit.ru';original=target.read_bytes();target.unlink()
+        replacement=self.root/'real-native.ru';replacement.write_bytes(original)
+        target.symlink_to(replacement)
+        with patch.object(prepare.subprocess,'run') as run:
+            with self.assertRaisesRegex(InvalidProvenance,'linked input'):prepare.native_preflight(root)
+            target.unlink();target.write_bytes(original)
+            linked=self.root/'linked-language';linked.symlink_to(root,target_is_directory=True)
+            with self.assertRaisesRegex(InvalidProvenance,'linked input'):prepare.native_preflight(linked)
+        run.assert_not_called()
+
+    def test_native_preflight_requires_complete_option_declarations(self):
+        root,help_text=self.native_preflight_tree()
+        for flag,argument in prepare.NATIVE_BUILD_OPTIONS.items():
+            declaration='  '+flag+(' '+argument if argument else '')
+            for invalid in ('', '  '+flag+'-extra', '  '+flag+'=True',
+                    'description mentions '+flag, '                          ['+flag+']'):
+                text=help_text.replace(declaration+'\n',invalid+'\n')
+                with self.subTest(flag=flag,invalid=invalid), patch.object(prepare.subprocess,'run',
+                        return_value=SimpleNamespace(returncode=0,stdout=text,stderr='')):
+                    with self.assertRaisesRegex(InvalidProvenance,'missing native bootstrap option'):
+                        prepare.native_preflight(root)
+        for invalid in ('  --allow-native BOOL','  --allow-native True','  --allow-native=false'):
+            with patch.object(prepare.subprocess,'run',return_value=SimpleNamespace(returncode=0,
+                    stdout=help_text.replace('  --allow-native\n',invalid+'\n'),stderr='')):
+                with self.assertRaises(InvalidProvenance):prepare.native_preflight(root)
+
+    def test_native_preflight_rejects_failed_noisy_or_invalid_help(self):
+        root,help_text=self.native_preflight_tree()
+        for rc,stdout,stderr in ((1,help_text,''),(False,help_text,''),(0,help_text,'warning'),
+                                (0,True,''),(0,'x'*65537,'')):
+            with self.subTest(rc=rc,stderr=stderr), patch.object(prepare.subprocess,'run',
+                    return_value=SimpleNamespace(returncode=rc,stdout=stdout,stderr=stderr)):
+                with self.assertRaises(InvalidProvenance):prepare.native_preflight(root)
+        with patch.object(prepare.subprocess,'run',side_effect=subprocess.TimeoutExpired('help',30)):
+            with self.assertRaises(subprocess.TimeoutExpired):prepare.native_preflight(root)
+
+    def test_prepare_checks_pinned_snapshot_before_native_preflight_and_toolchain(self):
+        root,_=self.native_preflight_tree();app=self.root/'app';app.mkdir()
+        events=[]
+        value={'compiler':{'commit':'a'*40,'tree':'b'*40}}
+        def snapshot(path,commit,tree):events.append(('snapshot',path,commit,tree));return {}
+        def fail_preflight(path):
+            events.append(('preflight',path));raise InvalidProvenance('missing native capability')
+        with patch.object(prepare,'ROOT',app), patch.object(prepare,'manifest',return_value=value), \
+                patch.dict(prepare.os.environ,{'GITHUB_SHA':'c'*40}), \
+                patch.object(prepare,'git',return_value='d'*40), \
+                patch.object(prepare,'snapshot',side_effect=snapshot), \
+                patch.object(prepare,'native_preflight',side_effect=fail_preflight), \
+                patch.object(prepare,'verify_app_baseline') as baseline:
+            with self.assertRaisesRegex(InvalidProvenance,'missing native capability'):
+                prepare.prepare(root,self.root/'output',self.root/'mingw')
+        self.assertEqual(events,[('snapshot',app,'c'*40,'d'*40),
+                                 ('snapshot',root,'a'*40,'b'*40),('preflight',root)])
+        baseline.assert_not_called()
+        self.assertFalse((self.root/'output').exists())
+
     def test_unfrozen_manifest_never_resolves_dynamic_branch_or_latest_artifact(self):
         file=self.root/'inputs.json'
         value={'schema':'ru-notepad-reviewed-preview-inputs-v1','compiler':{'commit':None,'tree':None},

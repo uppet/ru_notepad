@@ -224,6 +224,20 @@ def verify_proof(proof, *, source, compiler, ir, binary, triple, layout, frozen,
         selection = verify_linker_selection(proof.get('linker_selection'), tools, triple=triple)
         require(len(selection['command']) == 7 and selection['command'][1] == '--target='+triple
                 and selection['command'][3] == '-o', 'host link was not explicitly targeted pure object to EXE')
+        names = ('clang', 'llvm-as', 'llvm-link', 'opt', 'llvm-dis', 'llc')
+        executables = proof.get('tool_executables')
+        require(isinstance(executables, dict) and set(executables) == set(names),
+                'exact native tool executable inventory required')
+        host_inputs = proof.get('host_inputs')
+        require(isinstance(host_inputs, list), 'missing host inputs')
+        for name in names:
+            record = executables[name]
+            require(isinstance(record, dict) and type(record.get('size')) is int
+                    and record == identity(tools[name]), 'native tool executable identity mismatch: ' + name)
+            require(record['path'] in frozen and record['sha256'] == frozen[record['path']],
+                    'native tool executable differs from frozen input: ' + name)
+            require(sum(item == record for item in host_inputs) == 1,
+                    'native tool executable missing or duplicated in host inputs: ' + name)
     for key, file, digest_key in [('standalone_ir', ir, 'standalone_ir_sha256'), ('binary', binary, 'binary_sha256')]:
         require(proof.get('artifacts', {}).get(key) == {'path': str(file.resolve()), 'sha256': sha(file)}
                 and proof.get(digest_key) == sha(file), 'proof artifact mismatch: ' + key)

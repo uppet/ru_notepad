@@ -1,3 +1,4 @@
+import copy
 import json
 import re
 from pathlib import Path
@@ -47,6 +48,13 @@ class ReleaseTests(unittest.TestCase):
         return b.verify_proof(self.proof, **{k: self.files[k] for k in ('source','compiler','ir','binary')},
                               triple='triple', layout='layout', frozen=self.frozen)
 
+    def bind_tool_executables(self, tools):
+        records={name:b.identity(tools[name]) for name in
+                 ('clang','llvm-as','llvm-link','opt','llvm-dis','llc')}
+        self.proof['tool_executables']=records
+        self.proof['host_inputs'].extend(records.values())
+        self.frozen.update({record['path']:record['sha256'] for record in records.values()})
+
     def test_fixture_normalizes_short_temp_alias_before_use(self):
         # Portable model of Windows RUNNER~1: no symlink privileges required.
         canonical = self.root / 'long-temporary-path'
@@ -74,6 +82,7 @@ class ReleaseTests(unittest.TestCase):
     def test_host_link_requires_exact_explicit_target_and_pure_object_shape(self):
         tools={name:str(self.root/(name+'.exe')) for name in ('clang','linker','llvm-as','llvm-link','opt','llvm-dis','llc')}
         for path in tools.values(): Path(path).write_bytes(b'locked-tool')
+        self.bind_tool_executables(tools)
         triple='x86_64-pc-windows-msvc'
         record=b.identity(tools['linker'])
         command=[tools['clang'],'--target='+triple,str(self.root/'a.obj'),'-o',str(self.root/'a.exe'),*b.explicit_linker_flags(record)]
@@ -148,8 +157,9 @@ class ReleaseTests(unittest.TestCase):
         self.assertRaises(InvalidProvenance, self.verify)
 
     def test_actual_host_toolchain_must_match_locked_paths(self):
-        tools = {name: '/locked/'+name for name in ('clang','llvm-as','llvm-link','opt','llvm-dis','llc','linker')}
-        tools['linker'] = str(self.files['host'])
+        tools = {name: str(self.root/(name+'.exe')) for name in ('clang','llvm-as','llvm-link','opt','llvm-dis','llc','linker')}
+        for name,path in tools.items(): Path(path).write_text(name)
+        self.bind_tool_executables(tools)
         args = {k: self.files[k] for k in ('source','compiler','ir','binary')}
         args.update(triple='triple', layout='layout', frozen=self.frozen, tools=tools)
         self.proof['toolchain'] = {'clang': [tools['clang']],
@@ -162,6 +172,39 @@ class ReleaseTests(unittest.TestCase):
         with patch.object(b.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout=b'', stderr=link_trace([tools['linker'], '-out:p.exe']))):
             self.proof['linker_selection'] = b.inspect_linker_command(command, self.proof['linker'], {}, str(self.root))
         b.verify_proof(self.proof, **args)
+        original=copy.deepcopy(self.proof)
+        for mutation in ('missing','extra','wrong-shape'):
+            self.proof=copy.deepcopy(original)
+            if mutation=='missing':del self.proof['tool_executables']
+            elif mutation=='extra':self.proof['tool_executables']['linker']=b.identity(tools['linker'])
+            else:self.proof['tool_executables']=True
+            with self.subTest(mutation=mutation),self.assertRaises(InvalidProvenance):
+                b.verify_proof(self.proof,**args)
+        for name in original['tool_executables']:
+            for mutation in ('missing','path','hash','size','bool-size','extra-field','host-missing','host-duplicate','frozen-missing','frozen-hash','changed-bytes'):
+                self.proof=copy.deepcopy(original);frozen=dict(self.frozen)
+                record=self.proof['tool_executables'][name];path=Path(tools[name]);data=path.read_bytes()
+                if mutation=='missing':del self.proof['tool_executables'][name]
+                elif mutation=='path':record['path']=tools['linker']
+                elif mutation=='hash':record['sha256']='0'*64
+                elif mutation=='size':record['size']+=1
+                elif mutation=='bool-size':record['size']=True
+                elif mutation=='extra-field':record['unexpected']=True
+                elif mutation=='host-missing':self.proof['host_inputs'].remove(record)
+                elif mutation=='host-duplicate':self.proof['host_inputs'].append(record)
+                elif mutation=='frozen-missing':del frozen[record['path']]
+                elif mutation=='frozen-hash':frozen[record['path']]='0'*64
+                else:
+                    path.write_bytes(data+b'changed')
+                    changed=b.identity(path)
+                    self.proof['host_inputs'].remove(record)
+                    self.proof['host_inputs'].append(changed)
+                    self.proof['tool_executables'][name]=changed
+                try:
+                    with self.subTest(name=name,mutation=mutation),self.assertRaises(InvalidProvenance):
+                        b.verify_proof(self.proof,**{**args,'frozen':frozen})
+                finally:path.write_bytes(data)
+        self.proof=copy.deepcopy(original)
         self.proof['toolchain']['tools']['llc'] = '/PATH/other-llc'
         self.assertRaises(InvalidProvenance, b.verify_proof, self.proof, **args)
 

@@ -1,8 +1,8 @@
 {
   "schema": "ru-notepad-reviewed-preview-inputs-v1",
   "compiler": {
-    "commit": "3f14cc8eb913179198c79e959823e85b9e6d178c",
-    "tree": "4c9e9751592a043af725e7afa26bb4a1297ee709"
+    "commit": "26cc8a210d5cef2bd8ab37b6c270833884ea39a5",
+    "tree": "847c68b4569e12ffaf8ae4c5b500fdbaad7b801d"
   },
   "baseline": {
     "commit": "d964ea9f7e27065aa5bbcced8d6c7526a6224dd1",
@@ -15,7 +15,7 @@
     },
     "docs/bootstrap-llvm-preview.md": {
       "before": null,
-      "after": "040e3b6373c41cc83b09e4fc9a04b6638ee3128255c63919a67a89ae80990c97"
+      "after": "fb602b1cbd073bfbb19902fdcdf3add194ad3bcc08bedf5479c1a519e1ddad04"
     },
     "docs/recent-files.md": {
       "before": null,
@@ -99,7 +99,7 @@
     },
     "tools/test_windows_ci.py": {
       "before": "b28733251662cd749c961fda95d912a1638794857fbb07015b5fb6363c28ec3b",
-      "after": "df994ae5e32e7f36603413a1e3313fcb279162befa170b19848e5a22c0a11e7e"
+      "after": "a3e3a1180140a6234bd06f562214b8a46d79755a3b2e018512af9926d6d03fd0"
     },
     "tools/windows_ci.py": {
       "before": "c1a793bf7d96267adc47d70bd459b3c050cb54f67c9768a57041cad5a732142a",
@@ -108,6 +108,10 @@
     "docs/preview-024-candidate.md": {
       "before": null,
       "after": "7b68338f52575cdc58a447c1d420a3f6447880548f126a01b0334472f0628e22"
+    },
+    "tools/verify_ru_policy_fast_outputs.py": {
+      "before": "32b4fdcec098114f9a211456058ebc46ba78e7138cdbf556b346570167c7903b",
+      "after": "7841c0727006fe53a110bbe53e490e01858dde9474beba58e7ab49a23284f38f"
     }
   }
 }

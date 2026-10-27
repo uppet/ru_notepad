@@ -15,7 +15,7 @@ import sys
 # Resolve only this reviewed tools directory, including under Python -I.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from bootstrap_provenance import require, sha
+from bootstrap_provenance import require, checked, sha
 from build_bootstrap_release import build, snapshot, verify_app_baseline
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,6 +36,39 @@ def manifest():
     return value
 
 
+
+NATIVE_PREFLIGHT_FILES = (
+    'tools/bootstrap.py', 'bootstrap/native_emit.ru',
+    'tools/bootstrap_native_runtime.py', 'tools/verify_bootstrap_native_ci.py',
+)
+NATIVE_BUILD_OPTIONS = {
+    '--allow-native': None, '--source-root': 'SOURCE_ROOT', '--proof': 'PROOF',
+    '--linker': 'LINKER', '--emit-llvm': 'EMIT_LLVM', '--compiler': 'COMPILER',
+}
+
+
+def native_preflight(ru):
+    """Check pinned driver capabilities, never replace native acceptance.
+
+    Only argument parsing runs, without any application source argument.
+    """
+    files = {name: checked(ru, name) for name in NATIVE_PREFLIGHT_FILES}
+    result = subprocess.run(
+        [sys.executable, str(files['tools/bootstrap.py']), 'build', '--help'],
+        cwd=ru, capture_output=True, text=True, encoding='utf-8', errors='strict',
+        timeout=30, check=False)
+    require(type(result.returncode) is int and result.returncode == 0 and result.stderr == '',
+            'native bootstrap help failed')
+    require(isinstance(result.stdout, str) and len(result.stdout) <= 65536,
+            'invalid native bootstrap help')
+    # Full argparse declarations, not prose/usage substrings or Boolean values.
+    for flag, argument in NATIVE_BUILD_OPTIONS.items():
+        declaration = flag + (' ' + argument if argument else '')
+        require(re.search(r'^  ' + re.escape(declaration) + r'(?: {2,}[^\n]*)?$',
+                          result.stdout, re.MULTILINE) is not None,
+                'missing native bootstrap option: ' + flag)
+
+
 def prepare(ru, output, mingw):
     value = manifest()
     require(not output.exists() and not any(p.is_symlink() for p in output.parents), 'private fresh output required')
@@ -46,6 +79,7 @@ def prepare(ru, output, mingw):
     ru_pin = {'path': str(ru), **value['compiler']}
     app_sources = snapshot(ROOT, app_pin['commit'], app_pin['tree'])
     snapshot(ru, ru_pin['commit'], ru_pin['tree'])
+    native_preflight(ru)
     baseline = {**value['baseline'], 'reviewed_changes': value['reviewed_changes']}
     verify_app_baseline(ROOT, baseline, app_sources)
     sys.path.insert(0, str(ru))

@@ -7,18 +7,21 @@ exact source and executable. This document is a plan, not a passing test receipt
 
 ## Separate evidence, without substituting one for another
 
-- The compiler source is pinned to a reviewed native-FFI integration based on
-  the validated `ru-language` main line. The unmerged `wip` interpreter-depth
-  changes are not a prerequisite or part of that toolchain.
+- The compiler source must be pinned to an independently validated native-FFI
+  integration. A language version, successful ordinary bootstrap fixed point,
+  or green main/wip jobs alone does not establish native-FFI build capability.
+  Both the native frontend/Windows gates and this editor's current module graph
+  must be validated; an older compiler pin is not silently substituted.
 - Bootstrap source, stage compiler, emitted IR, native dependencies and final
   executable identities are recorded. No Python compiler or generated-C route
   may silently replace the bootstrap LLVM editor build.
 - The actual preview executable must pass the bootstrap pipeline smoke checks,
   all four existing GUI product gates, and the recent-files tests. Existing
   deadlines and assertions remain unchanged.
-- Three additional real-stage3 recent-file fixtures cover policy (25 assertions),
-  native registry/encoding boundaries (22), and the actual main-module callback
-  control flow (10). They do not substitute for starting and testing the editor.
+- Five real-stage3 fixtures cover recent-file policy (25 assertions), native
+  registry/encoding boundaries (22), actual main-module callback control flow
+  (10), Ru lexical policy including 续 (422), and Markdown policy (221). These
+  700 assertions do not substitute for starting and testing the editor.
 - The existing C-built native fixture suite remains separate baseline evidence.
   Its passing result does not claim those fixture executables were built with
   bootstrap LLVM, nor does a bootstrap smoke check replace product validation.
