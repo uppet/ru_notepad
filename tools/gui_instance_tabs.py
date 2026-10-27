@@ -387,26 +387,168 @@ def _item_rect(api,process,tabs,index):
         k.CloseHandle(handle)
 
 
-def _context(api,process,hwnd,index,menu_index):
-    u=api.user;tabs=api.control(hwnd,10);rect=_item_rect(api,process,tabs,index)
-    point=wintypes.POINT((rect.left+rect.right)//2,(rect.top+rect.bottom)//2)
-    local=(point.x&0xffff)|((point.y&0xffff)<<16)
-    u.GetCursorPos.argtypes=[ctypes.POINTER(wintypes.POINT)];u.GetCursorPos.restype=wintypes.BOOL
-    u.SetCursorPos.argtypes=[ctypes.c_int,ctypes.c_int];u.SetCursorPos.restype=wintypes.BOOL
-    u.ClientToScreen.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.POINT)];u.ClientToScreen.restype=wintypes.BOOL
-    original=wintypes.POINT()
-    if not u.GetCursorPos(ctypes.byref(original)) or not u.ClientToScreen(tabs,ctypes.byref(point)):raise ctypes.WinError(ctypes.get_last_error())
+# Fixed Win32 widths also keep portable ABI tests meaningful on LP64 Linux.
+class _MouseInput(ctypes.Structure):
+    _fields_=[('dx',ctypes.c_int32),('dy',ctypes.c_int32),('mouseData',ctypes.c_uint32),
+              ('dwFlags',ctypes.c_uint32),('time',ctypes.c_uint32),('dwExtraInfo',ctypes.c_size_t)]
+class _InputValue(ctypes.Union):
+    _fields_=[('mi',_MouseInput)]
+class _Input(ctypes.Structure):
+    _fields_=[('type',ctypes.c_uint32),('value',_InputValue)]
+class _Point(ctypes.Structure):
+    _fields_=[('x',ctypes.c_int32),('y',ctypes.c_int32)]
+class _Rect(ctypes.Structure):
+    _fields_=[('left',ctypes.c_int32),('top',ctypes.c_int32),('right',ctypes.c_int32),('bottom',ctypes.c_int32)]
+class _GUIThreadInfo(ctypes.Structure):
+    _fields_=[('cbSize',ctypes.c_uint32),('flags',ctypes.c_uint32),
+              *[(name,ctypes.c_void_p) for name in ('hwndActive','hwndFocus','hwndCapture','hwndMenuOwner','hwndMoveSize','hwndCaret')],
+              ('rcCaret',_Rect)]
+class _MenuBarInfo(ctypes.Structure):
+    _fields_=[('cbSize',ctypes.c_uint32),('rcBar',_Rect),('hMenu',ctypes.c_void_p),
+              ('hwndMenu',ctypes.c_void_p),('focusFlags',ctypes.c_uint32)]
+
+
+def _menu_api(api):
+    u=api.user
+    signatures={
+        'GetCursorPos':([ctypes.POINTER(_Point)],wintypes.BOOL),
+        'SetCursorPos':([ctypes.c_int,ctypes.c_int],wintypes.BOOL),
+        'ClientToScreen':([wintypes.HWND,ctypes.POINTER(_Point)],wintypes.BOOL),
+        'WindowFromPoint':([_Point],wintypes.HWND),
+        'GetForegroundWindow':([],wintypes.HWND),
+        'SetForegroundWindow':([wintypes.HWND],wintypes.BOOL),
+        'GetAsyncKeyState':([ctypes.c_int],ctypes.c_int16),
+        'SendInput':([ctypes.c_uint32,ctypes.POINTER(_Input),ctypes.c_int],ctypes.c_uint32),
+        'GetGUIThreadInfo':([ctypes.c_uint32,ctypes.POINTER(_GUIThreadInfo)],wintypes.BOOL),
+        'GetMenuBarInfo':([wintypes.HWND,ctypes.c_int32,ctypes.c_int32,ctypes.POINTER(_MenuBarInfo)],wintypes.BOOL),
+        'GetMenuItemCount':([ctypes.c_void_p],ctypes.c_int),
+        'GetMenuItemID':([ctypes.c_void_p,ctypes.c_int],ctypes.c_uint32),
+        'GetMenuState':([ctypes.c_void_p,ctypes.c_uint32,ctypes.c_uint32],ctypes.c_uint32),
+        'GetMenuItemRect':([wintypes.HWND,ctypes.c_void_p,ctypes.c_uint32,ctypes.POINTER(_Rect)],wintypes.BOOL),
+        'GetMenuStringW':([ctypes.c_void_p,ctypes.c_uint32,wintypes.LPWSTR,ctypes.c_int,ctypes.c_uint32],ctypes.c_int),
+        'IsWindow':([wintypes.HWND],wintypes.BOOL)}
+    for name,(args,result) in signatures.items():
+        fn=getattr(u,name);fn.argtypes=args;fn.restype=result
+
+
+def _popup_state(api,process,hwnd):
+    u=api.user;state={'pid':process.pid,'foreground':int(u.GetForegroundWindow() or 0),'popups':[]}
     try:
-        if not u.SetCursorPos(point.x,point.y):raise ctypes.WinError(ctypes.get_last_error())
-        for message,wparam in ((0x204,2),(0x205,0)):
-            if not u.PostMessageW(tabs,message,wparam,local):raise ctypes.WinError(ctypes.get_last_error())
-        _wait(api,process,lambda:any(c=='#32768' and v for _,c,v in api.windows(process.pid)),'actual native tab popup')
-        # Select actual popup item; no direct product close WM_COMMAND is sent.
-        for key in [0x24]+[0x28]*menu_index+[0x0d]:
-            for message,lparam in ((0x100,1),(0x101,0xc0000001)):
-                if not u.PostMessageW(hwnd,message,key,lparam):raise ctypes.WinError(ctypes.get_last_error())
-        _wait(api,process,lambda:not any(c=='#32768' and v for _,c,v in api.windows(process.pid)),'popup selection',dialogs=True)
-    finally:u.SetCursorPos(original.x,original.y)
+        _owned_pid(api,process.pid,hwnd)
+        tid=u.GetWindowThreadProcessId(hwnd,None)
+        info=_GUIThreadInfo();info.cbSize=ctypes.sizeof(info)
+        if not u.GetGUIThreadInfo(tid,ctypes.byref(info)):raise RuntimeError('Cannot query fixture GUI thread')
+        state.update(flags=info.flags,menu_owner=int(info.hwndMenuOwner or 0),focus=int(info.hwndFocus or 0),capture=int(info.hwndCapture or 0))
+        for popup,kind,visible in api.windows(process.pid):
+            if kind!='#32768' or not visible:continue
+            _owned_pid(api,process.pid,popup)
+            row={'hwnd':int(popup),'items':[]};state['popups'].append(row)
+            menu=_MenuBarInfo();menu.cbSize=ctypes.sizeof(menu)
+            if not u.GetMenuBarInfo(popup,-4,0,ctypes.byref(menu)) or not menu.hMenu:
+                raise RuntimeError('Cannot inspect actual popup HMENU')
+            row['hmenu']=int(menu.hMenu);count=u.GetMenuItemCount(menu.hMenu);row['count']=count
+            if count!=6:raise RuntimeError('Tab popup item inventory differs')
+            for index in range(count):
+                rect=_Rect();text=ctypes.create_unicode_buffer(257)
+                # NULL asks Windows to locate this displayed popup's menu window.
+                if not u.GetMenuItemRect(None,menu.hMenu,index,ctypes.byref(rect)):
+                    raise RuntimeError('Cannot inspect popup item rectangle')
+                length=u.GetMenuStringW(menu.hMenu,index,text,len(text),0x400)
+                if length<=0 or length>=256:raise RuntimeError('Popup item label is missing or unbounded')
+                row['items'].append({'id':int(u.GetMenuItemID(menu.hMenu,index)),
+                    'state':int(u.GetMenuState(menu.hMenu,index,0x400)),'label':text.value,
+                    'rect':[rect.left,rect.top,rect.right,rect.bottom]})
+    except Exception as exc:state['observation_error']=str(exc)[:256]
+    return state
+
+
+def _popup_target(state,hwnd,index,labels):
+    if state.get('observation_error') or state.get('menu_owner')!=hwnd or not state.get('flags',0)&4:
+        return None
+    if len(state['popups'])!=1:return None
+    popup=state['popups'][0]
+    if popup.get('count')!=6 or [item['id'] for item in popup['items']]!=list(range(1300,1306)):return None
+    if any(item['label'] not in labels[i] for i,item in enumerate(popup['items'])):return None
+    target=popup['items'][index];left,top,right,bottom=target['rect']
+    if target['state']==0xffffffff or target['state']&3 or right<=left or bottom<=top:return None
+    return popup['hwnd'],_Point((left+right)//2,(top+bottom)//2)
+
+
+def _physical_click(api,process,main,target,point,right,pending):
+    u=api.user
+    if u.GetForegroundWindow()!=main:raise RuntimeError('Refusing input outside foreground fixture')
+    _owned_pid(api,process.pid,main);_owned_pid(api,process.pid,target)
+    if not u.SetCursorPos(point.x,point.y):raise RuntimeError('Cannot position mouse over fixture')
+    # Recheck after positioning; never inject into an occluding/foreign window.
+    if u.WindowFromPoint(point)!=target or u.GetForegroundWindow()!=main:
+        raise RuntimeError('Mouse target is not the owned fixture control')
+    down,up=(8,16) if right else (2,4)
+    inputs=(_Input*2)();inputs[0].value.mi.dwFlags=down;inputs[1].value.mi.dwFlags=up
+    # Track before the API: a partial/uncertain batch may have pressed our button.
+    pending.add(up)
+    sent=u.SendInput(2,inputs,ctypes.sizeof(_Input))
+    if sent==0:pending.remove(up)  # No event was inserted, so this test pressed nothing.
+    if sent!=2:raise RuntimeError('SendInput did not deliver both fixture mouse events')
+    pending.remove(up)
+
+
+def _context(api,process,hwnd,index,menu_index,observations=None):
+    _menu_api(api);u=api.user
+    if u.GetAsyncKeyState(1)&0x8000 or u.GetAsyncKeyState(2)&0x8000:
+        raise RuntimeError('Refusing mouse test while a pre-existing button is held')
+    tabs=api.control(hwnd,10);rect=_item_rect(api,process,tabs,index)
+    point=_Point((rect.left+rect.right)//2,(rect.top+rect.bottom)//2)
+    original=_Point();previous=u.GetForegroundWindow();pending=set()
+    if not u.GetCursorPos(ctypes.byref(original)) or not u.ClientToScreen(tabs,ctypes.byref(point)):
+        raise RuntimeError('Cannot locate owned tab on screen')
+    catalog=json.loads((Path(__file__).resolve().parents[1]/'locales'/'instance_tabs.json').read_text(encoding='utf-8'))
+    labels=[set(catalog['tab.close_'+name].values()) for name in ('current','others','left','right','saved','all')]
+    trace=[]
+    if observations is not None:observations['popup '+str(index)+' '+str(menu_index)]=trace
+    def observe(stage):
+        state=_popup_state(api,process,hwnd)
+        row={'stage':stage,**state}
+        if trace and trace[-1]['stage']==stage:trace[-1]=row
+        elif len(trace)<16:trace.append(row)
+        return state
+    try:
+        if previous!=hwnd and not u.SetForegroundWindow(hwnd):raise RuntimeError('Cannot foreground owned fixture')
+        observe('before right click')
+        _physical_click(api,process,hwnd,tabs,point,True,pending)  # Normal DOWN+UP, no held-button workaround.
+        selected=[];saw_popup=[False]
+        def popup_ready():
+            state=observe('after right click')
+            if state['popups']:saw_popup[0]=True
+            elif saw_popup[0]:raise RuntimeError('Popup disappeared after normal right-button release')
+            target=_popup_target(state,hwnd,menu_index,labels)
+            if target:selected.append(target);return True
+            return False
+        _wait(api,process,popup_ready,'actual native tab popup with exact items')
+        popup,point=selected[0]
+        # Capture the same visible menu immediately before input, not a stale item rectangle.
+        target=_popup_target(observe('before left click'),hwnd,menu_index,labels)
+        if target is None or target[0]!=popup:raise RuntimeError('Popup disappeared before ordinary selection')
+        _physical_click(api,process,hwnd,popup,target[1],False,pending)
+        _wait(api,process,lambda:not any(c=='#32768' and v for _,c,v in api.windows(process.pid)),
+              'popup selection',dialogs=True)
+        observe('after left click')
+    finally:
+        # Only release buttons this test may have pressed; never touch pre-held user keys.
+        cleanup_errors=[]
+        for up in pending:
+            release=(_Input*1)();release[0].value.mi.dwFlags=up
+            if u.SendInput(1,release,ctypes.sizeof(_Input))!=1:
+                cleanup_errors.append('Could not release fixture-injected mouse button')
+        if not u.SetCursorPos(original.x,original.y):cleanup_errors.append('Could not restore original cursor')
+        if previous and previous!=hwnd and u.IsWindow(previous):
+            if not u.SetForegroundWindow(previous) and u.GetForegroundWindow()!=previous:
+                cleanup_errors.append('Could not restore original foreground window')
+        if cleanup_errors:
+            if observations is not None:observations['popup input cleanup errors']=cleanup_errors
+            import sys
+            original_error=sys.exception()
+            if original_error is not None:original_error.add_note('; '.join(cleanup_errors))
+            else:raise RuntimeError('; '.join(cleanup_errors))
 
 
 def run(api,binary_dir,fixtures,evidence):
@@ -509,7 +651,7 @@ def run(api,binary_dir,fixtures,evidence):
                     saved_expected=(api.text(h),api.editor_bytes(h))
                 before=_snapshot(api,h)
                 api.command(h,111)  # active 3, deliberately not clicked tab 2
-                _context(api,p,h,2,menu_index)
+                _context(api,p,h,2,menu_index,observations)
                 count={'current':4,'others':1,'left':3,'right':3,'saved':1,'all':1}[mode]
                 ready(p,h,count,'menu '+mode);actual=_snapshot(api,h)
                 names={'current':[0,2,3],'others':[1],'left':[1,2,3],'right':[0,1],'saved':[],'all':[]}[mode]
@@ -532,7 +674,7 @@ def run(api,binary_dir,fixtures,evidence):
             for _ in range(3):api.command(h,111)
             editor=api.editor(h)
             api.user.PostMessageW(editor,0x102,ord('x'),1);_wait(api,p,lambda:api.scalar(editor,2159)==1,'dirty edit')
-            before=_snapshot(api,h);_context(api,p,h,2,5);_button(api,p,2,observations=observations,label='dirty cancel')
+            before=_snapshot(api,h);_context(api,p,h,2,5,observations);_button(api,p,2,observations=observations,label='dirty cancel')
             ready(p,h,5,'cancel dismissal and unlocked documents')
             if _snapshot(api,h)!=before:raise RuntimeError('Cancel partially closed documents')
             checks['dirty_batch_cancel_preserves_all']=True
@@ -544,7 +686,7 @@ def run(api,binary_dir,fixtures,evidence):
                 api.command(h,112)
             api.user.PostMessageW(api.editor(h),0x102,ord('z'),1)
             _wait(api,p,lambda:api.scalar(api.editor(h),2159)==1,'untitled dirty edit')
-            before=_snapshot(api,h);_context(api,p,h,2,5);prompt=_button(api,p,6,observations=observations,label='save yes');_button(api,p,2,exclude=prompt,observations=observations,label='save-as cancel')
+            before=_snapshot(api,h);_context(api,p,h,2,5,observations);prompt=_button(api,p,6,observations=observations,label='save yes');_button(api,p,2,exclude=prompt,observations=observations,label='save-as cancel')
             ready(p,h,5,'save-as cancelled and unlocked documents')
             if _snapshot(api,h)!=before:raise RuntimeError('Save As cancellation partially closed documents')
             checks['save_as_cancel_preserves_all']=True

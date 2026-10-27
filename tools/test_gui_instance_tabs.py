@@ -350,4 +350,103 @@ class InformationBoxTests(unittest.TestCase):
                 subject._information_text(api,10,1.05)
         api.user.SendMessageTimeoutW.assert_not_called()
 
+
+class PhysicalPopupTests(unittest.TestCase):
+    def labels(self):return [{str(i)} for i in range(6)]
+    def state(self):
+        return {'flags':4,'menu_owner':10,'foreground':10,'popups':[{'hwnd':20,'hmenu':30,'count':6,
+            'items':[{'id':1300+i,'state':0,'label':str(i),'rect':[100,100+20*i,250,120+20*i]} for i in range(6)]}]}
+    def api(self):
+        api=Mock();api.user.GetForegroundWindow.return_value=10
+        api.user.WindowFromPoint.return_value=20;api.user.SetCursorPos.return_value=True
+        api.user.SendInput.return_value=2
+        api.user.GetAsyncKeyState.return_value=0
+        api.user.GetCursorPos.return_value=True;api.user.ClientToScreen.return_value=True
+        api.user.SetForegroundWindow.return_value=True;api.user.IsWindow.return_value=True
+        return api
+
+    def test_win64_input_and_menu_abi_use_fixed_windows_widths(self):
+        import ctypes
+        self.assertEqual(ctypes.sizeof(subject._Point),8)
+        self.assertEqual(ctypes.sizeof(subject._Rect),16)
+        if ctypes.sizeof(ctypes.c_void_p)==8:
+            self.assertEqual(ctypes.sizeof(subject._MouseInput),32)
+            self.assertEqual(ctypes.sizeof(subject._Input),40)
+            self.assertEqual(subject._Input.value.offset,8)
+            self.assertEqual(ctypes.sizeof(subject._GUIThreadInfo),72)
+            self.assertEqual(ctypes.sizeof(subject._MenuBarInfo),48)
+
+    def test_popup_target_requires_exact_owned_menu_ids_labels_enabled_and_rectangle(self):
+        target=subject._popup_target(self.state(),10,3,self.labels())
+        self.assertEqual((target[0],target[1].x,target[1].y),(20,175,170))
+        mutations=[lambda s:s.update(menu_owner=11),lambda s:s.update(flags=0),
+            lambda s:s.update(observation_error='bad'),lambda s:s['popups'].append(deepcopy(s['popups'][0])),
+            lambda s:s['popups'][0].update(count=5),lambda s:s['popups'][0]['items'][0].update(id=1301),
+            lambda s:s['popups'][0]['items'][0].update(label='wrong'),
+            lambda s:s['popups'][0]['items'][3].update(state=1),lambda s:s['popups'][0]['items'][3].update(state=2),
+            lambda s:s['popups'][0]['items'][3].update(state=0xffffffff),
+            lambda s:s['popups'][0]['items'][3].update(rect=[1,2,1,3])]
+        for i,mutate in enumerate(mutations):
+            state=self.state();mutate(state)
+            with self.subTest(i=i):self.assertIsNone(subject._popup_target(state,10,3,self.labels()))
+
+    def test_real_click_is_complete_normal_pair_and_guarded_before_injection(self):
+        for right,flags in ((True,[8,16]),(False,[2,4])):
+            api=self.api();pending=set()
+            with patch.object(subject,'_owned_pid') as owned:
+                subject._physical_click(api,Mock(pid=7),10,20,subject._Point(100,200),right,pending)
+            count,events,size=api.user.SendInput.call_args.args
+            self.assertEqual(count,2);self.assertEqual(size,subject.ctypes.sizeof(subject._Input))
+            self.assertEqual([events[i].value.mi.dwFlags for i in range(2)],flags)
+            self.assertEqual(pending,set());self.assertEqual(owned.call_count,2)
+        for foreground,target in ((11,20),(10,99)):
+            api=self.api();api.user.GetForegroundWindow.return_value=foreground;api.user.WindowFromPoint.return_value=target
+            with patch.object(subject,'_owned_pid'),self.assertRaises(RuntimeError):
+                subject._physical_click(api,Mock(pid=7),10,20,subject._Point(1,2),True,set())
+            api.user.SendInput.assert_not_called()
+        api=self.api()
+        with patch.object(subject,'_owned_pid',side_effect=RuntimeError('foreign PID')),self.assertRaises(RuntimeError):
+            subject._physical_click(api,Mock(pid=7),10,20,subject._Point(1,2),True,set())
+        api.user.SendInput.assert_not_called()
+
+    def test_partial_injection_tracks_only_our_possible_down_and_context_releases_it(self):
+        for sent,expected in ((0,set()),(1,{16})):
+            api=self.api();api.user.SendInput.return_value=sent;pending=set()
+            with patch.object(subject,'_owned_pid'),self.assertRaises(RuntimeError):
+                subject._physical_click(api,Mock(pid=7),10,20,subject._Point(1,2),True,pending)
+            self.assertEqual(pending,expected)
+        api=self.api();api.user.SendInput.side_effect=[1,1]
+        api.control.return_value=20
+        with patch.object(subject,'_item_rect',return_value=subject._Rect(0,0,40,20)), \
+             patch.object(subject,'_popup_state',return_value=self.state()),patch.object(subject,'_owned_pid'), \
+             self.assertRaisesRegex(RuntimeError,'both fixture mouse events'):
+            subject._context(api,Mock(pid=7),10,2,0,{})
+        self.assertEqual(api.user.SendInput.call_count,2)
+        count,event,size=api.user.SendInput.call_args.args
+        self.assertEqual((count,event[0].value.mi.dwFlags),(1,16))
+        self.assertEqual(api.user.SetCursorPos.call_args.args,(0,0))
+
+    def test_preheld_mouse_button_is_not_released_or_reused(self):
+        for key in (1,2):
+            api=self.api();api.user.GetAsyncKeyState.side_effect=lambda k:0x8000 if k==key else 0
+            with self.assertRaisesRegex(RuntimeError,'pre-existing button'):
+                subject._context(api,Mock(pid=7),10,2,0,{})
+            api.user.SendInput.assert_not_called();api.user.SetCursorPos.assert_not_called()
+
+    def test_popup_disappearance_after_right_up_does_not_reopen_or_fake_close(self):
+        api=self.api();api.control.return_value=20
+        bad=self.state();bad['popups'][0]['items'][0]['label']='not-ready'
+        gone=self.state();gone['popups']=[]
+        observations={}
+        def wait(api,proc,predicate,description,*args,**kwargs):
+            self.assertFalse(predicate());predicate()
+        with patch.object(subject,'_item_rect',return_value=subject._Rect(0,0,40,20)), \
+             patch.object(subject,'_popup_state',side_effect=[self.state(),bad,gone]), \
+             patch.object(subject,'_owned_pid'),patch.object(subject,'_wait',side_effect=wait), \
+             self.assertRaisesRegex(RuntimeError,'normal right-button release'):
+            subject._context(api,Mock(pid=7),10,2,0,observations)
+        self.assertEqual(api.user.SendInput.call_count,1)  # Exactly one complete right-click; no reopening.
+        self.assertEqual(observations['popup 2 0'][-1]['popups'],[])
+        api.user.PostMessageW.assert_not_called()
+
 if __name__=='__main__':unittest.main()
