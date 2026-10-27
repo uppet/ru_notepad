@@ -1,0 +1,43 @@
+name: NOT ACCEPTED instance modal diagnostic
+on:
+  push:
+    branches: [diagnostic/notepad-instance-modal-20261027]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: instance-modal-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  fixed-artifact-diagnostic:
+    if: github.ref == 'refs/heads/diagnostic/notepad-instance-modal-20261027'
+    runs-on: windows-latest
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Portable fixed-artifact contract checks
+        shell: pwsh
+        run: |
+          python tools/test_instance_modal_diagnostic.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Diagnose exact failed runtime only
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python tools/diagnose_instance_modal_windows.py --output "${{ runner.temp }}/instance-modal-diagnostic"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Preserve NOT ACCEPTED observations even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: NOT-ACCEPTED-instance-modal-diagnostic-${{ github.sha }}
+          path: ${{ runner.temp }}/instance-modal-diagnostic/evidence/
+          if-no-files-found: warn
+          retention-days: 14

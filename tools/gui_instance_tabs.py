@@ -88,7 +88,65 @@ def _wait(api,process,predicate,description,timeout=30,dialogs=False):
     raise RuntimeError('Timed out: '+description)
 
 
-def _button(api,process,identifier,timeout=10,exclude=None):
+def _modal_observation(api,process,identifier):
+    """Bounded read-only owned-window snapshot, never a modal success oracle."""
+    result={'expected_pid':process.pid,'requested_button':identifier,'windows':[]}
+    try:
+        u=api.user
+        u.GetWindowTextW.argtypes=[wintypes.HWND,wintypes.LPWSTR,ctypes.c_int]
+        u.GetWindowTextW.restype=ctypes.c_int
+        u.IsWindowEnabled.argtypes=[wintypes.HWND];u.IsWindowEnabled.restype=wintypes.BOOL
+        u.GetWindow.argtypes=[wintypes.HWND,wintypes.UINT];u.GetWindow.restype=wintypes.HWND
+        for hwnd,kind,visible in api.windows(process.pid)[:16]:
+            api.verify_owned_handles(process.pid,hwnd)
+            caption=ctypes.create_unicode_buffer(257)
+            u.GetWindowTextW(hwnd,caption,len(caption))
+            actual_pid=wintypes.DWORD();u.GetWindowThreadProcessId(hwnd,ctypes.byref(actual_pid))
+            owner=u.GetWindow(hwnd,4)  # GW_OWNER; never follow it for caption/control reads.
+            owner_pid=wintypes.DWORD()
+            if owner:u.GetWindowThreadProcessId(owner,ctypes.byref(owner_pid))
+            row={'hwnd':int(hwnd),'pid':actual_pid.value,'owner_hwnd':int(owner or 0),
+                 'owner_pid':owner_pid.value,'class':kind[:128],'visible':bool(visible),
+                 'enabled':bool(u.IsWindowEnabled(hwnd)),'caption':caption.value[:256],'buttons':{}}
+            result['windows'].append(row)
+            if kind=='#32770':
+                for key in (1,2,6,7):
+                    button=u.GetDlgItem(hwnd,key)
+                    item={'present':bool(button),'visible':False,'enabled':False}
+                    if button:
+                        api.verify_owned_handles(process.pid,button)
+                        item.update(visible=bool(u.IsWindowVisible(button)),enabled=bool(u.IsWindowEnabled(button)))
+                    row['buttons'][str(key)]=item
+    except Exception as exc:
+        result['observation_error']=type(exc).__name__
+    return result
+
+
+def _registry_observation(registry):
+    # Only this run's generated isolated namespace; no normal user preference reads.
+    prefix='Software\\ru_notepad\\SingleInstanceTests\\gui_'
+    if not registry.startswith(prefix) or len(registry[len(prefix):])!=32 or any(c not in '0123456789abcdef' for c in registry[len(prefix):]):
+        return {'observation_error':'invalid isolated namespace'}
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,registry) as key:
+            value,kind=winreg.QueryValueEx(key,'SingleInstance')
+        return {'type':kind,'value':value if type(value) is int else None,
+                'value_is_integer':type(value) is int}
+    except Exception as exc:
+        return {'observation_error':type(exc).__name__,'winerror':getattr(exc,'winerror',None)}
+
+
+def _toggle_preference(api,process,hwnd,registry,observations,label):
+    observations[label+' registry before']=_registry_observation(registry)
+    try:
+        _post_command(api,hwnd,805)
+        _button(api,process,1,observations=observations,label=label)
+    finally:
+        observations[label+' registry after']=_registry_observation(registry)
+
+
+def _button(api,process,identifier,timeout=10,exclude=None,*,observations=None,label=None):
     found=[]
     def find():
         ds=[h for h,c,v in api.windows(process.pid) if c=='#32770' and v and h!=exclude]
@@ -97,9 +155,16 @@ def _button(api,process,identifier,timeout=10,exclude=None):
         if child and api.user.IsWindowVisible(child):
             api.verify_owned_handles(process.pid,ds[0],child);found.append((ds[0],child));return True
         return False
-    _wait(api,process,find,'actual modal button '+str(identifier),timeout,dialogs=True)
-    if not api.user.PostMessageW(found[0][1],0xF5,0,0):raise ctypes.WinError(ctypes.get_last_error())
-    _wait(api,process,lambda:not api.user.IsWindowVisible(found[0][0]),'clicked dialog dismissed',timeout,dialogs=True)
+    try:
+        _wait(api,process,find,'actual modal button '+str(identifier),timeout,dialogs=True)
+        if observations is not None:
+            observations['modal '+str(label or identifier)+' found']=_modal_observation(api,process,identifier)
+        if not api.user.PostMessageW(found[0][1],0xF5,0,0):raise ctypes.WinError(ctypes.get_last_error())
+        _wait(api,process,lambda:not api.user.IsWindowVisible(found[0][0]),'clicked dialog dismissed',timeout,dialogs=True)
+    except Exception:
+        if observations is not None:
+            observations['modal '+str(label or identifier)]=_modal_observation(api,process,identifier)
+        raise
     return found[0][0]
 
 
@@ -318,11 +383,11 @@ def run(api,binary_dir,fixtures,evidence):
             ready(p,h,3,'duplicate activation',paths[0].name+' · ru_notepad')
             if _tabs(api,h)!=3:raise RuntimeError('Duplicate path created tab')
             checks['duplicate_activates_existing']=True
-            _post_command(api,h,805);_button(api,p,1)
+            _toggle_preference(api,p,h,registry,observations,'disable')
             if not persisted(0):raise RuntimeError('Disable DWORD missing')
             child('disabled',[paths[2]],True,lambda cp,ch:child_documents(cp,ch,paths[2],'disabled file'))
             checks['persistent_disable_creates_window']=True
-            _post_command(api,h,805);_button(api,p,1)
+            _toggle_preference(api,p,h,registry,observations,'reenable')
             if not persisted(1):raise RuntimeError('Enable DWORD missing')
             child('reenabled',[paths[2]],False);ready(p,h,4,'reenabled handoff')
             documents(h,{x.name:x.read_bytes() for x in paths[:3]},'reenabled exact documents')
@@ -364,7 +429,7 @@ def run(api,binary_dir,fixtures,evidence):
             for _ in range(3):api.command(h,111)
             editor=api.editor(h)
             api.user.PostMessageW(editor,0x102,ord('x'),1);_wait(api,p,lambda:api.scalar(editor,2159)==1,'dirty edit')
-            before=_snapshot(api,h);_context(api,p,h,2,5);_button(api,p,2)
+            before=_snapshot(api,h);_context(api,p,h,2,5);_button(api,p,2,observations=observations,label='dirty cancel')
             ready(p,h,5,'cancel dismissal and unlocked documents')
             if _snapshot(api,h)!=before:raise RuntimeError('Cancel partially closed documents')
             checks['dirty_batch_cancel_preserves_all']=True
@@ -376,7 +441,7 @@ def run(api,binary_dir,fixtures,evidence):
                 api.command(h,112)
             api.user.PostMessageW(api.editor(h),0x102,ord('z'),1)
             _wait(api,p,lambda:api.scalar(api.editor(h),2159)==1,'untitled dirty edit')
-            before=_snapshot(api,h);_context(api,p,h,2,5);prompt=_button(api,p,6);_button(api,p,2,exclude=prompt)
+            before=_snapshot(api,h);_context(api,p,h,2,5);prompt=_button(api,p,6,observations=observations,label='save yes');_button(api,p,2,exclude=prompt,observations=observations,label='save-as cancel')
             ready(p,h,5,'save-as cancelled and unlocked documents')
             if _snapshot(api,h)!=before:raise RuntimeError('Save As cancellation partially closed documents')
             checks['save_as_cancel_preserves_all']=True
@@ -456,7 +521,7 @@ def run(api,binary_dir,fixtures,evidence):
             sd=root/'timeout-sender';_copy_runtime(binary_dir,sd,hashes)
             sp=subprocess.Popen([str(sd/'ru_notepad.exe'),paths[3].name],cwd=root,creationflags=8);timeout_procs.append((sp,sd))
             timeout_record['executed']=True
-            prompt=_button(api,sp,7,timeout=15)  # No: never automatically reopen uncertain paths.
+            prompt=_button(api,sp,7,timeout=15,observations=observations,label='uncertain no')  # No: never automatically reopen uncertain paths.
             if k.ResumeThread(thread)!=1:raise RuntimeError('Owned fixture UI thread resume state differs')
             suspended=False
             _wait(api,sp,lambda:visible_main(sp) is not None,'uncertain sender remains visible')
@@ -473,7 +538,7 @@ def run(api,binary_dir,fixtures,evidence):
             timeout_record['owner_delivery_count']=delivered
             if _tabs(api,sh)!=1 or api.editor_bytes(sh)!=b'':raise RuntimeError('Uncertain handoff automatically opened files locally')
             checks['timeout_uncertain_no_automatic_open']=True
-            _post_command(api,sh,113);_button(api,sp,6)
+            _post_command(api,sh,113);_button(api,sp,6,observations=observations,label='pending yes')
             ready(sp,sh,2,'explicit open of retained uncertain paths')
             documents(sh,{paths[3].name:paths[3].read_bytes()},'pending exact documents')
             if _tabs(api,oh)!=delivered+1:raise RuntimeError('Explicit local open resent original IPC')

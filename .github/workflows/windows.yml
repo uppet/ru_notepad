@@ -2,6 +2,8 @@ name: Windows native acceptance
 
 on:
   push:
+    # Exact diagnostic-only branch: never changes feature/wip acceptance triggers.
+    branches-ignore: [diagnostic/notepad-instance-modal-20261027]
   pull_request:
   workflow_dispatch:
     inputs:

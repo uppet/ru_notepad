@@ -143,4 +143,87 @@ class ReadyContractTests(unittest.TestCase):
             with subject._failure_evidence(tmp,receipt(),{},{}):pass
             self.assertFalse((Path(tmp)/'instance-tabs-partial.json').exists())
 
+
+class ModalDiagnosticTests(unittest.TestCase):
+    def make_api(self,windows,visible=True):
+        api=Mock();api.windows.return_value=windows
+        api.user.GetDlgItem.return_value=44
+        api.user.IsWindowVisible.return_value=visible
+        api.user.IsWindowEnabled.return_value=True
+        api.user.PostMessageW.return_value=True
+        api.user.GetWindowTextW.return_value=0
+        api.user.GetWindow.return_value=0
+        return api
+
+    def test_zero_multiple_or_hidden_button_remain_failures_with_owned_diagnostics(self):
+        for windows,visible in [([],True), ([(10,'#32770',True),(11,'#32770',True)],True),
+                                ([(10,'#32770',True)],False), ([(10,'#32770',False)],True)]:
+            api=self.make_api(windows,visible);p=Mock(pid=123);p.poll.return_value=None
+            observed={};clock=[0.0]
+            with patch.object(subject.time,'monotonic',side_effect=lambda:clock[0]), \
+                 patch.object(subject.time,'sleep',side_effect=lambda _:clock.__setitem__(0,clock[0]+1)):
+                with self.assertRaisesRegex(RuntimeError,'Timed out: actual modal button 1'):
+                    subject._button(api,p,1,observations=observed,label='test')
+            self.assertEqual(clock[0],10)  # Existing deadline unchanged.
+            self.assertEqual(observed['modal test']['requested_button'],1)
+            self.assertEqual(len(observed['modal test']['windows']),len(windows))
+            api.user.PostMessageW.assert_not_called()  # No guessed click.
+            api.scalar.assert_not_called()  # No synchronous WM_GETTEXT observation.
+            for hwnd,_,_ in windows:api.verify_owned_handles.assert_any_call(123,hwnd)
+
+    def test_owner_identity_is_recorded_but_foreign_owner_is_not_inspected(self):
+        import ctypes
+        api=self.make_api([(10,'#32770',True)])
+        api.user.GetWindow.return_value=987
+        def pid(hwnd,out):
+            ctypes.cast(out,ctypes.POINTER(subject.wintypes.DWORD)).contents.value=123 if hwnd==10 else 456
+            return 7
+        api.user.GetWindowThreadProcessId.side_effect=pid
+        result=subject._modal_observation(api,Mock(pid=123),1)
+        self.assertEqual(result['expected_pid'],123)
+        row=result['windows'][0]
+        self.assertEqual((row['pid'],row['owner_hwnd'],row['owner_pid']),(123,987,456))
+        self.assertTrue(row['enabled'])
+        self.assertEqual(api.user.GetWindowTextW.call_count,1)
+        self.assertEqual(api.user.GetWindowTextW.call_args.args[0],10)
+        self.assertTrue(all(c.args[0]==10 for c in api.user.GetDlgItem.call_args_list))
+
+    def test_post_success_without_dialog_does_not_pass_or_replay_toggle(self):
+        api=self.make_api([]);p=Mock(pid=123);p.poll.return_value=None
+        observed={};clock=[0.0]
+        with patch.object(subject,'_registry_observation',side_effect=[{'observation_error':'FileNotFoundError'},{'type':4,'value':0,'value_is_integer':True}]), \
+             patch.object(subject.time,'monotonic',side_effect=lambda:clock[0]), \
+             patch.object(subject.time,'sleep',side_effect=lambda _:clock.__setitem__(0,clock[0]+1)):
+            with self.assertRaisesRegex(RuntimeError,'Timed out: actual modal button 1'):
+                subject._toggle_preference(api,p,5,'isolated',observed,'disable')
+        api.user.PostMessageW.assert_called_once_with(5,0x111,805,0)
+        self.assertEqual(observed['disable registry after']['value'],0)
+        self.assertEqual(observed['modal disable']['windows'],[])
+
+    def test_diagnostic_read_failure_never_masks_original_timeout(self):
+        api=self.make_api([]);p=Mock(pid=123);p.poll.return_value=None
+        api.windows.side_effect=[[],OSError('read failed')]
+        observed={};clock=[0.0]
+        with patch.object(subject.time,'monotonic',side_effect=lambda:clock[0]), \
+             patch.object(subject.time,'sleep',side_effect=lambda _:clock.__setitem__(0,10)):
+            with self.assertRaisesRegex(RuntimeError,'Timed out: actual modal button 1'):
+                subject._button(api,p,1,observations=observed)
+        self.assertEqual(observed['modal 1']['observation_error'],'OSError')
+
+    def test_registry_observation_is_read_only_and_isolated_and_failure_tolerant(self):
+        import sys
+        registry=Mock();registry.OpenKey.return_value.__enter__=Mock(return_value=11)
+        registry.OpenKey.return_value.__exit__=Mock(return_value=False)
+        registry.QueryValueEx.return_value=(0,4)
+        path='Software\\ru_notepad\\SingleInstanceTests\\gui_'+'a'*32
+        with patch.dict(sys.modules,winreg=registry):
+            self.assertEqual(subject._registry_observation(path),{'type':4,'value':0,'value_is_integer':True})
+            for wrong in ('Software\\ru_notepad\\Preferences',path+'\\child',path.replace('gui_','user_')):
+                self.assertEqual(subject._registry_observation(wrong),{'observation_error':'invalid isolated namespace'})
+            registry.OpenKey.assert_called_once_with(registry.HKEY_CURRENT_USER,path)
+            registry.QueryValueEx.assert_called_once_with(11,'SingleInstance')
+            registry.SetValueEx.assert_not_called()
+            registry.OpenKey.side_effect=PermissionError('private details')
+            self.assertEqual(subject._registry_observation(path),{'observation_error':'PermissionError','winerror':None})
+
 if __name__=='__main__':unittest.main()
