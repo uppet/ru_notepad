@@ -1,5 +1,8 @@
 """Portable negative controls only; no Windows or accepted-runtime claim."""
 import copy
+from contextlib import contextmanager, nullcontext
+import os
+import sys
 import hashlib
 import io
 import json
@@ -100,7 +103,8 @@ class DiagnosticTests(unittest.TestCase):
                      patch.object(diagnostic.sys,'platform','win32'), \
                      patch.object(diagnostic,'acquire',return_value=(output/'runtime',{},{})), \
                      patch.object(diagnostic,'diagnose',side_effect=RuntimeError('private signed URL must not be emitted') if failure else None,return_value=[]), \
-                     patch.object(diagnostic,'validate_runtime'),patch('builtins.print'):
+                     patch.object(diagnostic,'validate_runtime'), \
+                     patch.object(diagnostic,'run_full_instance_tabs',return_value={'validated':False,'accepted':False}),patch('builtins.print'):
                     code=diagnostic.main()
                 record=json.loads((output/'evidence/diagnostic.json').read_text())
                 self.assertEqual(code,1 if failure else 0)
@@ -109,6 +113,63 @@ class DiagnosticTests(unittest.TestCase):
                 self.assertIs(record['compiled'],False);self.assertIs(record['packaged'],False)
                 self.assertIs(record['full_feature_ci_required'],True)
                 self.assertNotIn('private',json.dumps(record));self.assertNotIn('signed URL',json.dumps(record))
+
+    def test_full_phase_runner_uses_strict_validator_and_checks_owned_cleanup(self):
+        import gui_instance_tabs as subject
+        import test_gui_instance_tabs as fixtures
+        for mutation in ('none','missing-phase','wrong-hash','leaked-registry','raise-with-partial'):
+            with tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp).resolve();evidence=root/'evidence';evidence.mkdir();state={'exists':False}
+                @contextmanager
+                def settings():
+                    state['exists']=True
+                    try:yield 'Software\\ru_notepad\\SingleInstanceTests\\gui_'+'a'*32
+                    finally:state['exists']=mutation=='leaked-registry'
+                def open_key(*args):
+                    if not state['exists']:raise FileNotFoundError()
+                    return nullcontext()
+                def run(api,runtime,paths,logs):
+                    self.assertNotIn('GH_TOKEN',os.environ);self.assertNotIn('GITHUB_TOKEN',os.environ)
+                    with subject.isolated_settings():
+                        result=fixtures.receipt()
+                        if mutation=='missing-phase':result['phases'].pop()
+                        if mutation=='wrong-hash':result['fixture_binary_sha256']['ru_notepad.exe']='b'*64
+                        if mutation=='raise-with-partial':
+                            (logs/'instance-tabs-partial.json').write_text(json.dumps({'accepted':False,'record':result}))
+                            raise RuntimeError('functional phase failed')
+                        return result
+                fake_registry=SimpleNamespace(HKEY_CURRENT_USER=1,OpenKey=open_key)
+                with patch.dict(sys.modules,{'winreg':fake_registry}), \
+                     patch.dict(os.environ,{'GH_TOKEN':'private','GITHUB_TOKEN':'private'}), \
+                     patch.object(diagnostic,'validate_runtime'),patch.object(subject.ci,'Windows'), \
+                     patch.object(subject,'isolated_settings',settings),patch.object(subject,'run',side_effect=run):
+                    result=diagnostic.run_full_instance_tabs(root/'runtime',fixtures.HASHES,evidence)
+                self.assertIs(result['validated'],mutation=='none')
+                self.assertIs(result['accepted'],False)
+                self.assertEqual(result['registry_cleanup'][0]['keys_removed'],[mutation!='leaked-registry']*2)
+                if mutation=='raise-with-partial':self.assertIn('partial_evidence',result)
+                if mutation in ('none','missing-phase','wrong-hash'):
+                    self.assertIsNotNone(result['receipt'])
+                    self.assertTrue((evidence/'full-instance-tabs/instance-tabs-receipt.json').is_file())
+
+    def test_modal_failure_does_not_skip_full_phases_or_imply_acceptance(self):
+        for modal_pass in (False,True):
+            with tempfile.TemporaryDirectory() as tmp:
+                output=Path(tmp).resolve()/'diagnostic'
+                cases=[{'case':name,'process':{'passed':modal_pass},'registry_cleaned':True,'source_bytes_unchanged':True}
+                       for name in ('A1-empty-on','A0-empty-off','B1-handoff-duplicate-on')]
+                full={'validated':True,'accepted':False}
+                with patch.object(diagnostic.sys,'argv',['diagnostic','--output',str(output)]), \
+                     patch.object(diagnostic.sys,'platform','win32'),patch.object(diagnostic,'validate_runtime'), \
+                     patch.object(diagnostic,'acquire',return_value=(output/'runtime',{},{})), \
+                     patch.object(diagnostic,'diagnose',return_value=cases), \
+                     patch.object(diagnostic,'run_full_instance_tabs',return_value=full) as full_run,patch('builtins.print'):
+                    self.assertEqual(diagnostic.main(),0)
+                full_run.assert_called_once()
+                record=json.loads((output/'evidence/diagnostic.json').read_text())
+                self.assertIs(record['diagnostic_completed'],True)
+                self.assertIs(record['functional_scenarios_passed'],modal_pass)
+                self.assertIs(record['accepted'],False);self.assertEqual(record['status'],'NOT_ACCEPTED')
 
     def test_diagnostic_branch_cannot_trigger_expensive_feature_lanes(self):
         workflows=Path(__file__).resolve().parents[1]/'.github/workflows'

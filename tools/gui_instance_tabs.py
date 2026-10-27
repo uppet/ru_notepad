@@ -88,6 +88,14 @@ def _wait(api,process,predicate,description,timeout=30,dialogs=False):
     raise RuntimeError('Timed out: '+description)
 
 
+def _owned_pid(api,process_id,hwnd):
+    """Observation may include hidden HWNDs; ownership does not imply visible."""
+    actual=wintypes.DWORD()
+    if not api.user.GetWindowThreadProcessId(hwnd,ctypes.byref(actual)) or actual.value!=process_id:
+        raise RuntimeError('Observed HWND does not belong to the fixture process')
+    return actual.value
+
+
 def _modal_observation(api,process,identifier):
     """Bounded read-only owned-window snapshot, never a modal success oracle."""
     result={'expected_pid':process.pid,'requested_button':identifier,'windows':[]}
@@ -98,7 +106,7 @@ def _modal_observation(api,process,identifier):
         u.IsWindowEnabled.argtypes=[wintypes.HWND];u.IsWindowEnabled.restype=wintypes.BOOL
         u.GetWindow.argtypes=[wintypes.HWND,wintypes.UINT];u.GetWindow.restype=wintypes.HWND
         for hwnd,kind,visible in api.windows(process.pid)[:16]:
-            api.verify_owned_handles(process.pid,hwnd)
+            _owned_pid(api,process.pid,hwnd)
             caption=ctypes.create_unicode_buffer(257)
             u.GetWindowTextW(hwnd,caption,len(caption))
             actual_pid=wintypes.DWORD();u.GetWindowThreadProcessId(hwnd,ctypes.byref(actual_pid))
@@ -114,7 +122,7 @@ def _modal_observation(api,process,identifier):
                     button=u.GetDlgItem(hwnd,key)
                     item={'present':bool(button),'visible':False,'enabled':False}
                     if button:
-                        api.verify_owned_handles(process.pid,button)
+                        _owned_pid(api,process.pid,button)
                         item.update(visible=bool(u.IsWindowVisible(button)),enabled=bool(u.IsWindowEnabled(button)))
                     row['buttons'][str(key)]=item
     except Exception as exc:
@@ -141,9 +149,104 @@ def _toggle_preference(api,process,hwnd,registry,observations,label):
     observations[label+' registry before']=_registry_observation(registry)
     try:
         _post_command(api,hwnd,805)
-        _button(api,process,1,observations=observations,label=label)
+        _information_button(api,process,hwnd,observations=observations,label=label)
     finally:
         observations[label+' registry after']=_registry_observation(registry)
+
+
+def _information_shape(dialog,owner,expected_bodies):
+    """Only the command-805 informational box; never a generic ID2=OK alias."""
+    if (dialog['owner']!=owner or dialog['caption']!='ru_notepad' or
+            not dialog['visible'] or not dialog['enabled']):return None
+    controls=dialog['controls']
+    buttons=[c for c in controls if c['class']=='Button']
+    # Count hidden/disabled buttons too: a second actionable choice is not MB_OK.
+    if len(buttons)!=1:return None
+    button=buttons[0]
+    if button['id'] not in (1,2) or button['control_type'] not in (0,1) or not button['visible'] or not button['enabled']:return None
+    if any(c['class'] not in ('Static','Button') for c in controls):return None
+    if any(c['class']=='Static' and c['control_type'] not in (0,1,2,3,11,12,14) for c in controls):return None
+    # SS_ICON/SS_BITMAP are decorative images, not text payloads. Unknown static types fail closed.
+    texts=[c['text'] for c in controls if c['class']=='Static' and c['control_type'] in (0,1,2,11,12) and c['visible'] and c['text']]
+    if len(texts)!=1 or texts[0] not in expected_bodies:return None
+    return button['hwnd']
+
+
+def _information_text(api,hwnd,deadline):
+    # Read control text with a bounded message, never an unbounded GetDlgItemText.
+    remaining=int((deadline-time.monotonic())*1000)
+    if remaining<=0:raise RuntimeError('Timed out: command805 information box')
+    buffer=ctypes.create_unicode_buffer(2049);copied=ctypes.c_size_t()
+    if not api.user.SendMessageTimeoutW(hwnd,0x000D,len(buffer),ctypes.addressof(buffer),3,
+                                       min(100,remaining),ctypes.byref(copied)):
+        raise RuntimeError('Information box text query did not respond')
+    if copied.value>=2048:raise RuntimeError('Information box text exceeds bound')
+    return buffer.value
+
+
+def _information_dialog(api,process,dialog,deadline):
+    u=api.user
+    u.GetWindow.argtypes=[wintypes.HWND,wintypes.UINT];u.GetWindow.restype=wintypes.HWND
+    u.GetDlgCtrlID.argtypes=[wintypes.HWND];u.GetDlgCtrlID.restype=ctypes.c_int
+    u.GetWindowLongPtrW.argtypes=[wintypes.HWND,ctypes.c_int];u.GetWindowLongPtrW.restype=ctypes.c_ssize_t
+    u.IsWindowEnabled.argtypes=[wintypes.HWND];u.IsWindowEnabled.restype=wintypes.BOOL
+    _owned_pid(api,process.pid,dialog)
+    controls=[];errors=[]
+    @api.callback_type
+    def visit(child,_):
+        try:
+            if len(controls)>=32:raise RuntimeError('Information dialog control inventory exceeds bound')
+            _owned_pid(api,process.pid,child)
+            name=ctypes.create_unicode_buffer(128)
+            if not u.GetClassNameW(child,name,len(name)):raise RuntimeError('Cannot read information control class')
+            style=int(u.GetWindowLongPtrW(child,-16))
+            controls.append({'hwnd':int(child),'class':name.value,'id':u.GetDlgCtrlID(child),
+                             'control_type':style & (31 if name.value=='Static' else 15),
+                             'visible':bool(u.IsWindowVisible(child)),'enabled':bool(u.IsWindowEnabled(child)),
+                             'text':''})
+            return True
+        except Exception as exc:
+            errors.append(exc);return False
+    u.EnumChildWindows(dialog,visit,0)
+    if errors:raise errors[0]
+    for control in controls:
+        if control['visible'] and (control['class']=='Button' or
+                (control['class']=='Static' and control['control_type'] in (0,1,2,11,12))):
+            control['text']=_information_text(api,control['hwnd'],deadline)
+    return {'owner':int(u.GetWindow(dialog,4) or 0),'caption':_information_text(api,dialog,deadline),
+            'visible':bool(u.IsWindowVisible(dialog)),'enabled':bool(u.IsWindowEnabled(dialog)),
+            'controls':controls}
+
+
+def _information_button(api,process,owner,timeout=10,*,observations=None,label=None):
+    # MessageBox documents the return IDOK, not the internal child ID. Our
+    # three real Windows diagnostics observed only child ID2 in this box.
+    # Single-button dialogs can use IDCANCEL to support Esc. This exception
+    # is restricted to exact command805 text/owner/one-button shape; the generic
+    # save/cancel/Yes/No helper below retains its original exact ID contract.
+    catalog=json.loads((Path(__file__).resolve().parents[1]/'locales'/'instance_tabs.json').read_text(encoding='utf-8'))
+    expected_bodies=set(catalog['instance.next_launch'].values())
+    deadline=time.monotonic()+timeout
+    try:
+        while time.monotonic()<deadline:
+            if process.poll() is not None:raise RuntimeError('GUI exited: command805 information box')
+            ds=[h for h,c,v in api.windows(process.pid) if c=='#32770' and v]
+            if len(ds)==1:
+                dialog=_information_dialog(api,process,ds[0],deadline)
+                if observations is not None:observations['information '+str(label or '805')]=dialog
+                button=_information_shape(dialog,owner,expected_bodies)
+                if button is not None:
+                    api.verify_owned_handles(process.pid,owner,ds[0],button)
+                    if time.monotonic()>=deadline:break
+                    if not api.user.PostMessageW(button,0xF5,0,0):raise ctypes.WinError(ctypes.get_last_error())
+                    _wait(api,process,lambda:not api.user.IsWindowVisible(ds[0]),'clicked dialog dismissed',timeout,dialogs=True)
+                    return ds[0]
+            time.sleep(.01)
+        raise RuntimeError('Timed out: command805 information box')
+    except Exception:
+        if observations is not None:
+            observations['modal '+str(label or '805')]=_modal_observation(api,process,1)
+        raise
 
 
 def _button(api,process,identifier,timeout=10,exclude=None,*,observations=None,label=None):

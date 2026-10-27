@@ -190,18 +190,89 @@ def diagnose(runtime,hashes,evidence):
     return cases
 
 
+def run_full_instance_tabs(runtime,hashes,evidence):
+    """Run unchanged full functional phases, preserving failure evidence.
+
+    Functional validation is diagnostic only; it cannot authorize delivery.
+    """
+    import windows_ci as ci
+    import gui_instance_tabs as instance
+    import winreg
+    runtime,evidence=Path(runtime),Path(evidence)
+    validate_runtime(runtime) # identity/security failures stop execution
+    fixtures=evidence.parent/'full-instance-fixtures';fixtures.mkdir()
+    full_evidence=evidence/'full-instance-tabs';full_evidence.mkdir()
+    result={'name':'full-instance-tabs-diagnostic','attempted':True,'validated':False,
+            'accepted':False,'registry_cleanup':[],'receipt':None}
+    original_settings=instance.isolated_settings
+    @contextmanager
+    def tracked_settings():
+        registry=None
+        try:
+            with original_settings() as registry:
+                yield registry
+        finally:
+            if registry is not None:
+                prefix='Software\\ru_notepad\\SingleInstanceTests\\gui_'
+                require(registry.startswith(prefix),'unexpected isolated namespace')
+                token=registry[len(prefix):]
+                require(len(token)==32 and all(c in '0123456789abcdef' for c in token),'unexpected test token')
+                roots=[registry,'Software\\ru_notepad\\RecentTests\\gui_'+token]
+                removed=[]
+                for key in roots:
+                    try:
+                        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,key):removed.append(False)
+                    except FileNotFoundError:removed.append(True)
+                result['registry_cleanup'].append({'namespace_suffix':token,'keys_removed':removed})
+                require(removed==[True,True],'owned diagnostic registry cleanup incomplete')
+    try:
+        with patch.dict(os.environ,child_environment(os.environ),clear=True), \
+             patch.object(instance,'isolated_settings',tracked_settings):
+            receipt=instance.run(ci.Windows(),runtime,fixtures,full_evidence)
+        result['receipt']=receipt
+        (full_evidence/'instance-tabs-receipt.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+        # Do not replace the actual gate by inferred phase counts or a marker.
+        instance.validate_result(receipt,hashes)
+        require(bool(result['registry_cleanup']) and all(x['keys_removed']==[True,True] for x in result['registry_cleanup']),
+                'missing full-run registry cleanup evidence')
+        result['validated']=True
+    except Exception as exc:
+        result['error_type']=type(exc).__name__
+        partial=full_evidence/'instance-tabs-partial.json'
+        if partial.is_file() and not partial.is_symlink():
+            require(partial.stat().st_size<=131073,'unbounded full-run failure evidence')
+            result['partial_evidence']={'path':'full-instance-tabs/instance-tabs-partial.json',
+                                        'sha256':sha(partial),'size':partial.stat().st_size}
+    finally:
+        (full_evidence/'diagnostic-result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    validate_runtime(runtime)
+    return result
+
+
+def functional_scenarios_passed(cases,full):
+    expected=('A1-empty-on','A0-empty-off','B1-handoff-duplicate-on')
+    return (isinstance(cases,list) and tuple(x.get('case') for x in cases)==expected
+            and all(x.get('process',{}).get('passed') is True and x.get('registry_cleaned') is True
+                    and x.get('source_bytes_unchanged') is True and not x.get('diagnostic_error') for x in cases)
+            and isinstance(full,dict) and full.get('validated') is True and full.get('accepted') is False)
+
+
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);args=parser.parse_args()
     output=args.output.resolve();require(not output.exists(),'refuse existing diagnostic output');output.mkdir(parents=True)
     evidence=output/'evidence';evidence.mkdir()
     report={'schema':'ru-notepad-instance-modal-diagnostic-v1','status':'NOT_ACCEPTED','accepted':False,
             'user_delivery_authorized':False,'compiled':False,'packaged':False,'full_feature_ci_required':True,
-            'source_run':RUN_ID,'source_head':HEAD,'artifact_id':ARTIFACT_ID,'cases':[]}
+            'source_run':RUN_ID,'source_head':HEAD,'artifact_id':ARTIFACT_ID,'cases':[],
+            'functional_scenarios_passed':False,'full_instance_tabs':None}
     code=1
     try:
         require(sys.platform=='win32','real Windows required')
         runtime,hashes,metadata=acquire(output);report.update(artifact=metadata,runtime_sha256=hashes)
         report['cases']=diagnose(runtime,hashes,evidence);validate_runtime(runtime)
+        # Modal failures are observations, not grounds to skip later phases.
+        report['full_instance_tabs']=run_full_instance_tabs(runtime,hashes,evidence)
+        report['functional_scenarios_passed']=functional_scenarios_passed(report['cases'],report['full_instance_tabs'])
         report['diagnostic_completed']=True;code=0
     except Exception as exc:
         report.update(diagnostic_completed=False,diagnostic_error=type(exc).__name__)

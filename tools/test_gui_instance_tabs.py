@@ -153,6 +153,11 @@ class ModalDiagnosticTests(unittest.TestCase):
         api.user.PostMessageW.return_value=True
         api.user.GetWindowTextW.return_value=0
         api.user.GetWindow.return_value=0
+        def pid(hwnd,out):
+            import ctypes
+            ctypes.cast(out,ctypes.POINTER(subject.wintypes.DWORD)).contents.value=123
+            return 7
+        api.user.GetWindowThreadProcessId.side_effect=pid
         return api
 
     def test_zero_multiple_or_hidden_button_remain_failures_with_owned_diagnostics(self):
@@ -169,7 +174,7 @@ class ModalDiagnosticTests(unittest.TestCase):
             self.assertEqual(len(observed['modal test']['windows']),len(windows))
             api.user.PostMessageW.assert_not_called()  # No guessed click.
             api.scalar.assert_not_called()  # No synchronous WM_GETTEXT observation.
-            for hwnd,_,_ in windows:api.verify_owned_handles.assert_any_call(123,hwnd)
+            for hwnd,_,_ in windows:self.assertTrue(any(c.args[0]==hwnd for c in api.user.GetWindowThreadProcessId.call_args_list))
 
     def test_owner_identity_is_recorded_but_foreign_owner_is_not_inspected(self):
         import ctypes
@@ -194,7 +199,7 @@ class ModalDiagnosticTests(unittest.TestCase):
         with patch.object(subject,'_registry_observation',side_effect=[{'observation_error':'FileNotFoundError'},{'type':4,'value':0,'value_is_integer':True}]), \
              patch.object(subject.time,'monotonic',side_effect=lambda:clock[0]), \
              patch.object(subject.time,'sleep',side_effect=lambda _:clock.__setitem__(0,clock[0]+1)):
-            with self.assertRaisesRegex(RuntimeError,'Timed out: actual modal button 1'):
+            with self.assertRaisesRegex(RuntimeError,'Timed out: command805 information box'):
                 subject._toggle_preference(api,p,5,'isolated',observed,'disable')
         api.user.PostMessageW.assert_called_once_with(5,0x111,805,0)
         self.assertEqual(observed['disable registry after']['value'],0)
@@ -225,5 +230,124 @@ class ModalDiagnosticTests(unittest.TestCase):
             registry.SetValueEx.assert_not_called()
             registry.OpenKey.side_effect=PermissionError('private details')
             self.assertEqual(subject._registry_observation(path),{'observation_error':'PermissionError','winerror':None})
+
+
+
+class InformationBoxTests(unittest.TestCase):
+    def shape(self,identifier=2):
+        return {'owner':5,'caption':'ru_notepad','visible':True,'enabled':True,'controls':[
+            {'hwnd':12,'class':'Static','control_type':0,'id':65535,'visible':True,'enabled':True,'text':'Expected information'},
+            {'hwnd':13,'class':'Static','control_type':3,'id':20,'visible':True,'enabled':True,'text':''},
+            {'hwnd':14,'class':'Button','control_type':1,'id':identifier,'visible':True,'enabled':True,'text':'OK'}]}
+
+    def test_exact_information_shape_accepts_both_observed_ok_control_ids(self):
+        for identifier in (1,2):
+            self.assertEqual(subject._information_shape(self.shape(identifier),5,{'Expected information'}),14)
+        # Button caption is OS localized; body and control structure, not an English OK string, bind the action.
+        shape=self.shape();shape['controls'][-1]['text']='确定'
+        self.assertEqual(subject._information_shape(shape,5,{'Expected information'}),14)
+
+    def test_information_shape_rejects_wrong_dialog_or_any_second_choice(self):
+        mutations=[lambda d:d.update(owner=6),lambda d:d.update(caption='Error'),
+            lambda d:d.update(visible=False),lambda d:d.update(enabled=False),
+            lambda d:d['controls'][0].update(text='Saving preferences failed'),
+            lambda d:d['controls'][0].update(visible=False),
+            lambda d:d['controls'][-1].update(visible=False),lambda d:d['controls'][-1].update(enabled=False),
+            lambda d:d['controls'][1].update(control_type=13),
+            lambda d:d['controls'][-1].update(control_type=2),
+            lambda d:d['controls'][-1].update(id=6),lambda d:d['controls'][-1].update(id=7),
+            lambda d:d['controls'].append(dict(d['controls'][-1],hwnd=15,id=1)),
+            lambda d:d['controls'].append(dict(d['controls'][-1],hwnd=15,id=1,visible=False)),
+            lambda d:d['controls'].append(dict(d['controls'][0],hwnd=16)),
+            lambda d:d['controls'].append(dict(d['controls'][0],hwnd=16,**{'class':'Edit'})),
+            lambda d:d['controls'].clear()]
+        for i,mutation in enumerate(mutations):
+            shape=self.shape();mutation(shape)
+            with self.subTest(i=i):self.assertIsNone(subject._information_shape(shape,5,{'Expected information'}))
+
+    def test_scoped_handler_clicks_actual_control_once_after_exact_match(self):
+        catalog=json.loads((Path(subject.__file__).resolve().parents[1]/'locales'/'instance_tabs.json').read_text())
+        for identifier in (1,2):
+            shape=self.shape(identifier);shape['controls'][0]['text']=catalog['instance.next_launch']['en']
+            api=ModalDiagnosticTests().make_api([(10,'#32770',True)]);p=Mock(pid=123);p.poll.return_value=None
+            api.user.IsWindowVisible.return_value=False
+            observed={}
+            with patch.object(subject,'_information_dialog',return_value=shape):
+                self.assertEqual(subject._information_button(api,p,5,observations=observed),10)
+            api.verify_owned_handles.assert_called_once_with(123,5,10,14)
+            api.user.PostMessageW.assert_called_once_with(14,0xf5,0,0)
+            self.assertEqual(observed['information 805']['controls'][-1]['id'],identifier)
+
+    def test_wrong_information_does_not_click_and_keeps_ten_second_deadline(self):
+        api=ModalDiagnosticTests().make_api([(10,'#32770',True)]);p=Mock(pid=123);p.poll.return_value=None
+        now=[0.0]
+        with patch.object(subject,'_information_dialog',return_value=self.shape()), \
+             patch.object(subject.time,'monotonic',side_effect=lambda:now[0]), \
+             patch.object(subject.time,'sleep',side_effect=lambda _:now.__setitem__(0,now[0]+1)):
+            with self.assertRaisesRegex(RuntimeError,'Timed out: command805 information box'):
+                subject._information_button(api,p,5)
+        self.assertEqual(now[0],10);api.user.PostMessageW.assert_not_called()
+
+    def test_hidden_owned_observation_does_not_abort_and_foreign_pid_is_rejected(self):
+        api=ModalDiagnosticTests().make_api([(10,'HiddenHelper',False),(11,'#32770',True)])
+        result=subject._modal_observation(api,Mock(pid=123),1)
+        self.assertNotIn('observation_error',result)
+        self.assertEqual(len(result['windows']),2)
+        self.assertFalse(result['windows'][0]['visible'])
+        api.verify_owned_handles.assert_not_called()  # Its visibility precondition is deliberately not used for observing.
+        with self.assertRaisesRegex(RuntimeError,'does not belong'):
+            subject._owned_pid(api,456,10)
+        with self.assertRaisesRegex(RuntimeError,'does not belong'):
+            subject._information_dialog(api,Mock(pid=456),10,99999999999)
+        api.user.PostMessageW.assert_not_called()
+
+    def test_actual_information_inventory_reads_owned_controls_and_rejects_foreign_child(self):
+        import ctypes
+        api=ModalDiagnosticTests().make_api([(10,'#32770',True)])
+        api.callback_type=lambda callback:callback
+        api.user.GetWindow.return_value=5
+        records={12:('Static',65535,'Expected information'),13:('Static',20,''),14:('Button',2,'OK')}
+        def enumerate_children(hwnd,callback,unused):
+            self.assertEqual(hwnd,10)
+            for child in records:
+                if not callback(child,0):return 0
+            return 1
+        def classname(hwnd,buffer,size):
+            buffer.value=records[hwnd][0];return len(buffer.value)
+        def gettext(hwnd,msg,size,address,flags,timeout,out):
+            self.assertEqual(msg,0x000d);self.assertLessEqual(timeout,100)
+            value=records[hwnd][2] if hwnd in records else 'ru_notepad'
+            buffer=ctypes.create_unicode_buffer(value)
+            ctypes.memmove(address,buffer,ctypes.sizeof(buffer))
+            ctypes.cast(out,ctypes.POINTER(ctypes.c_size_t)).contents.value=len(value)
+            return 1
+        api.user.EnumChildWindows.side_effect=enumerate_children
+        api.user.GetClassNameW.side_effect=classname
+        api.user.GetDlgCtrlID.side_effect=lambda hwnd:records[hwnd][1]
+        api.user.GetWindowLongPtrW.side_effect=lambda hwnd,index:3 if hwnd==13 else 0
+        api.user.SendMessageTimeoutW.side_effect=gettext
+        result=subject._information_dialog(api,Mock(pid=123),10,subject.time.monotonic()+10)
+        self.assertEqual(subject._information_shape(result,5,{'Expected information'}),14)
+        self.assertNotIn(13,[c.args[0] for c in api.user.SendMessageTimeoutW.call_args_list])  # SS_ICON is not text.
+        original_pid=api.user.GetWindowThreadProcessId.side_effect
+        def foreign_pid(hwnd,out):
+            if hwnd!=14:return original_pid(hwnd,out)
+            ctypes.cast(out,ctypes.POINTER(subject.wintypes.DWORD)).contents.value=999;return 7
+        api.user.GetWindowThreadProcessId.side_effect=foreign_pid
+        with self.assertRaisesRegex(RuntimeError,'does not belong'):
+            subject._information_dialog(api,Mock(pid=123),10,subject.time.monotonic()+10)
+        api.user.PostMessageW.assert_not_called()
+
+    def test_information_text_queries_are_bounded_by_remaining_deadline(self):
+        api=Mock();api.user.SendMessageTimeoutW.return_value=False
+        with patch.object(subject.time,'monotonic',return_value=1):
+            with self.assertRaisesRegex(RuntimeError,'did not respond'):
+                subject._information_text(api,10,1.05)
+        self.assertLessEqual(api.user.SendMessageTimeoutW.call_args.args[5],50)
+        api.user.SendMessageTimeoutW.reset_mock()
+        with patch.object(subject.time,'monotonic',return_value=2):
+            with self.assertRaisesRegex(RuntimeError,'Timed out'):
+                subject._information_text(api,10,1.05)
+        api.user.SendMessageTimeoutW.assert_not_called()
 
 if __name__=='__main__':unittest.main()
