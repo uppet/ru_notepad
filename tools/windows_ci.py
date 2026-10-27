@@ -170,6 +170,9 @@ SCANNER_PREFLIGHT_SOURCES = ('tools/test_ru_scan.py', 'src/ru_lexical.ru',
 SCANNER_PREFLIGHT_REPORT_FIELDS = {'cases', 'chunk_checks', 'ru_assertions_per_backend',
                                   'library_sha256', 'source_sha256', 'sanitizer'}
 SCANNER_SANITIZER_SUCCESS = 'PASS: 20000 ASan/UBSan bounded random buffer cases'
+SCANNER_CASES = 169
+SCANNER_CHUNK_CHECKS = 1014
+SCANNER_BACKEND_ASSERTIONS = 338
 HELPER_POLICY_EVIDENCE_FILES = ('helper-policy.stdout.log', 'helper-policy.stderr.log',
     'cleanup-control.stdout.log', 'cleanup-control.stderr.log',
     'bridge-failure.stdout.log', 'bridge-failure.stderr.log',
@@ -994,7 +997,8 @@ def helper_policy_action(action, root):
     report = json.loads(texts['report.json'])
     if (not isinstance(report, dict) or set(report) != SCANNER_PREFLIGHT_REPORT_FIELDS or
             any(type(report[key]) is not int or report[key] != count for key, count in
-                (('cases', 163), ('chunk_checks', 978), ('ru_assertions_per_backend', 326))) or
+                (('cases', SCANNER_CASES), ('chunk_checks', SCANNER_CHUNK_CHECKS),
+                 ('ru_assertions_per_backend', SCANNER_BACKEND_ASSERTIONS))) or
             report['sanitizer'] != SCANNER_SANITIZER_SUCCESS):
         raise RuntimeError('Linux helper policy lacks exact differential/fuzz/sanitizer success')
     if (json.loads(texts['helper-policy.stdout.log']) != report or texts['helper-policy.stderr.log'].strip() or
@@ -1003,10 +1007,10 @@ def helper_policy_action(action, root):
         raise RuntimeError('Linux helper-policy transcript/DLL/source identity mismatch')
     for name in ('differential-python.log', 'differential-c.log'):
         text = texts[name]
-        if (re.findall(r'^TOTAL PASS: ([0-9]+)\s*$', text, re.M) != ['326'] or
-                len(re.findall(r'^PASS:', text, re.M)) != 326 or
+        if (re.findall(r'^TOTAL PASS: ([0-9]+)\s*$', text, re.M) != [str(SCANNER_BACKEND_ASSERTIONS)] or
+                len(re.findall(r'^PASS:', text, re.M)) != SCANNER_BACKEND_ASSERTIONS or
                 re.search(r'^(FAIL:|SKIP:)', text, re.M)):
-            raise RuntimeError('Linux helper policy lacks 326 full style/fold assertions in each real backend')
+            raise RuntimeError('Linux helper policy lacks 338 full style/fold assertions in each real backend')
     if texts['sanitize.log'].strip() != SCANNER_SANITIZER_SUCCESS:
         raise RuntimeError('Linux helper policy lacks the real clean ASan/UBSan execution marker')
     cleanup = texts['cleanup-control.stdout.log']
@@ -1069,7 +1073,7 @@ def validate_scanner_preflight(record, binary_hashes, root):
     report = record.get('report')
     if not isinstance(report, dict) or set(report) != SCANNER_PREFLIGHT_REPORT_FIELDS:
         raise RuntimeError('Exact-DLL scanner preflight report is missing or malformed')
-    expected = {'cases': 163, 'chunk_checks': 978, 'ru_assertions_per_backend': 0}
+    expected = {'cases': SCANNER_CASES, 'chunk_checks': SCANNER_CHUNK_CHECKS, 'ru_assertions_per_backend': 0}
     if any(type(report[key]) is not int or report[key] != value for key, value in expected.items()):
         raise RuntimeError('Exact-DLL scanner preflight did not execute all deterministic boundary/fuzz cases')
     if report['sanitizer'] is not None:

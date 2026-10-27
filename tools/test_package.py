@@ -72,6 +72,12 @@ def markdown_evidence():
                           'cleared': True, 'wall_ms': 1.0, 'request_pending': True}} if dirty else {}
             case['stages'].append({'operation': operation, 'length': len(expected), 'dirty': dirty,
                 'source_sha256': case['source_sha256'], 'wall_ms': 100.0, 'probes': 1, 'observer': observer,
+                'phase_timing': {'length_savepoint_observed_ms': 20.0,
+                    'status_complete_observed': ([{'undo_commands': 1, 'elapsed_ms': 10.0},
+                        {'undo_commands': 2, 'elapsed_ms': 20.0}] if operation == 'undo' else
+                        [{'undo_commands': 0, 'elapsed_ms': 20.0}]),
+                    'undo_returned_ms': [1.0, 11.0] if operation == 'undo' else [],
+                    'max_wm_null_probe_ms': 1.0},
                 'memory': {'measurement': ci.GUI_MARKDOWN_MEMORY_MEASUREMENT, 'sample_count': 1,
                     'sampledWorkingSetPeak': 1048576, 'processPeakWorkingSet': 2097152,
                     'query_wall_ms': 0.1, 'max_query_ms': 0.1, 'samples': [
@@ -175,7 +181,7 @@ class PackageTests(unittest.TestCase):
         sources = ci.scanner_preflight_sources(self.root)
         self.summary['scanner_preflight'] = {'name': package.SCANNER_PREFLIGHT_NAME,
             'passed': True, 'executed': True, 'cleanup_killed': False, 'exit_code': 0,
-            'source_sha256': sources, 'report': {'cases': 163, 'chunk_checks': 978,
+            'source_sha256': sources, 'report': {'cases': 169, 'chunk_checks': 1014,
                 'ru_assertions_per_backend': 0, 'sanitizer': None,
                 'library_sha256': self.summary['tested_binary_sha256'][package.NATIVE_HELPER_NAME],
                 'source_sha256': sources['native/ru_scan.c']}}
@@ -766,7 +772,7 @@ class PackageTests(unittest.TestCase):
         self.assertFalse(any(name.startswith('native-test-evidence/') for name in runtime))
 
     def test_markdown_gui_schema_is_rechecked_at_packaging_boundary(self):
-        for mutation in ('missing', 'late', 'pending', 'source', 'collapse', 'observer', 'clock', 'progress-missing', 'diagnostic-missing', 'diagnostic-malformed'):
+        for mutation in ('missing', 'late', 'pending', 'source', 'collapse', 'observer', 'clock', 'progress-missing', 'diagnostic-missing', 'diagnostic-malformed', 'phase-missing', 'phase-invalid'):
             with self.subTest(mutation=mutation):
                 case = next(case for case in self.summary['tests'] if case['name'] == 'main-gui-markdown')
                 case['markdown_performance'] = markdown_evidence()
@@ -780,6 +786,8 @@ class PackageTests(unittest.TestCase):
                 elif mutation == 'observer': stage['observer']['snapshots'][0]['messages'] = 33
                 elif mutation == 'clock': record['clock']['implementation'] = 'fake()'
                 elif mutation == 'progress-missing': stage.pop('last_progress')
+                elif mutation == 'phase-missing': stage.pop('phase_timing')
+                elif mutation == 'phase-invalid': stage['phase_timing']['length_savepoint_observed_ms'] = True
                 elif mutation == 'diagnostic-missing': stage['last_progress']['diagnostic'] = None
                 elif mutation == 'diagnostic-malformed': stage['last_progress']['diagnostic']['via'] = 9
                 with self.assertRaises(RuntimeError): self.create('bad-markdown-' + mutation)

@@ -99,11 +99,11 @@
     },
     "tools/test_windows_ci.py": {
       "before": "b28733251662cd749c961fda95d912a1638794857fbb07015b5fb6363c28ec3b",
-      "after": "a3e3a1180140a6234bd06f562214b8a46d79755a3b2e018512af9926d6d03fd0"
+      "after": "5ee997f53fc5b2c2841dcbba035971f8f370cd809a7ee434a83556e61207c168"
     },
     "tools/windows_ci.py": {
       "before": "c1a793bf7d96267adc47d70bd459b3c050cb54f67c9768a57041cad5a732142a",
-      "after": "ff02af5f9a9259a7a6093bbaf8da24ee0e9895beb8b9c023d07a58f0a9c4f6e3"
+      "after": "bfc09e5649d88599aee35832ba61175635282b79dacd92c3987f5233b90deaa3"
     },
     "docs/preview-024-candidate.md": {
       "before": null,
@@ -112,6 +112,10 @@
     "tools/verify_ru_policy_fast_outputs.py": {
       "before": "32b4fdcec098114f9a211456058ebc46ba78e7138cdbf556b346570167c7903b",
       "after": "7841c0727006fe53a110bbe53e490e01858dde9474beba58e7ab49a23284f38f"
+    },
+    "tools/test_package.py": {
+      "before": "8f163a5d8d59740f0a285bbe49c5e6405d26bc906c70a25438bfee27b2dcd289",
+      "after": "490301eca634f84405507ac4445b7cb42659875cfa04f3d31d89ddc0263d6783"
     }
   }
 }

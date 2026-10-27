@@ -960,14 +960,14 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         sources = ci.scanner_preflight_sources(root)
         return {'name': ci.portable.SCANNER_PREFLIGHT_NAME, 'passed': True, 'executed': True,
                 'cleanup_killed': False, 'exit_code': 0, 'source_sha256': sources,
-                'report': {'cases': 163, 'chunk_checks': 978, 'ru_assertions_per_backend': 0, 'sanitizer': None,
+                'report': {'cases': 169, 'chunk_checks': 1014, 'ru_assertions_per_backend': 0, 'sanitizer': None,
                     'library_sha256': hashes[ci.portable.NATIVE_HELPER_NAME],
                     'source_sha256': sources['native/ru_scan.c']}}
 
     def test_scanner_preflight_is_mandatory_and_binds_exact_counts_dll_and_sources(self):
         for mutation in ('missing', 'failed', 'unexecuted', 'killed', 'exit', 'wrong-cases',
                          'wrong-chunks', 'unexpected-differential', 'wrong-dll', 'wrong-source',
-                         'wrong-script', 'missing-report', 'extra-report', 'host-sanitizer', 'old-counts'):
+                         'wrong-script', 'missing-report', 'extra-report', 'host-sanitizer', 'old-counts', 'pre-continue-counts', 'omitted-fixture'):
             with self.subTest(mutation=mutation):
                 summary = self.acceptance()
                 record = summary['scanner_preflight']
@@ -977,9 +977,11 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 if mutation == 'killed': record['cleanup_killed'] = True
                 if mutation == 'exit': record['exit_code'] = 1
                 if mutation == 'old-counts': record['report'].update(cases=157, chunk_checks=942)
+                if mutation == 'pre-continue-counts': record['report'].update(cases=163, chunk_checks=978)
+                if mutation == 'omitted-fixture': record['report'].update(cases=168, chunk_checks=1008)
                 if mutation == 'wrong-cases': record['report']['cases'] = 156
                 if mutation == 'wrong-chunks': record['report']['chunk_checks'] = 941
-                if mutation == 'unexpected-differential': record['report']['ru_assertions_per_backend'] = 326
+                if mutation == 'unexpected-differential': record['report']['ru_assertions_per_backend'] = 338
                 if mutation == 'wrong-dll': record['report']['library_sha256'] = 'different'
                 if mutation == 'wrong-source': record['report']['source_sha256'] = 'different'
                 if mutation == 'wrong-script': record['source_sha256']['tools/test_ru_scan.py'] = 'different'
@@ -1041,6 +1043,15 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 for path in evidence.iterdir(): self.assertLessEqual(path.stat().st_size, ci.MAX_LOG_BYTES)
                 if mode == 'timeout': self.assertTrue(result['cleanup_killed'])
 
+    def test_scanner_gate_counts_match_read_only_fixture_inventory(self):
+        import test_ru_scan as scanner
+        # fixtures() reads only tracked Ru text and returns literals. Do not call
+        # main(), Scanner(), differential(), or load/build any native library.
+        cases = len(scanner.fixtures()) + 100
+        self.assertEqual(cases, 169)
+        self.assertEqual((ci.SCANNER_CASES, ci.SCANNER_CHUNK_CHECKS,
+                          ci.SCANNER_BACKEND_ASSERTIONS), (cases, cases * 6, cases * 2))
+
     def helper_policy_fixture(self):
         directory = self.root / 'build/logs/014/ru-scan'
         inputs = {'ru_commit': ci.HELPER_POLICY_COMMIT, 'ru_tree': ci.HELPER_POLICY_TREE,
@@ -1062,7 +1073,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         with patch.object(ci, 'helper_policy_inputs', return_value=inputs):
             ci.helper_policy_action('prepare', self.root)
         (directory / 'libRuSyntax.so').write_bytes(b'synthetic host library')
-        report = {'cases': 163, 'chunk_checks': 978, 'ru_assertions_per_backend': 326,
+        report = {'cases': 169, 'chunk_checks': 1014, 'ru_assertions_per_backend': 338,
                   'sanitizer': ci.SCANNER_SANITIZER_SUCCESS,
                   'source_sha256': inputs['source_sha256']['native/ru_scan.c'],
                   'library_sha256': ci.sha(directory / 'libRuSyntax.so')}
@@ -1071,7 +1082,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         for name in ('report.json', 'helper-policy.stdout.log'):
             (directory / name).write_text(json.dumps(report))
         for name in ('differential-python.log', 'differential-c.log'):
-            (directory / name).write_text('PASS: fixture\n' * 326 + 'TOTAL PASS: 326\n')
+            (directory / name).write_text('PASS: fixture\n' * 338 + 'TOTAL PASS: 338\n')
         (directory / 'sanitize.log').write_text(ci.SCANNER_SANITIZER_SUCCESS + '\n')
         (directory / 'cleanup-control.stdout.log').write_text(
             'BACKEND: python\n' + 'PASS: fixture\n' * 8 + 'TOTAL PASS: 8\n' +
@@ -1307,7 +1318,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertFalse(ci.policy_prefix_wrapper_valid('policy-prefix-order.stderr.log', error.replace('POLICY_FAST_FAIL', 'POLICY_FAST_VERIFY_FAIL'), False))
 
     def test_linux_helper_policy_rejects_missing_or_partial_differential_sanitizer_and_source_results(self):
-        for mutation in ('missing', 'wrong-count', 'old-counts', 'wrong-library', 'wrong-source', 'changed-inputs',
+        for mutation in ('missing', 'wrong-count', 'old-counts', 'pre-continue-counts', 'omitted-fixture', 'wrong-library', 'wrong-source', 'changed-inputs',
                          'missing-sanitizer', 'partial-sanitizer', 'sanitizer-error', 'missing-python', 'missing-c',
                          'extra-total', 'failed-case', 'skipped-case', 'unexpected-stderr', 'oversize',
                          'missing-cleanup', 'partial-cleanup', 'cleanup-error',
@@ -1320,7 +1331,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 report = json.loads((directory / 'report.json').read_text())
                 if mutation == 'missing': (directory / 'report.json').unlink()
                 if mutation == 'old-counts': report.update(cases=157, chunk_checks=942, ru_assertions_per_backend=314)
-                if mutation == 'wrong-count': report['chunk_checks'] = 977
+                if mutation == 'pre-continue-counts': report.update(cases=163, chunk_checks=978, ru_assertions_per_backend=326)
+                if mutation == 'omitted-fixture': report.update(cases=168, chunk_checks=1008, ru_assertions_per_backend=336)
+                if mutation == 'wrong-count': report['chunk_checks'] = 1013
                 if mutation == 'wrong-library': report['library_sha256'] = 'different'
                 if mutation == 'wrong-source': report['source_sha256'] = 'different'
                 if mutation == 'missing-sanitizer': report['sanitizer'] = None
@@ -1328,15 +1341,15 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     report['sanitizer'] = ci.SCANNER_SANITIZER_SUCCESS + ' (LSan disabled by caller)'
                     (directory / 'sanitize.log').write_text(report['sanitizer'])
                 if mutation == 'changed-inputs': inputs = dict(inputs, ru_tree='different')
-                if mutation in ('wrong-count', 'old-counts', 'wrong-library', 'wrong-source', 'missing-sanitizer', 'partial-sanitizer'):
+                if mutation in ('wrong-count', 'old-counts', 'pre-continue-counts', 'omitted-fixture', 'wrong-library', 'wrong-source', 'missing-sanitizer', 'partial-sanitizer'):
                     for name in ('report.json', 'helper-policy.stdout.log'):
                         (directory / name).write_text(json.dumps(report))
                 if mutation == 'sanitizer-error': (directory / 'sanitize.log').write_text('runtime error: bad memory\n' + ci.SCANNER_SANITIZER_SUCCESS)
-                if mutation == 'missing-python': (directory / 'differential-python.log').write_text('TOTAL PASS: 326\n')
+                if mutation == 'missing-python': (directory / 'differential-python.log').write_text('TOTAL PASS: 338\n')
                 if mutation == 'missing-c': (directory / 'differential-c.log').unlink()
                 if mutation in ('extra-total', 'failed-case', 'skipped-case'):
                     with (directory / 'differential-python.log').open('a') as stream:
-                        stream.write({'extra-total': 'TOTAL PASS: 326', 'failed-case': 'FAIL: fixture', 'skipped-case': 'SKIP: fixture'}[mutation] + '\n')
+                        stream.write({'extra-total': 'TOTAL PASS: 338', 'failed-case': 'FAIL: fixture', 'skipped-case': 'SKIP: fixture'}[mutation] + '\n')
                 if mutation == 'unexpected-stderr': (directory / 'helper-policy.stderr.log').write_text('error')
                 if mutation == 'oversize': (directory / 'scanner-build.log').write_bytes(b'x' * (ci.MAX_LOG_BYTES + 1))
                 if mutation == 'missing-cleanup': (directory / 'cleanup-control.stdout.log').unlink()
