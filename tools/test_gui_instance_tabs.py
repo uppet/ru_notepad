@@ -449,4 +449,71 @@ class PhysicalPopupTests(unittest.TestCase):
         self.assertEqual(observations['popup 2 0'][-1]['popups'],[])
         api.user.PostMessageW.assert_not_called()
 
+
+class ScalarFailureDiagnosticsTests(unittest.TestCase):
+    def test_ready_failure_records_exact_stale_editor_request_without_retry(self):
+        api=BusyBeforeIdleAPI(False);original=api.scalar;failure=RuntimeError('Synthetic GUI query did not respond within 5 seconds')
+        calls=[]
+        def query(hwnd,message,wparam=0,lparam=0):
+            calls.append((hwnd,message,wparam,lparam))
+            if message==2140:raise failure
+            return original(hwnd,message,wparam,lparam)
+        api.scalar=query;p=Mock(pid=123);p.poll.return_value=None;observed={}
+        with patch.object(subject.ctypes,'get_last_error',return_value=1400,create=True), \
+             patch.object(subject.ctypes,'set_last_error',create=True), \
+             patch.object(subject.time,'perf_counter',side_effect=[0,1,1.002]), \
+             patch.object(subject,'_scalar_window_state',return_value={'target_exists':False}), \
+             self.assertRaises(RuntimeError) as raised:
+            subject._wait_ready(api,p,10,5,'menu current',observed)
+        self.assertIs(raised.exception,failure);self.assertIs(api.scalar,query)
+        row=observed['scalar failure menu current']
+        self.assertEqual((row['message'],row['target_hwnd'],row['last_error'],row['elapsed_ms']),(2140,102,1400,2.0))
+        self.assertEqual(row['declared_timeout_ms'],5000);self.assertNotIn('lparam',row)
+        self.assertEqual(sum(message==2140 for _,message,_,_ in calls),1)
+
+    def test_real_timeout_and_observer_failure_preserve_original_failure_and_restore_api(self):
+        for fail_observer in (False,True):
+            api=Mock();failure=RuntimeError('original query failed');api.scalar.side_effect=failure
+            original=api.scalar;observed={}
+            with patch.object(subject.ctypes,'get_last_error',return_value=1460,create=True), \
+                 patch.object(subject.ctypes,'set_last_error',create=True), \
+                 patch.object(subject.time,'perf_counter',side_effect=[1,6]), \
+                 patch.object(subject,'_scalar_window_state',side_effect=OSError('probe failed') if fail_observer else None,
+                              return_value={'target_exists':True,'target_owned':True}), \
+                 self.assertRaises(RuntimeError) as raised:
+                with subject._scalar_failure_evidence(api,Mock(pid=123),10,observed,'probe'):
+                    api.scalar(20,0x1304)
+            self.assertIs(raised.exception,failure);self.assertIs(api.scalar,original)
+            original.assert_called_once_with(20,0x1304,0,0)
+            if fail_observer:self.assertIn('observation failed',failure.__notes__[0])
+            else:
+                self.assertEqual(observed['scalar failure probe']['elapsed_ms'],5000)
+                self.assertEqual(observed['scalar failure probe']['last_error'],1460)
+
+    def test_window_failure_snapshot_is_direct_queries_only_and_identifies_invalid_handle(self):
+        import ctypes
+        api=Mock();p=Mock(pid=123);p.poll.return_value=None
+        api.user.IsWindow.side_effect=lambda hwnd:hwnd==10
+        api.user.IsWindowVisible.return_value=False;api.user.IsWindowEnabled.return_value=False
+        def pid(hwnd,out):
+            ctypes.cast(out,ctypes.POINTER(subject.wintypes.DWORD)).contents.value=123 if hwnd==10 else 0
+            return 7 if hwnd==10 else 0
+        api.user.GetWindowThreadProcessId.side_effect=pid;api.user.GetGUIThreadInfo.return_value=True
+        record=subject._scalar_window_state(api,p,10,20)
+        self.assertFalse(record['target_exists']);self.assertFalse(record['target_owned'])
+        self.assertEqual(record['target_pid'],0);self.assertTrue(record['main_exists'])
+        self.assertEqual(record['main_pid'],123);self.assertIn('gui_thread',record)
+        api.scalar.assert_not_called();api.user.SendMessageTimeoutW.assert_not_called()
+        api.user.GetClassNameW.assert_not_called()
+
+    def test_bounded_partial_keeps_deep_rectangle_scalar_leaves_without_unbounded_containers(self):
+        state={'popup 2 0':[{'stage':'before left click','popups':[{'items':[{'rect':[11,22,33,44]}]}]}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(RuntimeError,'fixture failure'):
+                with subject._failure_evidence(tmp,receipt(),state,{}):raise RuntimeError('fixture failure')
+            path=Path(tmp)/'instance-tabs-partial.json';self.assertLessEqual(path.stat().st_size,131073)
+            record=json.loads(path.read_text())
+            self.assertEqual(record['observations']['popup 2 0'][0]['popups'][0]['items'][0]['rect'],[11,22,33,44])
+            self.assertFalse(record['accepted'])
+
 if __name__=='__main__':unittest.main()

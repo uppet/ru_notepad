@@ -310,13 +310,71 @@ def _is_ready(observed,count,title=None):
             (title is None or observed['title']==title))
 
 
+def _scalar_window_state(api,process,main,target):
+    """No synchronous messages: distinguish stale HWND from a nonresponsive owner."""
+    result={'expected_pid':process.pid,'main_hwnd':int(main),'target_hwnd':int(target)}
+    try:
+        result['process_exit_code']=process.poll()
+        u=api.user
+        u.IsWindow.argtypes=[wintypes.HWND];u.IsWindow.restype=wintypes.BOOL
+        u.IsWindowEnabled.argtypes=[wintypes.HWND];u.IsWindowEnabled.restype=wintypes.BOOL
+        result['target_exists']=bool(u.IsWindow(target))
+        pid=wintypes.DWORD();tid=u.GetWindowThreadProcessId(target,ctypes.byref(pid))
+        result.update(target_pid=pid.value,target_thread=int(tid),target_owned=pid.value==process.pid,
+                      target_visible=bool(u.IsWindowVisible(target)),target_enabled=bool(u.IsWindowEnabled(target)))
+        if result['target_exists'] and result['target_owned']:
+            name=ctypes.create_unicode_buffer(128)
+            u.GetClassNameW(target,name,len(name));result['target_class']=name.value
+        main_pid=wintypes.DWORD();main_tid=u.GetWindowThreadProcessId(main,ctypes.byref(main_pid))
+        result.update(main_exists=bool(u.IsWindow(main)),main_pid=main_pid.value)
+        if main_tid and main_pid.value==process.pid:
+            u.GetGUIThreadInfo.argtypes=[ctypes.c_uint32,ctypes.POINTER(_GUIThreadInfo)]
+            u.GetGUIThreadInfo.restype=wintypes.BOOL
+            info=_GUIThreadInfo();info.cbSize=ctypes.sizeof(info)
+            if u.GetGUIThreadInfo(main_tid,ctypes.byref(info)):
+                result['gui_thread']={'flags':info.flags,'active':int(info.hwndActive or 0),
+                    'focus':int(info.hwndFocus or 0),'capture':int(info.hwndCapture or 0),
+                    'menu_owner':int(info.hwndMenuOwner or 0)}
+            else:result['gui_thread_error']='GetGUIThreadInfo failed'
+    except Exception as exc:result['observation_error']=type(exc).__name__
+    return result
+
+
+@contextmanager
+def _scalar_failure_evidence(api,process,main,observations,label):
+    original=api.scalar
+    def measured(target,message,wparam=0,lparam=0):
+        # Clear ctypes' thread-local saved error only; the original call and its
+        # unchanged 5000 ms timeout remain the sole operation under measurement.
+        clear=getattr(ctypes,'set_last_error',None)
+        if clear:clear(0)
+        started=time.perf_counter()
+        try:return original(target,message,wparam,lparam)
+        except Exception as original_error:
+            try:
+                get_error=getattr(ctypes,'get_last_error',None)
+                last_error=get_error() if get_error else None
+                elapsed=(time.perf_counter()-started)*1000
+                if observations is not None:
+                    detail={'message':int(message),'target_hwnd':int(target),'wparam':int(wparam),
+                            'declared_timeout_ms':5000,'elapsed_ms':round(elapsed,3),'last_error':last_error}
+                    # Do not record lparam: some queries carry a local buffer pointer.
+                    detail['window']=_scalar_window_state(api,process,main,target)
+                    observations['scalar failure '+label]=detail
+            except Exception as diagnostic_error:
+                original_error.add_note('Scalar failure observation failed: '+type(diagnostic_error).__name__)
+            raise
+    with patch.object(api,'scalar',measured):yield
+
+
 def _wait_ready(api,process,hwnd,count,description,observations=None,title=None):
     def ready():
         observed=_readiness(api,hwnd)
         if observations is not None:observations[description]=observed
         return _is_ready(observed,count,title)
     # Same 30-second wait budget, not an added sleep or a relaxed acceptance.
-    _wait(api,process,ready,description,timeout=30)
+    with _scalar_failure_evidence(api,process,hwnd,observations,description):
+        _wait(api,process,ready,description,timeout=30)
 
 
 @contextmanager
@@ -327,8 +385,11 @@ def _failure_evidence(evidence,result,observations,expected):
         # Diagnostic only, never consumed as a passing acceptance receipt.
         # Preserve partial child/phase records even when run() raises.
         def bounded(value,depth=0):
-            if depth>8:return '[depth limit]'
+            # Bound scalar leaves before container depth so nested menu RECT
+            # coordinates survive without allowing deeper lists/dicts.
+            if value is None or type(value) in (int,float,bool):return value
             if isinstance(value,str):return value[:2048]
+            if depth>8:return '[depth limit]'
             if isinstance(value,dict):return {str(k)[:128]:bounded(v,depth+1) for k,v in list(value.items())[:64]}
             if isinstance(value,(list,tuple)):return [bounded(v,depth+1) for v in value[:64]]
             if value is None or type(value) in (int,float,bool):return value
