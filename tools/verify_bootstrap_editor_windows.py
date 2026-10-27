@@ -27,6 +27,8 @@ import zlib
 from bootstrap_provenance import require, sha, validate_toolchain
 from build_bootstrap_release import identity, snapshot, verify_gui_pe, verify_proof, verify_app_baseline, verify_linker_selection, verify_linker_probe
 
+from verify_bootstrap_application_oracle import verify_application_oracle
+
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = 'ru-notepad-bootstrap-gui-acceptance-v1'
 DEADLINE_SECONDS = 60
@@ -93,7 +95,21 @@ def validate_receipts(config):
         verify_proof(proof_data, source=app_root/entry, compiler=compiler,
             ir=Path(proof_data['artifacts']['standalone_ir']['path']),
             binary=Path(proof_data['artifacts']['binary']['path']),
-            triple=receipt['target_triple'], layout=receipt['data_layout'], frozen=frozen, tools=receipt['tool_paths'])
+            triple=receipt['target_triple'], layout=receipt['data_layout'], frozen=frozen, tools=receipt['tool_paths'], proof_path=proof)
+        binary = Path(proof_data['artifacts']['binary']['path'])
+        require(receipt.get('native_metadata') == identity(binary.with_name(binary.name+'.metadata.c'))
+                and receipt.get('native_wrapper') == identity(binary.with_name(binary.name+'.native-wrapper.json'))
+                and receipt.get('frontend_ir_sha256') == proof_data['source_ir_sha256'],
+                'retained native evidence differs from build receipt')
+        if entry == 'src/main.ru':
+            oracle = verify_application_oracle(proof_data, app_root,
+                Path(receipt['source_pins']['ru_source']['path']), receipt['source_sha256'], binary)
+            require(receipt.get('application_oracle') == oracle
+                    and read_json(Path(config[key]).parent/'application-oracle-validation.json') == oracle,
+                    'main application oracle differs from build receipt')
+        else:
+            require('application_oracle' in receipt and receipt['application_oracle'] is None,
+                    'main oracle cannot validate probe entry')
     # Probe sources are reviewed gate inputs, not arbitrary programs bearing a marker.
     source_root = Path(app['source_pins']['app_source']['path'])
     for entry in entries[1:]:

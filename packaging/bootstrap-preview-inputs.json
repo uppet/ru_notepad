@@ -192,6 +192,14 @@
     "tests/test_bootstrap_native_wrapper.py": {
       "before": null,
       "after": "4994893f9f751c0c59b082712db71cd970749f02fa700741e9729a40617d767b"
+    },
+    "tools/test_cleanup_paths.py": {
+      "before": "43ba2326b43981154c61aab60b8458a48847866c6163455daa5d9ce8c16007aa",
+      "after": "8eee9fc9693af38df302d887f5bbd73fece4db70a5544d5348261b3ee4ddf3d8"
+    },
+    "tests/test_bootstrap_receipt_integration.py": {
+      "before": null,
+      "after": "5093eeb2740cf670e786466c6f353884ef8b8e0ec5bbb1f00365a1bf112fc190"
     }
   }
 }
