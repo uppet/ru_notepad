@@ -48,6 +48,22 @@ class ReleaseTests(unittest.TestCase):
         return b.verify_proof(self.proof, **{k: self.files[k] for k in ('source','compiler','ir','binary')},
                               triple='triple', layout='layout', frozen=self.frozen)
 
+    def bind_native_wrapper(self):
+        import compile_bootstrap_native as native
+        binary=self.files['binary'];metadata=binary.with_name(binary.name+'.metadata.c')
+        frontend=binary.with_name(binary.name+'.frontend.ll')
+        metadata.write_text('synthetic metadata identity fixture');frontend.write_text('synthetic frontend IR')
+        self.proof['metadata_sha256']=b.sha(metadata);self.proof['source_ir_sha256']=b.sha(frontend)
+        self.proof['artifacts'].update(metadata={'path':str(metadata),'sha256':b.sha(metadata)},
+                                       frontend_ir={'path':str(frontend),'sha256':b.sha(frontend)})
+        self.proof_path=self.root/'compile-proof.json';self.proof_path.write_text(json.dumps(self.proof))
+        driver=Path(native.__file__).resolve();self.frozen[str(driver)]=b.sha(driver)
+        row={'schema':native.SCHEMA,'compiler_commit':native.CORE_COMMIT,'compiler_tree':native.CORE_TREE,
+             'source':b.identity(self.files['source']),'compiler':b.identity(self.files['compiler']),
+             'driver':b.identity(driver),'proof':b.identity(self.proof_path),'metadata':b.identity(metadata),
+             'frontend_ir':b.identity(frontend),'poison_entries':list(native.POISON_ENTRIES),'python_frontend_attempts':[]}
+        binary.with_name(binary.name+'.native-wrapper.json').write_text(json.dumps(row))
+
     def bind_tool_executables(self, tools):
         records={name:b.identity(tools[name]) for name in
                  ('clang','llvm-as','llvm-link','opt','llvm-dis','llc')}
@@ -92,8 +108,9 @@ class ReleaseTests(unittest.TestCase):
             selection=b.inspect_linker_command(command,record,{},str(self.root),triple)
         def verify():
             return b.verify_proof(self.proof,**{k:self.files[k] for k in ('source','compiler','ir','binary')},
-                                  triple=triple,layout='layout',frozen=self.frozen,tools=tools)
+                                  triple=triple,layout='layout',frozen=self.frozen,tools=tools,proof_path=self.proof_path)
         self.proof['linker_selection']=selection
+        self.bind_native_wrapper()
         verify()
         for invalid in (command[:1]+command[2:],command[:1]+['--target='+triple+'19.99']+command[2:],
                         command[:1]+['--target='+triple]+command[1:]):
@@ -171,6 +188,7 @@ class ReleaseTests(unittest.TestCase):
         command = [tools['clang'], '--target='+triple, str(self.root/'p.obj'), '-o', str(self.root/'p.exe'), *b.explicit_linker_flags(self.proof['linker'])]
         with patch.object(b.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout=b'', stderr=link_trace([tools['linker'], '-out:p.exe']))):
             self.proof['linker_selection'] = b.inspect_linker_command(command, self.proof['linker'], {}, str(self.root))
+        self.bind_native_wrapper();args['proof_path']=self.proof_path
         b.verify_proof(self.proof, **args)
         original=copy.deepcopy(self.proof)
         for mutation in ('missing','extra','wrong-shape'):
@@ -431,7 +449,9 @@ class LinkerSelectionTests(unittest.TestCase):
         files={ru/'rulang/toolchain_environment.py':'def llvm_environment(): return {}\n',
                ru/'tools/bootstrap_compare.py':'def compare_native(*args): return True\n',
                app/'src/main.ru':'fixture',app/'packaging/bootstrap_gui_launcher.c':'fixture',
-               app/'tools/bootstrap_provenance.py':'fixture',directory/'stage3.exe':'compiler'}
+               app/'tools/bootstrap_provenance.py':'fixture',app/'tools/compile_bootstrap_native.py':'fixture',
+               app/'tools/verify_bootstrap_application_oracle.py':'fixture',
+               app/'packaging/application-native-oracle.json':'{}',directory/'stage3.exe':'compiler'}
         for path,body in files.items(): path.parent.mkdir(parents=True,exist_ok=True);path.write_text(body)
         tools={name:str(self.root/(name+'.exe')) for name in ('clang','llvm-as','llvm-link','opt','llvm-dis','llc','rc')}
         for path in tools.values(): Path(path).write_bytes(b'tool')

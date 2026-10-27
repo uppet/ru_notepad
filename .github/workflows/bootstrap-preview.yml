@@ -86,8 +86,19 @@ jobs:
           if ([System.IO.Path]::GetFullPath($actual) -ine [System.IO.Path]::GetFullPath($config.mingw_tool_paths.cc)) { throw 'Native fixture compiler differs from pinned MinGW tool' }
           gcc --version
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      - name: Fail-closed pipeline and negative-control unit tests
-        run: python -m unittest discover -s editor/tests -p 'test_bootstrap*.py' -v
+      - name: Fail-closed cheap contract preflight before self-compilation
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m unittest discover -s editor/tests -p 'test_bootstrap*.py' -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_windows_ci.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_package.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_gui_instance_tabs.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_i18n.py --catalog-only
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Fresh three-stage self-compilation and fixed point
         working-directory: language
         run: python tools/bootstrap.py verify --directory bin/bootstrap/preview-ci
@@ -103,7 +114,7 @@ jobs:
         run: python editor/tools/prepare_bootstrap_dependencies.py --config "$env:PREVIEW_OUTPUT/base-config.json" --output "$env:PREVIEW_OUTPUT/dependencies"
       - name: Compile editor and probes using actual stage3 LLVM backend
         run: python editor/tools/prepare_bootstrap_preview.py build --output "$env:PREVIEW_OUTPUT"
-      - name: Actual stage3 recent-file, Ru lexical and Markdown policy fixtures
+      - name: Actual stage3 original and instance/tab fixtures with exact runtime DLLs
         run: python editor/tools/verify_bootstrap_recent_policies.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --output "$env:PREVIEW_OUTPUT/recent-fixtures"
       - name: B7 functional smoke only
         run: python editor/tools/verify_bootstrap_editor_windows.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --output "$env:PREVIEW_OUTPUT/smoke-acceptance.json"
@@ -157,6 +168,14 @@ jobs:
             ${{ runner.temp }}/ru-bootstrap-preview/argv/application.ll
             ${{ runner.temp }}/ru-bootstrap-preview/dll/application.ll
             ${{ runner.temp }}/ru-bootstrap-preview/recent-fixtures/*.ll
+            ${{ runner.temp }}/ru-bootstrap-preview/app/intermediate-console.exe.metadata.c
+            ${{ runner.temp }}/ru-bootstrap-preview/app/intermediate-console.exe.frontend.ll
+            ${{ runner.temp }}/ru-bootstrap-preview/argv/intermediate-console.exe.metadata.c
+            ${{ runner.temp }}/ru-bootstrap-preview/argv/intermediate-console.exe.frontend.ll
+            ${{ runner.temp }}/ru-bootstrap-preview/dll/intermediate-console.exe.metadata.c
+            ${{ runner.temp }}/ru-bootstrap-preview/dll/intermediate-console.exe.frontend.ll
+            ${{ runner.temp }}/ru-bootstrap-preview/recent-fixtures/*.metadata.c
+            editor/packaging/application-native-oracle.json
             language/bin/bootstrap/preview-ci/stage2.exe.frontend.ll
             language/bin/bootstrap/preview-ci/stage3.exe.frontend.ll
             language/bin/bootstrap/preview-ci/stage2.exe.metadata.c

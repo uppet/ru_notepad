@@ -21,7 +21,14 @@ exact source and executable. This document is a plan, not a passing test receipt
 - Five real-stage3 fixtures cover recent-file policy (25 assertions), native
   registry/encoding boundaries (22), actual main-module callback control flow
   (10), Ru lexical policy including 续 (422), and Markdown policy (221). These
-  700 assertions do not substitute for starting and testing the editor.
+  original 700 assertions remain required. Four additional fixtures cover tab
+  close policy (16), single-instance protocol/settings policy (39), isolated
+  native registry roundtrip (11), and native tab callbacks (53): nine fixtures,
+  819 assertions. Receipt schema v3 rejects the former five-fixture/v2 receipt.
+  The exact three dependency DLLs are copied beside the fixture executables;
+  original and copied identities are checked before/after execution and again
+  at product/package consumption. No PATH-only DLL substitution is accepted.
+  These fixtures do not substitute for starting and testing the editor.
 - The existing C-built native fixture suite remains separate baseline evidence.
   Its passing result does not claim those fixture executables were built with
   bootstrap LLVM, nor does a bootstrap smoke check replace product validation.
@@ -56,3 +63,29 @@ not interchangeable passing evidence. Each preview build records the actual
 tool and DLL identities; its own original product gates must still pass.
 The C-baseline run must be disclosed as failed/uncompleted at that point, not
 reported as a successful complete release suite.
+
+## Native application graph evidence
+
+The editor-owned `compile_bootstrap_native.py` calls the exact reviewed 26cc
+`compile_native` API with native support and retained frontend evidence. During
+main, probe and all nine fixture compilations it poisons seven Python application
+frontend entry points (including the native emitter's source alias). Attempts,
+even caught ones, fail the build. This does not replace stage3, the six frozen
+LLVM executable identities, linker/source checks, native fixtures or GUI gates.
+
+Only the main entry is checked against the independently generated, source-frozen
+`packaging/application-native-oracle.json`: complete module byte identities,
+complete native signature/callback sets, and every module initializer's callback
+first-import guard before initializing state. Metadata initializer inventory does
+not itself map bodies to source paths; exact proof dependencies bind source names
+and bytes. The oracle is a development reference, not native execution evidence.
+Its base anchor is b79; the enclosing source snapshot binds the candidate version
+without an impossible self-referential commit hash.
+
+The preview ZIP carries five bounded evidence files: application metadata C,
+compile proof, native wrapper receipt, independent oracle, and oracle validation.
+Their exact hashes are bound into provenance and the packaging receipt. Retained
+frontend LLVM IR stays in CI evidence and its SHA-256 is recorded in the ZIP;
+compiler executables and environment configuration are not packaged. Portable
+negative controls validate contracts only; successful producer compilation and
+Windows GUI execution must come from this candidate's actual CI run.

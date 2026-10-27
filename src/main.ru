@@ -4,6 +4,10 @@
 偏好 取 外言 'i18n_settings.ru'.
 最近 取 外言 'recent_files.ru'.
 近策 取 外言 'recent_files_policy.ru'.
+关策 取 外言 'tab_close_policy.ru'.
+页单 取 外言 'tab_context.ru'.
+单例 取 外言 'single_instance.ru'.
+单设 取 外言 'single_instance_settings.ru'.
 布局策 取 外言 'i18n_layout.ru'.
 窗 取 外言 'win32.ru'.
 编 取 外言 'editor.ru'.
@@ -16,7 +20,33 @@
 关联 取 外言 'associations.ru'.
 拖放 取 外言 'file_drop.ru'.
 修改头 取 密 其 结构 [['header',窗 其 NMHDR],['position',窗 其 IP],['ch',窗 其 I],['modifiers',窗 其 I],['modificationType',窗 其 I],['text',窗 其 PTR],['length',窗 其 IP],['linesAdded',窗 其 IP],['message',窗 其 I],['wParam',窗 其 UP],['lParam',窗 其 IP],['line',窗 其 IP],['foldLevelNow',窗 其 I],['foldLevelPrev',窗 其 I],['margin',窗 其 I]].
-A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'system','docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'previous':空,'whole':空,'searchWrap':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
+A 取 {'modalDepth':0,'singlePreference':真,'singleState':空,'singleDeferredShow':假,'handoffPending':[],'closeRun':空,'tabMenuOpen':假,'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'system','docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'previous':空,'whole':空,'searchWrap':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
+
+# Admission barrier across native modal loops. No unacknowledged raw pointers retained.
+算 界面弹窗 主窗, 文 为 句, 标题 为 句, 类型 为 数:
+    A 其 增 'modalDepth' ((A 其 查 'modalDepth')+1).
+    结果盒 取 [0].
+    试
+        结果盒[0] 取 窗 其 弹窗 主窗 文 标题 类型.
+    救 原因
+        A 其 增 'modalDepth' ((A 其 查 'modalDepth')-1).
+        卒 原因.
+    终
+    A 其 增 'modalDepth' ((A 其 查 'modalDepth')-1).
+    得 结果盒[0].
+法
+算 界面文件对话 保存模式 为 事实, 原路 为 句:
+    A 其 增 'modalDepth' ((A 其 查 'modalDepth')+1).
+    结果盒 取 [''].
+    试
+        结果盒[0] 取 窗 其 文件对话 (A 其 查 'window') 保存模式 原路.
+    救 原因
+        A 其 增 'modalDepth' ((A 其 查 'modalDepth')-1).
+        卒 原因.
+    终
+    A 其 增 'modalDepth' ((A 其 查 'modalDepth')-1).
+    得 结果盒[0].
+法
 
 # Syntax work is deferred out of Scintilla callbacks, with one shared UI budget.
 # Pure cache update shared by periodic sampling and an already-required final refresh.
@@ -247,11 +277,11 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
     得 当前 其 查 'editor'.
 法
 算 提示 文 为 句:
-    得 窗 其 弹窗 (A 其 查 'window') 文 'ru_notepad' 64.
+    得 界面弹窗 (A 其 查 'window') 文 'ru_notepad' 64.
 法
 算 错误提示 文 为 句:
     (A 其 查 'errors') 其 增 文.
-    若 A 其 查 'visible' 则 得 窗 其 弹窗 (A 其 查 'window') (本地 其 格式 'error.body' ([文])) (本地 其 文本 'error.title') 16. 然
+    若 A 其 查 'visible' 则 得 界面弹窗 (A 其 查 'window') (本地 其 格式 'error.body' ([文])) (本地 其 文本 'error.title') 16. 然
     显 '[operation] rejected: '+文.
     得 0.
 法
@@ -287,7 +317,7 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
     得 假.
 法
 算 关机会话:
-    若 (A 其 查 'busy') 或 任一已改 则
+    若 (A 其 查 'busy') 或 (A 其 查 'closeRun') != 空 或 任一已改 则
         文 取 密 其 UTF16 (本地 其 文本 'notice.shutdown_blocked').
         窗 其 结果 ((窗 其 ShutdownBlockReasonCreate) 其 调用 (参 其 窗口二参 A 文)).
         文 其 关闭.
@@ -546,7 +576,7 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
 法
 算 询大文件 大小 为 数:
     若 非 (A 其 查 'visible') 则 得 假. 然
-    得 (窗 其 弹窗 (A 其 查 'window') (本地 其 格式 'dialog.large_file' ([大小])) (本地 其 文本 'dialog.large_file.title') 292) == 6.
+    得 (界面弹窗 (A 其 查 'window') (本地 其 格式 'dialog.large_file' ([大小])) (本地 其 文本 'dialog.large_file.title') 292) == 6.
 法
 算 锁界面:
     文们 取 A 其 查 'docs'.
@@ -627,10 +657,10 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
         卒 原因.
     终
     结束工作.
+    结束批关 真.
     得 空.
 法
-算 入队 路们 为 句 阵, 代码页 为 数:
-    若 A 其 查 'busy' 则 卒 (本地 其 文本 'error.main.open_busy'). 然
+算 校验入队 路们 为 句 阵, 代码页 为 数:
     若 (路们 其 量) > 64 则 卒 (本地 其 文本 'error.main.batch_count'). 然
     队 取 [].
     总 取 0.
@@ -648,6 +678,12 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
         然
         位 取 位+1.
     环
+    得 队.
+法
+算 入队 路们 为 句 阵, 代码页 为 数:
+    若 (A 其 查 'closeRun') != 空 或 (A 其 查 'tabMenuOpen') 则 卒 (本地 其 文本 'error.main.open_busy'). 然
+    若 A 其 查 'busy' 则 卒 (本地 其 文本 'error.main.open_busy'). 然
+    队 取 校验入队 路们 代码页.
     若 (队 其 量) == 0 则 得 假. 然
     A 其 增 'queue' 队.
     A 其 增 'lastOutcome' 'running'.
@@ -657,6 +693,34 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
         A 其 增 'queue' ([]).
         卒 原因.
     终
+    得 真.
+法
+算 接收入队 路们 为 句 阵:
+    若 A 其 查 'cancelRequested' 则 卒 (本地 其 文本 'error.main.open_busy'). 然
+    若 非 (A 其 查 'busy') 则 得 入队 路们 0. 然
+    若 (A 其 查 'closeRun') != 空 或 (A 其 查 'tabMenuOpen') 则 卒 (本地 其 文本 'error.main.open_busy'). 然
+    操 取 A 其 查 'operation'.
+    旧队 取 A 其 查 'queue'.
+    # Only an active serial-open queue may be extended. Save/cancel/finalization
+    # never ACKs a request that its completion path would discard.
+    若 操 != 空 则
+        若 操['kind'] != 'open' 则 卒 (本地 其 文本 'error.main.open_busy'). 然
+    另
+        若 (旧队 其 量) == 0 则 卒 (本地 其 文本 'error.main.open_busy'). 然
+    然
+    新队 取 校验入队 路们 0.
+    所有路 取 []. 位 取 0.
+    若 操 != 空 则 所有路 其 增 操['reader']['path']. 然
+    循 旧队 其 量 次 所有路 其 增 旧队[位][0]. 位 取 位+1. 环
+    位 取 0.
+    循 新队 其 量 次 所有路 其 增 新队[位][0]. 位 取 位+1. 环
+    校验入队 所有路 0.
+    # Keep previous encoding choices; publish the whole validated list once.
+    合队 取 []. 位 取 0.
+    循 旧队 其 量 次 合队 其 增 旧队[位]. 位 取 位+1. 环
+    位 取 0.
+    循 新队 其 量 次 合队 其 增 新队[位]. 位 取 位+1. 环
+    A 其 增 'queue' 合队.
     得 真.
 法
 # Only completed opens reach this hook. History is a best-effort preference,
@@ -759,7 +823,7 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
     得 真.
 法
 算 选保存路径 原路 为 句:
-    得 窗 其 文件对话 (A 其 查 'window') 真 原路.
+    得 界面文件对话 真 原路.
 法
 算 请求保存 另存 为 事实, 后续 为 句:
     若 A 其 查 'busy' 则 得 假. 然
@@ -833,6 +897,17 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
         安排语法.
     然
     刷新.
+    若 后续 == 'batch' 则
+        关程 取 A 其 查 'closeRun'.
+        若 关程 != 空 则
+            若 ((关程['saving'] 其 查 'editor') 其 句) != ((文档 其 查 'editor') 其 句) 或 (脏 文档) 则
+                结束批关 真.
+            另
+                关程 其 增 'saving' 空.
+                继续批关.
+            然
+        然
+    然
     若 后续 == 'tab' 则 删除当前页. 然
     若 后续 == 'app' 则 继续关闭. 然
     得 空.
@@ -861,13 +936,14 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
             A 其 增 'queue' ([]).
             结束工作.
         然
+        结束批关 真.
         错误提示 报错[0].
     终
     A 其 增 'inTick' 假.
     得 空.
 法
 算 询问关闭 文档:
-    得 窗 其 弹窗 (A 其 查 'window') (本地 其 格式 'dialog.unsaved' ([(文档 其 查 'name')])) (本地 其 文本 'dialog.unsaved.title') 35.
+    得 界面弹窗 (A 其 查 'window') (本地 其 格式 'dialog.unsaved' ([(文档 其 查 'name')])) (本地 其 文本 'dialog.unsaved.title') 35.
 法
 算 删除当前页:
     # Invalidate before forgetting or destroying a document with queued work.
@@ -889,7 +965,143 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
     安排语法.
     得 真.
 法
+# Stable identity snapshot; save/confirm all before any destructive removal.
+# Completed disk saves are intentionally not rolled back if a later prompt cancels.
+算 文档位置 文档:
+    若 文档 == 空 则 得 -1. 然
+    文们 取 A 其 查 'docs'. 位 取 0.
+    循 文们 其 量 次
+        若 ((文们[位] 其 查 'editor') 其 句) == ((文档 其 查 'editor') 其 句) 则 得 位. 然
+        位 取 位+1.
+    环
+    得 -1.
+法
+算 结束批关 恢复 为 事实:
+    关程 取 A 其 查 'closeRun'.
+    若 关程 == 空 则 得 空. 然
+    A 其 增 'closeRun' 空.
+    锁们 取 关程['locks']. 位 取 0.
+    循 锁们 其 量 次
+        锁 取 锁们[位].
+        若 (文档位置 锁[0]) >= 0 则
+            柄 取 锁[0] 其 查 'editor'.
+            窗 其 发送 柄 2171 锁[1] 0.
+            窗 其 结果 ((窗 其 EnableWindow) 其 调用 [柄,1]).
+        然
+        位 取 位+1.
+    环
+    窗 其 结果 ((窗 其 EnableWindow) 其 调用 [(A 其 查 'tabs'),1]).
+    若 恢复 则
+        原位 取 文档位置 关程['original'].
+        若 原位 >= 0 则 切页 原位. 然
+    然
+    得 空.
+法
+算 继续批关:
+    关程 取 A 其 查 'closeRun'.
+    若 关程 == 空 则 得 假. 然
+    项们 取 关程['items'].
+    锁位 取 0.
+    循 (关程['locks']) 其 量 次
+        锁文 取 关程['locks'][锁位][0].
+        若 (文档位置 锁文) >= 0 则 窗 其 结果 ((窗 其 EnableWindow) 其 调用 [(锁文 其 查 'editor'),0]). 然
+        锁位 取 锁位+1.
+    环
+    窗 其 结果 ((窗 其 EnableWindow) 其 调用 [(A 其 查 'tabs'),0]).
+    试
+        循
+            若 关程['next'] >= (项们 其 量) 则 破. 然
+            位 取 关程['next']. 项 取 项们[位].
+            索引 取 文档位置 项[0].
+            若 索引 < 0 或 (项[0] 其 查 'revision') != 项[1] 则 卒 (本地 其 文本 'tab.close_changed'). 然
+            切页 索引.
+            若 脏 项[0] 则
+                询关 取 A 其 查 'confirmClose'.
+                选 取 询关 项[0].
+                若 选 == 6 则
+                    关程 其 增 'next' (位+1).
+                    关程 其 增 'saving' 项[0].
+                    若 非 (请求保存 假 'batch') 则 结束批关 真. 然
+                    得 假.
+                然
+                若 选 != 7 则 结束批关 真. 得 假. 然
+            然
+            关程 其 增 'next' (位+1).
+        环
+        位 取 0.
+        循 项们 其 量 次
+            项 取 项们[位].
+            若 (文档位置 项[0]) < 0 或 (项[0] 其 查 'revision') != 项[1] 则 卒 (本地 其 文本 'tab.close_changed'). 然
+            位 取 位+1.
+        环
+        位 取 0.
+        循 项们 其 量 次
+            切页 (文档位置 项们[位][0]).
+            删除当前页.
+            位 取 位+1.
+        环
+        结束批关 真.
+    救 原因
+        结束批关 真. 卒 原因.
+    终
+    得 真.
+法
+算 批关 点击 为 数, 动作 为 句:
+    若 (A 其 查 'busy') 或 (A 其 查 'closeRun') != 空 则 得 假. 然
+    文们 取 A 其 查 'docs'. 脏们 取 []. 位 取 0.
+    循 文们 其 量 次
+        脏们 其 增 (脏 文们[位]). 位 取 位+1.
+    环
+    目标们 取 关策 其 目标 (文们 其 量) 点击 动作 脏们.
+    若 (目标们 其 量) == 0 则 得 假. 然
+    项们 取 []. 位 取 0.
+    循 目标们 其 量 次
+        文档 取 文们[目标们[位]].
+        项们 其 增 [文档,(文档 其 查 'revision')].
+        位 取 位+1.
+    环
+    关程 取 {'items':项们,'next':0,'saving':空,'original':当前,'locks':[]}.
+    A 其 增 'closeRun' 关程.
+    试
+        位 取 0.
+        循 文们 其 量 次
+            柄 取 文们[位] 其 查 'editor'.
+            (关程['locks']) 其 增 [文们[位],((窗 其 发送 柄 2140 0 0) 其 数)].
+            窗 其 发送 柄 2171 1 0.
+            窗 其 结果 ((窗 其 EnableWindow) 其 调用 [柄,0]).
+            位 取 位+1.
+        环
+        窗 其 结果 ((窗 其 EnableWindow) 其 调用 [(A 其 查 'tabs'),0]).
+        得 继续批关.
+    救 原因
+        结束批关 真. 卒 原因.
+    终
+法
+算 页右键:
+    若 (A 其 查 'busy') 或 (A 其 查 'closeRun') != 空 则 得 空. 然
+    点击 取 页单 其 点击 (A 其 查 'tabs').
+    文们 取 A 其 查 'docs'.
+    若 点击 < 0 或 点击 >= (文们 其 量) 则 得 空. 然
+    切页 点击.
+    干净 取 假. 位 取 0.
+    循 文们 其 量 次
+        若 非 (脏 文们[位]) 则 干净 取 真. 然
+        位 取 位+1.
+    环
+    A 其 增 'tabMenuOpen' 真.
+    号盒 取 [0].
+    试
+        号盒[0] 取 页单 其 弹出 (A 其 查 'window') ([真,((文们 其 量)>1),(点击>0),(点击<(文们 其 量)-1),干净,真]).
+    救 原因
+        A 其 增 'tabMenuOpen' 假. 卒 原因.
+    终
+    A 其 增 'tabMenuOpen' 假.
+    号 取 号盒[0].
+    若 号 >= 1300 且 号 <= 1305 则 批关 点击 (['current','others','left','right','saved','all'][号-1300]). 然
+    得 空.
+法
 算 关页:
+    若 (A 其 查 'closeRun') != 空 或 (A 其 查 'tabMenuOpen') 则 得 假. 然
     若 A 其 查 'busy' 则 A 其 增 'cancelRequested' 真. 得 假. 然
     若 脏 当前 则
         询关 取 A 其 查 'confirmClose'.
@@ -929,11 +1141,14 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
     得 真.
 法
 算 关程序:
+    若 (A 其 查 'closeRun') != 空 或 (A 其 查 'tabMenuOpen') 则 得 假. 然
     若 A 其 查 'busy' 则 A 其 增 'cancelRequested' 真. 得 假. 然
     A 其 增 'closeIndex' 0.
     得 继续关闭.
 法
 算 命令 号:
+    若 (A 其 查 'closeRun') != 空 且 号 != 901 则 得 空. 然
+    若 A 其 查 'tabMenuOpen' 则 得 空. 然
     若 号 == 901 则
         若 A 其 查 'busy' 则 A 其 增 'cancelRequested' 真. 然
         得 空.
@@ -949,13 +1164,26 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
         若 位 < (项们 其 量) 则 打开 项们[位][0] 项们[位][1]. 然
         得 空.
     然
+    若 号 == 805 则
+        新偏好 取 非 (A 其 查 'singlePreference').
+        存码 取 单设 其 保存偏好 新偏好.
+        若 存码 != 0 则
+            错误提示 (本地 其 格式 'instance.save_failed' ([存码])).
+        另
+            A 其 增 'singlePreference' 新偏好.
+            菜单.
+            提示 (本地 其 文本 'instance.next_launch').
+        然
+        得 空.
+    然
+    若 号 == 113 则 打开待确认. 得 空. 然
     若 号 == 1210 则 清最近. 得 空. 然
     若 号 == 101 则 新页 '' '' 65001 假 ''. 得 空. 然
     若 号 == 102 或 号 == 108 或 号 == 109 则
         代码页 取 0.
         若 号 == 108 则 代码页 取 1252. 然
         若 号 == 109 则 代码页 取 936. 然
-        打开 (窗 其 文件对话 (A 其 查 'window') 假 '') 代码页.
+        打开 (界面文件对话 假 '') 代码页.
         报语法警告.
         得 空.
     然
@@ -1048,14 +1276,14 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
     若 号 == 503 则 窗 其 发送 编辑柄 2334 0 0. 然
     若 号 == 504 则 窗 其 发送 编辑柄 2373 0 0. 然
     若 号 == 801 则
-        若 (窗 其 弹窗 (A 其 查 'window') (本地 其 文本 'dialog.register') (本地 其 文本 'dialog.register.title') 292) == 6 则
+        若 (界面弹窗 (A 其 查 'window') (本地 其 文本 'dialog.register') (本地 其 文本 'dialog.register.title') 292) == 6 则
             关联 其 注册.
             提示 (本地 其 文本 'association.registered').
         然
     然
     若 号 == 802 则 关联 其 打开设置 (A 其 查 'window'). 然
     若 号 == 803 则
-        若 (窗 其 弹窗 (A 其 查 'window') (本地 其 文本 'dialog.unregister') (本地 其 文本 'dialog.unregister.title') 292) == 6 则 关联 其 注销. 提示 (本地 其 文本 'association.unregistered'). 然
+        若 (界面弹窗 (A 其 查 'window') (本地 其 文本 'dialog.unregister') (本地 其 文本 'dialog.unregister.title') 292) == 6 则 关联 其 注销. 提示 (本地 其 文本 'association.unregistered'). 然
     然
     若 号 == 804 则 提示 (本地 其 格式 'association.status' ([(本地 其 文本 ('association.state.'+(关联 其 查询状态)))])). 然
     若 号 == 601 则 提示 (本地 其 格式 'about.body' (['0.1.8'])). 然
@@ -1079,9 +1307,9 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
 算 菜单:
     # Parallel primitive arrays keep the pinned compiler's ABI analysis bounded.
     组键们 取 ['menu.file', 'menu.edit', 'menu.search', 'menu.encoding', 'menu.language', 'menu.view', 'menu.settings', 'menu.ui_language', 'menu.help'].
-    组量们 取 [10, 6, 4, 6, 5, 7, 4, 8, 1].
-    号们 取 [101, 102, 108, 109, 103, 104, 105, 111, 112, 106, 201, 202, 203, 204, 205, 206, 301, 302, 303, 308, 401, 402, 403, 404, 405, 406, 701, 702, 703, 704, 705, 501, 502, 503, 504, 505, 506, 507, 801, 802, 803, 804, 850, 851, 852, 853, 854, 855, 856, 857, 601].
-    键们 取 ['command.new', 'command.open', 'command.open_windows1252', 'command.open_gbk', 'command.save', 'command.save_as', 'command.close_tab', 'command.previous_tab', 'command.next_tab', 'command.exit', 'command.undo', 'command.redo', 'command.cut', 'command.copy', 'command.paste', 'command.select_all', 'command.find', 'command.replace', 'command.find_next', 'command.find_previous', 'command.save_utf8', 'command.save_utf8_bom', 'command.save_utf16le', 'command.save_utf16be', 'command.save_windows1252', 'command.save_gbk', 'command.language_plain', 'command.language_cpp', 'command.language_json', 'command.language_ru', 'command.language_markdown', 'command.toggle_wrap', 'command.zoom_in', 'command.zoom_out', 'command.zoom_reset', 'command.fold_all', 'command.unfold_all', 'command.toggle_markdown_folds', 'command.register_association', 'command.default_apps', 'command.unregister_association', 'command.registration_status', 'language.system', 'language.en', 'language.zh_cn', 'language.ja', 'language.ko', 'language.es', 'language.ru', 'language.it', 'command.about'].
+    组量们 取 [11, 6, 4, 6, 5, 7, 5, 8, 1].
+    号们 取 [101, 102, 108, 109, 103, 104, 105, 111, 112, 113, 106, 201, 202, 203, 204, 205, 206, 301, 302, 303, 308, 401, 402, 403, 404, 405, 406, 701, 702, 703, 704, 705, 501, 502, 503, 504, 505, 506, 507, 801, 802, 803, 804, 805, 850, 851, 852, 853, 854, 855, 856, 857, 601].
+    键们 取 ['command.new', 'command.open', 'command.open_windows1252', 'command.open_gbk', 'command.save', 'command.save_as', 'command.close_tab', 'command.previous_tab', 'command.next_tab', 'command.open_pending_shell', 'command.exit', 'command.undo', 'command.redo', 'command.cut', 'command.copy', 'command.paste', 'command.select_all', 'command.find', 'command.replace', 'command.find_next', 'command.find_previous', 'command.save_utf8', 'command.save_utf8_bom', 'command.save_utf16le', 'command.save_utf16be', 'command.save_windows1252', 'command.save_gbk', 'command.language_plain', 'command.language_cpp', 'command.language_json', 'command.language_ru', 'command.language_markdown', 'command.toggle_wrap', 'command.zoom_in', 'command.zoom_out', 'command.zoom_reset', 'command.fold_all', 'command.unfold_all', 'command.toggle_markdown_folds', 'command.register_association', 'command.default_apps', 'command.unregister_association', 'command.registration_status', 'command.single_instance', 'language.system', 'language.en', 'language.zh_cn', 'language.ja', 'language.ko', 'language.es', 'language.ru', 'language.it', 'command.about'].
     主 取 窗 其 成功 ((窗 其 CreateMenu) 其 调用 []) 'CreateMenu'.
     子 取 空.
     试
@@ -1092,6 +1320,8 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
             循 组量们[组位] 次
                 号 取 号们[位].
                 标记 取 0.
+                若 号 == 805 且 (A 其 查 'singlePreference') 则 标记 取 8. 然
+                若 号 == 113 且 ((A 其 查 'handoffPending') 其 量) == 0 则 标记 取 3. 然
                 若 号 >= 850 且 号 <= 857 则
                     选项 取 ['system','en','zh-CN','ja','ko','es','ru','it'][号-850].
                     若 选项 == (A 其 查 'uiPreference') 则 标记 取 8. 然
@@ -1140,6 +1370,18 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
     然
     若 A 其 查 'ready' 则
         试
+            若 号 == 74 则
+                若 (A 其 查 'singleState') == 空 或 (A 其 查 'cancelRequested') 或 (A 其 查 'modalDepth') > 0 或 (A 其 查 'closeIndex') >= 0 或 (A 其 查 'closeRun') != 空 或 (A 其 查 'tabMenuOpen') 则 得 2. 然
+                # Copy/validate the complete request before queuing; no pointer survives.
+                试
+                    交路 取 单例 其 接收 (A 其 查 'singleState') ((窗 其 PTR) 其 重释 宽参) ((窗 其 PTR) 其 重释 长参).
+                    若 (交路 其 量) > 0 则 接收入队 交路. 然
+                救 原因
+                    得 2.
+                终
+                单例 其 激活 (A 其 查 'window').
+                得 1.
+            然
             若 号 == 17 则 得 关机会话. 然
             若 号 == 275 且 (宽参 其 数) == 901 则 工作时钟. 得 0. 然
             若 号 == 275 且 (宽参 其 数) == 902 则 语法时钟. 得 0. 然
@@ -1194,7 +1436,8 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
                     若 码 == 2000 则 语 其 请求 来源 位置. 安排语法. 然
                     若 码 == 2010 且 边栏 == 2 且 非 (A 其 查 'busy') 则 语 其 折叠 来源 位置. 然
                 然
-                若 A 其 查 'busy' 则 得 0. 然
+                若 (A 其 查 'busy') 或 (A 其 查 'closeRun') != 空 或 (A 其 查 'tabMenuOpen') 则 得 0. 然
+                若 (来源 其 句) == ((A 其 查 'tabs') 其 句) 且 码 == 4294967291 则 页右键. 得 0. 然
                 若 (来源 其 句) == ((A 其 查 'tabs') 其 句) 且 码 == 4294966745 则
                     切页 ((窗 其 发送 (A 其 查 'tabs') 4875 0 0) 其 数).
                 然
@@ -1323,7 +1566,7 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
     新页 '' '' 65001 假 ''.
     显 '[startup] initial document ready'.
     拖放 其 启用 主窗.
-    若 显示 则
+    若 显示 且 非 (A 其 查 'singleDeferredShow') 则
         窗 其 结果 ((窗 其 ShowWindow) 其 调用 [主窗,5]).
         窗 其 结果 ((窗 其 UpdateWindow) 其 调用 [主窗]).
         显 '[startup] main window shown'.
@@ -1340,17 +1583,85 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
     得 主窗.
 法
 
+算 打开待确认:
+    路们 取 A 其 查 'handoffPending'.
+    若 (路们 其 量) == 0 则 得 假. 然
+    若 (界面弹窗 (A 其 查 'window') (本地 其 文本 'instance.uncertain') (本地 其 文本 'instance.title') 308) != 6 则 得 假. 然
+    入队 路们 0.
+    A 其 增 'handoffPending' ([]).
+    菜单.
+    得 真.
+法
 算 元初 参数 为 句 阵:
     显 '[startup] Ru application modules loaded'.
-    若 (参数 其 量) > 0 且 参数[0] == '--markdown-phase-diagnostics' 则
-        A 其 增 'markdownDiagnosticEnabled' 真.
-        参数 取 参数[1:].
-    然
+    强制多窗 取 假.
+    循
+        若 (参数 其 量) == 0 则 破. 然
+        若 参数[0] == '--markdown-phase-diagnostics' 则
+            A 其 增 'markdownDiagnosticEnabled' 真.
+            参数 取 参数[1:].
+        另
+            若 参数[0] == '--multi-instance' 则
+                强制多窗 取 真.
+                参数 取 参数[1:].
+            另
+                破.
+            然
+        然
+    环
+    # Freeze argv paths in the launching process's cwd, including uncertain delivery.
+    绝路们 取 []. 参位 取 0.
     试
-        初始化 参数 真.
+        循 参数 其 量 次
+            若 参数[参位] != '' 则 绝路们 其 增 (件编 其 绝对路径 参数[参位]). 然
+            参位 取 参位+1.
+        环
     救 原因
+        界面弹窗 空 (本地 其 格式 'error.body' ([原因])) (本地 其 文本 'startup.title') 16.
+        得 1.
+    终
+    参数 取 绝路们.
+    单偏 取 单设 其 载入偏好.
+    A 其 增 'singlePreference' 单偏['enabled'].
+    单态 取 单例 其 准备 (单偏['enabled'] 且 非 强制多窗).
+    A 其 增 'singleState' 单态.
+    A 其 增 'singleDeferredShow' 真.
+    试
+        初始化 ([]) 真.
+        交果 取 单例 其 转交 单态 (A 其 查 'window') 参数.
+        若 交果 == 'accepted' 则
+            # No secondary window was shown. Only a confirmed receiver owns argv.
+            关程原 取 A 其 查 'docs'. 交位 取 0.
+            循 关程原 其 量 次
+                语 其 遗忘 (关程原[交位] 其 查 'editor').
+                交位 取 交位+1.
+            环
+            窗 其 成功 ((窗 其 DestroyWindow) 其 调用 [(A 其 查 'window')]) 'DestroyWindow(handoff)'.
+            窗 其 成功 ((窗 其 UnregisterClassW) 其 调用 (参 其 注销类参数 A)) 'UnregisterClassW'.
+            (A 其 查 'className') 其 关闭.
+            (A 其 查 'callback') 其 关闭.
+            单例 其 关闭 单态.
+            得 0.
+        然
+        # Admit own argv before publishing/showing, so reentrant external opens cannot displace it.
+        若 交果 == 'local' 且 (参数 其 量) > 0 则 入队 参数 0. 然
+        若 单态['owner'] 且 非 (单例 其 发布 单态 (A 其 查 'window')) 则 单态['error'] 取 'Single-instance window publication failed.'. 然
+        A 其 增 'singleDeferredShow' 假.
+        窗 其 结果 ((窗 其 ShowWindow) 其 调用 [(A 其 查 'window'),5]).
+        窗 其 结果 ((窗 其 UpdateWindow) 其 调用 [(A 其 查 'window')]).
+        显 '[startup] main window shown'.
+        报语法警告.
+        若 单偏['error'] != 0 则 错误提示 (本地 其 格式 'instance.read_failed' ([单偏['error']])). 然
+        若 单态['error'] != '' 则 错误提示 (本地 其 格式 'instance.failed' ([单态['error']])). 然
+        若 交果 == 'uncertain' 则
+            A 其 增 'handoffPending' 参数.
+            菜单.
+            打开待确认.
+        然
+    救 原因
+        单例 其 关闭 单态.
         显 '[startup] initialization failed'.
-        窗 其 弹窗 空 (本地 其 格式 'error.body' ([原因])) (本地 其 文本 'startup.title') 16.
+        界面弹窗 空 (本地 其 格式 'error.body' ([原因])) (本地 其 文本 'startup.title') 16.
         得 1.
     终
     消息 取 (窗 其 MSG) 其 新建.
@@ -1374,11 +1685,13 @@ A 取 {'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'w
         窗 其 成功 ((窗 其 UnregisterClassW) 其 调用 (参 其 注销类参数 A)) 'UnregisterClassW'.
         (A 其 查 'className') 其 关闭.
         (A 其 查 'callback') 其 关闭.
+        单例 其 关闭 单态.
     救 原因
+        单例 其 关闭 单态.
         # A native callback failure is contained, but application state cannot
         # be assumed resumable. Never silently overwrite files during recovery.
         A 其 增 'ready' 假.
-        窗 其 弹窗 空 (本地 其 格式 'fatal.body' ([原因])) (本地 其 文本 'fatal.title') 16.
+        界面弹窗 空 (本地 其 格式 'fatal.body' ([原因])) (本地 其 文本 'fatal.title') 16.
         得 1.
     终
     得 退出码.

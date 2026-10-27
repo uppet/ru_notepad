@@ -8,10 +8,15 @@ This new candidate adds previous-match search (Shift+F3), whole-word matching an
 
 ## Bootstrap LLVM preview candidate
 
-The current candidate adds a **File > Recent files** list and a native-bootstrap
-LLVM build of the editor. Fresh validation is still required before delivery;
+The current candidate adds configurable single-instance shell opening and a tab
+right-click close menu, alongside **File > Recent files** and the native-bootstrap
+LLVM build of the editor. Single-instance mode defaults on; its persisted setting
+applies on the next launch, with `--multi-instance` as a one-launch override.
+Batch close confirms/saves every target before removing tabs: cancellation removes
+none, but completed disk saves are not rolled back. See [behavior and limits](docs/single-instance-and-tabs.md). Fresh validation is still required before delivery;
 older preview results do not certify this candidate. The actual bootstrap-built
-executable must pass the product GUI checks and recent-file flows, and its ZIP
+executable must pass the product GUI checks, recent-file flows, and actual
+two-process single-instance/tab-menu flows, and its ZIP
 must preserve the tested binary identities. The existing C-built native fixture
 suite remains separate baseline evidence, not a claim that every fixture was
 compiled with bootstrap LLVM. See [preview scope and evidence](docs/bootstrap-llvm-preview.md).

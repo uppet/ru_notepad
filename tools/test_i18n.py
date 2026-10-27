@@ -39,7 +39,7 @@ MENU_GROUPS = {
                  ('file', 'edit', 'search', 'encoding', 'language', 'view', 'settings', 'help', 'ui_language')),
     'file': tuple('command.' + key for key in
                   ('new', 'open', 'open_windows1252', 'open_gbk', 'save', 'save_as',
-                   'close_tab', 'previous_tab', 'next_tab', 'exit')),
+                   'close_tab', 'previous_tab', 'next_tab', 'exit', 'open_pending_shell')),
     'edit': tuple('command.' + key for key in ('undo', 'redo', 'cut', 'copy', 'paste', 'select_all')),
     'search': ('command.find', 'command.replace', 'command.find_next', 'command.find_previous'),
     'encoding': tuple('command.' + key for key in
@@ -48,7 +48,8 @@ MENU_GROUPS = {
     'view': tuple('command.' + key for key in
                   ('toggle_wrap', 'zoom_in', 'zoom_out', 'zoom_reset', 'fold_all', 'unfold_all', 'toggle_markdown_folds')),
     'settings': tuple('command.' + key for key in
-                      ('register_association', 'default_apps', 'unregister_association', 'registration_status')),
+                      ('register_association', 'default_apps', 'unregister_association', 'registration_status', 'single_instance')),
+    'tab-context': tuple('tab.close_' + key for key in ('current','others','left','right','saved','all')),
     'help': ('command.about',),
     'ui-language': tuple('language.' + key for key in ('system', 'en', 'zh_cn', 'ja', 'ko', 'es', 'ru', 'it')),
 }
@@ -102,7 +103,7 @@ def validate_menus(data):
     covered = [key for keys in MENU_GROUPS.values() for key in keys]
     if len(covered) != len(set(covered)):
         raise ValueError('A menu entry belongs to more than one group')
-    actual = {key for key in data if key.startswith(('menu.', 'command.', 'language.'))}
+    actual = {key for key in data if key.startswith(('menu.', 'command.', 'language.')) or (key.startswith('tab.close_') and key != 'tab.close_changed')}
     if actual != set(covered):
         raise ValueError('Menu group coverage changed; review new or missing entries')
     for group, keys in MENU_GROUPS.items():

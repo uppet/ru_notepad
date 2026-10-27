@@ -11,11 +11,11 @@
   "reviewed_changes": {
     "README.md": {
       "before": "4fec039d9e1f3129d90c9662c2202fca8809d9c1e340dae429130cfe41cf9c7c",
-      "after": "f84ef7c9406b5f6c3bdd3f8c5e718e1c90dea27058224acc717075f3f4c29805"
+      "after": "17e7c78bd8806c88b6323c0ef1cf0c7eaef80d18cf91e7eee08788bcb48a5c5f"
     },
     "docs/bootstrap-llvm-preview.md": {
       "before": null,
-      "after": "fb602b1cbd073bfbb19902fdcdf3add194ad3bcc08bedf5479c1a519e1ddad04"
+      "after": "e304e5b11aa163f0781d025b0691f4c16f15ec6880843ffa503bfceaf47d5862"
     },
     "docs/recent-files.md": {
       "before": null,
@@ -27,11 +27,11 @@
     },
     "src/i18n_catalog.ru": {
       "before": "e2b6d48d25529c7d631652980ec45d6a5dc837467e505e58fbe581a352fe84db",
-      "after": "b7ed44914d2b1ae14e255eff9574a0aeb8a45cb26bbf8bccdb69620dce5c93a9"
+      "after": "d1c085d22b4d35749ed90b5fb01dbd6217c4a2b595db6b6e7f9c626e86e773db"
     },
     "src/main.ru": {
       "before": "3dcb97ca641f2fb8068785517aedcbbda6d3c65ca179683601f76508d71dd734",
-      "after": "318fbb20a50b62c9bd5df9cdca12906b64624182cdf6a32d92a5d7e520635295"
+      "after": "6024343ff260703a94758598289068dcd4c22212b4ea6e9f4a546bd7d91c807f"
     },
     "src/recent_files.ru": {
       "before": null,
@@ -116,6 +116,82 @@
     "tools/test_package.py": {
       "before": "8f163a5d8d59740f0a285bbe49c5e6405d26bc906c70a25438bfee27b2dcd289",
       "after": "490301eca634f84405507ac4445b7cb42659875cfa04f3d31d89ddc0263d6783"
+    },
+    "tools/test_gui_instance_tabs.py": {
+      "before": null,
+      "after": "7eab1b5e0a997fe44dec88732d676b9ce90eb0afe77e826e15ccc09e1239a1d7"
+    },
+    "tools/compile_bootstrap_native.py": {
+      "before": null,
+      "after": "0d58bda54d317b32a59e91bad27ca41c2565903e1d080535c50cce2c251a0fde"
+    },
+    "tools/test_i18n.py": {
+      "before": "efe744d29412beab1f4d44b8e116267706bca32d0d435f95bb07512a28705d5f",
+      "after": "fc7480e2320c6f173f46daa56a371170d25517cec70ec4c0fdfdb0c9e70e1089"
+    },
+    "tools/gui_instance_tabs.py": {
+      "before": null,
+      "after": "4de2f94a531e6693da99304f7a5a4bfa0635644ab08001b509ce2cd2b048d890"
+    },
+    "tools/verify_bootstrap_application_oracle.py": {
+      "before": null,
+      "after": "86560d6d56a8790e625837ef25c439b21e4251c51544a1c403f59fd0c0e9f746"
+    },
+    "docs/single-instance-and-tabs.md": {
+      "before": null,
+      "after": "e5fb724dffdaadaa50d0a4cb9e3abeb849ad5abb0a570e5b55dd24c89c8e31c6"
+    },
+    "src/tab_context.ru": {
+      "before": null,
+      "after": "ca5e2ac0e1ca270215605dddb37c4cffec8b024ea40800d0caeaf22ed02276d2"
+    },
+    "src/single_instance_settings.ru": {
+      "before": null,
+      "after": "f00d8415d83345eadf3ffd8fe08ce8fe57ae35c61aa6f6a454b535821e20657e"
+    },
+    "src/tab_close_policy.ru": {
+      "before": null,
+      "after": "274a9a2b64c74633fba2b549ad5e111e5486af50d9c4cf51020d95712efcacd7"
+    },
+    "src/single_instance_policy.ru": {
+      "before": null,
+      "after": "27cc907c6b3c4dbc0aebb852e2490558ef9ff61820c013e8cf33d24691b5a6ec"
+    },
+    "src/single_instance.ru": {
+      "before": null,
+      "after": "d77f656640d3af6ae563c8a88b60658c39d86155f47035c720371a4aa6e90be3"
+    },
+    "packaging/application-native-oracle.json": {
+      "before": null,
+      "after": "f17ee57e7869cdcb5eeab995ed0db88bc38cbfe2be8e430049c04dd2413ddabe"
+    },
+    "locales/instance_tabs.json": {
+      "before": null,
+      "after": "81131d676884e8d12b4ae920e930f322f71814229d9ec0e5d9ce36d99ed7ee23"
+    },
+    "tests/test_bootstrap_instance_tabs.py": {
+      "before": null,
+      "after": "c6d5c8cb9fd593e3afe8771fc7cde747a010228fc3419bf3eaa0325a093211d5"
+    },
+    "tests/tab_close_policy.ru": {
+      "before": null,
+      "after": "62c8d213f897403f5a7f7e8b44844ea60040e5149d8612b48e12059009b4a49e"
+    },
+    "tests/single_instance_settings_native.ru": {
+      "before": null,
+      "after": "9e72bf63e6ad01fd4bfc029fb805541c8f98f65c6b8a47e8ef4dfc7df1b82bab"
+    },
+    "tests/single_instance_policy.ru": {
+      "before": null,
+      "after": "e8ee1ab5b20441148bbd8364d59cc02cf77b5e306edf8b8168d578f4cebf788b"
+    },
+    "tests/app_tabs_native.ru": {
+      "before": null,
+      "after": "f12781a5521441017cfd19488da4f060c2fbe45be4706a05f240ece308d1a7d9"
+    },
+    "tests/test_bootstrap_native_wrapper.py": {
+      "before": null,
+      "after": "6649545a7db3309c79afdca632a602b8aebc658011e8189d235d3aac1c961435"
     }
   }
 }

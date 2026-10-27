@@ -18,6 +18,8 @@ import subprocess
 import sys
 
 from bootstrap_provenance import require, checked, sha, validate, validate_toolchain
+from compile_bootstrap_native import validate_wrapper_receipt
+from verify_bootstrap_application_oracle import verify_application_oracle, ORACLE_PATH
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = 'ru-notepad-bootstrap-llvm-build-v1'
@@ -209,7 +211,7 @@ def verify_linker_selection(selection, tools, *, expected_command=None, triple=N
     return selection
 
 
-def verify_proof(proof, *, source, compiler, ir, binary, triple, layout, frozen, tools=None):
+def verify_proof(proof, *, source, compiler, ir, binary, triple, layout, frozen, tools=None, proof_path=None):
     require(proof.get('schema') == 'ru-bootstrap-build-proof-v1'
             and proof.get('native_protocol') == 'bootstrap-native-v1', 'native bootstrap proof required')
     require(proof.get('source') == str(source.resolve()) and proof.get('compiler') == identity(compiler), 'source/compiler proof mismatch')
@@ -238,6 +240,8 @@ def verify_proof(proof, *, source, compiler, ir, binary, triple, layout, frozen,
                     'native tool executable differs from frozen input: ' + name)
             require(sum(item == record for item in host_inputs) == 1,
                     'native tool executable missing or duplicated in host inputs: ' + name)
+        require(proof_path is not None, 'native wrapper proof path required')
+        validate_wrapper_receipt(proof, source, compiler, binary, Path(proof_path), frozen)
     for key, file, digest_key in [('standalone_ir', ir, 'standalone_ir_sha256'), ('binary', binary, 'binary_sha256')]:
         require(proof.get('artifacts', {}).get(key) == {'path': str(file.resolve()), 'sha256': sha(file)}
                 and proof.get(digest_key) == sha(file), 'proof artifact mismatch: ' + key)
@@ -258,6 +262,13 @@ def verify_proof(proof, *, source, compiler, ir, binary, triple, layout, frozen,
     for record in proof['host_inputs']:
         name = record.get('path')
         require(name in frozen and record == identity(name) and record['sha256'] == frozen[name], 'host input mismatch')
+
+
+def native_compile_command(ru, source, compiler, app, tools, proof, ir, binary):
+    return [sys.executable, '-I', '-B', ROOT/'tools/compile_bootstrap_native.py',
+            '--ru-root', ru, '--source', source, '--source-root', app,
+            '--compiler', compiler, '--llvm-clang', tools['clang'],
+            '--proof', proof, '--linker', tools['linker'], '--emit-llvm', ir, '--output', binary]
 
 
 def link_commands(tools, ir, wrapper, app, stage, triple):
@@ -361,7 +372,10 @@ def build(config, staging):
     compiler = directory/'stage3.exe'
     source = checked(app, entry)
     wrapper = checked(ROOT, 'packaging/bootstrap_gui_launcher.c')
-    local_inputs = {str(path): sha(path) for path in (wrapper, Path(__file__), ROOT/'tools/bootstrap_provenance.py')}
+    local_inputs = {str(path): sha(path) for path in (wrapper, Path(__file__), ROOT/'tools/bootstrap_provenance.py',
+        ROOT/'tools/compile_bootstrap_native.py', ROOT/'tools/verify_bootstrap_application_oracle.py')}
+    if entry == 'src/main.ru':
+        local_inputs[str(checked(app, ORACLE_PATH))] = sha(checked(app, ORACLE_PATH))
     require(not staging.exists(), 'staging must be a fresh private directory')
     require(not any(staging.resolve().is_relative_to(root) for root in (ru, app, directory)), 'staging cannot modify source/bootstrap trees')
     staging.mkdir(parents=True, exist_ok=False)
@@ -379,13 +393,15 @@ def build(config, staging):
               for name, digest in sources[key].items()}
     frozen[str(compiler.resolve())] = bootstrap['stage3_sha256']
     frozen.update({str(Path(path).resolve()): config['tool_sha256'][name] for name, path in tools.items()})
-    run([sys.executable, '-I', '-B', ru/'tools/bootstrap.py', '--llvm-clang', tools['clang'], 'build', source,
-         '--compiler', compiler, '--allow-native', '--source-root', app, '--proof', proof_path,
-         '--linker', tools['linker'], '--emit-llvm', ir, '-o', intermediate], cwd=ru)
+    run(native_compile_command(ru, source, compiler, app, tools, proof_path, ir, intermediate), cwd=ru)
     proof_bytes = proof_path.read_bytes()
     proof = json.loads(proof_bytes)
     verify_proof(proof, source=source, compiler=compiler, ir=ir, binary=intermediate,
-                 triple=triple, layout=layout, frozen=frozen, tools=tools)
+                 triple=triple, layout=layout, frozen=frozen, tools=tools, proof_path=proof_path)
+    oracle_validation = (verify_application_oracle(proof, app, ru, sources, intermediate)
+                         if entry == 'src/main.ru' else None)
+    if oracle_validation is not None:
+        (staging/'application-oracle-validation.json').write_text(json.dumps(oracle_validation,indent=2)+'\n',encoding='utf-8')
     final_link_inputs = None
     final_linker_selection = None
     plan = link_commands(tools, ir, wrapper, app, staging, triple)
@@ -407,7 +423,9 @@ def build(config, staging):
     require(proof_path.read_bytes() == proof_bytes, 'proof changed during linking')
     require(sha(report) == bootstrap['verification_sha256'], 'bootstrap verification changed during build')
     verify_proof(proof, source=source, compiler=compiler, ir=ir, binary=intermediate,
-                 triple=triple, layout=layout, frozen=frozen, tools=tools)
+                 triple=triple, layout=layout, frozen=frozen, tools=tools, proof_path=proof_path)
+    if entry == 'src/main.ru':
+        require(verify_application_oracle(proof, app, ru, sources, intermediate) == oracle_validation, 'application oracle drift during final link')
     verify_gui_pe(staging/'ru_notepad.exe')
     verify_linker_probe(linker_probe, tools, triple, staging)
     receipt = {'schema': SCHEMA, 'status': 'built-not-runtime-accepted-not-publishable',
@@ -423,6 +441,10 @@ def build(config, staging):
         'sdk_crt_environment': {k: v for k, v in environment.items() if k.upper() in
             {'PATH', 'INCLUDE', 'LIB', 'LIBPATH', 'WINDOWSSDKDIR', 'WINDOWSSDKVERSION', 'VCTOOLSINSTALLDIR', 'VCTOOLSVERSION'}},
         'compile_proof_sha256': sha(proof_path), 'standalone_ir_sha256': sha(ir),
+        'native_metadata': identity(intermediate.with_name(intermediate.name+'.metadata.c')),
+        'native_wrapper': identity(intermediate.with_name(intermediate.name+'.native-wrapper.json')),
+        'frontend_ir_sha256': proof['source_ir_sha256'],
+        'application_oracle': oracle_validation,
         'linked_inputs': final_link_inputs, 'final_linker_selection': final_linker_selection, 'host_python': identity(sys.executable),
         'final_binary': identity(staging/'ru_notepad.exe'), 'native_acceptance': False,
         'required_gates': ['GUI CRT startup and diagnostics', 'UTF16/UTF8 argv edge cases',

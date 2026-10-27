@@ -21,7 +21,7 @@ import verify_bootstrap_editor_windows as smoke
 from prepare_bootstrap_dependencies import validate_receipt
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA = 'ru-notepad-bootstrap-product-preview-v1'
+SCHEMA = 'ru-notepad-bootstrap-product-preview-v2'
 GUI_NAMES = {'main-gui-smoke', 'main-gui-file-entry', 'main-gui-ru-syntax', 'main-gui-markdown'}
 
 
@@ -59,6 +59,8 @@ def validate_product(report, ci):
     ci.validate_scanner_preflight(report['scanner_preflight'], hashes, ROOT)
     from verify_recent_files_windows import validate_recent_files_result
     validate_recent_files_result(report['recent_files'], hashes)
+    from gui_instance_tabs import validate_result
+    validate_result(report.get('instance_tabs'), hashes)
 
 
 def collect_product_gui(ci, api, runtime, fixtures, evidence, report, save):
@@ -89,7 +91,7 @@ def verify(config, output):
     smoke_report = smoke.read_json(smoke_path)
     from verify_bootstrap_recent_policies import validate_report, compiler_from_receipt
     recent_fixture_path = Path(config['recent_fixtures_receipt'])
-    validate_report(smoke.read_json(recent_fixture_path), app, compiler_from_receipt(app, config['app_receipt']))
+    validate_report(smoke.read_json(recent_fixture_path), app, compiler_from_receipt(app, config['app_receipt']), dependencies)
     require(smoke_report.get('schema') == smoke.SCHEMA and smoke_report.get('status') == 'passed'
             and smoke.all_passed(smoke_report.get('results', {})), 'B7 smoke did not pass')
     for key in ('app_receipt', 'argv_probe_receipt', 'dll_probe_receipt', 'dependencies_receipt'):
@@ -117,7 +119,7 @@ def verify(config, output):
                   ('app_receipt', 'argv_probe_receipt', 'dll_probe_receipt', 'dependencies_receipt')},
               'smoke_receipt': identity(smoke_path), 'recent_fixtures_receipt': identity(recent_fixture_path), 'gui_results': [],
               'all_native_console_tests_bootstrap_compiled': False, 'full_release_acceptance': False,
-              'coverage': 'Original four GUI product gates plus recent-file GUI; independent C-native baseline is separate'}
+              'coverage': 'Original four GUI product gates, recent-file GUI, and single-instance/tab-close GUI; independent C-native baseline is separate'}
     def save():
         (output/'product-preview.json').write_text(json.dumps(report, indent=2, ensure_ascii=True)+'\n', encoding='utf-8')
     save()
@@ -127,11 +129,14 @@ def verify(config, output):
         save()
         with tempfile.TemporaryDirectory(prefix='ru-bootstrap-product-') as fixtures:
             collect_product_gui(ci, api, runtime, fixtures, evidence, report, save)
+            from gui_instance_tabs import run as run_instance_tabs
+            report['instance_tabs'] = run_instance_tabs(api, runtime, fixtures, evidence)
+            save()
         smoke.validate_receipts(config)
         validate_receipt(Path(config['dependencies_receipt']))
         require(identity(smoke_path) == report['smoke_receipt'], 'smoke receipt changed')
         require(identity(recent_fixture_path) == report['recent_fixtures_receipt'], 'recent fixture receipt changed')
-        validate_report(smoke.read_json(recent_fixture_path), app, compiler_from_receipt(app, config['app_receipt']))
+        validate_report(smoke.read_json(recent_fixture_path), app, compiler_from_receipt(app, config['app_receipt']), dependencies)
         require({name: sha(runtime/name) for name in sources} == hashes, 'runtime changed during product tests')
         report['status'] = 'passed'
         validate_product(report, ci)

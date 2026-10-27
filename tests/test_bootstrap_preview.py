@@ -27,6 +27,44 @@ class PreviewContracts(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name)
 
+    def test_preview_package_documents_instance_tabs_acceptance(self):
+        self.assertEqual(package.PREVIEW_DOCS,('bootstrap-llvm-preview.md','recent-files.md','single-instance-and-tabs.md'))
+        for name in package.PREVIEW_DOCS:
+            self.assertTrue((package.ROOT/'docs'/name).is_file())
+        source=Path(package.__file__).read_text()
+        for text in ('instance_tabs GUI gate','--multi-instance','pending shell files',"'instance_tabs_gui': True"):
+            self.assertIn(text,source)
+        self.assertIn("validate_result(report.get('instance_tabs'), hashes)",Path(product.__file__).read_text())
+
+    def test_native_package_evidence_exact_inventory_and_fail_closed(self):
+        expected={'application.metadata.c','native-wrapper.json','application-native-oracle.json',
+                  'application-oracle-validation.json','compile-proof.json'}
+        self.assertEqual(set(package.NATIVE_EVIDENCE_LIMITS),expected)
+        app_root=self.root/'app';app_root.mkdir();(app_root/'packaging').mkdir()
+        binary=self.root/'intermediate-console.exe'
+        meta=binary.with_name(binary.name+'.metadata.c');meta.write_text('synthetic metadata')
+        wrapper=binary.with_name(binary.name+'.native-wrapper.json');wrapper.write_text('{}')
+        (app_root/package.ORACLE_PATH).write_text('{}')
+        result={'status':'passed'}
+        (self.root/'application-oracle-validation.json').write_text(json.dumps(result))
+        proof={'compiler':{'path':str(self.root/'compiler.exe')},'source_ir_sha256':'a'*64}
+        proof_path=self.root/'compile-proof.json';proof_path.write_text(json.dumps(proof))
+        app={'compile_proof_sha256':build.sha(proof_path),'native_wrapper':build.identity(wrapper),
+             'native_metadata':build.identity(meta),'application_oracle':result,'frontend_ir_sha256':'a'*64,
+             'source_pins':{'app_source':{'path':str(app_root)},'ru_source':{'path':str(self.root/'core')}},
+             'source_sha256':{'app_source':{}}}
+        config={'app_receipt':str(self.root/'build-receipt.json')}
+        with patch.object(package,'validate_wrapper_receipt',return_value=build.identity(wrapper)), \
+             patch.object(package,'verify_application_oracle',return_value=result):
+            self.assertEqual(set(package.collect_native_evidence(config,app)),expected)
+            for key in ('compile_proof_sha256','native_wrapper','native_metadata','application_oracle','frontend_ir_sha256'):
+                bad=copy.deepcopy(app);bad[key]='wrong'
+                with self.subTest(key=key),self.assertRaises(InvalidProvenance):package.collect_native_evidence(config,bad)
+            with patch.dict(package.NATIVE_EVIDENCE_LIMITS,{'application.metadata.c':1}):
+                with self.assertRaises(InvalidProvenance):package.collect_native_evidence(config,app)
+            (self.root/'application-oracle-validation.json').write_text('{}')
+            with self.assertRaises(InvalidProvenance):package.collect_native_evidence(config,app)
+
     def test_workflow_job_env_contexts_and_runtime_output_initialization(self):
         workflow=(Path(__file__).resolve().parents[1]/'.github/workflows/bootstrap-preview.yml').read_text()
         def check_job_env(text):
@@ -307,18 +345,44 @@ class PreviewContracts(unittest.TestCase):
             err=root/(name+'.stderr');err.write_bytes(b'')
             report['results'][name]={'executed':True,'timeout':False,'returncode':0,'assertions':count,
                 **{key:build.identity(path) for key,path in [('binary',binary),('ir',ir),('proof',proof_path),('stdout',out),('stderr',err)]}}
+        dependency_directory=root/'dependency-source';dependency_directory.mkdir()
+        binaries={}
+        for dll in recent_fixtures.smoke.DLLS:
+            file=dependency_directory/dll;file.write_bytes(('pinned '+dll).encode())
+            binaries[dll]=build.identity(file)
+        dependencies={'app_source':app['source_pins']['app_source'],
+                      'source_sha256':app['source_sha256']['app_source'],'binaries':binaries}
+        report['runtime_dependencies']=recent_fixtures.install_runtime_dependencies(root,app,dependencies)
         def verify_fields(proof,**kwargs):
             self.assertEqual(kwargs.pop('tools'),app['tool_paths'])
             return build.verify_proof(proof,**kwargs)
         with patch.object(recent_fixtures,'validate_toolchain'),patch.object(recent_fixtures,'verify_proof',side_effect=verify_fields) as verifier:
-            recent_fixtures.validate_report(report,app,compiler)
-            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221})
-            self.assertEqual(verifier.call_count,5)
+            recent_fixtures.validate_report(report,app,compiler,dependencies)
+            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16, 'single_instance_policy':39, 'single_instance_settings_native':11, 'app_tabs_native':53})
+            self.assertEqual(verifier.call_count,9)
+            for schema in ('ru-notepad-bootstrap-editor-fixtures-v1', 'ru-notepad-bootstrap-editor-fixtures-v2'):
+                bad=copy.deepcopy(report);bad['schema']=schema
+                with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)
+            for mutation in ('missing-runtime', 'missing-dll', 'extra-dll', 'changed-dll', 'rehashed-dll', 'relocated-dll', 'wrong-dependency-source'):
+                bad=copy.deepcopy(report);dep=copy.deepcopy(dependencies)
+                path=root/'Scintilla.dll';data=path.read_bytes()
+                if mutation=='missing-runtime':del bad['runtime_dependencies']
+                elif mutation=='missing-dll':del bad['runtime_dependencies']['Scintilla.dll']
+                elif mutation=='extra-dll':bad['runtime_dependencies']['extra.dll']=build.identity(path)
+                elif mutation=='changed-dll':path.write_bytes(data+b'changed')
+                elif mutation=='rehashed-dll':
+                    path.write_bytes(data+b'changed');bad['runtime_dependencies']['Scintilla.dll']=build.identity(path)
+                elif mutation=='relocated-dll':bad['runtime_dependencies']['Scintilla.dll']=binaries['Scintilla.dll']
+                else:dep['source_sha256']={}
+                try:
+                    with self.subTest(mutation=mutation),self.assertRaises(InvalidProvenance):
+                        recent_fixtures.validate_report(bad,app,compiler,dep)
+                finally:path.write_bytes(data)
             for missing in recent_fixtures.CASES:
                 bad=copy.deepcopy(report);del bad['results'][missing]
-                with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler)
+                with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)
             bad=copy.deepcopy(report);bad['stage3_sha256']='0'*64
-            with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler)
+            with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)
             for name in recent_fixtures.CASES:
                 proof_path=Path(report['results'][name]['proof']['path'])
                 for mutate in ('source','compiler','binary'):
@@ -328,8 +392,21 @@ class PreviewContracts(unittest.TestCase):
                     else:wrong['artifacts']['binary']={'path':str(host),'sha256':build.sha(host)}
                     proof_path.write_text(json.dumps(wrong));bad=copy.deepcopy(report)
                     bad['results'][name]['proof']=build.identity(proof_path)
-                    with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler)
+                    with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)
                 proof_path.write_text(json.dumps(originals[name]))
+
+    def test_cheap_contract_checks_precede_self_compilation_and_check_each_exit(self):
+        workflow=(Path(__file__).resolve().parents[1]/'.github/workflows/bootstrap-preview.yml').read_text()
+        start=workflow.index('      - name: Fail-closed cheap contract preflight')
+        end=workflow.index('      - name: Fresh three-stage',start)
+        body=workflow[start:end]
+        for command in ("python -m unittest discover -s editor/tests -p 'test_bootstrap*.py' -v",
+                        'python editor/tools/test_windows_ci.py -v',
+                        'python editor/tools/test_package.py -v',
+                        'python editor/tools/test_gui_instance_tabs.py -v',
+                        'python editor/tools/test_i18n.py --catalog-only'):
+            self.assertIn(command+'\n          if ($LASTEXITCODE) { exit $LASTEXITCODE }',body)
+        self.assertEqual(body.count('if ($LASTEXITCODE)'),5)
 
     def test_recent_fixtures_require_exact_individual_assertions_and_total(self):
         good=b'PASS: a\nPASS: b\nTOTAL PASS: 2\n'
