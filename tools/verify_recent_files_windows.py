@@ -6,6 +6,7 @@ No global input, user's documents or Preferences value is modified.
 """
 from __future__ import annotations
 import ctypes
+import hashlib
 from contextlib import contextmanager
 from ctypes import wintypes
 import json
@@ -17,6 +18,7 @@ import uuid
 from unittest.mock import patch
 
 import windows_ci as ci
+import gui_instance_tabs as instance_gui
 
 CHECKS = (
     'successful_open_only', 'ten_item_bound', 'unicode_space_ampersand_menu',
@@ -27,6 +29,68 @@ CHECKS = (
     'isolated_registry_cleaned',
 )
 PHASES = ('initial', 'restart', 'cleared', 'persistence-failure')
+
+
+def _wait_idle(api, process, hwnd, count, label, observations, extra=None):
+    """Original 30s budget; status text alone does not establish cleanup completion."""
+    def ready():
+        snapshot = instance_gui._readiness(api, hwnd, count, process.pid)
+        observations[label] = snapshot
+        return instance_gui._is_ready(snapshot, count) and (extra is None or extra())
+    with instance_gui._scalar_failure_evidence(api, process, hwnd, observations, label):
+        ci.wait_gui(api, process, ready, label, timeout=30)
+
+
+def _undo_after_idle(api, process, hwnd, count, editor, original, before_undo, observations):
+    observations['Undo expected original'] = {'bytes':len(original), 'sha256':hashlib.sha256(original).hexdigest()}
+    _wait_idle(api, process, hwnd, count, 'Missing-file operation did not finish', observations)
+    if api.editor(hwnd) != editor:
+        raise RuntimeError('Missing-file operation changed the active synthetic editor')
+    api.verify_owned_handles(process.pid, hwnd, editor)
+    before_undo()
+    def observe():
+        if api.editor(hwnd) != editor:
+            raise RuntimeError('Undo changed the active synthetic editor')
+        api.verify_owned_handles(process.pid, hwnd, editor)
+        data = api.editor_bytes(hwnd)
+        dirty = api.scalar(editor, 2159)
+        observations['Undo document'] = {
+            'editor': int(editor), 'title': api.text(hwnd)[:256],
+            'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest(),
+            'modified': dirty, 'readonly': api.scalar(editor, 2140),
+            'can_undo': api.scalar(editor, 2174),
+        }
+        return data, dirty
+    observe()
+    observations['Undo before'] = dict(observations['Undo document'])
+    observations['Undo command_attempted'] = True
+    api.command(hwnd, 201)  # Exactly one production Undo, never a retry.
+    observations['Undo command_returned'] = True
+    def restored():
+        data, dirty = observe()
+        return data == original and dirty == 0
+    ci.wait_gui(api, process, restored, 'Undo did not restore the synthetic clean document', timeout=30)
+
+
+def _write_failure_observation(evidence, phase, error, observations, hashes):
+    # Diagnostic-only sidecar, not a success receipt. Never mask the actual failure.
+    def bounded(value, depth=0):
+        if value is None or type(value) in (int, float, bool): return value
+        if isinstance(value, str): return value[:1024]
+        if depth > 6: return '[depth limit]'
+        if isinstance(value, dict): return {str(k)[:128]: bounded(v, depth+1) for k,v in list(value.items())[:32]}
+        if isinstance(value, (list,tuple)): return [bounded(v,depth+1) for v in value[:32]]
+        return type(value).__name__
+    try:
+        value = bounded({'phase':phase, 'error':str(error), 'passed':False,
+                         'fixture_binary_sha256':hashes, 'observations':observations})
+        payload = json.dumps(value, ensure_ascii=False, indent=2).encode('utf-8')
+        if len(payload) > 65536:
+            payload = json.dumps({'phase':phase, 'passed':False, 'error':str(error)[:1024],
+                                  'observation_error':'bounded sidecar exceeded 64 KiB'}).encode('utf-8')
+        (Path(evidence)/'recent-files-partial.json').write_bytes(payload)
+    except Exception:
+        pass
 
 
 @contextmanager
@@ -175,6 +239,7 @@ def run_recent_files(api, binary_dir, fixtures, evidence):
               'cleanup_killed': False, 'exit_code': None, 'checks': {}, 'phases': [],
               'fixture_binary_sha256': expected_hashes}
     checks = result['checks']
+    observations = {}
     recent = list(reversed(paths[-10:]))
 
     def stored():
@@ -194,9 +259,15 @@ def run_recent_files(api, binary_dir, fixtures, evidence):
             shutil.copyfile(binary_dir / filename, isolated / filename)
             if ci.sha(isolated / filename) != digest:
                 raise RuntimeError('Recent-file phase binary identity changed')
+        def observed_exercise(process, hwnd):
+            try:
+                return exercise(process, hwnd)
+            except Exception as exc:
+                _write_failure_observation(evidence, label, exc, observations, expected_hashes)
+                raise
         with patch.dict(os.environ, {'RU_NOTEPAD_RECENT_TEST_KEY': env_key}):
             item = ci.run_gui(api, isolated, evidence, name='main-gui-recent-' + label,
-                              arguments=arguments, exercise=exercise, log_prefix='recent-' + label)
+                              arguments=arguments, exercise=observed_exercise, log_prefix='recent-' + label)
         item['phase'] = label
         item['fixture_binary_sha256'] = dict(expected_hashes)
         result['phases'].append(item)
@@ -209,8 +280,8 @@ def run_recent_files(api, binary_dir, fixtures, evidence):
 
     def initial(process, hwnd):
         tabs = lambda: api.scalar(api.control(hwnd, 10), 0x1304)
-        ci.wait_gui(api, process, lambda: tabs() == 13 and len(_menu(api, hwnd)) == 10,
-                    'Initial successful files did not reach recent-file menu')
+        _wait_idle(api, process, hwnd, 13, 'Initial successful files did not reach recent-file menu',
+                   observations, lambda: len(_menu(api, hwnd)) == 10)
         if _menu(api, hwnd) != list(map(_label, recent)):
             raise RuntimeError('Recent-file menu order/Unicode/escaping is incorrect')
         if [x[0] for x in stored()] != list(map(str, recent)):
@@ -219,8 +290,8 @@ def run_recent_files(api, binary_dir, fixtures, evidence):
                       ordinal_distinguishes_sharp_s=True)
         duplicate = Path(str(paths[3]).upper())
         api.drop(api.editor(hwnd), [duplicate])
-        ci.wait_gui(api, process, lambda: _menu(api, hwnd)[0] == _label(duplicate),
-                    'Case-insensitive duplicate was not promoted')
+        _wait_idle(api, process, hwnd, 13, 'Case-insensitive duplicate was not promoted',
+                   observations, lambda: _menu(api, hwnd)[0] == _label(duplicate))
         recent[:] = [duplicate] + [p for p in recent if p != paths[3]]
         if len(_menu(api, hwnd)) != 10 or tabs() != 13:
             raise RuntimeError('Duplicate opening duplicated history or tabs')
@@ -234,21 +305,18 @@ def run_recent_files(api, binary_dir, fixtures, evidence):
         dirty = api.editor_bytes(hwnd)
         api.drop(editor, [inputs / 'deliberately missing.txt'])
         _error_dialog(api, process)
-        ci.wait_gui(api, process, lambda: not ci.status_startswith(api.text(api.control(hwnd, 11)), 'status.opening'),
-                    'Missing-file operation did not finish')
-        if tabs() != 13 or api.editor_bytes(hwnd) != dirty or api.scalar(editor, 2159) != 1:
-            raise RuntimeError('Missing file changed or discarded dirty document')
-        if _menu(api, hwnd) != before:
-            raise RuntimeError('Failed file was promoted to recent list')
-        checks.update(failed_open_not_promoted=True, missing_keeps_dirty_text=True)
-        api.command(hwnd, 201)
-        ci.wait_gui(api, process, lambda: api.editor_bytes(hwnd) == original and api.scalar(editor, 2159) == 0,
-                    'Undo did not restore the synthetic clean document')
+        def before_undo():
+            if tabs() != 13 or api.editor_bytes(hwnd) != dirty or api.scalar(editor, 2159) != 1:
+                raise RuntimeError('Missing file changed or discarded dirty document')
+            if _menu(api, hwnd) != before:
+                raise RuntimeError('Failed file was promoted to recent list')
+            checks.update(failed_open_not_promoted=True, missing_keeps_dirty_text=True)
+        _undo_after_idle(api, process, hwnd, 13, editor, original, before_undo, observations)
         api.drop(api.editor(hwnd), [large])
         busy = lambda: ci.status_startswith(api.text(api.control(hwnd, 11)), 'status.opening')
         ci.wait_gui(api, process, busy, 'Cancellation fixture never entered busy state')
         api.command(hwnd, 901)
-        ci.wait_gui(api, process, lambda: not busy(), 'Cancellation did not finish')
+        _wait_idle(api, process, hwnd, 13, 'Cancellation did not finish', observations)
         if tabs() != 13 or _menu(api, hwnd) != before:
             raise RuntimeError('Cancelled file was promoted or left a partial tab')
         checks['cancel_not_promoted'] = True
@@ -259,8 +327,7 @@ def run_recent_files(api, binary_dir, fixtures, evidence):
             raise RuntimeError('Restart did not restore the exact recent-file order')
         checks['restart_restores_order'] = True
         api.command(hwnd, 1200)
-        ci.wait_gui(api, process, lambda: api.scalar(api.control(hwnd, 10), 0x1304) == 2,
-                    'Recent-file command did not open its stored path')
+        _wait_idle(api, process, hwnd, 2, 'Recent-file command did not open its stored path', observations)
         if api.editor_bytes(hwnd) != paths[3].read_bytes():
             raise RuntimeError('Recent-file command opened wrong bytes')
         checks['recent_command_opens_exact_file'] = True
@@ -277,8 +344,7 @@ def run_recent_files(api, binary_dir, fixtures, evidence):
         return {}
 
     def persistence_failure(process, hwnd):
-        ci.wait_gui(api, process, lambda: api.scalar(api.control(hwnd, 10), 0x1304) == 2,
-                    'Persistence failure prevented successful file opening')
+        _wait_idle(api, process, hwnd, 2, 'Persistence failure prevented successful file opening', observations)
         if api.editor_bytes(hwnd) != paths[0].read_bytes() or _menu(api, hwnd) != [_label(paths[0])]:
             raise RuntimeError('Persistence failure changed the opened document or in-memory list')
         return {}

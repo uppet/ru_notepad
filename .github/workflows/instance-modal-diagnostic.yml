@@ -28,6 +28,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/test_gui_instance_tabs.py -v
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tools/test_markdown_open_diagnostic.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Diagnose exact failed runtime only
         shell: pwsh
         env:

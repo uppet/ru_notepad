@@ -15,20 +15,15 @@ from unittest.mock import patch
 import zipfile
 
 REPOSITORY='uppet/ru_notepad'
-RUN_ID=40537388471
-HEAD='5ccfdd361d669f3fbd7bdc8fb9ae107fc0ea2b2b'
-TREE='c741206a468d99fce37695ecea858e341987002f'
-ARTIFACT_ID=12751602835
+RUN_ID=40650796210
+HEAD='1da616554198792ad8653718e6e9f8999e7658e6'
+TREE='0c0c1f4d2fdf4c51faa218cd5a543a7fc570a320'
+ARTIFACT_ID=12801248581
 ARTIFACT_NAME='NOT-ACCEPTED-diagnostic-runtime-'+HEAD
-ZIP_SHA256='77e777040cd49addeece7817c6da941fdb8df03e88c1d982598b5415e344d5b4'
-ZIP_SIZE=4358091
-PRODUCT_SHA256='fdf794dc16a0a02646bfc92e3a3d1f6e4762aab3c0f9c1d965c545794d568a29'
-FILES={
- 'Lexilla.dll':('9e79fff00f69d4924da95407860669f61497098c1f064c7daf8c33e01303f734', 2860032),
- 'RuSyntax.dll':('d381c2069403c2b8823c6e857de40390a607c7e6c30bfae1bcc58f86a4bfd8af', 32256),
- 'Scintilla.dll':('bad5db40b7c624fe807ebdca3d3b371a8bd8686a019554b30434c0502a5fe980', 2256384),
- 'compile-proof.json':('8b7553858560d4ca556b88c32350a176cc8d14679fa69d11c87585f1511d96fe', 36811),
- 'ru_notepad.exe':('e7a35b24747439212aa1401cd257442b7d6923c128b6eb10d9e3f8902aede936', 7016448)}
+ZIP_SHA256='06fbba5d4eeaeda3079479f8ea2ab1995a59d85e08c7bd50dc9fa3c09fe64d7d'
+ZIP_SIZE=4376259
+PRODUCT_SHA256='86d3022d4b8b7b8668fd15ed52e52a53281884635262f8610ac5549215ad8bb3'
+FILES={'Lexilla.dll': ('2fa48d9844c6183af19ff8cc443841d503b7110b47cdfbde2f2e4fe3058a9228', 2860032), 'RuSyntax.dll': ('d381c2069403c2b8823c6e857de40390a607c7e6c30bfae1bcc58f86a4bfd8af', 32256), 'Scintilla.dll': ('961643361b928fdb1bb7f1049f5fe773f3f6583d9ee83570f25ed0cd3a20b3af', 2256384), 'compile-proof.json': ('d553d6492a11460c7cead44fd264583c540b9c13cbe2b61f5da5cd12434c455a', 37026), 'ru_notepad.exe': ('3110da007d328136d629c23a1dbf2733dc692f9ff19b1613b1c7c923b8bb15c7', 7076864)}
 RUNTIME=tuple(name for name in FILES if name!='compile-proof.json')
 MEMBERS=set(FILES)|{'NOT_ACCEPTED.json'}
 
@@ -249,6 +244,40 @@ def run_full_instance_tabs(runtime,hashes,evidence):
     return result
 
 
+def run_markdown_open(runtime,hashes,evidence):
+    from diagnose_markdown_open_windows import run
+    return run(runtime,hashes,evidence)
+
+
+
+def run_recent_files(runtime,hashes,evidence):
+    import gui_instance_tabs as instance
+    import verify_recent_files_windows as recent
+    from diagnose_markdown_open_windows import verify_registry_removed
+    validate_runtime(runtime)
+    target=evidence/'recent-files';target.mkdir()
+    fixtures=evidence.parent/'recent-files-fixtures';fixtures.mkdir()
+    result={'accepted':False,'validated':False,'registry_cleaned':False,'receipt':None}
+    registry=None
+    try:
+        with patch.dict(os.environ,child_environment(os.environ),clear=True):
+            try:
+                with instance.isolated_settings() as registry:
+                    result['receipt']=recent.run_recent_files(instance.ci.Windows(),runtime,fixtures,target)
+                    recent.validate_recent_files_result(result['receipt'],hashes)
+            finally:
+                if registry is not None:
+                    verify_registry_removed(registry)
+                    result['registry_cleaned']=True
+        result['validated']=True
+    except Exception as exc:
+        result['error_type']=type(exc).__name__
+    finally:
+        (target/'diagnostic-result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    validate_runtime(runtime)
+    return result
+
+
 def functional_scenarios_passed(cases,full):
     expected=('A1-empty-on','A0-empty-off','B1-handoff-duplicate-on')
     return (isinstance(cases,list) and tuple(x.get('case') for x in cases)==expected
@@ -272,7 +301,14 @@ def main():
         report['cases']=diagnose(runtime,hashes,evidence);validate_runtime(runtime)
         # Modal failures are observations, not grounds to skip later phases.
         report['full_instance_tabs']=run_full_instance_tabs(runtime,hashes,evidence)
-        report['functional_scenarios_passed']=functional_scenarios_passed(report['cases'],report['full_instance_tabs'])
+        report['markdown_open']=run_markdown_open(runtime,hashes,evidence)
+        report['recent_files']=run_recent_files(runtime,hashes,evidence)
+        md=report['markdown_open'];mru=report['recent_files']
+        report['functional_scenarios_passed']=(functional_scenarios_passed(report['cases'],report['full_instance_tabs'])
+            and md.get('stage_passed') is True and md.get('process',{}).get('passed') is True
+            and md.get('registry_cleaned') is True and md.get('source_bytes_unchanged') is True
+            and md.get('runtime_bytes_unchanged') is True and not md.get('diagnostic_error_type')
+            and mru.get('validated') is True and mru.get('registry_cleaned') is True)
         report['diagnostic_completed']=True;code=0
     except Exception as exc:
         report.update(diagnostic_completed=False,diagnostic_error=type(exc).__name__)

@@ -28,8 +28,8 @@ class DiagnosticTests(unittest.TestCase):
 
     def test_exact_metadata_and_every_binding_rejects_replacement(self):
         artifact,run=self.metadata();record=diagnostic.validate_metadata(artifact,run)
-        self.assertEqual(record['zip_sha256'],'77e777040cd49addeece7817c6da941fdb8df03e88c1d982598b5415e344d5b4')
-        self.assertEqual(record['artifact_id'],12751602835)
+        self.assertEqual(record['zip_sha256'],'06fbba5d4eeaeda3079479f8ea2ab1995a59d85e08c7bd50dc9fa3c09fe64d7d')
+        self.assertEqual(record['artifact_id'],12801248581)
         for key in artifact:
             bad=copy.deepcopy(artifact);bad[key]=None
             with self.subTest(artifact=key),self.assertRaises(ValueError):diagnostic.validate_metadata(bad,run)
@@ -104,6 +104,8 @@ class DiagnosticTests(unittest.TestCase):
                      patch.object(diagnostic,'acquire',return_value=(output/'runtime',{},{})), \
                      patch.object(diagnostic,'diagnose',side_effect=RuntimeError('private signed URL must not be emitted') if failure else None,return_value=[]), \
                      patch.object(diagnostic,'validate_runtime'), \
+                     patch.object(diagnostic,'run_markdown_open',return_value={'stage_passed':True,'process':{'passed':True},'registry_cleaned':True,'source_bytes_unchanged':True,'runtime_bytes_unchanged':True}), \
+                     patch.object(diagnostic,'run_recent_files',return_value={'validated':True,'registry_cleaned':True}), \
                      patch.object(diagnostic,'run_full_instance_tabs',return_value={'validated':False,'accepted':False}),patch('builtins.print'):
                     code=diagnostic.main()
                 record=json.loads((output/'evidence/diagnostic.json').read_text())
@@ -163,6 +165,8 @@ class DiagnosticTests(unittest.TestCase):
                      patch.object(diagnostic.sys,'platform','win32'),patch.object(diagnostic,'validate_runtime'), \
                      patch.object(diagnostic,'acquire',return_value=(output/'runtime',{},{})), \
                      patch.object(diagnostic,'diagnose',return_value=cases), \
+                     patch.object(diagnostic,'run_markdown_open',return_value={'stage_passed':True,'process':{'passed':True},'registry_cleaned':True,'source_bytes_unchanged':True,'runtime_bytes_unchanged':True}), \
+                     patch.object(diagnostic,'run_recent_files',return_value={'validated':True,'registry_cleaned':True}), \
                      patch.object(diagnostic,'run_full_instance_tabs',return_value=full) as full_run,patch('builtins.print'):
                     self.assertEqual(diagnostic.main(),0)
                 full_run.assert_called_once()
@@ -170,6 +174,56 @@ class DiagnosticTests(unittest.TestCase):
                 self.assertIs(record['diagnostic_completed'],True)
                 self.assertIs(record['functional_scenarios_passed'],modal_pass)
                 self.assertIs(record['accepted'],False);self.assertEqual(record['status'],'NOT_ACCEPTED')
+
+    def test_new_diagnostic_failures_never_count_as_functional_success(self):
+        cases=[{'case':n,'process':{'passed':True},'registry_cleaned':True,'source_bytes_unchanged':True}
+               for n in ('A1-empty-on','A0-empty-off','B1-handoff-duplicate-on')]
+        for field in ('stage_passed','registry_cleaned','source_bytes_unchanged','runtime_bytes_unchanged','process','mru'):
+            with tempfile.TemporaryDirectory() as tmp:
+                output=Path(tmp)/'out'
+                md={'stage_passed':True,'process':{'passed':True},'registry_cleaned':True,
+                    'source_bytes_unchanged':True,'runtime_bytes_unchanged':True}
+                mru={'validated':True,'registry_cleaned':True}
+                if field=='mru':mru['validated']=False
+                elif field=='process':md[field]={'passed':False}
+                else:md[field]=False
+                with patch.object(diagnostic.sys,'argv',['diagnostic','--output',str(output)]), \
+                     patch.object(diagnostic.sys,'platform','win32'),patch.object(diagnostic,'validate_runtime'), \
+                     patch.object(diagnostic,'acquire',return_value=(output/'runtime',{},{})), \
+                     patch.object(diagnostic,'diagnose',return_value=cases), \
+                     patch.object(diagnostic,'run_full_instance_tabs',return_value={'validated':True,'accepted':False}), \
+                     patch.object(diagnostic,'run_markdown_open',return_value=md), \
+                     patch.object(diagnostic,'run_recent_files',return_value=mru),patch('builtins.print'):
+                    self.assertEqual(diagnostic.main(),0)
+                result=json.loads((output/'evidence/diagnostic.json').read_text())
+                self.assertIs(result['diagnostic_completed'],True)
+                self.assertIs(result['functional_scenarios_passed'],False)
+                self.assertIs(result['accepted'],False)
+
+    def test_recent_wrapper_keeps_strict_production_validator_and_namespace_cleanup(self):
+        import gui_instance_tabs as instance
+        import verify_recent_files_windows as recent
+        import diagnose_markdown_open_windows as md
+        hashes={name:'a'*64 for name in diagnostic.RUNTIME}
+        good={'name':'main-gui-recent-files','passed':True,'executed':True,'cleanup_killed':False,
+              'exit_code':0,'fixture_binary_sha256':hashes,'checks':dict.fromkeys(recent.CHECKS,True),
+              'phases':[{'phase':p,'passed':True,'executed':True,'cleanup_killed':False,'exit_code':0,
+                         'fixture_binary_sha256':hashes} for p in recent.PHASES]}
+        for mutation in ('none','missing-phase','wrong-bytes','kill','leak'):
+            with tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp);evidence=root/'evidence';evidence.mkdir();record=copy.deepcopy(good)
+                if mutation=='missing-phase':record['phases'].pop()
+                if mutation=='wrong-bytes':record['fixture_binary_sha256']={}
+                if mutation=='kill':record['cleanup_killed']=True
+                @contextmanager
+                def settings():yield 'Software\\ru_notepad\\SingleInstanceTests\\gui_'+'a'*32
+                with patch.object(diagnostic,'validate_runtime'),patch.object(instance,'isolated_settings',settings), \
+                     patch.object(instance.ci,'Windows'),patch.object(recent,'run_recent_files',return_value=record), \
+                     patch.object(md,'verify_registry_removed',side_effect=RuntimeError('leak') if mutation=='leak' else None) as cleanup:
+                    result=diagnostic.run_recent_files(root/'runtime',hashes,evidence)
+                cleanup.assert_called_once()
+                self.assertIs(result['validated'],mutation=='none');self.assertIs(result['accepted'],False)
+                self.assertIs(result['registry_cleaned'],mutation!='leak')
 
     def test_diagnostic_branch_cannot_trigger_expensive_feature_lanes(self):
         workflows=Path(__file__).resolve().parents[1]/'.github/workflows'
@@ -204,7 +258,7 @@ class DiagnosticTests(unittest.TestCase):
         self.assertIn('/evidence/',source)
         for forbidden in ('secrets.', 'contents: write','actions: write','gh release','build_bootstrap_release','package_bootstrap_preview','latest successful'):
             self.assertNotIn(forbidden,source)
-        self.assertEqual(diagnostic.RUN_ID,40537388471)
+        self.assertEqual(diagnostic.RUN_ID,40650796210)
         script=Path(diagnostic.__file__).read_text()
         self.assertIn("'status':'NOT_ACCEPTED','accepted':False",script)
         self.assertIn("'full_feature_ci_required':True",script)
