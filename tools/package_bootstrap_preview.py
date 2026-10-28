@@ -78,7 +78,7 @@ def markdown_acceptance_scope(report, ci):
     require(len(rows) == 1, 'exact Markdown product receipt required')
     record=rows[0]['markdown_performance']
     ci.validate_gui_markdown(record, require_windows_clock=True)
-    require(record.get('schema') == 'ru-notepad-markdown-v2'
+    require(record.get('schema') == ci.GUI_MARKDOWN_SCHEMA
             and sum(len(case['stages']) for case in record['cases']) == 11,
             'current Markdown acceptance scope required')
     return {'schema':record['schema'], 'active_stages':11,

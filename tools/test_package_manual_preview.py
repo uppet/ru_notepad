@@ -269,6 +269,19 @@ class ManualPreviewTests(unittest.TestCase):
                 preview.validate_summary(self.summary,self.root,self.summary['tested_binary_sha256'])
         self.summary=original
 
+    def test_historical_v2_metrics_are_explicit_failed_diagnostics_only(self):
+        self.timeout(2,2,legacy=False)
+        record=self.markdown()['markdown_performance'];record['schema']='ru-notepad-markdown-v2'
+        for case in record['cases']:
+            for stage in case['stages']:
+                row=stage['last_progress']['diagnostic']
+                stage['last_progress']['diagnostic']={key:row[key] for key in ci.MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS}
+        result=preview.validate_summary(self.summary,self.root,self.summary['tested_binary_sha256'])
+        self.assertEqual(result['formal_acceptance'],'failed')
+        with self.assertRaises(RuntimeError):ci.validate_gui_markdown(record)
+        record['schema']=ci.GUI_MARKDOWN_SCHEMA
+        with self.assertRaises(RuntimeError):preview.validate_summary(self.summary,self.root,self.summary['tested_binary_sha256'])
+
     def test_historical_double_undo_timeout_stays_failed_not_current_pass(self):
         self.timeout(2,3)
         result=preview.validate_summary(self.summary,self.root,self.summary['tested_binary_sha256'])

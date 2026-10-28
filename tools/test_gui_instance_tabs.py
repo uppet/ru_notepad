@@ -754,4 +754,97 @@ class RaceObservationTests(unittest.TestCase):
         self.assertEqual(row['participants'][0]['observation_error'],'OSError')
         self.assertNotIn('passed',row)
 
+
+class RecentUndoReadinessTests(unittest.TestCase):
+    def api(self, busy=True, broken=None):
+        class API(BusyBeforeIdleAPI):
+            def __init__(self):
+                super().__init__(busy)
+                self.original=b'original';self.value=b'originalX';self.dirty=1;self.undo_calls=0
+            def text(self,handle):return 'Ln 1 Col 2' if handle==20011 else 'fixture.txt · ru_notepad'
+            def editor_bytes(self,hwnd):return self.value
+            def verify_owned_handles(self,pid,*handles):
+                for h in handles:subject._owned_pid(self,pid,h)
+            def scalar(self,handle,message,*args):
+                if message==2159:return self.dirty
+                if message==2174:return 1
+                return super().scalar(handle,message,*args)
+            def command(self,hwnd,command):
+                if command!=201:raise AssertionError('not Undo')
+                self.undo_calls+=1
+                if self.busy:self.ignored+=1;return
+                self.value=b'wrong!!!' if broken=='bytes' else self.original
+                self.dirty=1 if broken=='dirty' else 0
+        return API()
+
+    def test_missing_file_old_status_passes_but_new_ready_waits_before_single_undo(self):
+        import verify_recent_files_windows as recent
+        api=self.api();process=Mock(pid=123);process.poll.return_value=None
+        self.assertFalse(recent.ci.status_startswith(api.text(20011),'status.opening'))
+        api.command(1,201)
+        self.assertEqual((api.ignored,api.value),(1,b'originalX'))
+        api=self.api();now=[0.0];observed={};before=Mock()
+        def tick(_):now[0]+=.01;api.busy=False
+        with patch.object(recent.ci.time,'perf_counter',side_effect=lambda:now[0]),patch.object(recent.ci.time,'sleep',side_effect=tick):
+            recent._undo_after_idle(api,process,1,3,102,api.original,before,observed)
+        before.assert_called_once();self.assertEqual(api.undo_calls,1);self.assertEqual(api.ignored,0)
+        self.assertEqual((api.value,api.dirty),(api.original,0))
+        self.assertEqual(observed['Undo before']['modified'],1)
+        self.assertEqual(observed['Undo document']['modified'],0)
+        self.assertTrue(observed['Undo command_returned'])
+        self.assertEqual(observed['Undo expected original'],{'bytes':len(api.original),'sha256':subject.hashlib.sha256(api.original).hexdigest()})
+
+    def test_missing_cleanup_never_gets_undo_or_more_than_original_ready_budget(self):
+        import verify_recent_files_windows as recent
+        api=self.api();process=Mock(pid=123);process.poll.return_value=None;now=[0.0];observed={}
+        with patch.object(recent.ci.time,'perf_counter',side_effect=lambda:now[0]),patch.object(recent.ci.time,'sleep',side_effect=lambda _:now.__setitem__(0,now[0]+1)),self.assertRaisesRegex(RuntimeError,'Missing-file operation did not finish'):
+            recent._undo_after_idle(api,process,1,3,102,api.original,lambda:None,observed)
+        self.assertEqual(now[0],30);self.assertEqual(api.undo_calls,0)
+        self.assertFalse(observed['Missing-file operation did not finish']['tabs_enabled'])
+        self.assertNotIn('Undo command_attempted',observed)
+
+    def test_ready_guards_cover_all_busy_signals_not_just_status(self):
+        import verify_recent_files_windows as recent
+        for mode in ('tabs-disabled','cancel-visible','editor-readonly','editor-disabled'):
+            api=self.api(False);process=Mock(pid=123);process.poll.return_value=None;now=[0.0];observed={}
+            if mode=='tabs-disabled':api.user.IsWindowEnabled.side_effect=lambda h:h!=20010
+            if mode=='cancel-visible':api.user.IsWindowVisible.side_effect=lambda h:True if h==20901 else api.visible(h)
+            if mode=='editor-disabled':api.user.IsWindowEnabled.side_effect=lambda h:h!=102
+            if mode=='editor-readonly':
+                original=api.scalar;api.scalar=lambda h,m,*a:1 if m==2140 else original(h,m,*a)
+            with self.subTest(mode=mode),patch.object(recent.ci.time,'perf_counter',side_effect=lambda:now[0]),patch.object(recent.ci.time,'sleep',side_effect=lambda _:now.__setitem__(0,now[0]+1)),self.assertRaises(RuntimeError):
+                recent._undo_after_idle(api,process,1,3,102,api.original,lambda:None,observed)
+            self.assertEqual(now[0],30);self.assertEqual(api.undo_calls,0)
+
+    def test_wrong_bytes_or_dirty_state_fails_without_repeated_undo(self):
+        import verify_recent_files_windows as recent
+        for broken in ('bytes','dirty'):
+            api=self.api(False,broken);process=Mock(pid=123);process.poll.return_value=None;now=[0.0];observed={}
+            with self.subTest(broken=broken),patch.object(recent.ci.time,'perf_counter',side_effect=lambda:now[0]),patch.object(recent.ci.time,'sleep',side_effect=lambda _:now.__setitem__(0,now[0]+1)),self.assertRaisesRegex(RuntimeError,'Undo did not restore'):
+                recent._undo_after_idle(api,process,1,3,102,api.original,lambda:None,observed)
+            self.assertEqual(now[0],30);self.assertEqual(api.undo_calls,1)
+            self.assertEqual(observed['Undo document']['readonly'],0)
+            self.assertEqual(observed['Undo document']['sha256'],subject.hashlib.sha256(api.value).hexdigest())
+
+    def test_foreign_or_replaced_editor_is_not_treated_as_transient_undo_success(self):
+        import verify_recent_files_windows as recent
+        for mode in ('foreign','different-editor'):
+            api=self.api(False);process=Mock(pid=123);process.poll.return_value=None
+            if mode=='foreign':api.foreign.add(102)
+            with self.subTest(mode=mode),patch.object(recent.ci.time,'sleep') as sleep,self.assertRaises(RuntimeError):
+                recent._undo_after_idle(api,process,1,3,101 if mode=='different-editor' else 102,api.original,lambda:None,{})
+            self.assertEqual(api.undo_calls,0);sleep.assert_not_called()
+
+    def test_failure_sidecar_is_bounded_nonpassing_and_write_error_does_not_mask(self):
+        import verify_recent_files_windows as recent
+        with tempfile.TemporaryDirectory() as directory:
+            recent._write_failure_observation(directory,'initial',RuntimeError('original failure'),{'large':'x'*100000,'Undo command_attempted':True},HASHES)
+            path=Path(directory)/'recent-files-partial.json';raw=path.read_bytes();self.assertLessEqual(len(raw),65536)
+            row=json.loads(raw);self.assertIs(row['passed'],False);self.assertEqual(row['error'],'original failure')
+            self.assertEqual(row['fixture_binary_sha256'],HASHES)
+            self.assertTrue(row['observations']['Undo command_attempted'])
+            with patch.object(Path,'write_bytes',side_effect=OSError('fixture write failure')):
+                recent._write_failure_observation(directory,'initial',RuntimeError('original failure'),{},HASHES)
+
+
 if __name__=='__main__':unittest.main()

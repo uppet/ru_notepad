@@ -24,7 +24,10 @@ def fixture():
 
 def route():
     return {'id': 4, 'gen': 2, 'rev': 0, 'pending': 0, 'phase': 4,
-            'length': 1000000, 'feed': 1000000, 'bulkCalls': 1, 'metric_valid': 1}
+            'length': 1000000, 'feed': 1000000, 'bulkCalls': 1, 'metric_valid': 1,
+            'feedStepCount': 1, 'feedStepUs': 1, 'publishStepCount': 1, 'publishStepUs': 1,
+            'lifecycleStepCount': 1, 'lifecycleStepUs': 0, 'visibilityStepCount': 0, 'visibilityStepUs': 0,
+            'stepErrors': 0, 'stepMetricValid': 1, 'entry_yields': 0, 'post_yields': 0}
 
 
 def profile_record():
@@ -417,6 +420,9 @@ class Controls(unittest.TestCase):
         ci = types.SimpleNamespace(parse_markdown_diagnostic=lambda line: json.loads(line.split('[MDP ', 1)[1]))
         line = lambda value: ' [MDP ' + json.dumps(value) + '\n'
         self.assertEqual(runner.validate_log_route(ci, line(earlier) + line(final), final), 2)
+        for key in ('feedStepCount','publishStepUs','stepErrors','stepMetricValid','entry_yields','post_yields'):
+            with self.subTest(key=key),self.assertRaisesRegex(runner.StudyError,'final_route_disagreement'):
+                runner.validate_log_route(ci,line(dict(final,**{key:final[key]+1})),final)
         with self.assertRaisesRegex(runner.StudyError, 'sequence_regressed'):
             runner.validate_log_route(ci, line(final) + line(earlier), final)
         with self.assertRaisesRegex(runner.StudyError, 'identity_changed'):

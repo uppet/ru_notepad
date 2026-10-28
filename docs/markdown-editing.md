@@ -56,7 +56,7 @@ The publisher now requires a prepared pending Markdown scan and still publishes 
 
 The later fold-publication run passed 1,832 console assertions but still timed out while opening the unchanged 1 MB unclosed-fence corpus. It had no final style probe. A missing final probe alone does not identify whether opening, scanning, fold publication, native styling or layout was responsible.
 
-The CI-only `--markdown-phase-diagnostics` switch now projects existing numeric state into the status control with at most one additional status write per 250 ms and a shared 4,096-record process cap. If an identity completes within a reserved slot, its already-required final status refresh attaches one current-identity terminal record without another message or timer. This also replaces an existing pending record of that same identity. Repeated completed refreshes reuse the terminal record; if the shared cap prevents renewal, the stale pending record is withheld. Normal launches do not enable this output. The existing observer status read parses a fixed `MDP2` schema; there are no extra observer messages or document-text reads. Partial snapshots preserve only bounded numeric fields and closed status categories, never status prose, paths or typed content. Missing or malformed diagnostics cannot satisfy the GUI completion gate, and a diagnostic exception latches a fixed failure rather than reporting success.
+The CI-only `--markdown-phase-diagnostics` switch now projects existing numeric state into the status control with at most one additional status write per 250 ms and a shared 4,096-record process cap. If an identity completes within a reserved slot, its already-required final status refresh attaches one current-identity terminal record without another message or timer. This also replaces an existing pending record of that same identity. Repeated completed refreshes reuse the terminal record; if the shared cap prevents renewal, the stale pending record is withheld. Normal launches do not enable this output. The existing observer status read originally parsed a fixed `MDP2` schema (the current `MDP3` extension is described below); there are no extra observer messages or document-text reads. Partial snapshots preserve only bounded numeric fields and closed status categories, never status prose, paths or typed content. Missing or malformed diagnostics cannot satisfy the GUI completion gate, and a diagnostic exception latches a fixed failure rather than reporting success.
 
 Fields are sequence, origin (`via=0` for a periodic sample, `via=1` for an existing completion refresh), state identity, generation, revision, phase, pending, document byte length, bytes fed, published-line cursor, and the existing process-cumulative tick/work/gap counters. Phase codes are 0 (prepare), 1 (scan), 2 (queued fold ranges), 3 (visibility cleanup), and 4 (no pending fold work, including disabled folding). A phase is a sampled remaining-work category, not a measurement of time spent in that phase. Sequence and counters are process-cumulative, not per-operation totals. The completion-refresh record uses the preceding completed tick totals because the current callback has not yet committed its totals; it does not invent a sample timestamp or advance those counters. A cached sample can lag while work is pending; GUI completion requires a terminal numeric marker together with the original style/fold/context/status/visibility requirements.
 
@@ -86,3 +86,35 @@ The existing 221 policy and 31 selection assertions also passed on both. A small
 paired parser experiment was noisy and does not establish a stable speedup.
 These checks do not replace the actual Windows OPEN deadline: the prior 5ccf
 binary took 30,008.282 ms and was still folding, so that run remains failed.
+
+## Per-step attribution and readiness (2026-10-28 candidate)
+
+The current `MDP3` numeric record retains all `MDP2` fields and appends
+identity-scoped completed-step counts and microseconds for four mutually
+exclusive entry categories: feed (bounded text read, policy work and result
+validation), publish (already queued fold ranges), lifecycle (preparation or
+EOF completion), and visibility cleanup. These are whole-step wall intervals,
+not parser-only CPU measurements. They reuse the existing before/after QPC
+values; no new clock query, native message, input read or scheduling decision is
+added. Scalar bookkeeping still has real cost and is not described as free.
+
+A failed step without an existing ending timestamp increments the error count
+and invalidates step attribution rather than fabricating a zero duration.
+Normal acceptance requires valid step metrics and zero step errors in addition
+to all previous content, style, fold and completion predicates. Scan-identity
+replacement starts fresh counters. The bulk-call metrics retain their separate
+validity and scope. The status marker is bounded to 1,536 characters and uses
+the existing status read/write cadence; the observer does not add queries.
+
+Scheduler entry yields and continuation-post yields are separate process-wide
+counters. Their sum retains the previous yield total; neither count is a
+fraction of accepted work ticks. The existing 8 ms admission budget, 1,024-byte
+feed bound, event/range caps and queue checks remain unchanged. Historical
+`MDP2` receipts are readable only through the explicit legacy diagnostic path;
+a past failure is not converted into a current-schema pass.
+
+The MRU acceptance runner now waits for the existing stable owned-editor idle
+state, not just disappearance of the opening status, before sending its single
+Undo command. Exact restored bytes and clean/savepoint state remain required.
+The same-binary diagnostic passed this sequence; final feature acceptance still
+requires the complete Windows run and cannot be assembled from separate runs.

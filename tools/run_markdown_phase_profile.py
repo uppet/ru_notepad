@@ -738,7 +738,7 @@ def validate_phase_record(record, route):
 
 
 def validate_log_route(ci, text, expected):
-    # The current launcher normally has no MDP2 log lines; the final status
+    # The current launcher normally has no MDP3 log lines; the final status
     # snapshot is the existing route proof. If log projections are present,
     # validate all, use the last record, and require it to agree after exit.
     records = []
@@ -755,7 +755,10 @@ def validate_log_route(ci, text, expected):
             records.append(record)
     if records:
         keys = ('id', 'gen', 'rev', 'feed', 'length', 'pending', 'phase', 'bulkCalls',
-                'bulkLines', 'fallbackBatches', 'directCalls', 'directLines', 'metric_valid')
+                'bulkLines', 'fallbackBatches', 'directCalls', 'directLines', 'metric_valid',
+                'feedStepCount', 'feedStepUs', 'publishStepCount', 'publishStepUs',
+                'lifecycleStepCount', 'lifecycleStepUs', 'visibilityStepCount', 'visibilityStepUs',
+                'stepErrors', 'stepMetricValid', 'entry_yields', 'post_yields')
         if any(records[-1][key] != expected[key] for key in keys):
             fail('log_final_route_disagreement')
     return len(records)

@@ -95,6 +95,11 @@ def markdown_evidence(*, legacy=False):
                     'style_samples': {'positions': style_positions, 'expected': style_values, 'actual': list(style_values)},
                     'folds_match': True, 'context_match': True,
                     'lexer': 98, 'tail_requested': True, 'children_visible': True}})
+            if not legacy:
+                case['stages'][-1]['last_progress']['diagnostic'].update(
+                    feedStepCount=1, feedStepUs=1, publishStepCount=1, publishStepUs=0,
+                    lifecycleStepCount=1, lifecycleStepUs=0, visibilityStepCount=0, visibilityStepUs=0,
+                    stepErrors=0, stepMetricValid=1, entry_yields=0, post_yields=0)
             if kind == 'unclosed-fence' and operation == 'open':
                 case['stages'][-1]['last_progress']['diagnostic'].update(
                     bulkCalls=1, bulkLines=1, fallbackBatches=0,

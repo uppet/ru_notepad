@@ -9,8 +9,8 @@
     {
       "scope": "app",
       "path": "src/main.ru",
-      "sha256": "a69e65401e7ad01d1860a39b6bfe947bb5a900e0e840d120d56a838e06bf9a71",
-      "git_blob": "fc2894c5d244a9600052019524899c37ae132dcf"
+      "sha256": "58bdd73699609680fa1eb4c675a715f75d594420aa0f8fbc5c234fcd85174c04",
+      "git_blob": "a679a8c204be313aad6060d1314f76b125e62951"
     },
     {
       "scope": "compiler",
@@ -165,8 +165,8 @@
     {
       "scope": "app",
       "path": "src/markdown_syntax.ru",
-      "sha256": "8ae5c6b71f48fd3e374095cbcbb0e1585ba1aea54d2a592d03446d49da760ce3",
-      "git_blob": "014aaf6d2ca2af68733a481108432cfadc79aacf"
+      "sha256": "4948aeaf9089262434188602614bbcbc048150bc568064153dfcae19a9b94ca4",
+      "git_blob": "981e8bd6f6cc95a6fe3b7a4ff5e9ccd8b669c65f"
     },
     {
       "scope": "app",

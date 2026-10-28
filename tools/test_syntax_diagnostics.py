@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / 'tools'))
 from ru_cli_diagnostics import prepare_compile_diagnostics, validate_stderr
 FIELDS = ('seq ok generation revision pending bytes feed read_bytes restart chunks ticks '
           'work_ms gap_ms max_tick_ms max_gap_ms posts continuation_ticks queue_yields '
-          'stale_messages text_notifications style_notifications fold_notifications').split()
+          'stale_messages text_notifications style_notifications fold_notifications entry_yields post_yields').split()
 
 
 def production_parts(ru_root):
@@ -76,6 +76,7 @@ A 其 增 'active' 0.
 A 其 增 'syntaxTicks' 5. A 其 增 'syntaxWorkMs' 1.5. A 其 增 'syntaxGapMs' 2.25.
 A 其 增 'syntaxMaxTickMs' 0.75. A 其 增 'syntaxMaxGapMs' 1.25.
 A 其 增 'syntaxPosts' 7. A 其 增 'syntaxContinuations' 6. A 其 增 'syntaxYields' 8.
+A 其 增 'syntaxEntryYields' 3. A 其 增 'syntaxPostYields' 5.
 A 其 增 'syntaxStale' 1. A 其 增 'syntaxTextNotifications' 3.
 A 其 增 'syntaxStyleNotifications' 0. A 其 增 'syntaxFoldNotifications' 0.
 诊断语法.
@@ -103,7 +104,7 @@ A 其 增 'syntaxSnapshots' 0. 语 其 设置 2.
 def validate(output):
     lines = [line for line in output.splitlines() if line.startswith('RU_GUI_SNAPSHOT ')]
     base = dict(zip(FIELDS, [1, 1, 9, 2, 1, 123, 124, 128, 0, 4, 5,
-                            1.5, 2.25, 0.75, 1.25, 7, 6, 8, 1, 3, 0, 0]))
+                            1.5, 2.25, 0.75, 1.25, 7, 6, 8, 1, 3, 0, 0, 3, 5]))
     expected = [base, {'seq': 2, 'ok': 0}, {**base, 'seq': 3, 'pending': 0}, {'seq': 1, 'ok': 0}]
     if len(lines) != 4:
         raise ValueError('Expected four bounded diagnostic lines from both synthetic states')

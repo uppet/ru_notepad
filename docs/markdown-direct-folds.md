@@ -128,7 +128,7 @@ is claimed until that exact candidate completes real Windows acceptance.
 
 ## Bounded measurements
 
-The CI-only MDP2 status projection retains its existing four-per-second cadence
+The CI-only bulk metrics introduced in MDP2 (retained in current MDP3) retain its existing four-per-second cadence
 and terminal refresh behavior. It adds identity-scoped actual bulk calls and
 completed rows, fallback batches, per-line direct calls/rows, logical plan size,
 and measured bulk-call microseconds. QPC failures mark the measurement invalid;

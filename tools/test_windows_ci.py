@@ -6,6 +6,7 @@ GUI, DLL, file-codec, ACL, or Windows runtime acceptance evidence.
 """
 from pathlib import Path
 import ctypes
+import copy
 import hashlib
 import io
 import json
@@ -90,11 +91,21 @@ class MarkdownDeprecatedCaseTests(unittest.TestCase):
         self.assertIsNone(record['deprecated'][0]['passed'])
         ci.validate_gui_markdown(record)
         old = markdown_evidence(legacy=True)
-        ci.validate_gui_markdown(old, legacy=True)
+        ci.validate_gui_markdown(old, legacy=True, legacy_diagnostic=True)
+        with self.assertRaises(RuntimeError):ci.validate_gui_markdown(old,legacy=True)
+        current_repro=copy.deepcopy(old)
+        for case in current_repro['cases']:
+            for stage in case['stages']:
+                stage['last_progress']['diagnostic'].update(feedStepCount=1,feedStepUs=1,
+                    publishStepCount=1,publishStepUs=0,lifecycleStepCount=1,lifecycleStepUs=0,
+                    visibilityStepCount=0,visibilityStepUs=0,stepErrors=0,stepMetricValid=1,
+                    entry_yields=0,post_yields=0)
+        ci.validate_gui_markdown(current_repro,legacy=True)
+        with self.assertRaises(RuntimeError):ci.validate_gui_markdown(current_repro,legacy=True,legacy_diagnostic=True)
         with self.assertRaises(RuntimeError): ci.validate_gui_markdown(old)
         with self.assertRaises(RuntimeError): ci.validate_gui_markdown(record, legacy=True)
         old['cases'][2]['stages'][3]['wall_ms'] = 30000.01
-        with self.assertRaises(RuntimeError): ci.validate_gui_markdown(old, legacy=True)
+        with self.assertRaises(RuntimeError): ci.validate_gui_markdown(old, legacy=True, legacy_diagnostic=True)
 
     def test_deprecation_does_not_relax_any_active_stage_budget_or_correctness(self):
         for case_id, case in enumerate(markdown_evidence()['cases']):
@@ -255,6 +266,11 @@ def markdown_evidence(*, legacy=False):
                     'style_samples': {'positions': style_positions, 'expected': style_values, 'actual': list(style_values)},
                     'folds_match': True, 'context_match': True,
                     'lexer': 98, 'tail_requested': True, 'children_visible': True}})
+            if not legacy:
+                case['stages'][-1]['last_progress']['diagnostic'].update(
+                    feedStepCount=1, feedStepUs=1, publishStepCount=1, publishStepUs=0,
+                    lifecycleStepCount=1, lifecycleStepUs=0, visibilityStepCount=0, visibilityStepUs=0,
+                    stepErrors=0, stepMetricValid=1, entry_yields=0, post_yields=0)
     return record
 
 
@@ -547,7 +563,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'markdown_policy': r'^TOTAL PASS: 221\s*$',
             'markdown_selection_policy': r'^TOTAL PASS: 31\s*$',
             'markdown_native': r'^TOTAL PASS: 58\s*$',
-            'app_markdown_native': r'^TOTAL PASS: 70\s*$',
+            'app_markdown_native': r'^TOTAL PASS: 73\s*$',
             'markdown_direct_native': r'^TOTAL PASS: 114\s*$',
             'i18n_policy': r'^TOTAL PASS: 289\s*$',
             'i18n_settings_native': r'^TOTAL PASS: 69\s*$',
@@ -1166,7 +1182,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'RU_TIMER_CORPUS_PASS: 4\n')
         import test_syntax_diagnostics as diagnostic_control
         base = dict(zip(diagnostic_control.FIELDS, [1, 1, 9, 2, 1, 123, 124, 128, 0, 4, 5,
-            1.5, 2.25, 0.75, 1.25, 7, 6, 8, 1, 3, 0, 0]))
+            1.5, 2.25, 0.75, 1.25, 7, 6, 8, 1, 3, 0, 0, 3, 5]))
         records = [base, {'seq': 2, 'ok': 0}, {**base, 'seq': 3, 'pending': 0}, {'seq': 1, 'ok': 0}]
         body = 'PASS: fixture\n' * 10 + ''.join('RU_GUI_SNAPSHOT ' +
             ' '.join(f'{key}={value}' for key, value in record.items()) + '\n' for record in records) + 'TOTAL PASS: 10\n'
@@ -1510,8 +1526,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         baseline = [test for test in summary['tests'] if test['name'] not in
                     {'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
         self.assertEqual(len(baseline), 39)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in baseline), 2077 + 103 + 42 + 42)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 2077 + 103 + 289 + 69 + 1606 + 42 + 42)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in baseline), 2077 + 103 + 42 + 42 + 3)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 2077 + 103 + 289 + 69 + 1606 + 42 + 42 + 3)
 
     def test_direct_style_fixture_is_built_packaged_and_required(self):
         name = 'ru_direct_styling_native'
@@ -3324,7 +3340,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         prior = [t for t in summary['tests'] if t['name'] not in
                  {'markdown_direct_native', 'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
         self.assertEqual(len(prior), 38)
-        self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1867 + 90 + 6 + 103 + 42 + 42)
+        self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1867 + 90 + 6 + 103 + 42 + 42 + 3)
         self.assertEqual(direct['assertions_passed'], 114)
         self.assertEqual(ci.console_command('markdown_direct_native', self.root, self.root),
                          [str(self.root / 'markdown_direct_native.exe')])
@@ -3479,7 +3495,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
 
     def test_markdown_gate_preserves_old_counts_and_requires_exact_new_counts(self):
         expected = {'markdown_policy': 221, 'markdown_selection_policy': 31,
-                    'markdown_native': 58, 'app_markdown_native': 70, 'markdown_direct_native': 114}
+                    'markdown_native': 58, 'app_markdown_native': 73, 'markdown_direct_native': 114}
         self.assertEqual({name: ci.expected_assertions(name) for name in expected}, expected)
         self.assertEqual(ci.console_command('app_markdown_native', self.root, self.root),
                          [str(self.root / 'app_markdown_native.exe'), str(self.root)])
@@ -3548,7 +3564,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         # Reviewed source contract only. Actual callback/contraction behavior is
         # separately required from markdown_native and the detached GUI cases.
         source = (ci.ROOT / 'src/markdown_syntax.ru').read_text(encoding='utf-8')
-        expected = {'_本态': '8a5ac21dfaed5a7acd9633c5ee30aed02517b6da4e61edd6724bb9da154653fe', '_须本态': 'ad619e1b49326aeb41de2f838a49662358aae6827f3f9603b16945ad224dd37e', '_护': 'd09426159fc731acf23725021e04cb93ad33dbe58526e9741f5806adf93d5445', '_讯': '5b1cac1da67dd9bf65ae91029f5622121301b70a03056a52d72e96ccd41ec9e2', '_全显': 'a2facd577a3085e305284e6e205a9c0d014773f06ef00070f51da71e8289cbf7', '_发布': 'f31481eadda2b032e94434f1fcb1739c41e2d81e9e07a1391f95d3e4d3a5c053', '_须直属': '8105e93a67e66078a2ccf57a377687c3d134626b74b11e627985cd7255f74bab', '登记直属': 'd528efc0163c27444df666080dd6522a7de514b626223bf0ce6c6fbf2e9acccd', '撤销直属': '11a975a7a865fc61009d3a6b5cdf0c2455b4e4355d47d9a1773567acee14ba3b', '_直护': '1196e2af8d48e4a4f37b07baf4059b8be846956e8cd9e55556b0d0724db28c7d', '_直发布': 'aca4265d0f732a9f63c5cfc4815d3d4b05fc7e6d79219a05bf770c704565d701', '_批移位': '92922d737d210319ee19b50aaf68d26840a1ed15c5bbb56f6aa1ccc69a0bfeb1', '_写批计划': '68d92c84edc831a296a616569d92d3911fce0f8552d0cc0fafe6271f2a0afef8', '_验批果': '699c0a3c5ff2192219f5c22f6880be40d36fcf7fd4d7ce941a2c2e23e100d063', '_批发布': '2a175bb7efff6a5af78b2e405e3b550ae70f92012a2bac5685e7ce9f57836e16', '_统计': 'f31451b38baa49c039a772bc0d5aaa04e0d2d32d57c68ac23bca3a7f16b91f94', '_统计时刻': '55ec9489e7c0421b0617e70b5953c732d3bfbdb3d0bc882153e3d0607e51bbf5', '_统计耗时': '1e51b386ebba4ebb1613196a14c9bdd64cacbade50eb8ab029ef596c3ddcd4aa', '_丢弃': '9a0ff8228817367569a13c16929e1917f42bbd5967c766fa7ffdbe3c33d52845', '状态': 'a1789ccfe386ad090afa5a6097bb58ee9928346122f2d964c5d0705deb9e3eab'}
+        expected = {'_本态': '8a5ac21dfaed5a7acd9633c5ee30aed02517b6da4e61edd6724bb9da154653fe', '_须本态': 'ad619e1b49326aeb41de2f838a49662358aae6827f3f9603b16945ad224dd37e', '_护': 'd09426159fc731acf23725021e04cb93ad33dbe58526e9741f5806adf93d5445', '_讯': '5b1cac1da67dd9bf65ae91029f5622121301b70a03056a52d72e96ccd41ec9e2', '_全显': 'a2facd577a3085e305284e6e205a9c0d014773f06ef00070f51da71e8289cbf7', '_发布': 'f31481eadda2b032e94434f1fcb1739c41e2d81e9e07a1391f95d3e4d3a5c053', '_须直属': '8105e93a67e66078a2ccf57a377687c3d134626b74b11e627985cd7255f74bab', '登记直属': 'd528efc0163c27444df666080dd6522a7de514b626223bf0ce6c6fbf2e9acccd', '撤销直属': '11a975a7a865fc61009d3a6b5cdf0c2455b4e4355d47d9a1773567acee14ba3b', '_直护': '1196e2af8d48e4a4f37b07baf4059b8be846956e8cd9e55556b0d0724db28c7d', '_直发布': 'aca4265d0f732a9f63c5cfc4815d3d4b05fc7e6d79219a05bf770c704565d701', '_批移位': '92922d737d210319ee19b50aaf68d26840a1ed15c5bbb56f6aa1ccc69a0bfeb1', '_写批计划': '68d92c84edc831a296a616569d92d3911fce0f8552d0cc0fafe6271f2a0afef8', '_验批果': '699c0a3c5ff2192219f5c22f6880be40d36fcf7fd4d7ce941a2c2e23e100d063', '_批发布': '2a175bb7efff6a5af78b2e405e3b550ae70f92012a2bac5685e7ce9f57836e16', '_统计': '676fa1680bf762f7ee3be59afea75488949e208cb70a32f02d90787ed0c0dfed', '_统计时刻': '55ec9489e7c0421b0617e70b5953c732d3bfbdb3d0bc882153e3d0607e51bbf5', '_统计耗时': '1e51b386ebba4ebb1613196a14c9bdd64cacbade50eb8ab029ef596c3ddcd4aa', '_丢弃': '9a0ff8228817367569a13c16929e1917f42bbd5967c766fa7ffdbe3c33d52845', '状态': 'f08db18ea8c3afb3ba478fd36e2c81a805073737f9244196b72b7459397d7a4a'}
         for name, digest in expected.items():
             functions = re.findall(r'^算 ' + re.escape(name) + r'(?=[ \n])[^\n]*\n(.*?)^法$',
                                    source, re.MULTILINE | re.DOTALL)
@@ -3727,7 +3743,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
 
     def markdown_marker(self, seq=9):
         record = dict(markdown_evidence()['cases'][0]['stages'][0]['last_progress']['diagnostic'], seq=seq)
-        return ' [MDP2 ' + ' '.join(f'{name}={record[name]}' for name in ci.MARKDOWN_DIAGNOSTIC_FIELDS) + ']'
+        return ' [MDP3 ' + ' '.join(f'{name}={record[name]}' for name in ci.MARKDOWN_DIAGNOSTIC_FIELDS) + ']'
 
     def test_markdown_status_legacy_length_then_text_reproduces_truncated_marker(self):
         before, after = self.markdown_marker(9), self.markdown_marker(10)
@@ -3808,7 +3824,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             ci.validate_gui_markdown(record, require_windows_clock=True)
 
     def test_markdown_numeric_phase_parser_rejects_unbounded_private_or_missing_fields(self):
-        marker = ' [MDP2 seq=1 via=0 id=2 gen=3 rev=0 phase=2 pending=1 length=1000000 feed=470180 published=47104 tick=123 work_us=100000 gap_us=200000 bulkCalls=736 bulkLines=47104 fallbackBatches=0 directCalls=0 directLines=0 maxPlanBytes=1056 bulkUs=1234 ownedBufferBytes=1088 metric_valid=1]'
+        marker = ' [MDP3 seq=1 via=0 id=2 gen=3 rev=0 phase=2 pending=1 length=1000000 feed=470180 published=47104 tick=123 work_us=100000 gap_us=200000 bulkCalls=736 bulkLines=47104 fallbackBatches=0 directCalls=0 directLines=0 maxPlanBytes=1056 bulkUs=1234 ownedBufferBytes=1088 metric_valid=1 feedStepCount=1 feedStepUs=1 publishStepCount=1 publishStepUs=1 lifecycleStepCount=1 lifecycleStepUs=0 visibilityStepCount=0 visibilityStepUs=0 stepErrors=0 stepMetricValid=1 entry_yields=0 post_yields=0]'
         result = ci.parse_markdown_diagnostic('PRIVATE_PATH_SENTINEL' + marker)
         self.assertEqual(result['phase'], 2)
         self.assertNotIn('PRIVATE', json.dumps(result))
@@ -3818,7 +3834,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     marker.replace('feed=470180', 'feed=1000001'), marker.replace('tick=123', 'tick=true'),
                     marker.replace('tick=123', 'tick=01'), marker.replace('id=2', 'id=-1'),
                     marker.replace('rev=0 ', ''), marker.replace('gen=3', 'private=3'),
-                    marker + marker, ' [MDP2 error=1]', marker.replace('gap_us=200000', 'gap_us=9999999999999999')]:
+                    marker + marker, ' [MDP3 error=1]', marker.replace('gap_us=200000', 'gap_us=9999999999999999')]:
             with self.subTest(bad=bad), self.assertRaises(RuntimeError): ci.parse_markdown_diagnostic(bad)
         self.assertIsNone(ci.parse_markdown_diagnostic('ordinary Markdown status'))
         self.assertLessEqual(len(marker), ci.MARKDOWN_DIAGNOSTIC_MAX_CHARS)
@@ -3842,11 +3858,62 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         for change in ({'directCalls': 1}, {'published': 47103}, {'fallbackBatches': 47105}):
             with self.subTest(terminal=change), self.assertRaises(RuntimeError):
                 ci.validate_markdown_diagnostic(dict(terminal, **change))
-        for bad in (marker.replace('MDP2', 'MDP1'), marker.replace('MDP2', 'MDP3'),
+        for bad in (marker.replace('MDP3', 'MDP1'), marker.replace('MDP3', 'MDP2'),
                     marker.replace('bulkUs=1234', 'bulkUs=NaN'),
                     marker.replace('metric_valid=1', 'metric_valid=1 extra=1')):
             with self.subTest(marker=bad), self.assertRaises(RuntimeError):
                 ci.parse_markdown_diagnostic(bad)
+
+    def test_markdown_v3_step_metrics_and_explicit_legacy_contract(self):
+        record=markdown_evidence()['cases'][0]['stages'][0]['last_progress']['diagnostic']
+        ci.validate_markdown_diagnostic(record)
+        marker=' [MDP3 '+' '.join(f'{key}={record[key]}' for key in ci.MARKDOWN_DIAGNOSTIC_FIELDS)+']'
+        self.assertEqual(ci.parse_markdown_diagnostic(marker),record)
+        old={key:record[key] for key in ci.MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS}
+        old_marker=' [MDP2 '+' '.join(f'{key}={old[key]}' for key in ci.MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS)+']'
+        with self.assertRaises(RuntimeError):ci.parse_markdown_diagnostic(old_marker)
+        with self.assertRaises(RuntimeError):ci.validate_markdown_diagnostic(old)
+        self.assertEqual(ci.parse_markdown_diagnostic(old_marker,legacy=True),old)
+        with self.assertRaises(RuntimeError):ci.parse_markdown_diagnostic(marker,legacy=True)
+        for field in ci.MARKDOWN_DIAGNOSTIC_STEP_FIELDS:
+            missing=dict(record);del missing[field]
+            with self.subTest(missing=field),self.assertRaises(RuntimeError):ci.validate_markdown_diagnostic(missing)
+            for value in (True,-1,1.5,float('nan'),float('inf'),9007199254740992):
+                with self.subTest(field=field,value=value),self.assertRaises(RuntimeError):
+                    ci.validate_markdown_diagnostic(dict(record,**{field:value}))
+        for delta in ({'stepMetricValid':0},{'stepMetricValid':2},{'stepErrors':1},
+                      *({kind+'StepCount':0,kind+'StepUs':1} for kind in ('feed','publish','lifecycle','visibility'))):
+            with self.subTest(delta=delta),self.assertRaises(RuntimeError):ci.validate_markdown_diagnostic(dict(record,**delta))
+        # Time granularity can legitimately yield zero us for a completed step.
+        ci.validate_markdown_diagnostic(dict(record,feedStepCount=1,feedStepUs=0))
+        # Per-scan steps and global scheduler counters have different reset scopes.
+        ci.validate_markdown_diagnostic(dict(record,feedStepCount=999,tick=1,entry_yields=3,post_yields=7))
+        self.assertLessEqual(len(marker),1536)
+        for field in ('feedStepCount','publishStepCount'):
+            empty=markdown_evidence()
+            projection=empty['cases'][0]['stages'][0]['last_progress']['diagnostic']
+            projection[field]=0;projection[field.replace('Count','Us')]=0
+            # Pending/isolated projection has no claim of measured final work.
+            ci.validate_markdown_diagnostic(projection)
+            with self.subTest(empty=field),self.assertRaisesRegex(RuntimeError,'actual measured step counts'):
+                ci.validate_gui_markdown(empty)
+        current=markdown_evidence();current['schema']='ru-notepad-markdown-v2'
+        with self.assertRaises(RuntimeError):ci.validate_gui_markdown(current)
+
+    def test_snapshot_yield_split_requires_exact_sum_without_extra_queries(self):
+        good=observer_evidence()['diagnostics']
+        good['receipts'][2].update(queue_yields=5,entry_yields=2,post_yields=3)
+        ci.validate_gui_ru_diagnostics(good)
+        def encoded(record):return ''.join('RU_GUI_SNAPSHOT '+' '.join(f'{key}={value}' for key,value in row.items())+'\n' for row in record['receipts'])
+        ci.parse_gui_ru_snapshots(encoded(good))
+        for field,value in (('entry_yields',1),('post_yields',4),('queue_yields',6),('entry_yields',True)):
+            broken=copy.deepcopy(good);broken['receipts'][2][field]=value
+            with self.subTest(field=field,value=value),self.assertRaises(RuntimeError):ci.validate_gui_ru_diagnostics(broken)
+            with self.assertRaises(RuntimeError):ci.parse_gui_ru_snapshots(encoded(broken))
+        for field in ('entry_yields','post_yields'):
+            broken=copy.deepcopy(good);del broken['receipts'][2][field]
+            with self.assertRaises(RuntimeError):ci.validate_gui_ru_diagnostics(broken)
+            with self.assertRaises(RuntimeError):ci.parse_gui_ru_snapshots(encoded(broken))
 
     def test_markdown_memory_schema_rejects_fabricated_unbounded_or_mislabeled_peak(self):
         baseline = markdown_evidence()['cases'][0]['stages'][0]
@@ -3995,8 +4062,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             def window_text(self, hwnd):
                 if hwnd == 1: return '* ' + path.name + ' · ru_notepad'
                 self.status_reads += 1
-                marker = (' [MDP2 seq=1 via=0 id=2 gen=3 rev=0 phase=1 pending=1 length=' + str(len(expected)) +
-                          ' feed=470180 published=47104 tick=123 work_us=100000 gap_us=200000 bulkCalls=736 bulkLines=47104 fallbackBatches=0 directCalls=0 directLines=0 maxPlanBytes=1056 bulkUs=1234 ownedBufferBytes=1088 metric_valid=1]')
+                marker = (' [MDP3 seq=1 via=0 id=2 gen=3 rev=0 phase=1 pending=1 length=' + str(len(expected)) +
+                          ' feed=470180 published=47104 tick=123 work_us=100000 gap_us=200000 bulkCalls=736 bulkLines=47104 fallbackBatches=0 directCalls=0 directLines=0 maxPlanBytes=1056 bulkUs=1234 ownedBufferBytes=1088 metric_valid=1 feedStepCount=1 feedStepUs=1 publishStepCount=1 publishStepUs=1 lifecycleStepCount=1 lifecycleStepUs=0 visibilityStepCount=0 visibilityStepUs=0 stepErrors=0 stepMetricValid=1 entry_yields=0 post_yields=0]')
                 # Use valid progress bounded to this smaller synthetic corpus.
                 marker = marker.replace('feed=470180', 'feed=47018')
                 if missing_diagnostic: marker = ''

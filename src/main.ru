@@ -20,7 +20,7 @@
 关联 取 外言 'associations.ru'.
 拖放 取 外言 'file_drop.ru'.
 修改头 取 密 其 结构 [['header',窗 其 NMHDR],['position',窗 其 IP],['ch',窗 其 I],['modifiers',窗 其 I],['modificationType',窗 其 I],['text',窗 其 PTR],['length',窗 其 IP],['linesAdded',窗 其 IP],['message',窗 其 I],['wParam',窗 其 UP],['lParam',窗 其 IP],['line',窗 其 IP],['foldLevelNow',窗 其 I],['foldLevelPrev',窗 其 I],['margin',窗 其 I]].
-A 取 {'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':假,'cleanupRetrying':假,'cleanupPending':假,'singlePreference':真,'singleState':空,'singleDeferredShow':假,'handoffPending':[],'closeRun':空,'tabMenuOpen':假,'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'system','docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'previous':空,'whole':空,'searchWrap':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
+A 取 {'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':假,'cleanupRetrying':假,'cleanupPending':假,'singlePreference':真,'singleState':空,'singleDeferredShow':假,'handoffPending':[],'closeRun':空,'tabMenuOpen':假,'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'system','docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'previous':空,'whole':空,'searchWrap':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxEntryYields':0,'syntaxPostYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
 
 # Admission barrier across native modal loops. No unacknowledged raw pointers retained.
 算 界面弹窗 主窗, 文 为 句, 标题 为 句, 类型 为 数:
@@ -60,8 +60,9 @@ A 取 {'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':�
         工 取 (A 其 查 'syntaxWorkMs')*1000. 工 取 工-工%1.
         隙 取 (A 其 查 'syntaxGapMs')*1000. 隙 取 隙-隙%1.
         有效 取 0. 若 扫['bulkMetricsValid'] 则 有效 取 1. 然
-        文 取 ' [MDP2 seq='+(序 为 句)+' via='+(来源 为 句)+' id='+(扫['identity'] 为 句)+' gen='+(扫['generation'] 为 句)+' rev='+(扫['revision'] 为 句)+' phase='+(扫['phaseCode'] 为 句)+' pending='+(待 为 句)+' length='+(扫['length'] 为 句)+' feed='+(扫['feed'] 为 句)+' published='+(扫['published'] 为 句)+' tick='+((A 其 查 'syntaxTicks') 为 句)+' work_us='+(工 为 句)+' gap_us='+(隙 为 句)+' bulkCalls='+(扫['bulkCalls'] 为 句)+' bulkLines='+(扫['bulkLines'] 为 句)+' fallbackBatches='+(扫['fallbackBatches'] 为 句)+' directCalls='+(扫['directCalls'] 为 句)+' directLines='+(扫['directLines'] 为 句)+' maxPlanBytes='+(扫['maxPlanBytes'] 为 句)+' bulkUs='+(扫['bulkUs'] 为 句)+' ownedBufferBytes='+(扫['ownedBufferBytes'] 为 句)+' metric_valid='+(有效 为 句)+']'.
-        若 文 其 量 > 768 则 卒 'Bounded Markdown numeric marker overflow.'. 然
+        步有效 取 0. 若 扫['stepMetricValid'] 则 步有效 取 1. 然
+        文 取 ' [MDP3 seq='+(序 为 句)+' via='+(来源 为 句)+' id='+(扫['identity'] 为 句)+' gen='+(扫['generation'] 为 句)+' rev='+(扫['revision'] 为 句)+' phase='+(扫['phaseCode'] 为 句)+' pending='+(待 为 句)+' length='+(扫['length'] 为 句)+' feed='+(扫['feed'] 为 句)+' published='+(扫['published'] 为 句)+' tick='+((A 其 查 'syntaxTicks') 为 句)+' work_us='+(工 为 句)+' gap_us='+(隙 为 句)+' bulkCalls='+(扫['bulkCalls'] 为 句)+' bulkLines='+(扫['bulkLines'] 为 句)+' fallbackBatches='+(扫['fallbackBatches'] 为 句)+' directCalls='+(扫['directCalls'] 为 句)+' directLines='+(扫['directLines'] 为 句)+' maxPlanBytes='+(扫['maxPlanBytes'] 为 句)+' bulkUs='+(扫['bulkUs'] 为 句)+' ownedBufferBytes='+(扫['ownedBufferBytes'] 为 句)+' metric_valid='+(有效 为 句)+' feedStepCount='+(扫['feedStepCount'] 为 句)+' feedStepUs='+(扫['feedStepUs'] 为 句)+' publishStepCount='+(扫['publishStepCount'] 为 句)+' publishStepUs='+(扫['publishStepUs'] 为 句)+' lifecycleStepCount='+(扫['lifecycleStepCount'] 为 句)+' lifecycleStepUs='+(扫['lifecycleStepUs'] 为 句)+' visibilityStepCount='+(扫['visibilityStepCount'] 为 句)+' visibilityStepUs='+(扫['visibilityStepUs'] 为 句)+' stepErrors='+(扫['stepErrors'] 为 句)+' stepMetricValid='+(步有效 为 句)+' entry_yields='+((A 其 查 'syntaxEntryYields') 为 句)+' post_yields='+((A 其 查 'syntaxPostYields') 为 句)+']'.
+        若 文 其 量 > 1536 则 卒 'Bounded Markdown numeric marker overflow.'. 然
         A 其 增 'markdownDiagnosticIdentity' 扫['identity'].
         A 其 增 'markdownDiagnosticPending' 扫['pending'].
         A 其 增 'markdownDiagnosticText' 文.
@@ -144,7 +145,7 @@ A 取 {'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':�
 法
 算 续投语法:
     若 非 (A 其 查 'ready') 或 非 (A 其 查 'syntaxTimer') 或 (A 其 查 'busy') 或 (A 其 查 'syntaxTick') 或 (A 其 查 'syntaxQueued') != 0 则 得 空. 然
-    若 界面待办 则 A 其 增 'syntaxYields' ((A 其 查 'syntaxYields')+1). 得 空. 然
+    若 界面待办 则 A 其 增 'syntaxYields' ((A 其 查 'syntaxYields')+1). A 其 增 'syntaxPostYields' ((A 其 查 'syntaxPostYields')+1). 得 空. 然
     代 取 A 其 查 'syntaxGeneration'.
     # Posting failure is recoverable: the existing 10ms timer remains armed.
     若 非 ((窗 其 结果 ((窗 其 PostMessageW) 其 调用 [(A 其 查 'window'),33670,代,0])) 其 为空) 则
@@ -185,7 +186,7 @@ A 取 {'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':�
 法
 算 语法时钟:
     若 非 (A 其 查 'ready') 或 非 (A 其 查 'syntaxTimer') 或 (A 其 查 'busy') 或 (A 其 查 'syntaxTick') 则 得 假. 然
-    若 界面待办 则 A 其 增 'syntaxYields' ((A 其 查 'syntaxYields')+1). 得 假. 然
+    若 界面待办 则 A 其 增 'syntaxYields' ((A 其 查 'syntaxYields')+1). A 其 增 'syntaxEntryYields' ((A 其 查 'syntaxEntryYields')+1). 得 假. 然
     A 其 增 'syntaxTick' 真.
     试
         文们 取 A 其 查 'docs'.
@@ -263,7 +264,7 @@ A 取 {'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':�
         若 扫 == 空 则 卒 'No active Ru diagnostic projection.'. 然
         待办 取 0.
         若 扫['pending'] 则 待办 取 1. 然
-        显 'RU_GUI_SNAPSHOT seq='+(序 为 句)+' ok=1 generation='+(扫['generation'] 为 句)+' revision='+(扫['revision'] 为 句)+' pending='+(待办 为 句)+' bytes='+(扫['bytes'] 为 句)+' feed='+(扫['feed'] 为 句)+' read_bytes='+(扫['readBytes'] 为 句)+' restart='+(扫['restart'] 为 句)+' chunks='+(扫['chunks'] 为 句)+' ticks='+((A 其 查 'syntaxTicks') 为 句)+' work_ms='+((A 其 查 'syntaxWorkMs') 为 句)+' gap_ms='+((A 其 查 'syntaxGapMs') 为 句)+' max_tick_ms='+((A 其 查 'syntaxMaxTickMs') 为 句)+' max_gap_ms='+((A 其 查 'syntaxMaxGapMs') 为 句)+' posts='+((A 其 查 'syntaxPosts') 为 句)+' continuation_ticks='+((A 其 查 'syntaxContinuations') 为 句)+' queue_yields='+((A 其 查 'syntaxYields') 为 句)+' stale_messages='+((A 其 查 'syntaxStale') 为 句)+' text_notifications='+((A 其 查 'syntaxTextNotifications') 为 句)+' style_notifications='+((A 其 查 'syntaxStyleNotifications') 为 句)+' fold_notifications='+((A 其 查 'syntaxFoldNotifications') 为 句).
+        显 'RU_GUI_SNAPSHOT seq='+(序 为 句)+' ok=1 generation='+(扫['generation'] 为 句)+' revision='+(扫['revision'] 为 句)+' pending='+(待办 为 句)+' bytes='+(扫['bytes'] 为 句)+' feed='+(扫['feed'] 为 句)+' read_bytes='+(扫['readBytes'] 为 句)+' restart='+(扫['restart'] 为 句)+' chunks='+(扫['chunks'] 为 句)+' ticks='+((A 其 查 'syntaxTicks') 为 句)+' work_ms='+((A 其 查 'syntaxWorkMs') 为 句)+' gap_ms='+((A 其 查 'syntaxGapMs') 为 句)+' max_tick_ms='+((A 其 查 'syntaxMaxTickMs') 为 句)+' max_gap_ms='+((A 其 查 'syntaxMaxGapMs') 为 句)+' posts='+((A 其 查 'syntaxPosts') 为 句)+' continuation_ticks='+((A 其 查 'syntaxContinuations') 为 句)+' queue_yields='+((A 其 查 'syntaxYields') 为 句)+' stale_messages='+((A 其 查 'syntaxStale') 为 句)+' text_notifications='+((A 其 查 'syntaxTextNotifications') 为 句)+' style_notifications='+((A 其 查 'syntaxStyleNotifications') 为 句)+' fold_notifications='+((A 其 查 'syntaxFoldNotifications') 为 句)+' entry_yields='+((A 其 查 'syntaxEntryYields') 为 句)+' post_yields='+((A 其 查 'syntaxPostYields') 为 句).
     救 原因
         # Do not disclose an original exception or document data in diagnostics.
         显 'RU_GUI_SNAPSHOT seq='+(序 为 句)+' ok=0'.

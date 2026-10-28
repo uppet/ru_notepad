@@ -105,6 +105,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python editor/tools/test_single_instance_admission.py --ru-root language --output "$env:PREVIEW_OUTPUT/instance-admission-controls"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -I editor/tools/test_markdown_step_metrics.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-step-controls"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Fresh three-stage self-compilation and fixed point
         working-directory: language
         run: python tools/bootstrap.py verify --directory bin/bootstrap/preview-ci

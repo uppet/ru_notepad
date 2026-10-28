@@ -290,11 +290,11 @@ def validate_other_test(test, summary):
             for n in portable.RUNTIME_NAMES}, 'GUI binary binding mismatch')
 
 
-def validate_complete_stage(stage, kind, operation, source_hash):
+def validate_complete_stage(stage, kind, operation, source_hash, *, legacy_diagnostic=False):
     expected, styles, _ = ci.markdown_expected(kind, operation)
     validate_stage_metadata(stage, kind, operation, source_hash, timeout=False)
     ci.validate_markdown_progress(stage['last_progress'], complete=True,
-                                  expected_length=len(expected), expected_dirty=stage['dirty'])
+                                  expected_length=len(expected), expected_dirty=stage['dirty'], legacy_diagnostic=legacy_diagnostic)
     last = stage['last_probe']
     require(isinstance(last, dict) and set(last) == {'length', 'dirty', 'end_styled', 'status_done',
         'styles_match', 'style_samples', 'folds_match', 'context_match', 'lexer', 'tail_requested', 'children_visible'},
@@ -386,9 +386,10 @@ def validate_timeout(test, summary):
     record = test.get('markdown_performance')
     require(isinstance(record, dict), 'Invalid timeout case prefix')
     legacy = set(record) == {'measurement', 'clock', 'cases'}
+    legacy_diagnostic = legacy or record.get('schema') == 'ru-notepad-markdown-v2'
     if not legacy:
         require(set(record) == {'schema', 'measurement', 'clock', 'cases', 'deprecated', 'teardown'}
-                and record['schema'] == ci.GUI_MARKDOWN_SCHEMA
+                and record['schema'] in ('ru-notepad-markdown-v2', ci.GUI_MARKDOWN_SCHEMA)
                 and json.dumps(record['deprecated'], sort_keys=True) == json.dumps(ci.gui_markdown_deprecated(), sort_keys=True)
                 and record['teardown'] == {}, 'Invalid current timeout scope or fabricated teardown')
     require(record['measurement'] == ci.GUI_MARKDOWN_LEGACY_MEASUREMENT and isinstance(record['cases'], list)
@@ -411,11 +412,11 @@ def validate_timeout(test, summary):
             operation = operations[stage_index]
             final = final_case and stage_index == len(case['stages']) - 1
             if not final:
-                validate_complete_stage(stage, kind, operation, case['source_sha256'])
+                validate_complete_stage(stage, kind, operation, case['source_sha256'], legacy_diagnostic=legacy_diagnostic)
                 continue
             validate_stage_metadata(stage, kind, operation, case['source_sha256'], timeout=True)
             progress = stage['last_progress']
-            ci.validate_markdown_progress(progress)
+            ci.validate_markdown_progress(progress, legacy_diagnostic=legacy_diagnostic)
             # Undo first restores the inserted byte (dirty), then the second
             # native undo restores clean source bytes. Both share the original
             # deadline; the producer sends the second only after first completion.

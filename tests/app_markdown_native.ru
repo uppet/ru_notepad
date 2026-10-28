@@ -157,16 +157,19 @@ _选测 取 {'action':'','writes':0,'styleStarts':0,'fired':假,'paints':0}.
     状 其 增 'markdownDiagnosticEnabled' 真.
     应用 其 诊断Markdown 1000.
     条 取 窗 其 取文 (状 其 查 'status').
-    确认 ((状 其 查 'markdownDiagnosticSeq') == 1 且 (条 其 含 ' [MDP2 seq=1 ') 且 (条 其 含 ' phase=4 pending=0 ') 且 (条 其 含 ' work_us=')) 'enabled numeric status projection contains fixed completed-stage fields'.
+    确认 ((状 其 查 'markdownDiagnosticSeq') == 1 且 (条 其 含 ' [MDP3 seq=1 ') 且 (条 其 含 ' phase=4 pending=0 ') 且 (条 其 含 ' work_us=')) 'enabled numeric status projection contains fixed completed-stage fields'.
     应用 其 诊断Markdown 1000. 应用 其 诊断Markdown 1249.
     确认 ((状 其 查 'markdownDiagnosticSeq') == 1 且 (窗 其 取文 (状 其 查 'status')) == 条) 'phase status writes remain capped to one per250 milliseconds'.
     应用 其 诊断Markdown 1250.
-    确认 ((状 其 查 'markdownDiagnosticSeq') == 2 且 (窗 其 取文 (状 其 查 'status')) 其 含 ' [MDP2 seq=2 ') 'phase status becomes eligible exactly at its next bounded slot'.
+    确认 ((状 其 查 'markdownDiagnosticSeq') == 2 且 (窗 其 取文 (状 其 查 'status')) 其 含 ' [MDP3 seq=2 ') 'phase status becomes eligible exactly at its next bounded slot'.
     旧投影 取 语 其 状态 柄.
+    确认 ((条 其 含 ' feedStepCount=') 且 (条 其 含 ' publishStepUs=') 且 (条 其 含 ' stepMetricValid=1 entry_yields=') 且 (条 其 含 ' post_yields=')) 'MDP3 exposes bounded step and existing-queue categories without another query'.
     # Exercise the real revision notification without modifying document bytes.
     语 其 变化 柄 0 0 0 1.
+    初计 取 语 其 状态 柄.
+    确认 (初计['feedStepCount'] == 0 且 初计['publishStepCount'] == 0 且 初计['lifecycleStepCount'] == 0 且 初计['visibilityStepCount'] == 0 且 初计['stepErrors'] == 0 且 初计['stepMetricValid']) 'new revision starts fresh identity-bounded step counters'.
     应用 其 刷新.
-    确认 (非 ((窗 其 取文 (状 其 查 'status')) 其 含 '[MDP2') 且 (状 其 查 'markdownDiagnosticSeq') == 2) 'a new pending identity cannot reuse the earlier diagnostic marker'.
+    确认 (非 ((窗 其 取文 (状 其 查 'status')) 其 含 '[MDP3') 且 (状 其 查 'markdownDiagnosticSeq') == 2) 'a new pending identity cannot reuse the earlier diagnostic marker'.
     语 其 排空 柄.
     应用 其 刷新.
     新投影 取 语 其 状态 柄.
@@ -194,7 +197,7 @@ _选测 取 {'action':'','writes':0,'styleStarts':0,'fired':假,'paints':0}.
     状 其 增 'markdownDiagnosticSeq' 4096. 应用 其 诊断Markdown 1750.
     确认 ((状 其 查 'markdownDiagnosticSeq') == 4096) 'phase diagnostics stop at the fixed4096 process cap'.
     状 其 增 'markdownDiagnosticEnabled' 假. 应用 其 刷新.
-    确认 (非 ((窗 其 取文 (状 其 查 'status')) 其 含 '[MDP2') 且 (编 其 文本 柄) == 文 且 非 (应用 其 脏 页) 且 (窗 其 发送 柄 2009 0 0) 其 数 == 选始 且 (窗 其 发送 柄 2008 0 0) 其 数 == 选末 且 (窗 其 发送 柄 2174 0 0) 其 为空 且 (状 其 查 'syntaxTicks') == 原次 且 (状 其 查 'syntaxWorkMs') == 原工 且 (状 其 查 'syntaxGapMs') == 原隙) 'diagnostics preserve bytes savepoint selection undo and scanner timing counters'.
+    确认 (非 ((窗 其 取文 (状 其 查 'status')) 其 含 '[MDP3') 且 (编 其 文本 柄) == 文 且 非 (应用 其 脏 页) 且 (窗 其 发送 柄 2009 0 0) 其 数 == 选始 且 (窗 其 发送 柄 2008 0 0) 其 数 == 选末 且 (窗 其 发送 柄 2174 0 0) 其 为空 且 (状 其 查 'syntaxTicks') == 原次 且 (状 其 查 'syntaxWorkMs') == 原工 且 (状 其 查 'syntaxGapMs') == 原隙) 'diagnostics preserve bytes savepoint selection undo and scanner timing counters'.
     状 其 增 'markdownDiagnosticSeq' 0. 状 其 增 'markdownDiagnosticNext' 0. 状 其 增 'markdownDiagnosticIdentity' 0. 状 其 增 'markdownDiagnosticPending' 真. 状 其 增 'markdownDiagnosticText' ''.
 为
 算 元初 参数 为 句 阵:
@@ -222,6 +225,8 @@ _选测 取 {'action':'','writes':0,'styleStarts':0,'fired':假,'paints':0}.
     确认 ((窗 其 发送 柄 2223 4 0) 其 数 == 9216) 'following H1 closes earlier section'.
     确认 ((窗 其 取文 (态 其 查 'status')) 其 含 'Markdown') 'status names Markdown mode'.
     确认 ((语 其 状态 柄)['maxRead'] <= 1024 且 (语 其 状态 柄)['maxPublish'] <= 64) 'real timer respects byte and publication admission caps'.
+    步计 取 语 其 状态 柄.
+    确认 (步计['feedStepCount'] == 步计['chunks'] 且 步计['feedStepCount'] > 0 且 步计['publishStepCount'] > 0 且 步计['lifecycleStepCount'] == 2 且 步计['stepErrors'] == 0 且 步计['stepMetricValid']) 'real prepare feed publication and finish classify completed steps once'.
     验阶段诊断 柄 页.
     验自然配色 主 柄 页.
     # Explicit lexing verifies lexer output only; it cannot detect the initial

@@ -31,7 +31,7 @@
     },
     "src/main.ru": {
       "before": "3dcb97ca641f2fb8068785517aedcbbda6d3c65ca179683601f76508d71dd734",
-      "after": "a69e65401e7ad01d1860a39b6bfe947bb5a900e0e840d120d56a838e06bf9a71"
+      "after": "58bdd73699609680fa1eb4c675a715f75d594420aa0f8fbc5c234fcd85174c04"
     },
     "src/recent_files.ru": {
       "before": null,
@@ -67,7 +67,7 @@
     },
     "tools/verify_recent_files_windows.py": {
       "before": null,
-      "after": "5b04e4b7b398afc6befca05e629f92ac247607f57ee13ed862e334cc31802692"
+      "after": "812839a8e04c3a56ee3a8c97360fcb17250c5cb3ccb1e6f721571ddfe9d29b2e"
     },
     "docs/ru-language-syntax.md": {
       "before": "6363942a3ae11e45c2d2c21722fbd699f00e84a93aa7c16782f3c0589f16e1d9",
@@ -99,11 +99,11 @@
     },
     "tools/test_windows_ci.py": {
       "before": "b28733251662cd749c961fda95d912a1638794857fbb07015b5fb6363c28ec3b",
-      "after": "f74535cb9c050447e24d2bea17ffb5b376f56e85c4424fea46e6e5ded94b2418"
+      "after": "6c5118902bea4d8993703a1b3ef1fa8de349cd0fa4effc002e1f13501abd7749"
     },
     "tools/windows_ci.py": {
       "before": "c1a793bf7d96267adc47d70bd459b3c050cb54f67c9768a57041cad5a732142a",
-      "after": "ab27c36dc6076ec6a2d1cec5554ca33e75e91102b7e91a3b3d50c5dfa0a33f79"
+      "after": "37842cb134a1d7871e9b5c2ae0047e8c71054553fbe7239dfba0d9fd70f5e5c2"
     },
     "docs/preview-024-candidate.md": {
       "before": null,
@@ -115,11 +115,11 @@
     },
     "tools/test_package.py": {
       "before": "8f163a5d8d59740f0a285bbe49c5e6405d26bc906c70a25438bfee27b2dcd289",
-      "after": "825000a96bd87e82f8dc14ed90919b907758b50a49889bca709766127614db1e"
+      "after": "3c636a3dce062966722eef4131d1cde383060141aa576f83604e4a4839bf62e5"
     },
     "tools/test_gui_instance_tabs.py": {
       "before": null,
-      "after": "99f1a52743f404067afe5e55c0527e25344ca86a9bbb1a0578b5ed4c46eabb6c"
+      "after": "4fd8327c5d10a8856ff4e1696aa7bb584db3c2978d54bba69306800286cd7b0f"
     },
     "tools/compile_bootstrap_native.py": {
       "before": null,
@@ -163,7 +163,7 @@
     },
     "packaging/application-native-oracle.json": {
       "before": null,
-      "after": "a55f788c698700c39b2d4b8cc6cefde3113c25021edb6629a52f1999ec769702"
+      "after": "b22b1051557848133183a7eee69bbca8e5e40553c4d06fb202adb1d8e86b1de5"
     },
     "locales/instance_tabs.json": {
       "before": null,
@@ -211,19 +211,19 @@
     },
     ".github/workflows/windows.yml": {
       "before": "f82e3e45e0cf4f0522fdd6d2a516e6ec91cc0a000fbff503ca954f0e37dfaf57",
-      "after": "375303349f15aec0ec6d68cc5206c2183477df24cfc83c19f63a12e0f2ff7222"
+      "after": "71e60b75850402c8d72b830f1cfad8570f0872fe2d366c7c5be68c400afed875"
     },
     "docs/markdown-editing.md": {
       "before": "b1185eee1c70ab93956932fe820381c101df94950237acf4f95b9d18a78467bf",
-      "after": "ae675aa915027a1cb9b9e30abcc161c2df74a1ac1a6ee78f76175730895d36b6"
+      "after": "6b10b80fb8fd0c088a7f4a897cdfc472b4c7de5f6b55146db31a77a54889f33c"
     },
     "tools/package_manual_preview.py": {
       "before": "ca2dc35586d1642debf6a5111fa282d881bad43cee4d55138427ad90d954939e",
-      "after": "053d3fc9b1e15341bd2ad790b8b9457a756ac61df400d0e37ca29f2a6f2f0b05"
+      "after": "b4868232ee0e7379018bd4c24f6119c02052701e7ea693370a5862b94e477b11"
     },
     "tools/test_package_manual_preview.py": {
       "before": "8f91b1d4ca223b329be5a5ac75f1e338c79cc3140abf4258179210c7fd80e34e",
-      "after": "409c246733a25a0dcea2dbbe1db49813c66ca3cbf5a86c6dbd9a2a798687b7a9"
+      "after": "a2a7ec894f27f78b1a4a517aa8a5679280036d6c2517508febbd648b7b8062da"
     },
     "tests/single_instance_busy_native.ru": {
       "before": null,
@@ -232,6 +232,34 @@
     "tools/test_single_instance_admission.py": {
       "before": null,
       "after": "1f46fdd047bb43441c22e45bb4dcc88559070ae7d6db11a11664ffe1b3c1a437"
+    },
+    "docs/markdown-direct-folds.md": {
+      "before": "b281e6c7fd7fc949db129e8ab5e3998b5b87329d1687b11fa50f17a5d0abcfd5",
+      "after": "4738d71f5ae3495e4067d1b096e69749e59317dc367556de9d6c1a6b8c7f1ece"
+    },
+    "src/markdown_syntax.ru": {
+      "before": "8ae5c6b71f48fd3e374095cbcbb0e1585ba1aea54d2a592d03446d49da760ce3",
+      "after": "4948aeaf9089262434188602614bbcbc048150bc568064153dfcae19a9b94ca4"
+    },
+    "tests/app_markdown_native.ru": {
+      "before": "1d4eae1e73a09ef7d5634ed50c9c491af1488d277ef252c920dfe50973a1422e",
+      "after": "7d3cd4bf806f4bdbf3140e970e02bd8ad19c1e700febc3f73af5854fe8027d36"
+    },
+    "tools/run_markdown_phase_profile.py": {
+      "before": "3502a1924397910fe2a0dac0ffa85b4f911d91d647e1188d9b817b58a445c4d3",
+      "after": "083c9ea17d7ae4d07308f96b469774c41ca2443bcd10cfcfc6c0cf93c15d6d95"
+    },
+    "tools/test_markdown_phase_profile.py": {
+      "before": "94abf02be2c4f060bc3f024cc51b3813f696cda7f8461728fa021005700dbab8",
+      "after": "8b506bf4e2680461d34344281f6583beab34d5890e6628f2fe74ee21174cee38"
+    },
+    "tools/test_syntax_diagnostics.py": {
+      "before": "21f1a08e226b2a2b112f4beb53ee8bc827c2c837a853aaa4d12dd6a6ead0b102",
+      "after": "a21f6bae8dfb307ef60bef4a850c5eb8bae4a8359a3418b5a8dd859a94425e09"
+    },
+    "tools/test_markdown_step_metrics.py": {
+      "before": null,
+      "after": "2919ac0a9f244821415858eb6404726e9725fbbdb254bc434c2fc20950aedc34"
     }
   }
 }

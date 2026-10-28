@@ -80,7 +80,7 @@ NATIVE_CONSOLE_TESTS = (
     ('markdown_policy', r'^TOTAL PASS: 221\s*$'),
     ('markdown_selection_policy', r'^TOTAL PASS: 31\s*$'),
     ('markdown_native', r'^TOTAL PASS: 58\s*$'),
-    ('app_markdown_native', r'^TOTAL PASS: 70\s*$'),
+    ('app_markdown_native', r'^TOTAL PASS: 73\s*$'),
     ('markdown_direct_native', r'^TOTAL PASS: 114\s*$'),
     ('i18n_policy', r'^TOTAL PASS: 289\s*$'),
     ('i18n_settings_native', r'^TOTAL PASS: 69\s*$'),
@@ -1395,7 +1395,7 @@ GUI_RU_SNAPSHOT_TIME_FIELDS = {'work_ms', 'gap_ms', 'max_tick_ms', 'max_gap_ms'}
 GUI_RU_SNAPSHOT_INTEGER_FIELDS = {'seq', 'ok', 'generation', 'revision', 'pending',
     'bytes', 'feed', 'read_bytes', 'restart', 'chunks', 'ticks', 'posts',
     'continuation_ticks', 'queue_yields', 'stale_messages', 'text_notifications',
-    'style_notifications', 'fold_notifications'}
+    'style_notifications', 'fold_notifications', 'entry_yields', 'post_yields'}
 GUI_RU_HEAD_MEASUREMENT = ('First observed matching head-token styles are an upper bound; '
     'full scalar snapshots are sampled no more often than every 250 ms, not a paint measurement.')
 
@@ -1520,7 +1520,7 @@ def parse_gui_ru_snapshots(text):
         expected = fields if values.get('ok') == 1 else {'seq', 'ok'}
         if (set(values) != expected or values.get('ok') not in (0, 1) or
                 values.get('seq') != len(records) + 1 or
-                (values.get('ok') == 1 and values['pending'] not in (0, 1))):
+                (values.get('ok') == 1 and (values['pending'] not in (0, 1) or values['entry_yields'] + values['post_yields'] != values['queue_yields']))):
             raise RuntimeError('GUI Ru diagnostic snapshot shape or sequence is malformed')
         records.append(values)
     return records
@@ -1665,6 +1665,7 @@ def validate_gui_ru_diagnostics(record):
                 receipt['seq'] != index + 1 or receipt['ok'] != 1 or receipt['pending'] not in (0, 1)):
             raise RuntimeError('GUI Ru diagnostic receipt is incomplete or malformed')
         if (not 0 <= receipt['bytes'] <= receipt['feed'] <= receipt['read_bytes'] <= GUI_RU_TIMER_BYTES or
+                receipt['entry_yields'] + receipt['post_yields'] != receipt['queue_yields'] or
                 receipt['continuation_ticks'] > min(receipt['ticks'], receipt['posts']) or
                 receipt['max_tick_ms'] > receipt['work_ms'] + 0.000001 or
                 receipt['max_gap_ms'] > receipt['gap_ms'] + 0.000001):
@@ -2249,7 +2250,7 @@ GUI_MARKDOWN_MEASUREMENT = ('Detached production GUI; a 100 KB/5000-newline coll
     'bulkUs cumulatively measures the typed Apply FFI and result-wrapper interval per scan identity.')
 # v1 remains available only for explicit historical validation/reproduction.
 GUI_MARKDOWN_LEGACY_MEASUREMENT = GUI_MARKDOWN_MEASUREMENT
-GUI_MARKDOWN_SCHEMA = 'ru-notepad-markdown-v2'
+GUI_MARKDOWN_SCHEMA = 'ru-notepad-markdown-v3'
 
 
 def gui_markdown_operations(kind, *, legacy=False):
@@ -2309,17 +2310,36 @@ def markdown_expected(kind, operation):
     return data, [dict(p, offset=p['offset'] + int(inserted and p['offset'] >= 8)) for p in probes], folds
 
 
-MARKDOWN_DIAGNOSTIC_FIELDS = ('seq', 'via', 'id', 'gen', 'rev', 'phase', 'pending', 'length',
+MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS = ('seq', 'via', 'id', 'gen', 'rev', 'phase', 'pending', 'length',
                               'feed', 'published', 'tick', 'work_us', 'gap_us', 'bulkCalls', 'bulkLines',
                               'fallbackBatches', 'directCalls', 'directLines', 'maxPlanBytes',
                               'bulkUs', 'ownedBufferBytes', 'metric_valid')
-MARKDOWN_DIAGNOSTIC_MAX_CHARS = 768
+MARKDOWN_DIAGNOSTIC_STEP_FIELDS = ('feedStepCount', 'feedStepUs', 'publishStepCount', 'publishStepUs',
+    'lifecycleStepCount', 'lifecycleStepUs', 'visibilityStepCount', 'visibilityStepUs',
+    'stepErrors', 'stepMetricValid', 'entry_yields', 'post_yields')
+MARKDOWN_DIAGNOSTIC_FIELDS = MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS + MARKDOWN_DIAGNOSTIC_STEP_FIELDS
+MARKDOWN_DIAGNOSTIC_MAX_CHARS = 1536
 
 
-def validate_markdown_diagnostic(record):
-    if (not isinstance(record, dict) or set(record) != set(MARKDOWN_DIAGNOSTIC_FIELDS) or
+def validate_markdown_diagnostic(record, *, legacy=False):
+    fields = MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS if legacy else MARKDOWN_DIAGNOSTIC_FIELDS
+    if not isinstance(record, dict) or set(record) != set(fields):
+        raise RuntimeError('Markdown numeric phase projection is invalid')
+    if not legacy:
+        if (any(type(record[key]) is not int or not 0 <= record[key] <= 9007199254740991
+                for key in MARKDOWN_DIAGNOSTIC_STEP_FIELDS) or
+                record['stepMetricValid'] != 1 or record['stepErrors'] != 0 or
+                any(record[kind+'StepCount'] == 0 and record[kind+'StepUs'] != 0
+                    for kind in ('feed', 'publish', 'lifecycle', 'visibility'))):
+            raise RuntimeError('Markdown step metric projection is invalid')
+    _validate_markdown_diagnostic_legacy({key:record[key] for key in MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS})
+    return record
+
+
+def _validate_markdown_diagnostic_legacy(record):
+    if (not isinstance(record, dict) or set(record) != set(MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS) or
             any(type(record[key]) is not int or not 0 <= record[key] <= 9007199254740991
-                for key in MARKDOWN_DIAGNOSTIC_FIELDS) or
+                for key in MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS) or
             not 1 <= record['seq'] <= 4096 or record['via'] not in (0, 1) or record['id'] < 1 or record['gen'] < 1 or
             record['phase'] not in range(5) or record['pending'] not in (0, 1) or
             (record['phase'] == 4) != (record['pending'] == 0) or
@@ -2340,22 +2360,24 @@ def validate_markdown_diagnostic(record):
     return record
 
 
-def parse_markdown_diagnostic(status):
+def parse_markdown_diagnostic(status, *, legacy=False):
     # Never retain status prose, paths, source text or arbitrary error strings.
     if '[MDP' not in status:
         return None
-    match = re.search(r' \[MDP2 ([^\[\]\r\n]{1,760})\]$', status)
+    fields = MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS if legacy else MARKDOWN_DIAGNOSTIC_FIELDS
+    version, maximum = ('MDP2', 760) if legacy else ('MDP3', 1528)
+    match = re.search(r' \[' + version + r' ([^\[\]\r\n]{1,' + str(maximum) + r'})\]$', status)
     if match is None or status.count('[MDP') != 1 or len(match.group(0)) > MARKDOWN_DIAGNOSTIC_MAX_CHARS:
         raise RuntimeError('Markdown numeric phase marker is malformed')
     parts = match.group(1).split(' ')
-    if len(parts) != len(MARKDOWN_DIAGNOSTIC_FIELDS):
+    if len(parts) != len(fields):
         raise RuntimeError('Markdown numeric phase field inventory changed')
     result = {}
-    for name, part in zip(MARKDOWN_DIAGNOSTIC_FIELDS, parts):
+    for name, part in zip(fields, parts):
         if re.fullmatch(re.escape(name) + r'=(0|[1-9][0-9]{0,15})', part) is None:
             raise RuntimeError('Markdown numeric phase field is malformed')
         result[name] = int(part.split('=', 1)[1])
-    return validate_markdown_diagnostic(result)
+    return validate_markdown_diagnostic(result, legacy=legacy)
 
 
 def markdown_diagnostic_failure(status):
@@ -2468,7 +2490,7 @@ def validate_markdown_memory(record, observer, wall_ms):
             record['max_query_ms'] != max(s['query_wall_ms'] for s in record['samples'])):
         raise RuntimeError('Markdown process memory summaries disagree with measured samples')
 
-def validate_markdown_progress(progress, *, complete=False, expected_length=None, expected_dirty=None):
+def validate_markdown_progress(progress, *, complete=False, expected_length=None, expected_dirty=None, legacy_diagnostic=False):
     if (not isinstance(progress, dict) or set(progress) != {'opened', 'length', 'dirty', 'status', 'tail_requested', 'diagnostic'} or
             type(progress['opened']) is not bool or type(progress['tail_requested']) is not bool or
             progress['status'] not in ('not-open', 'opening', 'folding', 'failure', 'complete', 'unknown')):
@@ -2481,7 +2503,7 @@ def validate_markdown_progress(progress, *, complete=False, expected_length=None
           type(progress['dirty']) is not bool):
         raise RuntimeError('Markdown observed partial size or dirty flag is malformed')
     if progress['diagnostic'] is not None:
-        validate_markdown_diagnostic(progress['diagnostic'])
+        validate_markdown_diagnostic(progress['diagnostic'], legacy=legacy_diagnostic)
     if complete and (not progress['opened'] or progress['length'] != expected_length or
             progress['dirty'] is not expected_dirty or progress['status'] != 'complete' or
             not progress['tail_requested'] or progress['diagnostic'] is None or
@@ -2489,6 +2511,11 @@ def validate_markdown_progress(progress, *, complete=False, expected_length=None
             progress['diagnostic']['length'] != expected_length or
             progress['diagnostic']['feed'] != expected_length):
         raise RuntimeError('Markdown completion lacks bounded phase evidence')
+    if complete and not legacy_diagnostic:
+        diagnostic = progress['diagnostic']
+        if ((diagnostic['feed'] > 0 and diagnostic['feedStepCount'] == 0) or
+                (diagnostic['published'] > 0 and diagnostic['publishStepCount'] == 0)):
+            raise RuntimeError('Markdown completion lacks actual measured step counts')
 
 
 def markdown_status_complete(status):
@@ -2530,7 +2557,11 @@ def validate_gui_markdown_responsiveness(record, wall_ms):
         raise RuntimeError('Markdown GUI natural paint request/completion is invalid')
 
 
-def validate_gui_markdown(record, *, require_windows_clock=False, legacy=False):
+def validate_gui_markdown(record, *, require_windows_clock=False, legacy=False, legacy_diagnostic=False):
+    # Twelve-stage reproduction uses today's binary/MDP3. Old MDP2 is a
+    # separate explicit offline historical switch, never a default fallback.
+    if legacy_diagnostic and not legacy:
+        raise RuntimeError('Historical phase metrics require explicit historical scope')
     fields = {'measurement', 'clock', 'cases'}
     if not legacy:
         fields |= {'schema', 'deprecated', 'teardown'}
@@ -2568,7 +2599,7 @@ def validate_gui_markdown(record, *, require_windows_clock=False, legacy=False):
                 raise RuntimeError('Markdown GUI bounded stage metadata is invalid')
             validate_markdown_phase_timing(stage['phase_timing'], stage['wall_ms'],
                                            operation, stage['undo_commands'])
-            validate_markdown_progress(stage['last_progress'], complete=True, expected_length=len(expected), expected_dirty=dirty)
+            validate_markdown_progress(stage['last_progress'], complete=True, expected_length=len(expected), expected_dirty=dirty, legacy_diagnostic=legacy_diagnostic)
             last = stage['last_probe']
             if (not isinstance(last, dict) or set(last) != {'length', 'dirty', 'end_styled', 'status_done',
                     'styles_match', 'style_samples', 'folds_match', 'context_match', 'lexer', 'tail_requested', 'children_visible'} or

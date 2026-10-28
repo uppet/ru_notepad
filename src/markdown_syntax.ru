@@ -165,7 +165,7 @@ _时存 取 _计数型 其 新建.
     若 非 (_本态 柄 态) 则 得 空. 然
     计 取 _批统计们 其 查 (柄 其 句).
     若 计 == 空 或 计['identity'] != 态['identity'] 则
-        计 取 {'identity':态['identity'],'bulkCalls':0,'bulkLines':0,'fallbackBatches':0,'directCalls':0,'directLines':0,'maxPlanBytes':0,'bulkUs':0,'ownedBufferBytes':0,'bulkMetricsValid':真}.
+        计 取 {'identity':态['identity'],'bulkCalls':0,'bulkLines':0,'fallbackBatches':0,'directCalls':0,'directLines':0,'maxPlanBytes':0,'bulkUs':0,'ownedBufferBytes':0,'bulkMetricsValid':真,'feedStepCount':0,'feedStepMs':0,'publishStepCount':0,'publishStepMs':0,'lifecycleStepCount':0,'lifecycleStepMs':0,'visibilityStepCount':0,'visibilityStepMs':0,'stepErrors':0,'stepMetricValid':真}.
         _批统计们 其 增 (柄 其 句) 计.
     然
     得 计.
@@ -770,14 +770,36 @@ _时存 取 _计数型 其 新建.
     态 取 _编辑们 其 查 (柄 其 句).
     若 态 == 空 或 非 态['pending'] 或 态['inTick'] 或 非 (_同线程 柄) 则 得 假. 然
     若 预算 <= 0 或 预算 > 8 则 预算 取 8. 然
-    起时 取 0.
+    起时 取 0. 计 取 空. 步已开始 取 假.
     态 其 增 'inTick' 真.
     试
+        # Capture only this identity's sidecar. Never recreate it after callbacks.
+        计 取 _统计 柄 态.
         起时 取 时刻.
         循
+            # Entry category includes _一步's common guards/read/validation work;
+            # feed is NOT pure parser time. Classification adds no native query.
+            类 取 'feed'.
+            若 态['phase'] == 'visibility' 则 类 取 'visibility'.
+            另
+                若 态['phase'] == 'prepare' 则 类 取 'lifecycle'.
+                另
+                    若 (态['ranges']) 其 量 > 0 则 类 取 'publish'.
+                    另 若 态['eof'] 则 类 取 'lifecycle'. 然 然
+                然
+            然
+            次键 取 类+'StepCount'. 时键 取 类+'StepMs'.
             块始 取 时刻.
+            步已开始 取 真.
             _一步 柄 态.
             现在 取 时刻.
+            步已开始 取 假.
+            # No additional QPC. Only completed intervals have a duration.
+            若 计 != 空 则
+                计 其 增 次键 (计[次键]+1).
+                若 现在 >= 块始 则 计 其 增 时键 (计[时键]+(现在-块始)).
+                另 计 其 增 'stepMetricValid' 假. 然
+            然
             若 现在-块始 > 态['maxChunkMs'] 则 态 其 增 'maxChunkMs' (现在-块始). 然
             若 非 态['pending'] 或 非 (_本态 柄 态) 或 现在-起时+(现在-块始) >= 预算 则 破. 然
         环
@@ -787,6 +809,11 @@ _时存 取 _计数型 其 新建.
         # Clear our own flag before recovery, even if QPC or recovery itself
         # fails. This never clears the replacement state's independent flag.
         态 其 增 'inTick' 假.
+        # A failed endpoint has no measured duration; do not add a rescue QPC.
+        若 计 != 空 则
+            计 其 增 'stepMetricValid' 假.
+            若 步已开始 则 计 其 增 'stepErrors' (计['stepErrors']+1). 然
+        然
         _失败 柄 态 (原因 为 句).
     终
     态 其 增 'inTick' 假.
@@ -800,6 +827,10 @@ _时存 取 _计数型 其 新建.
     # Lexilla, not this bridge, services SCN_STYLENEEDED. Never recurse here.
     得 待办 柄.
 法
+# Round once per projection, never once per step. This is wall time, not CPU.
+算 _步微秒 值 为 数:
+    微 取 值*1000. 得 微-微%1.
+法
 算 状态 柄:
     态 取 _编辑们 其 查 (柄 其 句).
     若 态 == 空 则 得 空. 然
@@ -809,7 +840,7 @@ _时存 取 _计数型 其 新建.
     若 态['phase'] == 'scan' 则 阶段 取 1. 若 (态['ranges']) 其 量 > 0 则 阶段 取 2. 然 然
     若 态['phase'] == 'visibility' 则 阶段 取 3. 然
     若 非 态['pending'] 则 阶段 取 4. 然
-    得 {'phaseCode':阶段,'enabled':(态['language'] == 'markdown'),'foldEnabled':态['foldEnabled'],'language':态['language'],'warning':(_警告 态),'pending':态['pending'],'generation':态['generation'],'revision':态['revision'],'identity':态['identity'],'feed':态['feed'],'bytes':态['feed'],'length':态['length'],'chunks':态['chunks'],'readBytes':态['readBytes'],'published':态['published'],'maxRead':态['maxRead'],'maxPublish':态['maxPublish'],'maxRanges':态['maxRanges'],'maxTickMs':态['maxTickMs'],'maxChunkMs':态['maxChunkMs'],'restart':0,'points':0,'eof':态['eof'],'queuedRanges':((态['ranges']) 其 量),'rangeIndex':态['rangeIndex'],'rangeOffset':态['rangeOffset'],'bulkCalls':计['bulkCalls'],'bulkLines':计['bulkLines'],'fallbackBatches':计['fallbackBatches'],'directCalls':计['directCalls'],'directLines':计['directLines'],'maxPlanBytes':计['maxPlanBytes'],'bulkUs':计['bulkUs'],'ownedBufferBytes':计['ownedBufferBytes'],'bulkMetricsValid':计['bulkMetricsValid']}.
+    得 {'phaseCode':阶段,'enabled':(态['language'] == 'markdown'),'foldEnabled':态['foldEnabled'],'language':态['language'],'warning':(_警告 态),'pending':态['pending'],'generation':态['generation'],'revision':态['revision'],'identity':态['identity'],'feed':态['feed'],'bytes':态['feed'],'length':态['length'],'chunks':态['chunks'],'readBytes':态['readBytes'],'published':态['published'],'maxRead':态['maxRead'],'maxPublish':态['maxPublish'],'maxRanges':态['maxRanges'],'maxTickMs':态['maxTickMs'],'maxChunkMs':态['maxChunkMs'],'restart':0,'points':0,'eof':态['eof'],'queuedRanges':((态['ranges']) 其 量),'rangeIndex':态['rangeIndex'],'rangeOffset':态['rangeOffset'],'bulkCalls':计['bulkCalls'],'bulkLines':计['bulkLines'],'fallbackBatches':计['fallbackBatches'],'directCalls':计['directCalls'],'directLines':计['directLines'],'maxPlanBytes':计['maxPlanBytes'],'bulkUs':计['bulkUs'],'ownedBufferBytes':计['ownedBufferBytes'],'bulkMetricsValid':计['bulkMetricsValid'],'feedStepCount':计['feedStepCount'],'feedStepUs':(_步微秒 计['feedStepMs']),'publishStepCount':计['publishStepCount'],'publishStepUs':(_步微秒 计['publishStepMs']),'lifecycleStepCount':计['lifecycleStepCount'],'lifecycleStepUs':(_步微秒 计['lifecycleStepMs']),'visibilityStepCount':计['visibilityStepCount'],'visibilityStepUs':(_步微秒 计['visibilityStepMs']),'stepErrors':计['stepErrors'],'stepMetricValid':计['stepMetricValid']}.
 法
 算 排空 柄:
     # Acceptance-test helper only; production admits one tick per timer.
