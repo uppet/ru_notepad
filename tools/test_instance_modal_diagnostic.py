@@ -28,8 +28,8 @@ class DiagnosticTests(unittest.TestCase):
 
     def test_exact_metadata_and_every_binding_rejects_replacement(self):
         artifact,run=self.metadata();record=diagnostic.validate_metadata(artifact,run)
-        self.assertEqual(record['zip_sha256'],'787408015a04193713f686030b88e79413754c87318e17f227017c65fd44dcf0')
-        self.assertEqual(record['artifact_id'],12728275345)
+        self.assertEqual(record['zip_sha256'],'77e777040cd49addeece7817c6da941fdb8df03e88c1d982598b5415e344d5b4')
+        self.assertEqual(record['artifact_id'],12751602835)
         for key in artifact:
             bad=copy.deepcopy(artifact);bad[key]=None
             with self.subTest(artifact=key),self.assertRaises(ValueError):diagnostic.validate_metadata(bad,run)
@@ -204,7 +204,7 @@ class DiagnosticTests(unittest.TestCase):
         self.assertIn('/evidence/',source)
         for forbidden in ('secrets.', 'contents: write','actions: write','gh release','build_bootstrap_release','package_bootstrap_preview','latest successful'):
             self.assertNotIn(forbidden,source)
-        self.assertEqual(diagnostic.RUN_ID,40484690558)
+        self.assertEqual(diagnostic.RUN_ID,40537388471)
         script=Path(diagnostic.__file__).read_text()
         self.assertIn("'status':'NOT_ACCEPTED','accepted':False",script)
         self.assertIn("'full_feature_ci_required':True",script)
