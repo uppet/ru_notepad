@@ -1,3 +1,4 @@
+import ast
 import copy
 import hashlib
 import io
@@ -136,16 +137,44 @@ class DriverTests(unittest.TestCase):
             self.assertEqual(d.download_fixed(Path(tmp)/'artifact.zip'),{'fixed':True})
         self.assertEqual(calls[0].get_header('Authorization'),'Bearer secret');self.assertIsNone(calls[1].get_header('Authorization'))
 
+    def test_driver_text_io_is_explicit_utf8_under_isolated_python(self):
+        tree=ast.parse(Path(d.__file__).read_text(encoding='utf-8'))
+        reads=[];writes=[]
+        for node in ast.walk(tree):
+            if not isinstance(node,ast.Call) or not isinstance(node.func,ast.Attribute):continue
+            name=node.func.attr
+            if name in ('read_text','write_text'):
+                encoding=next((kw.value for kw in node.keywords if kw.arg=='encoding'),None)
+                self.assertIsInstance(encoding,ast.Constant)
+                self.assertEqual(encoding.value,'utf-8')
+                (reads if name=='read_text' else writes).append(node)
+            if name=='run' and any(kw.arg=='text' and isinstance(kw.value,ast.Constant) and kw.value.value is True for kw in node.keywords):
+                self.assertTrue(any(kw.arg=='encoding' and isinstance(kw.value,ast.Constant) and kw.value.value=='utf-8' for kw in node.keywords))
+        self.assertEqual(len(reads),4);self.assertEqual(len(writes),5)
+        payload=json.dumps({'source':'如言 函数 丁'},ensure_ascii=False).encode('utf-8')
+        with self.assertRaises(UnicodeDecodeError):payload.decode('cp1252')
+        with tempfile.TemporaryDirectory() as tmp:
+            directory=Path(tmp)
+            for name in ('verification.json','report.json','proof.json','stdout.log'):
+                (directory/name).write_bytes(payload)
+            scope={'directory':directory,'proof_path':directory/'proof.json','stdout':directory/'stdout.log'}
+            # Execute the actual four production read expressions, not a parallel reader.
+            for expression in reads:
+                value=eval(compile(ast.Expression(expression),'<production-read>','eval'),scope)
+                self.assertEqual(json.loads(value),{'source':'如言 函数 丁'})
+            d.checkpoint(directory,'核验')
+            self.assertEqual(json.loads((directory/'driver-progress.json').read_bytes())['phase'],'核验')
+
     def test_workflow_has_only_fixed_diagnostic_scope(self):
         local=Path(__file__).parent/'stage3-markdown-diagnostic.yml'
         workflow=local if local.is_file() else Path(__file__).resolve().parents[2]/'.github/workflows/stage3-markdown-diagnostic.yml'
-        text=workflow.read_text()
+        text=workflow.read_text(encoding='utf-8')
         self.assertIn('diagnostic/notepad-instance-modal-20261027',text)
         self.assertIn(d.APP,text);self.assertIn(d.CORE,text)
         self.assertIn('NOT-ACCEPTED-stage3-markdown',text)
         self.assertNotIn('bootstrap.py verify',text)
         self.assertNotIn('secrets.',text)
-        source=Path(d.__file__).read_text()
+        source=Path(d.__file__).read_text(encoding='utf-8')
         self.assertLess(source.index('build.verify_proof('),source.index('report=profile.measure('))
         self.assertIn('provenance.validate(',source)
         self.assertIn('cycle==verification[\'bootstrap\']',source)

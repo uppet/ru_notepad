@@ -45,7 +45,7 @@ class DriverValidationError(ValueError):
 def checkpoint(output,phase):
     global PHASE
     PHASE=phase
-    (Path(output)/'driver-progress.json').write_text(json.dumps({'status':'NOT_ACCEPTED','accepted':False,'phase':phase}))
+    (Path(output)/'driver-progress.json').write_text(json.dumps({'status':'NOT_ACCEPTED','accepted':False,'phase':phase}),encoding='utf-8')
 
 
 def require(value,message):
@@ -215,7 +215,7 @@ def main_run(core,editor,output):
             if key not in sanitized:os.environ.pop(key,None)
     checkpoint(output,'extract-fixed-artifact')
     directory=extract_fixed(archive,output/'accepted-core-artifact')
-    (output/'artifact-identity.json').write_text(json.dumps(metadata,indent=2))
+    (output/'artifact-identity.json').write_text(json.dumps(metadata,indent=2),encoding='utf-8')
     checkpoint(output,'toolchain-discovery')
     sys.path.insert(0,str(core))
     from rulang.llvm_toolchain import LLVMToolchain
@@ -245,7 +245,7 @@ def main_run(core,editor,output):
     comparator=load_file('_profile_trusted_comparator',core/'tools/bootstrap_compare.py')
     checkpoint(output,'accepted-bootstrap-provenance')
     bootstrap=provenance.validate(core,directory,directory/'verification.json',CORE,CORE_TREE,comparator.compare_native,expected_triple=triple,expected_data_layout=layout)
-    verification=json.loads((directory/'verification.json').read_text());cycle=json.loads((directory/'report.json').read_text())
+    verification=json.loads((directory/'verification.json').read_text(encoding='utf-8'));cycle=json.loads((directory/'report.json').read_text(encoding='utf-8'))
     require(cycle==verification['bootstrap'],'report and verification bootstrap cycle differ')
     compiler=directory/'stage3.exe';pe_x64(compiler);frozen[str(compiler.resolve())]=sha(compiler)
     require(cycle['stages'][-1]['binary_sha256']==sha(compiler),'stage3 differs from accepted report')
@@ -254,14 +254,14 @@ def main_run(core,editor,output):
     for path in prepared.iterdir():
         if path.is_file():frozen[str(path.resolve())]=sha(path)
     for path in HERE.glob('*.py'):frozen[str(path.resolve())]=sha(path)
-    (output/'frozen-inputs.json').write_text(json.dumps(frozen,indent=2))
+    (output/'frozen-inputs.json').write_text(json.dumps(frozen,indent=2),encoding='utf-8')
     builds={};binaries={}
     for kind in ('policy','control'):
         target=output/kind;target.mkdir();source=prepared/(kind+'.ru');binary=target/(kind+'.exe');ir=target/(kind+'.ll');proof_path=target/'proof.json'
         checkpoint(output,'compile-'+kind)
         run(build.native_compile_command(core,source,compiler,prepared,tools,proof_path,ir,binary))
         checkpoint(output,'verify-'+kind)
-        proof=json.loads(proof_path.read_text())
+        proof=json.loads(proof_path.read_text(encoding='utf-8'))
         build.verify_proof(proof,source=source,compiler=compiler,ir=ir,binary=binary,triple=triple,layout=layout,frozen=frozen,tools=tools,proof_path=proof_path)
         verify_generated_sources(proof,prepared,source,core,frozen)
         pe_x64(binary)
@@ -273,7 +273,7 @@ def main_run(core,editor,output):
     receipt={'status':'NOT_ACCEPTED','accepted':False,'artifact':metadata,'bootstrap':bootstrap,'stage3':identity(compiler),
              'source_commit':APP,'source_tree':APP_TREE,'trusted_comparator':identity(core/'tools/bootstrap_compare.py'),'verification':identity(directory/'verification.json'),'cycle_report':identity(directory/'report.json'),'tools':tool_records,'builds':builds,'commands':commands,
              'scope':'Fixed accepted compiler reused; new pure policy harness only. No GUI/editor acceptance.'}
-    (output/'build-identity.json').write_text(json.dumps(receipt,indent=2))
+    (output/'build-identity.json').write_text(json.dumps(receipt,indent=2),encoding='utf-8')
     checkpoint(output,'measure-six-fixed-processes')
     report=profile.measure(prepared,binaries,output/'measurement',builds)
     checkpoint(output,'verify-post-measurement')
@@ -292,7 +292,7 @@ def main():
             failure={'status':'NOT_ACCEPTED','accepted':False,'phase':PHASE,'error_type':type(exc).__name__}
             if isinstance(exc,DriverValidationError):failure['validation_reason']=exc.reason[:256]
             if isinstance(exc,ArtifactHTTPError):failure.update(artifact_http_stage=exc.stage,http_status=exc.status)
-            (args.output/'driver-failure.json').write_text(json.dumps(failure))
+            (args.output/'driver-failure.json').write_text(json.dumps(failure),encoding='utf-8')
         print('NOT_ACCEPTED: stage3 diagnostic driver failed ('+type(exc).__name__+')',file=sys.stderr)
         raise SystemExit(1)
 
