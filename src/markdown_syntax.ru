@@ -597,9 +597,15 @@ _时存 取 _计数型 其 新建.
     权 取 _直属们 其 查 (柄 其 句).
     若 权 == 空 或 非 权['ready'] 则 得 空. 然
     _须直属 柄 态 权.
+    # Share only adjacent complete post/pre guards. Each guard may reenter;
+    # every original owner/document/length check inside it remains unchanged.
     _护 柄 态.
-    掩码 取 (_讯 柄 态 2378 0 0) 其 数.
-    自动 取 (_讯 柄 态 2664 0 0) 其 数.
+    掩码果 取 窗 其 发送 柄 2378 0 0.
+    _护 柄 态.
+    掩码 取 掩码果 其 数.
+    自动果 取 窗 其 发送 柄 2664 0 0.
+    _护 柄 态.
+    自动 取 自动果 其 数.
     _须直属 柄 态 权.
     若 掩码 != 3 或 自动 != 0 则 得 空. 然
     计划 取 空. 结果存 取 空. 直 取 空. 借 取 空. 文档 取 空.

@@ -165,8 +165,8 @@
     {
       "scope": "app",
       "path": "src/markdown_syntax.ru",
-      "sha256": "4948aeaf9089262434188602614bbcbc048150bc568064153dfcae19a9b94ca4",
-      "git_blob": "981e8bd6f6cc95a6fe3b7a4ff5e9ccd8b669c65f"
+      "sha256": "443d442393f382ae21c2a1b0ed9f5354253adaf14b37ddf3bd4aadde16f57ada",
+      "git_blob": "1e4a80a411d4bbc5feb8f78c1f40c86972191498"
     },
     {
       "scope": "app",

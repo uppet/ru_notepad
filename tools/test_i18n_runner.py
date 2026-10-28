@@ -247,9 +247,43 @@ class SourceContracts(unittest.TestCase):
                             self.assertNotIn(b'\r', data)
                     text = source.read_text(encoding='utf-8')
                     production = ROOT / ('src/ru_syntax.ru' if kind == 'ru' else 'src/markdown_syntax.ru')
-                    for name in (('选择', '状态', '_失败') if kind == 'ru' else ('_统计', '撤销直属', '变化', '状态')):
+                    for name in (('选择', '状态', '_失败') if kind == 'ru' else ('_统计', '撤销直属', '变化', '_步微秒', '状态')):
                         self.assertIn(warning.function_source(production, name, parse), text)
-                    parse(text)
+                    # Parsing does not resolve application function calls. Execute
+                    # the entire prepared graph to keep its real dependency closure.
+                    from rulang.interpreter import Interpreter
+                    actual = io.StringIO()
+                    Interpreter(stdout=actual).execute(parse(text), source_path=source)
+                    self.assertEqual(actual.getvalue(), warning.expected_output(kind))
+
+    @unittest.skipUnless(ARGS.ru_root, 'pass --ru-root for real pinned frontend extraction')
+    def test_markdown_status_dependency_and_zero_metric_negative_controls(self):
+        compiler = ARGS.ru_root.resolve()
+        self.assertEqual(runner.compiler_snapshot(compiler), PIN)
+        with patch.object(sys, 'path', [str(compiler), *sys.path]):
+            from rulang.frontend import parse
+            from rulang.interpreter import Interpreter
+            with tempfile.TemporaryDirectory() as temporary:
+                source = warning.prepare(Path(temporary).resolve(), 'md', parse)
+                text = source.read_text(encoding='utf-8')
+                helper = warning.function_source(ROOT/'src/markdown_syntax.ru', '_步微秒', parse)
+                self.assertEqual(text.count(helper), 1)
+                with self.assertRaisesRegex(Exception, '未定义函数.*_步微秒'):
+                    Interpreter(stdout=io.StringIO()).execute(parse(text.replace(helper, '', 1)), source_path=source)
+                # Independent inventory: do not obtain expected fields from the
+                # producer table being tested, or silently accept newly missing keys.
+                zeros = ('feedStepCount','feedStepMs','publishStepCount','publishStepMs',
+                         'lifecycleStepCount','lifecycleStepMs','visibilityStepCount','visibilityStepMs','stepErrors')
+                for key in zeros:
+                    anchor = "'"+key+"':0"
+                    self.assertEqual(text.count(anchor), 1)
+                    changed = text.replace(anchor, "'"+key+"':1", 1)
+                    with self.subTest(metric=key), self.assertRaisesRegex(Exception, 'status retains raw diagnostic layers'):
+                        Interpreter(stdout=io.StringIO()).execute(parse(changed), source_path=source)
+                anchor = "'stepMetricValid':真"
+                self.assertEqual(text.count(anchor), 1)
+                with self.assertRaisesRegex(Exception, 'status retains raw diagnostic layers'):
+                    Interpreter(stdout=io.StringIO()).execute(parse(text.replace(anchor, "'stepMetricValid':假", 1)), source_path=source)
 
 
 # Independent approved constructor values, not inferred from the source under test.

@@ -165,7 +165,7 @@ PROBE_MD = """柄 取 外言 './handle_stub.ru'.
         后 取 状态 柄.
         确认 (清理[0] == 清理数 且 (窗 其 调用)[0] == 消息数) 'status does not restart policy or visibility recovery'.
         确认 (后['generation'] == 前['generation'] 且 后['revision'] == 前['revision'] 且 后['identity'] == 前['identity'] 且 后['language'] == 'markdown' 且 非 后['foldEnabled']) 'status preserves Markdown identities and disabled folds'.
-        确认 (态['warning'] == 键 且 态['warningArgs'] == 参数 且 态['warningRecovery'] == 恢复 且 后['readBytes'] == 0 且 后['published'] == 0) 'status retains raw diagnostic layers without scanner work'.
+        确认 (态['warning'] == 键 且 态['warningArgs'] == 参数 且 态['warningRecovery'] == 恢复 且 后['readBytes'] == 0 且 后['published'] == 0 且 后['feedStepCount'] == 0 且 后['feedStepUs'] == 0 且 后['publishStepCount'] == 0 且 后['publishStepUs'] == 0 且 后['lifecycleStepCount'] == 0 且 后['lifecycleStepUs'] == 0 且 后['visibilityStepCount'] == 0 且 后['visibilityStepUs'] == 0 且 后['stepErrors'] == 0 且 后['stepMetricValid']) 'status retains raw diagnostic layers without scanner work'.
         显 'md|'+(层数 为 句)+'|'+语言+'|'+后['warning'].
         位 取 位+1.
     环
@@ -185,7 +185,7 @@ def prepare(directory, kind, parse):
     (directory / 'scanner_stub.ru').write_text(SCANNER + function_source(native, '初始化', parse), encoding='utf-8', newline='\n')
     path = ROOT / ('src/ru_syntax.ru' if kind == 'ru' else 'src/markdown_syntax.ru')
     names = (('_放点', '_放候', '_放态', '_警告', '_失败', '_初始化失败', '选择', '状态') if kind == 'ru'
-             else ('_建态', '_统计', '_丢弃', '撤销直属', '_警告', '_失败', '变化', '状态'))
+             else ('_建态', '_统计', '_丢弃', '撤销直属', '_警告', '_失败', '变化', '_步微秒', '状态'))
     source = SHARED + (RU if kind == 'ru' else MD)
     source += ''.join(function_source(path, name, parse) for name in names)
     source += PROBE_RU if kind == 'ru' else PROBE_MD

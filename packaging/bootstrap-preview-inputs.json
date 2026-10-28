@@ -99,7 +99,7 @@
     },
     "tools/test_windows_ci.py": {
       "before": "b28733251662cd749c961fda95d912a1638794857fbb07015b5fb6363c28ec3b",
-      "after": "6c5118902bea4d8993703a1b3ef1fa8de349cd0fa4effc002e1f13501abd7749"
+      "after": "be838ef255350c8e63d8d4c66e6d3f1d4e220e47495c2b80d6d020fde7ccfcba"
     },
     "tools/windows_ci.py": {
       "before": "c1a793bf7d96267adc47d70bd459b3c050cb54f67c9768a57041cad5a732142a",
@@ -163,7 +163,7 @@
     },
     "packaging/application-native-oracle.json": {
       "before": null,
-      "after": "b22b1051557848133183a7eee69bbca8e5e40553c4d06fb202adb1d8e86b1de5"
+      "after": "a4c57e81952eb31ae19abbecfd8b8c581ba93059cc414b86f8d38271ad435d01"
     },
     "locales/instance_tabs.json": {
       "before": null,
@@ -211,7 +211,7 @@
     },
     ".github/workflows/windows.yml": {
       "before": "f82e3e45e0cf4f0522fdd6d2a516e6ec91cc0a000fbff503ca954f0e37dfaf57",
-      "after": "71e60b75850402c8d72b830f1cfad8570f0872fe2d366c7c5be68c400afed875"
+      "after": "cbd906487c63b3952f7218b335db46caf96bd0594df7a2c15fd10918bcc1acbd"
     },
     "docs/markdown-editing.md": {
       "before": "b1185eee1c70ab93956932fe820381c101df94950237acf4f95b9d18a78467bf",
@@ -235,11 +235,11 @@
     },
     "docs/markdown-direct-folds.md": {
       "before": "b281e6c7fd7fc949db129e8ab5e3998b5b87329d1687b11fa50f17a5d0abcfd5",
-      "after": "4738d71f5ae3495e4067d1b096e69749e59317dc367556de9d6c1a6b8c7f1ece"
+      "after": "9682c604e090ef33c5549b754d1385bdb2500990ec1f0fe45318f82a60a18d80"
     },
     "src/markdown_syntax.ru": {
       "before": "8ae5c6b71f48fd3e374095cbcbb0e1585ba1aea54d2a592d03446d49da760ce3",
-      "after": "4948aeaf9089262434188602614bbcbc048150bc568064153dfcae19a9b94ca4"
+      "after": "443d442393f382ae21c2a1b0ed9f5354253adaf14b37ddf3bd4aadde16f57ada"
     },
     "tests/app_markdown_native.ru": {
       "before": "1d4eae1e73a09ef7d5634ed50c9c491af1488d277ef252c920dfe50973a1422e",
@@ -260,6 +260,18 @@
     "tools/test_markdown_step_metrics.py": {
       "before": null,
       "after": "2919ac0a9f244821415858eb6404726e9725fbbdb254bc434c2fc20950aedc34"
+    },
+    "tests/syntax_warning_portable.py": {
+      "before": "badc0ccd70df6c602e2d6da49eaf0e920f98e4413f4da99eed40e44ee1b30149",
+      "after": "8dfe91256e8cd6fe2a42eaa9460d5628dee6fd91896fcd6dc117c7dea1d5322c"
+    },
+    "tools/test_i18n_runner.py": {
+      "before": "594f3e83c1acd5ff78e27c4c3da40ffb322dbc25c220a17adca7a567884f03d3",
+      "after": "f113a01e7cbeb4c9a3de0cb966e60ccd077596c9f671cf88c358a7aaf81d7562"
+    },
+    "tools/test_markdown_bulk_guards.py": {
+      "before": null,
+      "after": "75cdd1995e69cba7f810d8805cc0e93f63e4d5c806ce454dbaa2c902a9da112d"
     }
   }
 }

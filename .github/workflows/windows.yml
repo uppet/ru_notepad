@@ -90,6 +90,8 @@ jobs:
         run: python -I tools/test_single_instance_admission.py --ru-root .ci/ru-language --output build/instance-admission-controls
       - name: Verify existing-clock Markdown step classification without changing scheduling
         run: python -I tools/test_markdown_step_metrics.py --ru-root .ci/ru-language --output build/markdown-step-controls
+      - name: Verify complete shared pre-post Markdown bulk guards and reentrant rejection
+        run: python -I tools/test_markdown_bulk_guards.py --ru-root .ci/ru-language --output build/markdown-bulk-guard-controls
       - name: Require private bounded i18n runner negative controls
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.historical_callback) }}
         run: python -I tools/test_i18n_runner.py --ru-root .ci/ru-language -v

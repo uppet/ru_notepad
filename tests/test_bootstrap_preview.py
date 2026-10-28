@@ -466,9 +466,10 @@ class PreviewContracts(unittest.TestCase):
                         'python editor/tools/test_i18n_models.py',
                         'python editor/tools/test_single_instance_state.py --ru-root language --output "$env:PREVIEW_OUTPUT/instance-state-controls"',
                         'python editor/tools/test_single_instance_admission.py --ru-root language --output "$env:PREVIEW_OUTPUT/instance-admission-controls"',
-                        'python -I editor/tools/test_markdown_step_metrics.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-step-controls"'):
+                        'python -I editor/tools/test_markdown_step_metrics.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-step-controls"',
+                        'python -I editor/tools/test_markdown_bulk_guards.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-bulk-guard-controls"'):
             self.assertIn(command+'\n          if ($LASTEXITCODE) { exit $LASTEXITCODE }',body)
-        self.assertEqual(body.count('if ($LASTEXITCODE)'),9)
+        self.assertEqual(body.count('if ($LASTEXITCODE)'),10)
 
     def test_recent_fixtures_require_exact_individual_assertions_and_total(self):
         good=b'PASS: a\nPASS: b\nTOTAL PASS: 2\n'

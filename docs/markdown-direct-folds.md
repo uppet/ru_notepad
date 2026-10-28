@@ -108,6 +108,19 @@ recovery. Missing helper ABI, or a validated zero-attempt prewrite configuration
 ineligibility, may select ordinary messages after a fresh complete Ru guard.
 A partial or uncertain write can never take that fallback.
 
+The bulk eligibility reads of the modification mask (2378) and automatic-fold
+mode (2664) share only immediately adjacent complete guards: G0, read mask, G1,
+read mode, G2. Each read still has a full owner/thread/document/length guard on
+both sides; its result is converted only after its post-guard succeeds. No guard
+is carried across another callback, and capability checks, the last direct-
+pointer message, helper-side eligibility checks and post-Apply checks remain.
+The controlled production-body regression reduces healthy native calls from
+159 to 131 and synchronous messages from 20 to 16 per batch. These are structural
+counts, not a measured speedup or evidence that the 30-second GUI budget passes.
+The regression executes both original and shared-guard bodies, injects mutation
+and exceptions at retained message boundaries, and rejects removed-middle-guard
+and premature-result-conversion variants. It does not replace actual Windows QA.
+
 The existing generic mutation guards, cancellation/restart rules, 1024-byte
 scanner bound, 64-range queue and 8 ms admission budget remain in force. Native
 calls are not preemptible; no hard per-call responsiveness guarantee is added.
