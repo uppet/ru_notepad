@@ -1,0 +1,104 @@
+name: Fixed stage3 Markdown diagnostic (NOT ACCEPTED)
+on:
+  push:
+    branches: [diagnostic/notepad-instance-modal-20261027]
+    paths:
+      - 'tools/stage3_markdown_profile/**'
+      - '.github/workflows/stage3-markdown-diagnostic.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: stage3-markdown-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  fixed-stage3-policy:
+    if: github.ref == 'refs/heads/diagnostic/notepad-instance-modal-20261027'
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONOPTIMIZE: '0'
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: core.autocrlf
+      GIT_CONFIG_VALUE_0: 'false'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out diagnostic scripts only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: diagnostic
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - name: Cheap fail-closed driver and measurement contracts
+        run: |
+          python -m unittest discover -s diagnostic/tools/stage3_markdown_profile -p 'test_*.py' -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Check out exact reviewed production wrapper and 940c policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: uppet/ru_notepad
+          ref: 1da616554198792ad8653718e6e9f8999e7658e6
+          path: editor
+          persist-credentials: false
+      - name: Check out exact accepted core source, without rebuilding it
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: uppet/ru-language
+          ref: 26cc8a210d5cef2bd8ab37b6c270833884ea39a5
+          path: language
+          persist-credentials: false
+      - name: Set real x64 SDK and CRT environment
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$vs -or $LASTEXITCODE) { throw 'x64 Visual Studio tools unavailable' }
+          $vars = & cmd.exe /d /s /c "call `"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set"
+          if ($LASTEXITCODE) { throw 'vcvars64 failed' }
+          $allow = @('PATH','INCLUDE','LIB','LIBPATH','WindowsSdkDir','WindowsSDKVersion','VCToolsInstallDir','VCToolsVersion')
+          foreach ($line in $vars) {
+            $pair = $line -split '=', 2
+            if ($pair.Length -eq 2 -and $allow -contains $pair[0]) { "$($pair[0])=$($pair[1])" >> $env:GITHUB_ENV }
+          }
+      - name: Prepare original pinned LLVM 14 tools only
+        working-directory: language
+        run: |
+          python tools/prepare_workspace.py --with-llvm
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Verify fixed accepted stage3, compile both harnesses, then measure serially
+        working-directory: language
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (!$env:RUNNER_TEMP) { throw 'RUNNER_TEMP unavailable' }
+          $out = Join-Path $env:RUNNER_TEMP 'notepad-stage3-markdown-diagnostic'
+          python -I -B ../diagnostic/tools/stage3_markdown_profile/run_stage3_markdown_windows.py --core . --editor ../editor --output "$out"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Upload diagnostic proofs and measurements, never an editor preview
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: NOT-ACCEPTED-stage3-markdown-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/notepad-stage3-markdown-diagnostic/artifact-identity.json
+            ${{ runner.temp }}/notepad-stage3-markdown-diagnostic/build-identity.json
+            ${{ runner.temp }}/notepad-stage3-markdown-diagnostic/frozen-inputs.json
+            ${{ runner.temp }}/notepad-stage3-markdown-diagnostic/driver-failure.json
+            ${{ runner.temp }}/notepad-stage3-markdown-diagnostic/driver-progress.json
+            ${{ runner.temp }}/notepad-stage3-markdown-diagnostic/command-*.log
+            ${{ runner.temp }}/notepad-stage3-markdown-diagnostic/accepted-core-artifact/report.json
+            ${{ runner.temp }}/notepad-stage3-markdown-diagnostic/accepted-core-artifact/verification.json
+            ${{ runner.temp }}/notepad-stage3-markdown-diagnostic/prepared/**
+            ${{ runner.temp }}/notepad-stage3-markdown-diagnostic/policy/**
+            ${{ runner.temp }}/notepad-stage3-markdown-diagnostic/control/**
+            ${{ runner.temp }}/notepad-stage3-markdown-diagnostic/measurement/**

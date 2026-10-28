@@ -2,6 +2,9 @@ name: NOT ACCEPTED instance modal diagnostic
 on:
   push:
     branches: [diagnostic/notepad-instance-modal-20261027]
+    paths-ignore:
+      - 'tools/stage3_markdown_profile/**'
+      - '.github/workflows/stage3-markdown-diagnostic.yml'
   workflow_dispatch:
 permissions:
   contents: read
