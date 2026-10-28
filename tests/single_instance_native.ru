@@ -29,6 +29,11 @@ PID 取 K 其 绑定 'GetCurrentProcessId' (密 其 签名 U ([]) 'win64').
     确认 (态['owner'] 且 态['mutex'] != 空) 'enabled native preparation owns real mutex'.
     确认 (态['identity'] != '' 且 (态['property'] 其 含 后缀)) 'native SID session and isolated property recorded'.
     柄 取 窗 其 成功 ((窗 其 CreateWindowExW) 其 调用 [0,类名,标题,0,0,0,1,1,空,空,空,空]) 'CreateWindowExW(isolated STATIC)'.
+    # Independent wrappers compare exact uintptr strings, never heap identity/double.
+    同柄 取 P 其 重释 ((密 其 uintptr) 其 重释 柄).
+    确认 ((同柄 其 句) == (柄 其 句)) 'independent native HWND wrappers preserve exact address'.
+    确认 (((P 其 值 1) 其 句) != ((P 其 值 2) 其 句)) 'different native addresses are not equal'.
+    确认 ((模 其 _窗口进程 同柄) == (((PID 其 调用 []) 其 值) 其 数)) 'rewrapped real HWND retains owning PID'.
     确认 (模 其 发布 态 柄) 'native owner publishes hidden window'.
     确认 (态['window'] == 柄) 'native publication writes window state'.
     属性名 取 密 其 UTF16 态['property'].

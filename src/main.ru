@@ -20,7 +20,7 @@
 关联 取 外言 'associations.ru'.
 拖放 取 外言 'file_drop.ru'.
 修改头 取 密 其 结构 [['header',窗 其 NMHDR],['position',窗 其 IP],['ch',窗 其 I],['modifiers',窗 其 I],['modificationType',窗 其 I],['text',窗 其 PTR],['length',窗 其 IP],['linesAdded',窗 其 IP],['message',窗 其 I],['wParam',窗 其 UP],['lParam',窗 其 IP],['line',窗 其 IP],['foldLevelNow',窗 其 I],['foldLevelPrev',窗 其 I],['margin',窗 其 I]].
-A 取 {'modalDepth':0,'singlePreference':真,'singleState':空,'singleDeferredShow':假,'handoffPending':[],'closeRun':空,'tabMenuOpen':假,'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'system','docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'previous':空,'whole':空,'searchWrap':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
+A 取 {'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':假,'cleanupRetrying':假,'cleanupPending':假,'singlePreference':真,'singleState':空,'singleDeferredShow':假,'handoffPending':[],'closeRun':空,'tabMenuOpen':假,'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'system','docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'previous':空,'whole':空,'searchWrap':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
 
 # Admission barrier across native modal loops. No unacknowledged raw pointers retained.
 算 界面弹窗 主窗, 文 为 句, 标题 为 句, 类型 为 数:
@@ -598,6 +598,8 @@ A 取 {'modalDepth':0,'singlePreference':真,'singleState':空,'singleDeferredSh
 算 开始工作:
     若 A 其 查 'busy' 则 卒 (本地 其 文本 'error.main.operation_busy'). 然
     A 其 增 'busy' 真.
+    A 其 增 'openFinalizing' 假.
+    A 其 增 'handoffReject' 假.
     A 其 增 'cancelRequested' 假.
     A 其 增 'locks' ([]).
     试
@@ -610,25 +612,57 @@ A 取 {'modalDepth':0,'singlePreference':真,'singleState':空,'singleDeferredSh
     得 空.
 法
 算 结束工作:
-    窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),901]).
-    锁们 取 A 其 查 'locks'.
-    位 取 0.
-    循 锁们 其 量 次
-        锁 取 锁们[位].
-        窗 其 发送 锁[0] 2171 锁[1] 0.
-        窗 其 结果 ((窗 其 EnableWindow) 其 调用 [锁[0],1]).
-        位 取 位+1.
-    环
-    A 其 增 'locks' ([]).
-    A 其 增 'operation' 空.
-    A 其 增 'busy' 假.
-    A 其 增 'cancelRequested' 假.
-    窗 其 结果 ((窗 其 EnableWindow) 其 调用 [(A 其 查 'tabs'),1]).
-    窗 其 结果 ((窗 其 ShowWindow) 其 调用 [(A 其 查 'cancel'),0]).
-    布局.
-    刷新.
-    若 (A 其 查 'active') >= 0 则 窗 其 结果 ((窗 其 SetFocus) 其 调用 [编辑柄]). 然
+    若 A 其 查 'cleanupActive' 则 卒 (本地 其 文本 'error.main.operation_busy'). 然
+    A 其 增 'cleanupActive' 真.
+    试
+        # Guard every native teardown call, including UI refresh after busy becomes false.
+        若 非 (A 其 查 'openFinalizing') 则 A 其 增 'handoffReject' 真. 然
+        窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),901]).
+        锁们 取 A 其 查 'locks'.
+        位 取 0.
+        循 锁们 其 量 次
+            锁 取 锁们[位].
+            窗 其 发送 锁[0] 2171 锁[1] 0.
+            窗 其 结果 ((窗 其 EnableWindow) 其 调用 [锁[0],1]).
+            位 取 位+1.
+        环
+        A 其 增 'locks' ([]).
+        A 其 增 'operation' 空.
+        # Idle layout is visible, but routing remains guarded until all UI calls return.
+        A 其 增 'busy' 假.
+        A 其 增 'cancelRequested' 假.
+        窗 其 结果 ((窗 其 EnableWindow) 其 调用 [(A 其 查 'tabs'),1]).
+        窗 其 结果 ((窗 其 ShowWindow) 其 调用 [(A 其 查 'cancel'),0]).
+        布局.
+        刷新.
+        若 (A 其 查 'active') >= 0 则 窗 其 结果 ((窗 其 SetFocus) 其 调用 [编辑柄]). 然
+        A 其 增 'openFinalizing' 假.
+        A 其 增 'handoffReject' 假.
+        A 其 增 'cleanupPending' 假.
+    救 原因
+        A 其 增 'cleanupPending' 真.
+        A 其 增 'handoffReject' 真.
+        A 其 增 'openFinalizing' 假.
+        A 其 增 'cleanupActive' 假.
+        # A stable document transaction permits explicit menu/shortcut recovery.
+        若 (A 其 查 'operation') == 空 且 ((A 其 查 'queue') 其 量) == 0 则 A 其 增 'busy' 假. 然
+        卒 原因.
+    终
+    A 其 增 'cleanupActive' 假.
     得 空.
+法
+# Only an explicit rejected idle tail can be recovered; never recurse into live teardown.
+算 恢复工作收尾:
+    若 非 (A 其 查 'cleanupPending') 或 非 (A 其 查 'handoffReject') 或 (A 其 查 'operation') != 空 或 ((A 其 查 'queue') 其 量) != 0 或 (A 其 查 'cleanupActive') 或 (A 其 查 'cleanupRetrying') 则 得 假. 然
+    A 其 增 'cleanupRetrying' 真.
+    试
+        结束工作.
+    救 原因
+        A 其 增 'cleanupRetrying' 假.
+        卒 原因.
+    终
+    A 其 增 'cleanupRetrying' 假.
+    得 真.
 法
 算 清操作:
     操 取 A 其 查 'operation'.
@@ -646,6 +680,8 @@ A 取 {'modalDepth':0,'singlePreference':真,'singleState':空,'singleDeferredSh
     得 空.
 法
 算 取消工作:
+    A 其 增 'cancelRequested' 真.
+    A 其 增 'openFinalizing' 假.
     A 其 增 'queue' ([]).
     A 其 增 'closeIndex' (-1).
     A 其 增 'lastOutcome' 'cancelled'.
@@ -681,6 +717,8 @@ A 取 {'modalDepth':0,'singlePreference':真,'singleState':空,'singleDeferredSh
     得 队.
 法
 算 入队 路们 为 句 阵, 代码页 为 数:
+    恢复工作收尾.
+    若 (A 其 查 'openFinalizing') 或 (A 其 查 'handoffReject') 则 卒 (本地 其 文本 'error.main.open_busy'). 然
     若 (A 其 查 'closeRun') != 空 或 (A 其 查 'tabMenuOpen') 则 卒 (本地 其 文本 'error.main.open_busy'). 然
     若 A 其 查 'busy' 则 卒 (本地 其 文本 'error.main.open_busy'). 然
     队 取 校验入队 路们 代码页.
@@ -691,12 +729,17 @@ A 取 {'modalDepth':0,'singlePreference':真,'singleState':空,'singleDeferredSh
         开始工作.
     救 原因
         A 其 增 'queue' ([]).
+        若 (A 其 查 'cleanupPending') 且 (A 其 查 'operation') == 空 则 A 其 增 'busy' 假. 然
         卒 原因.
     终
     得 真.
 法
+算 交接待收尾:
+    若 (A 其 查 'handoffReject') 或 (A 其 查 'cancelRequested') 或 (A 其 查 'modalDepth') > 0 或 (A 其 查 'closeIndex') >= 0 或 (A 其 查 'closeRun') != 空 或 (A 其 查 'tabMenuOpen') 则 得 假. 然
+    得 (A 其 查 'openFinalizing') 且 (A 其 查 'operation') == 空 且 ((A 其 查 'queue') 其 量) == 0.
+法
 算 接收入队 路们 为 句 阵:
-    若 A 其 查 'cancelRequested' 则 卒 (本地 其 文本 'error.main.open_busy'). 然
+    若 (A 其 查 'handoffReject') 或 (A 其 查 'cancelRequested') 则 卒 (本地 其 文本 'error.main.open_busy'). 然
     若 非 (A 其 查 'busy') 则 得 入队 路们 0. 然
     若 (A 其 查 'closeRun') != 空 或 (A 其 查 'tabMenuOpen') 则 卒 (本地 其 文本 'error.main.open_busy'). 然
     操 取 A 其 查 'operation'.
@@ -773,6 +816,7 @@ A 取 {'modalDepth':0,'singlePreference':真,'singleState':空,'singleDeferredSh
     A 其 增 'lastReader' 读态.
     操 取 {'kind':'open','reader':读态,'editor':空,'load':空}.
     A 其 增 'operation' 操.
+    A 其 增 'openFinalizing' 假.
     文们 取 A 其 查 'docs'.
     位 取 0.
     循 文们 其 量 次
@@ -802,6 +846,8 @@ A 取 {'modalDepth':0,'singlePreference':真,'singleState':空,'singleDeferredSh
     得 空.
 法
 算 保存到 路 为 句, 戳 为 句, 后续 为 句:
+    恢复工作收尾.
+    若 (A 其 查 'openFinalizing') 或 (A 其 查 'handoffReject') 则 卒 (本地 其 文本 'error.main.operation_busy'). 然
     若 A 其 查 'busy' 则 卒 (本地 其 文本 'error.main.operation_busy'). 然
     文档 取 当前.
     A 其 增 'lastOutcome' 'running'.
@@ -857,6 +903,8 @@ A 取 {'modalDepth':0,'singlePreference':真,'singleState':空,'singleDeferredSh
         文档 取 登记页 操['editor'] 读态['path'] 读态['encoding'] 读态['bom'] 读态['stamp'] 读态['fileIdentity'] (读态['size'] >= (编 其 大文件模式字节)).
         # The tab now owns the native editor. Never destroy it in error cleanup.
         操 其 增 'editor' 空.
+        # Only a completed open enters this state; duplicate/declined remain NACK2.
+        A 其 增 'openFinalizing' 真.
         A 其 增 'operation' 空.
         A 其 增 'lastOutcome' 'opened'.
         显 '[operation] open completed'.
@@ -913,7 +961,7 @@ A 取 {'modalDepth':0,'singlePreference':真,'singleState':空,'singleDeferredSh
     得 空.
 法
 算 工作时钟:
-    若 非 (A 其 查 'busy') 或 (A 其 查 'inTick') 则 得 空. 然
+    若 非 (A 其 查 'busy') 或 (A 其 查 'inTick') 或 (A 其 查 'cleanupActive') 或 (A 其 查 'cleanupRetrying') 则 得 空. 然
     A 其 增 'inTick' 真.
     A 其 增 'ticks' ((A 其 查 'ticks')+1).
     起 取 (窗 其 结果 ((窗 其 GetTickCount64) 其 调用 [])) 其 数.
@@ -926,18 +974,27 @@ A 取 {'modalDepth':0,'singlePreference':真,'singleState':空,'singleDeferredSh
             若 现-起 >= 8 则 破. 然
         环
     救 原因
-        操 取 A 其 查 'operation'.
-        为保存 取 操 != 空 且 操['kind'] == 'save'.
+        A 其 增 'handoffReject' 真.
+        A 其 增 'openFinalizing' 假.
         报错 取 [原因].
-        试 清操作. 救 清因 报错[0] 取 报错[0]+'\n'+清因. 终
-        A 其 增 'lastOutcome' 'failed'.
-        A 其 增 'closeIndex' (-1).
-        若 为保存 则
-            A 其 增 'queue' ([]).
-            结束工作.
-        然
-        结束批关 真.
-        错误提示 报错[0].
+        试
+            操 取 A 其 查 'operation'.
+            为保存 取 操 != 空 且 操['kind'] == 'save'.
+            试 清操作. 救 清因 报错[0] 取 报错[0]+'\n'+清因. 终
+            A 其 增 'lastOutcome' 'failed'.
+            A 其 增 'closeIndex' (-1).
+            若 为保存 则
+                A 其 增 'queue' ([]).
+                试 结束工作. 救 清因 报错[0] 取 报错[0]+'\n'+清因. 终
+            然
+            # One bounded automatic retry only for an idle, empty, rejected tail.
+            试 恢复工作收尾. 救 清因 报错[0] 取 报错[0]+'\n'+清因. 终
+            结束批关 真.
+            错误提示 报错[0].
+        救 处理因
+            A 其 增 'inTick' 假.
+            卒 (报错[0]+'\n'+处理因).
+        终
     终
     A 其 增 'inTick' 假.
     得 空.
@@ -1371,10 +1428,12 @@ A 取 {'modalDepth':0,'singlePreference':真,'singleState':空,'singleDeferredSh
     若 A 其 查 'ready' 则
         试
             若 号 == 74 则
-                若 (A 其 查 'singleState') == 空 或 (A 其 查 'cancelRequested') 或 (A 其 查 'modalDepth') > 0 或 (A 其 查 'closeIndex') >= 0 或 (A 其 查 'closeRun') != 空 或 (A 其 查 'tabMenuOpen') 则 得 2. 然
+                若 (A 其 查 'singleState') == 空 或 (A 其 查 'handoffReject') 或 (A 其 查 'cancelRequested') 或 (A 其 查 'modalDepth') > 0 或 (A 其 查 'closeIndex') >= 0 或 (A 其 查 'closeRun') != 空 或 (A 其 查 'tabMenuOpen') 则 得 2. 然
                 # Copy/validate the complete request before queuing; no pointer survives.
                 试
                     交路 取 单例 其 接收 (A 其 查 'singleState') ((窗 其 PTR) 其 重释 宽参) ((窗 其 PTR) 其 重释 长参).
+                    # BUSY3 proves zero admission only after full sender/packet validation.
+                    若 (交路 其 量) > 0 且 (交接待收尾) 则 得 3. 然
                     若 (交路 其 量) > 0 则 接收入队 交路. 然
                 救 原因
                     得 2.

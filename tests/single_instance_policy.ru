@@ -22,7 +22,7 @@
 确认 ((模 其 结果 真 1) == 'accepted') 'only affirmative ACK permits exit'.
 确认 ((模 其 结果 真 2) == 'local') 'explicit rejection permits local open'.
 确认 ((模 其 结果 真 0) == 'uncertain') 'zero ACK is not assumed rejection'.
-确认 ((模 其 结果 真 3) == 'uncertain') 'unknown ACK never opens automatically'.
+确认 ((模 其 结果 真 4) == 'uncertain') 'unknown ACK never opens automatically'.
 确认 ((模 其 结果 假 0) == 'uncertain') 'timeout retains uncertainty'.
 确认 ((模 其 结果 假 1) == 'uncertain') 'timeout dominates stale result'.
 多 取 []. 循 64 次 多 其 增 'C:\\a'. 环
@@ -47,4 +47,6 @@
 确认 ((模 其 发现结果 假 4999) == 'wait') 'existing slow owner still gets discovery grace'.
 确认 ((模 其 发现结果 假 5000) == 'uncertain') 'live unpublished owner never triggers automatic second open'.
 确认 ((模 其 发现结果 假 6000) == 'uncertain') 'late startup remains explicit user decision'.
+确认 ((模 其 结果 真 3) == 'busy') 'explicit zero-admission busy permits bounded retry'.
+确认 ((模 其 结果 假 3) == 'uncertain') 'timeout overrides stale busy receipt'.
 显 'TOTAL PASS: '+(次数[0] 为 句).

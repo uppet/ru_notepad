@@ -22,13 +22,29 @@ fixture and visible two-process GUI gates. No new Windows result is claimed here
   requests do not partially enter the receiver's queue. Normal file decoding,
   path permissions, file identity, large-file confirmation and errors still apply.
 - Discovery waits at most five seconds for a ready owner. A single send waits at
-  most one second. ACK means a fully copied, validated batch entered the normal
-  asynchronous queue, not that all files have finished loading.
+  most one second, within one six-second discovery-and-delivery budget. ACK means
+  a fully copied, validated batch entered the normal asynchronous queue, not that
+  all files have finished loading.
+- A distinct temporary BUSY response is limited to the final cleanup of a
+  successfully opened document. It is returned only after sender and packet
+  validation, before any of that request enters the queue. Only this explicit
+  zero-acceptance response permits a bounded retry of the same immutable packet;
+  the owner identity is rechecked and all attempts share the original total
+  budget. This is not a retry of a lost or uncertain ACK. Ordinary rejection,
+  modal dialogs, cancellation and shutdown retain their separate behavior.
 - A definite rejection can use a separate window. A send timeout or unavailable
   starting owner does **not** automatically retransmit/open the same files.
   The secondary retains its frozen paths and asks explicitly whether to open
   them separately. Choosing No leaves File → Open Pending Shell Files available.
   Choosing Yes can intentionally duplicate an already accepted request.
+  Exhausting temporary-BUSY retries also retains these pending paths rather than
+  silently opening another window. Older senders treat the new response as
+  uncertain; older receivers' definite rejection behavior remains unchanged.
+- If final UI cleanup fails after the open operation is otherwise idle, one
+  protected cleanup retry may restore that idle state while reporting the
+  original error. Persistent failure keeps admission blocked and documents
+  intact. A later explicit user open/save may make one further protected
+  recovery attempt; IPC does not drive an automatic cleanup retry loop.
 
 Names include the user's SID and Windows session, with normal mutex ACLs,
 desktop restrictions and UIPI left intact. Checking the claimed sender HWND is

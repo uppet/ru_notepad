@@ -23,10 +23,11 @@ exact source and executable. This document is a plan, not a passing test receipt
 - Five real-stage3 fixtures cover recent-file policy (25 assertions), native
   registry/encoding boundaries (22), actual main-module callback control flow
   (10), Ru lexical policy including 续 (422), and Markdown policy (221). These
-  original 700 assertions remain required. Five additional fixtures cover tab
-  close policy (16), single-instance protocol/settings policy (39), isolated
+  original 700 assertions remain required. Six additional fixtures cover tab
+  close policy (16), single-instance protocol/settings policy (41), isolated
   native registry roundtrip (11), native tab callbacks (53), and actual enabled
-  single-instance lifecycle (15): ten fixtures, 834 assertions. Receipt schema v3 rejects the former five-fixture/v2 receipt.
+  single-instance lifecycle (18), and real open-finalization BUSY/ACK behavior (23):
+  eleven fixtures, 862 assertions. Receipt schema v4 rejects the former v1/v2/v3 receipts.
   The exact three dependency DLLs are copied beside the fixture executables;
   original and copied identities are checked before/after execution and again
   at product/package consumption. No PATH-only DLL substitution is accepted.

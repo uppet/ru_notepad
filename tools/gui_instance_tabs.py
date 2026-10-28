@@ -723,6 +723,49 @@ def _context(api,process,hwnd,index,menu_index,observations=None):
             else:raise RuntimeError('; '.join(cleanup_errors))
 
 
+def _race_launch_context(registry):
+    try:
+        namespace=os.environ.get('RU_NOTEPAD_INSTANCE_TEST_KEY','')
+        return {'namespace_sha256':hashlib.sha256(namespace.encode('utf-8')).hexdigest(),
+                'namespace_valid':namespace.startswith('gui_') and len(namespace)==36 and all(c in '0123456789abcdef' for c in namespace[4:]),
+                'registry':_registry_observation(registry)}
+    except Exception as exc:return {'namespace_valid':False,'observation_error':type(exc).__name__}
+
+
+def _race_observation(api,participants,registry):
+    """Diagnostic only: no UI messages, route changes, retries, or acceptance."""
+    result={'config':_race_launch_context(registry),'participants':[]}
+    try:
+        namespace=os.environ.get('RU_NOTEPAD_INSTANCE_TEST_KEY','')
+        if not result['config']['namespace_valid']:raise RuntimeError('Invalid isolated race namespace')
+        property_name='RuNotepad.SingleInstance.v1.test.'+namespace
+        u=api.user;k=api.kernel
+        u.GetPropW.argtypes=[wintypes.HWND,wintypes.LPCWSTR];u.GetPropW.restype=wintypes.HANDLE
+        u.GetWindowTextW.argtypes=[wintypes.HWND,wintypes.LPWSTR,ctypes.c_int];u.GetWindowTextW.restype=ctypes.c_int
+        k.ProcessIdToSessionId.argtypes=[wintypes.DWORD,ctypes.POINTER(wintypes.DWORD)]
+        k.ProcessIdToSessionId.restype=wintypes.BOOL
+        for process,_ in participants[:2]:
+            row={'pid':process.pid,'exit_code':process.poll(),'windows':[]};result['participants'].append(row)
+            if row['exit_code'] is not None:continue
+            session=wintypes.DWORD()
+            if k.ProcessIdToSessionId(process.pid,ctypes.byref(session)):row['session_id']=session.value
+            else:row['session_error']='ProcessIdToSessionId failed'
+            try:
+                for hwnd,kind,visible in api.windows(process.pid):
+                    if kind!=ci.MAIN_CLASS:continue
+                    if len(row['windows'])>=4:raise RuntimeError('Race main-window inventory exceeds bound')
+                    _owned_pid(api,process.pid,hwnd)
+                    caption=ctypes.create_unicode_buffer(257)
+                    u.GetWindowTextW(hwnd,caption,len(caption))
+                    # Revalidate after the caption observation before querying its property.
+                    _owned_pid(api,process.pid,hwnd)
+                    row['windows'].append({'hwnd':int(hwnd),'visible':bool(visible),'title':caption.value[:256],
+                                           'owner_property_present':bool(u.GetPropW(hwnd,property_name))})
+            except Exception as exc:row['observation_error']=type(exc).__name__
+    except Exception as exc:result['observation_error']=type(exc).__name__
+    return result
+
+
 def run(api,binary_dir,fixtures,evidence):
     import winreg
     binary_dir,fixtures,evidence=map(Path,(binary_dir,fixtures,evidence))
@@ -872,6 +915,7 @@ def run(api,binary_dir,fixtures,evidence):
               'exit_code':None,'fixture_binary_sha256':dict(hashes),'participants':[]}
         result['phases'].append(race);race_procs=[]
         try:
+            observations['startup-race launch config']=_race_launch_context(registry)
             race_dirs=[]
             for i in range(2):
                 d=root/('startup-race-'+str(i));_copy_runtime(binary_dir,d,hashes);race_dirs.append(d)
@@ -890,7 +934,9 @@ def run(api,binary_dir,fixtures,evidence):
                 if len(visible)==1 and len(exited)==1:
                     owner=visible[0];break
                 time.sleep(.02)
-            if owner is None:raise RuntimeError('Simultaneous startup did not converge to one acknowledged owner')
+            if owner is None:
+                observations['startup-race failure']=_race_observation(api,race_procs,registry)
+                raise RuntimeError('Simultaneous startup did not converge to one acknowledged owner')
             rp,rh=owner
             ready(rp,rh,3,'race owner accepts both original paths')
             documents(rh,{q.name:q.read_bytes() for q in paths[:2]},'race exact documents')

@@ -1,7 +1,7 @@
 # Same-user/session routing filters, NOT authentication of the actual sender.
 # WM_COPYDATA wParam is caller-supplied; its window token is only a routing check.
 # Keep default desktop/UIPI/mutex ACLs; no filter relaxation, elevation or shell.
-# Hold the creation mutex handle only in the publishing owner. Send exactly once.
+# Hold the creation mutex handle only in the publishing owner. Retry only explicit BUSY3 zero-admission receipts.
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
 策 取 外言 'single_instance_policy.ru'.
@@ -68,12 +68,15 @@ _名称 取 'RuNotepad.SingleInstance.v1'.
     终
     _释放 存们 柄们. 得 文.
 法
-算 _窗口身份 窗口:
+算 _窗口进程 窗口:
     存 取 _数 其 新建.
     果 取 _PID 其 调用 [窗口,存].
     号 取 (存 其 读 'n') 其 数. 存 其 关闭.
     若 (果 其 值) 其 为空 或 号 == 0 则 卒 'Invalid single-instance window.'. 然
-    得 _身份 号.
+    得 号.
+法
+算 _窗口身份 窗口:
+    得 _身份 (_窗口进程 窗口).
 法
 算 _占用 态:
     名 取 密 其 UTF16 ('Local\\'+态['property']+'.'+态['identity']).
@@ -145,18 +148,33 @@ _名称 取 'RuNotepad.SingleInstance.v1'.
     环
     存 取 密 其 UTF16 文. 包 取 _包 其 新建. 回 取 _回执 其 新建.
     包 其 写 'tag' 1380864049. 包 其 写 'bytes' (存 其 大小). 包 其 写 'data' (存 其 地址).
-    回 其 写 'n' 0.
     状 取 'uncertain'.
     试
-        # SMTO_BLOCK|SMTO_ABORTIFHUNG, bounded 1 second; no automatic retry.
-        果 取 _Send 其 调用 [目标,74,(UP 其 重释 窗口),(IP 其 重释 (包 其 地址)),3,1000,回].
-        状 取 策 其 结果 (非 ((果 其 值) 其 为空)) ((回 其 读 'n') 其 数).
+        原进程 取 _窗口进程 目标.
+        # Immutable packet; never redirect a retry to a replacement owner.
+        循 16 次
+            现目标 取 _目标 态.
+            若 现目标 == 空 或 (现目标 其 句) != (目标 其 句) 或 (_窗口进程 目标) != 原进程 则 破. 然
+            剩 取 6000-((((_Tick 其 调用 []) 其 值) 其 数)-起).
+            若 剩 <= 0 则 破. 然
+            等 取 1000. 若 等 > 剩 则 等 取 剩. 然
+            回 其 写 'n' 0.
+            果 取 _Send 其 调用 [目标,74,(UP 其 重释 窗口),(IP 其 重释 (包 其 地址)),3,等,回].
+            状 取 策 其 结果 (非 ((果 其 值) 其 为空)) ((回 其 读 'n') 其 数).
+            若 状 != 'busy' 则 破. 然
+            # BUSY3 guarantees no enqueue; timeout/unknown never reaches this loop.
+            状 取 'uncertain'.
+            剩 取 6000-((((_Tick 其 调用 []) 其 值) 其 数)-起).
+            若 剩 <= 0 则 破. 然
+            暂 取 25. 若 暂 > 剩 则 暂 取 剩. 然
+            _Sleep 其 调用 [暂].
+        环
     救 原因
         状 取 'uncertain'.
     终
     存 其 关闭. 包 其 关闭. 回 其 关闭. 得 状.
 法
-# Caller returns 1 only AFTER successful all-path enqueue; 2 for explicit reject.
+# Caller returns 1 after enqueue, 2 for reject, 3 only for validated zero-admission open finalization.
 # Never retain the COPYDATA pointer beyond this synchronous call.
 算 接收 态 发送窗 参数:
     若 非 态['enabled'] 或 非 态['owner'] 或 (_窗口身份 (P 其 重释 发送窗)) != 态['identity'] 则 卒 'Single-instance sender identity mismatch.'. 然

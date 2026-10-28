@@ -666,4 +666,92 @@ class StableEditorReadinessTests(unittest.TestCase):
                 self.assertEqual(row['transient_reason'],'fixed-epoch-changed')
                 self.assertFalse(subject._is_ready(row,3))
 
+
+class RaceObservationTests(unittest.TestCase):
+    namespace='gui_'+'a'*32
+    registry='Software\\ru_notepad\\SingleInstanceTests\\gui_'+'a'*32
+
+    def api(self,owners=(101,),mains=None):
+        api=Mock()
+        inventory=mains or {11:[(101,subject.ci.MAIN_CLASS,True)],22:[(202,subject.ci.MAIN_CLASS,True)]}
+        identities={h:pid for pid,items in inventory.items() for h,_,_ in items}
+        def pid(hwnd,out):
+            out._obj.value=identities.get(hwnd,999)
+            return 1
+        def session(pid,out):out._obj.value=7;return 1
+        def caption(hwnd,buffer,length):
+            self.assertEqual(length,257)
+            buffer.value='x'*256
+            return 256
+        api.windows.side_effect=lambda pid:inventory.get(pid,[])
+        api.user.GetWindowThreadProcessId.side_effect=pid
+        api.kernel.ProcessIdToSessionId.side_effect=session
+        api.user.GetWindowTextW.side_effect=caption
+        api.user.GetPropW.side_effect=lambda hwnd,name:1 if hwnd in owners else 0
+        return api,identities
+
+    def process(self,pid,code=None):return Mock(pid=pid,poll=Mock(return_value=code))
+
+    def test_race_owner_inventory_is_bounded_readonly_and_not_acceptance(self):
+        for owners in ((101,),(101,202)):
+            api,_=self.api(owners)
+            children=[(self.process(11),None),(self.process(22),None),(self.process(33),None)]
+            with patch.dict(subject.os.environ,{'RU_NOTEPAD_INSTANCE_TEST_KEY':self.namespace}),patch.object(subject,'_registry_observation',return_value={'type':4,'value':1}) as registry:
+                row=subject._race_observation(api,children,self.registry)
+            registry.assert_called_once_with(self.registry)
+            self.assertTrue(row['config']['namespace_valid'])
+            self.assertEqual(row['config']['namespace_sha256'],subject.hashlib.sha256(self.namespace.encode()).hexdigest())
+            self.assertEqual([p['pid'] for p in row['participants']],[11,22])
+            self.assertEqual([p['session_id'] for p in row['participants']],[7,7])
+            self.assertEqual([p['windows'][0]['owner_property_present'] for p in row['participants']],[101 in owners,202 in owners])
+            self.assertNotIn('passed',row)
+            for p in row['participants']:self.assertEqual(len(p['windows'][0]['title']),256)
+            self.assertEqual([c.args[1] for c in api.user.GetPropW.call_args_list],['RuNotepad.SingleInstance.v1.test.'+self.namespace]*2)
+            api.scalar.assert_not_called();api.user.SendMessageW.assert_not_called();api.user.SendMessageTimeoutW.assert_not_called()
+        inventory={11:[(100+i,subject.ci.MAIN_CLASS,True) for i in range(5)]}
+        api,_=self.api(mains=inventory)
+        with patch.dict(subject.os.environ,{'RU_NOTEPAD_INSTANCE_TEST_KEY':self.namespace}),patch.object(subject,'_registry_observation',return_value={}):
+            row=subject._race_observation(api,[(self.process(11),None)],self.registry)
+        self.assertEqual(len(row['participants'][0]['windows']),4)
+        self.assertEqual(row['participants'][0]['observation_error'],'RuntimeError')
+        self.assertEqual(api.user.GetPropW.call_count,4)
+
+    def test_race_exited_foreign_and_reused_handles_never_read_foreign_property(self):
+        for mode in ('exited','foreign','reused-after-caption'):
+            api,identities=self.api()
+            process=self.process(11,0 if mode=='exited' else None)
+            if mode=='foreign':identities[101]=999
+            if mode=='reused-after-caption':
+                original=api.user.GetWindowTextW.side_effect
+                def caption(*args):
+                    result=original(*args);identities[101]=999;return result
+                api.user.GetWindowTextW.side_effect=caption
+            with patch.dict(subject.os.environ,{'RU_NOTEPAD_INSTANCE_TEST_KEY':self.namespace}),patch.object(subject,'_registry_observation',return_value={}):
+                row=subject._race_observation(api,[(process,None)],self.registry)
+            api.user.GetPropW.assert_not_called()
+            self.assertEqual(row['participants'][0]['windows'],[])
+            if mode=='exited':api.windows.assert_not_called();api.kernel.ProcessIdToSessionId.assert_not_called()
+            if mode in ('foreign','exited'):api.user.GetWindowTextW.assert_not_called()
+            if mode!='exited':self.assertEqual(row['participants'][0]['observation_error'],'RuntimeError')
+
+    def test_race_observation_errors_and_invalid_registry_remain_diagnostic(self):
+        api,_=self.api()
+        with patch.dict(subject.os.environ,{'RU_NOTEPAD_INSTANCE_TEST_KEY':'not-isolated'}),patch.object(subject,'_registry_observation',return_value={}):
+            row=subject._race_observation(api,[(self.process(11),None)],self.registry)
+        self.assertFalse(row['config']['namespace_valid']);self.assertEqual(row['participants'],[])
+        api.windows.assert_not_called();api.user.GetPropW.assert_not_called()
+        with patch.dict(subject.os.environ,{'RU_NOTEPAD_INSTANCE_TEST_KEY':self.namespace}),patch.object(subject,'_registry_observation',side_effect=OSError('fixture read failure')):
+            row=subject._race_observation(api,[],self.registry)
+        self.assertEqual(row['config']['observation_error'],'OSError')
+        fake_registry=Mock()
+        with patch.dict('sys.modules',{'winreg':fake_registry}):
+            for invalid in ('Software\\ru_notepad\\Preferences',self.registry+'x',self.registry[:-1]+'G'):
+                self.assertEqual(subject._registry_observation(invalid),{'observation_error':'invalid isolated namespace'})
+        fake_registry.OpenKey.assert_not_called()
+        api,_=self.api();api.windows.side_effect=OSError('fixture inventory failed')
+        with patch.dict(subject.os.environ,{'RU_NOTEPAD_INSTANCE_TEST_KEY':self.namespace}),patch.object(subject,'_registry_observation',return_value={}):
+            row=subject._race_observation(api,[(self.process(11),None)],self.registry)
+        self.assertEqual(row['participants'][0]['observation_error'],'OSError')
+        self.assertNotIn('passed',row)
+
 if __name__=='__main__':unittest.main()

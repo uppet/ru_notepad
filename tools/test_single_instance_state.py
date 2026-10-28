@@ -62,8 +62,9 @@ def static_check(ru_root, root=ROOT):
 def prepare(output, source):
     output.mkdir(parents=True,exist_ok=True)
     modules={
-      'control':"态 取 [0,0,0,0,0,0,0,0,0,0,0,0].\n",
-      'handle':"为空 取 假. 数 取 123.\n",
+      'control':"态 取 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0].\n",
+      'otherhandle':"句 取 '999'.\n",
+      'handle':"为空 取 假. 数 取 123. 句 取 '123'.\n",
       'empty':"为空 取 真. 数 取 0.\n",
       'good':"值 取 外言 './handle.ru'. 错误码 取 0.\n",
       'exists':"值 取 外言 './handle.ru'. 错误码 取 183.\n",
@@ -92,6 +93,9 @@ def prepare(output, source):
       'sleep':"控 取 外言 './control.ru'. 算 调用 参数: 若 参数[0] != 25 则 卒 'unexpected sleep budget'. 然 (控 其 态)[7] 取 (控 其 态)[7]+1. 得 空. 法\n",
       'send':"控 取 外言 './control.ru'. 好 取 外言 './good.ru'. 坏 取 外言 './failed.ru'. 算 调用 参数: (控 其 态)[6] 取 (控 其 态)[6]+1. 若 参数[1] != 74 或 参数[4] != 3 或 参数[5] != 1000 则 卒 'send contract differs'. 然 参数[6] 其 写 'n' 1. 若 (控 其 态)[0] == 11 则 参数[6] 其 写 'n' 2. 然 若 (控 其 态)[0] == 13 则 参数[6] 其 写 'n' 0. 然 若 (控 其 态)[0] == 14 则 卒 'send failed'. 然 若 (控 其 态)[0] == 12 则 得 坏. 然 得 好. 法\n",
     })
+    modules['tick']="控 取 外言 './control.ru'. 果 取 外言 './tickresult.ru'. 算 调用 参数: 步 取 1000. 若 (控 其 态)[0] >= 21 且 (控 其 态)[0] != 25 则 步 取 1. 然 (控 其 态)[5] 取 (控 其 态)[5]+步. 得 果. 法\n"
+    modules['sleep']="控 取 外言 './control.ru'. 算 调用 参数: 若 参数[0] <= 0 或 参数[0] > 25 则 卒 'unexpected sleep budget'. 然 (控 其 态)[7] 取 (控 其 态)[7]+1. 若 (控 其 态)[0] >= 21 则 (控 其 态)[5] 取 (控 其 态)[5]+参数[0]. 然 得 空. 法\n"
+    modules['send']="控 取 外言 './control.ru'. 好 取 外言 './good.ru'. 坏 取 外言 './failed.ru'. 算 调用 参数: (控 其 态)[6] 取 (控 其 态)[6]+1. 若 参数[1] != 74 或 参数[4] != 3 或 参数[5] <= 0 或 参数[5] > 1000 或 参数[3] != 98 则 卒 'send contract differs'. 然 (控 其 态)[12] 取 参数[5]. 模式 取 (控 其 态)[0]. 发送次 取 (控 其 态)[6]. 参数[6] 其 写 'n' 1. 若 模式 == 11 则 参数[6] 其 写 'n' 2. 然 若 模式 == 13 则 参数[6] 其 写 'n' 0. 然 若 模式 == 14 则 卒 'send failed'. 然 若 模式 == 12 则 得 坏. 然 若 模式 >= 21 则 参数[6] 其 写 'n' 3. 若 发送次 > 1 则 若 模式 == 21 则 参数[6] 其 写 'n' 1. 然 若 模式 == 22 则 参数[6] 其 写 'n' 2. 然 若 模式 == 23 则 得 坏. 然 若 模式 == 24 则 参数[6] 其 写 'n' 4. 然 然 然 得 好. 法\n"
     modules['create']=modules['create'].replace("若 (控 其 态)[0] == 1 则", "若 (控 其 态)[0] == 1 或 (控 其 态)[0] == 15 或 (控 其 态)[0] == 20 或 ((控 其 态)[0] == 16 且 (控 其 态)[1] < 2) 则")
     modules['setprop']=modules['setprop'].replace("算 调用 参数:", "算 调用 参数: (控 其 态)[11] 取 (控 其 态)[11]+1.")
     policy=(ROOT/'src/single_instance_policy.ru').read_text(encoding='utf-8')
@@ -99,6 +103,7 @@ def prepare(output, source):
     for name,text in modules.items():(output/(name+'.ru')).write_text(text,encoding='utf-8')
     header="""控 取 外言 './control.ru'.
 密 取 外言 './native.ru'. 窗 取 外言 './window.ru'. 设 取 外言 './settings.ru'.
+异柄 取 外言 './otherhandle.ru'.
 P 取 外言 './pointer.ru'. 柄 取 外言 './handle.ru'.
 _CreateMutexW 取 外言 './create.ru'. _CloseHandle 取 外言 './close.ru'.
 _GetCurrentProcessId 取 外言 './pid.ru'. _SetProp 取 外言 './setprop.ru'. _RemoveProp 取 外言 './remove.ru'.
@@ -106,16 +111,22 @@ _GetCurrentProcessId 取 外言 './pid.ru'. _SetProp 取 外言 './setprop.ru'. 
 UP 取 外言 './pointer.ru'. IP 取 外言 './pointer.ru'.
 _包 取 外言 './packettype.ru'. _回执 取 外言 './receipttype.ru'.
 _Tick 取 外言 './tick.ru'. _Sleep 取 外言 './sleep.ru'. _Send 取 外言 './send.ru'.
+算 _窗口进程 窗口:
+    若 (控 其 态)[0] == 26 且 (控 其 态)[6] > 0 则 得 999. 然
+    得 123.
+法
 算 _目标 态:
     (控 其 态)[8] 取 (控 其 态)[8]+1.
     若 (控 其 态)[0] == 17 则 卒 'target lookup failed'. 然
     若 (控 其 态)[0] == 15 或 (控 其 态)[0] == 16 则 得 空. 然
     若 (控 其 态)[0] == 20 且 (控 其 态)[8] < 3 则 得 空. 然
+    若 (控 其 态)[0] == 27 且 (控 其 态)[6] > 0 则 得 异柄. 然
+    若 (控 其 态)[0] == 28 且 (控 其 态)[6] > 0 则 得 空. 然
     得 柄.
 法
 算 重置 模式:
     位 取 0.
-    循 12 次 (控 其 态)[位] 取 0. 位 取 位+1. 环
+    循 16 次 (控 其 态)[位] 取 0. 位 取 位+1. 环
     (控 其 态)[0] 取 模式. 得 空.
 法
 算 接手态:
@@ -194,6 +205,26 @@ _名称 取 'RuNotepad.SingleInstance.v1'.
 确认 (捕[0] 且 (控 其 态)[6] == 0) 'normalization failure never delivers partial batch'.
 重置 10. 态 取 接手态.
 确认 ((转交 态 柄 ([])) == 'accepted' 且 (控 其 态)[6] == 1) 'empty request activates via one acknowledged send'.
+
+重置 21. 态 取 接手态.
+确认 ((转交 态 柄 (['中文.txt'])) == 'accepted' 且 (控 其 态)[6] == 2) 'BUSY3 then ACK retries exactly once'.
+确认 ((控 其 态)[9] == 1 且 (控 其 态)[4] == 1 且 (控 其 态)[7] == 1) 'busy retry keeps one normalized immutable packet and releases it once'.
+重置 22. 态 取 接手态.
+确认 ((转交 态 柄 (['a.txt'])) == 'local' 且 (控 其 态)[6] == 2) 'BUSY3 then NACK keeps explicit local policy'.
+重置 23. 态 取 接手态.
+确认 ((转交 态 柄 (['a.txt'])) == 'uncertain' 且 (控 其 态)[6] == 2) 'BUSY3 then timeout never retries again'.
+重置 24. 态 取 接手态.
+确认 ((转交 态 柄 (['a.txt'])) == 'uncertain' 且 (控 其 态)[6] == 2) 'BUSY3 then unknown never retries again'.
+重置 25. 态 取 接手态.
+确认 ((转交 态 柄 (['a.txt'])) == 'uncertain' 且 (控 其 态)[6] == 3 且 (控 其 态)[12] == 950) 'busy deadline clamps final send to remaining original budget'.
+重置 26. 态 取 接手态.
+确认 ((转交 态 柄 (['a.txt'])) == 'uncertain' 且 (控 其 态)[6] == 1) 'owner PID change forbids retry'.
+重置 27. 态 取 接手态.
+确认 ((转交 态 柄 (['a.txt'])) == 'uncertain' 且 (控 其 态)[6] == 1) 'owner HWND change forbids redirect'.
+重置 28. 态 取 接手态.
+确认 ((转交 态 柄 (['a.txt'])) == 'uncertain' 且 (控 其 态)[6] == 1) 'owner property disappearance forbids retry'.
+重置 29. 态 取 接手态.
+确认 ((转交 态 柄 (['a.txt'])) == 'uncertain' 且 (控 其 态)[6] == 16) 'busy attempt bound includes initial send'.
 显 'TOTAL PASS: '+(次数[0] 为 句).
 """
     path=output/'state-probe.ru';path.write_text(header+body+probe,encoding='utf-8');return path
@@ -201,13 +232,13 @@ _名称 取 'RuNotepad.SingleInstance.v1'.
 
 API_BOUNDARIES=('_CloseHandle','_CreateMutexW','_GetCurrentProcessId','_RemoveProp','_Send','_SetProp','_Sleep','_Tick')
 ALL_EXPORTS={
-    'single_instance.ru':('_释放','_身份','_窗口身份','_占用','准备','发布','关闭','_目标','转交','接收','激活'),
+    'single_instance.ru':('_释放','_身份','_窗口进程','_窗口身份','_占用','准备','发布','关闭','_目标','转交','接收','激活'),
     'single_instance_policy.ru':('宽数','验路','编包','解包','结果','设置结果','发现结果'),
     'single_instance_settings.ru':('测试路径','命名空间','_有效路径','_读取','_写入','载入偏好','保存偏好','测试载入','测试保存'),
     'tab_close_policy.ru':('目标',),
     'tab_context.ru':('点击','弹出'),
 }
-EXPECTED_ASSERTIONS=35
+EXPECTED_ASSERTIONS=45
 
 
 def sha(path): return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -249,7 +280,7 @@ def coverage_matrix(root):
                 route=('this: complete unchanged production body on interpreter and GCC with declared OS seams'
                        if name in FUNCTIONS else 'Windows native lifecycle / actual GUI; not executed by this portable state harness')
             elif filename=='single_instance_policy.ru':
-                route='pure policy39 suite; transfer calls real 编包/宽数/验路/结果/发现结果 here; not native wire ABI'
+                route='pure policy41 suite; transfer calls real 编包/宽数/验路/结果/发现结果 here; not native wire ABI'
             elif filename=='single_instance_settings.ru':
                 route='settings11 Windows registry fixture; GUI persistence and isolated namespace; not executed here'
             elif filename=='tab_close_policy.ru':
@@ -285,6 +316,8 @@ def run(ru_root,output):
         'nack-falsely-accepted':source.replace(response,response+" 若 ((回 其 读 'n') 其 数) == 2 则 状 取 'accepted'. 然"),
         'timeout-falsely-local':source.replace(response,response+" 若 (果 其 值) 其 为空 则 状 取 'local'. 然"),
         'discovery-falsely-local':source.replace(discovery,"若 等待 != 'wait' 则 得 'local'. 然"),
+        'busy-falsely-accepted':source.replace(response,response+" 若 状 == 'busy' 则 状 取 'accepted'. 然"),
+        'timeout-retried':source.replace(response,response+" 若 (果 其 值) 其 为空 则 状 取 'busy'. 然"),
     }
     negatives=[]
     for name,mutant in mutations.items():
@@ -296,13 +329,13 @@ def run(ru_root,output):
              'compiler_commit':commit,'compiler_entry_sha256':sha(compiler),
              'source_sha256':hashlib.sha256(source.encode()).hexdigest(),
              'complete_production_functions':list(FUNCTIONS),'api_boundaries':list(API_BOUNDARIES),
-             'additional_os_seams':['_身份 (token/session lookup)','_目标 (window discovery)'],
+             'additional_os_seams':['_身份 (token/session lookup)','_目标 (window discovery)','_窗口进程 (owned window PID)' ],
              'portable_ffi_seams':['owned text/packet/receipt values and allocation types','pointer conversions','absolute path conversion','test namespace'],
              'production_bodies_sha256':sha(output/'unmodified-production-bodies.ru'),
              'all_src_ast_scan':hashes,'coverage_matrix':matrix,'assertions_per_backend':EXPECTED_ASSERTIONS,
              'results':results,'negative_controls':negatives,'generated_sources':generated}
     (output/'receipt.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-    print(f'SINGLE_INSTANCE_STATE_PORTABLE_PASS {EXPECTED_ASSERTIONS} interpreter + {EXPECTED_ASSERTIONS} GCC; 4 negative controls each backend; not Windows evidence')
+    print(f'SINGLE_INSTANCE_STATE_PORTABLE_PASS {EXPECTED_ASSERTIONS} interpreter + {EXPECTED_ASSERTIONS} GCC; 6 negative controls each backend; not Windows evidence')
 
 
 if __name__=='__main__':

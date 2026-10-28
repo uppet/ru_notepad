@@ -38,7 +38,7 @@ def fixture(source):
     parts = ["""# Generated from complete current production rescue bodies; no Win32 imports.
 次数 取 [0].
 调用数 取 [0,0].
-批关数 取 [0].
+批关数 取 [0]. 恢复数 取 [0].
 结果 取 [''].
 A 取 {'operation':{'kind':'save'},'lastOutcome':'','closeIndex':0,'queue':[]}.
 作 确认 条件 为 事实 文 为 句:
@@ -53,6 +53,10 @@ A 取 {'operation':{'kind':'save'},'lastOutcome':'','closeIndex':0,'queue':[]}.
 算 结束工作:
     调用数[1] 取 调用数[1]+1.
     得 空.
+法
+算 恢复工作收尾:
+    恢复数[0] 取 恢复数[0]+1.
+    得 假.
 法
 算 结束批关 拒绝 为 事实:
     若 非 拒绝 则 卒 'FAIL: rescue must abort tab-close batch'. 然
@@ -73,7 +77,7 @@ A 取 {'operation':{'kind':'save'},'lastOutcome':'','closeIndex':0,'queue':[]}.
         for suffix, text in (('正', body), ('旧', mutant)):
             parts.append(f"算 路径{index}{suffix}:\n    试\n        卒 'primary'.\n    救 原因\n{text}    终\n    得 空.\n法\n")
         for suffix, expected in (('正', "primary\\ncleanup"), ('旧', 'primary')):
-            parts.append(f"""调用数[0] 取 0. 调用数[1] 取 0. 批关数[0] 取 0. 结果[0] 取 ''.
+            parts.append(f"""调用数[0] 取 0. 调用数[1] 取 0. 批关数[0] 取 0. 恢复数[0] 取 0. 结果[0] 取 ''.
 A 其 增 'closeRun' 'pending-close'.
 试
     路径{index}{suffix}.
@@ -86,7 +90,7 @@ A 其 增 'closeRun' 'pending-close'.
                 # Additional executable invariants retain the historical eight
                 # PASS diagnostics and both scalar negative controls unchanged.
                 expected_close = '空' if index == 1 else "'pending-close'"
-                parts.append(f"若 批关数[0] != {index} 或 (A 其 查 'closeRun') != {expected_close} 则 卒 'FAIL: {function} batch-close abort state/count'. 然\n")
+                parts.append(f"若 恢复数[0] != {index} 或 批关数[0] != {index} 或 (A 其 查 'closeRun') != {expected_close} 则 卒 'FAIL: {function} batch-close abort state/count'. 然\n")
                 parts.append(f"确认 (调用数[0] == 1) '{function} cleanup runs exactly once'.\n确认 (调用数[1] == 1) '{function} unlock runs exactly once'.\n")
     parts.append("显 'TOTAL PASS: '+(次数[0] 为 句).\n")
     return ''.join(parts)

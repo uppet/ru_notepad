@@ -86,6 +86,8 @@ jobs:
         run: python -I tools/test_i18n_models.py
       - name: Verify actual single-instance state control flow before native builds
         run: python -I tools/test_single_instance_state.py --ru-root .ci/ru-language --output build/instance-state-controls
+      - name: Verify zero-acceptance BUSY and open-finalization reentrancy
+        run: python -I tools/test_single_instance_admission.py --ru-root .ci/ru-language --output build/instance-admission-controls
       - name: Require private bounded i18n runner negative controls
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.historical_callback) }}
         run: python -I tools/test_i18n_runner.py --ru-root .ci/ru-language -v

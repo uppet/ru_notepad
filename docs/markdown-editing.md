@@ -70,3 +70,19 @@ case from blocking/default acceptance and requested a TODO for later optimizatio
 It is not a pass or a performance fix. All other active stages, source/style/fold
 correctness and UI checks remain required at their original limits. See
 [the exact deprecated case, retained failure and TODO](bootstrap-llvm-preview.md#deprecated-case-and-todo-2026-10-27).
+
+## Local fence predicate cache (candidate, 2026-10-28)
+
+Inside a feed, an already-started deferred fence-line segment proves the same
+non-closing predicate until a line boundary. Reuse that local fact instead of
+re-reading five state fields for each following scalar. The existing replay,
+newline, EOF and range-return paths still run; no cache survives a feed call.
+The state layout, retained closer-array aliases, byte accounting, publication
+limits and scheduling budgets are unchanged.
+
+A fresh baseline/candidate differential checked 1,203 feeds, four early range
+returns, all 24 state slots and retained aliases on interpreter and GCC backends.
+The existing 221 policy and 31 selection assertions also passed on both. A small
+paired parser experiment was noisy and does not establish a stable speedup.
+These checks do not replace the actual Windows OPEN deadline: the prior 5ccf
+binary took 30,008.282 ms and was still folding, so that run remains failed.

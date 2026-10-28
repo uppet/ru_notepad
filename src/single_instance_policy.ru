@@ -51,6 +51,7 @@
     若 非 已投递 则 得 'uncertain'. 然
     若 回执 == 1 则 得 'accepted'. 然
     若 回执 == 2 则 得 'local'. 然
+    若 回执 == 3 则 得 'busy'. 然
     # Zero/unknown is not proof that the receiver did not enqueue the request.
     得 'uncertain'.
 法

@@ -127,7 +127,7 @@ class ReceiptIntegration(unittest.TestCase):
             bad=copy.deepcopy(app);bad[field]='wrong'
             with self.subTest(field=field),self.assertRaises(InvalidProvenance):package.collect_native_evidence(self.config,bad)
 
-    def test_nine_fixture_report_uses_real_six_tools_and_wrapper_chain(self):
+    def test_eleven_fixture_report_uses_real_six_tools_and_wrapper_chain(self):
         app=self.receipts['app_receipt'];output=self.root/'fixtures';output.mkdir()
         template_dir=Path(self.config['app_receipt']).parent
         template=json.loads((template_dir/'compile-proof.json').read_text())
@@ -159,6 +159,14 @@ class ReceiptIntegration(unittest.TestCase):
                 **{key:build.identity(path) for key,path in (('binary',binary),('ir',ir),('proof',proof_path),('stdout',stdout),('stderr',stderr))}}
         with patch.object(recent,'validate_toolchain'): # external executable discovery only
             recent.validate_report(report,app,self.compiler,deps)
+            for mutation in ('old-schema','missing-busy','old-policy-count','old-lifecycle-count'):
+                stale=copy.deepcopy(report)
+                if mutation=='old-schema':stale['schema']='ru-notepad-bootstrap-editor-fixtures-v3'
+                elif mutation=='missing-busy':del stale['results']['single_instance_busy_native']
+                elif mutation=='old-policy-count':stale['results']['single_instance_policy']['assertions']=39
+                else:stale['results']['single_instance_native']['assertions']=15
+                with self.subTest(stale=mutation),self.assertRaises(InvalidProvenance):
+                    recent.validate_report(stale,app,self.compiler,deps)
             for name,path in wrappers.items():
                 original=path.read_bytes();bad=json.loads(original);bad['python_frontend_attempts']=['frontend.parse'];path.write_text(json.dumps(bad))
                 with self.subTest(fixture=name),self.assertRaisesRegex(InvalidProvenance,'poison proof'):
