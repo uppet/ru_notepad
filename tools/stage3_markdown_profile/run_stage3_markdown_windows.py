@@ -139,7 +139,9 @@ def extract_fixed(archive,directory):
     with zipfile.ZipFile(archive) as bundle:
         require(len(bundle.infolist())<=4096,'artifact member bound exceeded')
         for member in bundle.infolist():
-            name=member.filename;relative=PurePosixPath(name)
+            name=member.orig_filename
+            require(name==member.filename,'normalized artifact member name rejected')
+            relative=PurePosixPath(name)
             require(name and '\\' not in name and ':' not in name and not relative.is_absolute()
                     and all(p not in ('','..','.') for p in relative.parts),'unsafe artifact member')
             require(name.casefold() not in names,'duplicate/case-colliding artifact member');names.add(name.casefold())

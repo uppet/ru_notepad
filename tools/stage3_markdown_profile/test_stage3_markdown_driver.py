@@ -56,17 +56,32 @@ class DriverTests(unittest.TestCase):
             self.extract(archive,target);self.assertEqual((target/'stage3.exe').read_bytes(),b'fixture')
 
     def test_unsafe_duplicate_and_linked_archive_members_rejected(self):
-        variants=[lambda z:z.writestr('../escape',b'x'),lambda z:z.writestr('/absolute',b'x'),
-                  lambda z:z.writestr('C:/drive',b'x'),lambda z:z.writestr('dir\\escape',b'x'),
-                  lambda z:z.writestr('STAGE3.EXE',b'x')]
-        def linked(z):
-            info=zipfile.ZipInfo('link');info.create_system=3;info.external_attr=(stat.S_IFLNK|0o777)<<16;z.writestr(info,b'target')
-        variants.append(linked)
-        for extra in variants:
-            with tempfile.TemporaryDirectory() as tmp:
-                archive=self.zip_fixture(tmp,extra)
-                with self.assertRaises(ValueError):self.extract(archive,Path(tmp)/'out')
-                self.assertFalse((Path(tmp).parent/'escape').exists())
+        variants=[('traversal','../escape',False),('absolute','/absolute',False),
+                  ('drive','C:/drive',False),('backslash','dir\\escape',False),
+                  ('case-collision','STAGE3.EXE',False),('symlink','link',True),
+                  ('nul','bad\x00hidden',False)]
+        # ZipInfo normalizes Windows separators on both write and read. Set raw
+        # fields after construction so these fixtures really contain unsafe names.
+        for variant,name,is_link in variants:
+            for separator in ('/', '\\'):
+                with self.subTest(variant=variant,zip_separator=separator), tempfile.TemporaryDirectory() as tmp:
+                    def extra(z):
+                        info=zipfile.ZipInfo('placeholder')
+                        info.filename=name;info.orig_filename=name
+                        if is_link:
+                            info.create_system=3;info.external_attr=(stat.S_IFLNK|0o777)<<16
+                        z.writestr(info,b'target' if is_link else b'x')
+                    archive=self.zip_fixture(tmp,extra)
+                    # Exercise Python's actual Windows normalization on Linux too.
+                    with patch.object(zipfile.os,'sep',separator),patch.object(zipfile.os,'altsep','/' if separator=='\\' else None):
+                        with zipfile.ZipFile(archive) as z:
+                            actual=z.infolist()[-1]
+                            self.assertEqual(actual.orig_filename,name)
+                            if variant=='backslash':
+                                self.assertEqual(actual.filename,'dir/escape' if separator=='\\' else name)
+                            if is_link:self.assertEqual(stat.S_IFMT(actual.external_attr>>16),stat.S_IFLNK)
+                        with self.assertRaises(ValueError):self.extract(archive,Path(tmp)/'out')
+                    self.assertFalse((Path(tmp).parent/'escape').exists())
 
     def test_nested_stage3_is_not_a_fallback_for_missing_exact_root(self):
         with tempfile.TemporaryDirectory() as tmp:
