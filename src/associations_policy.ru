@@ -1,4 +1,5 @@
 # Pure registration policy: candidates only, never Windows' selected defaults.
+本地 取 外言 'i18n.ru'.
 程序标识 取 'RuNotepad.Text'.
 应用键 取 'Software\\Classes\\Applications\\ru_notepad.exe'.
 类型键 取 'Software\\Classes\\RuNotepad.Text'.
@@ -7,17 +8,17 @@
 扩展名 取 ['.txt','.ru','.md','.log','.csv','.json','.xml','.yaml','.yml','.ini','.cfg','.c','.h','.cpp','.hpp'].
 
 算 命令 可执行 为 句:
-    若 可执行 其 量 < 4 则 卒 '应用程序路径必须为完整路径。'. 然
+    若 可执行 其 量 < 4 则 卒 (本地 其 文本 'error.association.absolute_path'). 然
     绝对 取 假.
     若 可执行[1] == ':' 且 可执行[2] == '\\' 则
         若 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' 其 含 可执行[0] 则 绝对 取 真. 然
     然
     若 可执行[:2] == '\\\\' 则 绝对 取 真. 然
-    若 非 绝对 则 卒 '应用程序路径必须为完整路径。'. 然
+    若 非 绝对 则 卒 (本地 其 文本 'error.association.absolute_path'). 然
     位 取 0.
     循 可执行 其 量 次
         字 取 可执行[位].
-        若 字 < ' ' 或 字 == '"' 或 字 == '*' 或 字 == '?' 则 卒 '应用程序路径包含不支持的字符。'. 然
+        若 字 < ' ' 或 字 == '"' 或 字 == '*' 或 字 == '?' 则 卒 (本地 其 文本 'error.association.path_characters'). 然
         位 取 位+1.
     环
     得 '"'+可执行+'" "%1"'.

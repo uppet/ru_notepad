@@ -36,11 +36,38 @@ if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo ru_syntax_native.exe: real Scintilla Ru styles, edits, folding, margin callbacks and bounded performance probes.
 ru_syntax_native.exe >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo ru_direct_styling_native.exe: guarded direct-style routing, complete output equivalence, thread and document lifetime rejection, undo and fallback.
+ru_direct_styling_native.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo app_ru_native.exe: actual Ru menu routing, folding, tab isolation, bounded cooperative scheduling, capped numeric diagnostics and unchanged document state.
 app_ru_native.exe "%TESTDIR%" >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo app_ru_native.exe --measure-ru-timer: exact 1 MB Unicode source on production cooperative scheduler with timer fallback, bounded reads and filtered notification diagnostics.
 app_ru_native.exe "%TESTDIR%" --measure-ru-timer >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo markdown_policy.exe: bounded heading and fence parsing, UTF-8 splits, limits and reset policy.
+markdown_policy.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo markdown_selection_policy.exe: Markdown suffix and explicit language selection policy.
+markdown_selection_policy.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo markdown_native.exe: real Markdown bounded folding, edits, stale lifetime and document ownership controls.
+markdown_native.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo app_markdown_native.exe: production Markdown menu routing, folding option, tab isolation and document state.
+app_markdown_native.exe "%TESTDIR%" >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo markdown_direct_native.exe: guarded direct fold equivalence, acquisition invalidation and actual GC stress.
+cmd /d /c "set RU_GC_THRESHOLD=64&&set RU_GC_STATS=1&&markdown_direct_native.exe" >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo i18n_policy.exe: seven interface languages, fallback, placeholders, and wrapping layout policy.
+i18n_policy.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo i18n_settings_native.exe: isolated synthetic HKCU language preference roundtrip and malformed values; no production preference writes.
+i18n_settings_native.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo app_i18n_native.exe: actual localized menus, labels, measured layout and unchanged Unicode documents; session-only language switches.
+app_i18n_native.exe "%TESTDIR%" >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo shortcuts.exe: keyboard shortcut routing and modifier combinations.
 shortcuts.exe >>test-results.txt 2>&1
@@ -114,7 +141,7 @@ if "%~4"=="" copy /b "RuSyntax.dll" "%FALLBACKDIR%\RuSyntax.dll" >nul || exit /b
 if "%~4"=="bad-helper" copy /b "Scintilla.dll" "%FALLBACKDIR%\RuSyntax.dll" >nul || exit /b 1
 if "%~4"=="wrong-helper-abi" copy /b "RuSyntaxWrongAbi.dll" "%FALLBACKDIR%\RuSyntax.dll" >nul || exit /b 1
 if not "%~4"=="" copy /b "Lexilla.dll" "%FALLBACKDIR%\Lexilla.dll" >nul || exit /b 1
-if "%~1"=="bad-lexer" copy /b "Scintilla.dll" "%FALLBACKDIR%\Lexilla.dll" >nul || exit /b 1
+if "%~1"=="bad-lexer" copy /b "RuSyntax.dll" "%FALLBACKDIR%\Lexilla.dll" >nul || exit /b 1
 pushd "%FALLBACKDIR%" || exit /b 1
 "%FALLBACKEXE%.exe" %~2 >>"%~dp0test-results.txt" 2>&1
 set "FALLBACK_STATUS=%ERRORLEVEL%"

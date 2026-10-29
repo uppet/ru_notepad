@@ -29,7 +29,7 @@ DEPENDENCIES = {
 NATIVE_HELPER_NAME = 'RuSyntax.dll'
 NATIVE_WRONG_ABI_NAME = 'RuSyntaxWrongAbi.dll'
 NATIVE_COMPILE_SOURCES = {
-    NATIVE_HELPER_NAME: ('native/ru_scan.c',),
+    NATIVE_HELPER_NAME: ('native/ru_scan.c', 'native/ru_markdown_fold.c'),
     NATIVE_WRONG_ABI_NAME: ('native/ru_wrong_abi.c',),
 }
 NATIVE_SOURCE_SUFFIXES = {'.c', '.h', '.inc', '.inl', '.def'}
@@ -37,14 +37,17 @@ NATIVE_BUILD_DRIVERS = ('tools/build.py', 'tools/package.py')
 NATIVE_CFLAGS = ('-std=c99', '-O2', '-Wall', '-Wextra', '-shared', '-static-libgcc',
                  '-Wl,--no-insert-timestamp', '-Wl,--kill-at', '-s',
                  '-Inative')
-NATIVE_LINK_LIBRARIES = ()
+NATIVE_LINK_LIBRARIES = ('user32',)
 RUNTIME_NAMES = ('ru_notepad.exe', *DEPENDENCIES, NATIVE_HELPER_NAME)
 TEST_NAMES = ('document_policy.exe', 'ui_arguments.exe', 'file_codec_flags.exe',
               'editor_native.exe', 'app_native.exe', 'app_features_native.exe', 'file_codec_tests.exe',
               'file_codec_security_probe.exe', 'syntax_native.exe', 'syntax_policy.exe', 'shortcuts.exe', 'status_native.exe',
               'file_streaming_native.exe', 'editor_streaming_native.exe',
               'associations_policy.exe', 'associations_native.exe', 'file_drop_native.exe', 'app_streaming_native.exe',
-              'ru_lexical_policy.exe', 'ru_syntax_native.exe', 'app_ru_native.exe')
+              'ru_lexical_policy.exe', 'ru_syntax_native.exe', 'app_ru_native.exe',
+              'ru_direct_styling_native.exe', 'markdown_policy.exe', 'markdown_selection_policy.exe',
+              'markdown_native.exe', 'app_markdown_native.exe', 'markdown_direct_native.exe',
+              'i18n_policy.exe', 'i18n_settings_native.exe', 'app_i18n_native.exe')
 TEST_SUPPORT_DLL_NAMES = (NATIVE_WRONG_ABI_NAME,)
 SCANNER_PREFLIGHT_NAME = 'ru-scanner-preflight'
 BINARY_NAMES = (*RUNTIME_NAMES, *TEST_NAMES, *TEST_SUPPORT_DLL_NAMES)
@@ -56,13 +59,19 @@ SYSTEM_DLLS = {'advapi32.dll', 'gdi32.dll', 'imm32.dll', 'kernel32.dll',
 MAX_LOG_BYTES = 1024 * 1024
 GUI_EVIDENCE_PREFIXES = {'main-gui-smoke': 'main-launcher',
                          'main-gui-file-entry': 'main-file-entry-launcher',
-                         'main-gui-ru-syntax': 'main-ru-syntax-launcher'}
+                         'main-gui-ru-syntax': 'main-ru-syntax-launcher',
+                         'main-gui-markdown': 'main-markdown-launcher'}
 UNICODE_LICENSE_SHA256 = 'e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96'
 RUNTIME_FILES = {
     'LICENSE': 'LICENSE',
+    'packaging/licenses/ru-language-MIT.txt': 'licenses/ru-language-MIT.txt',
     'VERSION': 'VERSION', 'packaging/README-preview.txt': 'README.txt',
     'packaging/开始前请读.txt': '开始前请读.txt', 'CHANGELOG.md': 'CHANGELOG.md',
     'THIRD_PARTY_NOTICES.md': 'THIRD_PARTY_NOTICES.md',
+    'docs/markdown-editing.md': 'docs/markdown-editing.md',
+    'docs/internationalization.md': 'docs/internationalization.md',
+    'docs/i18n_candidate_validation.md': 'docs/i18n_candidate_validation.md',
+    'docs/markdown-policy-subset.md': 'docs/markdown-policy-subset.md',
     'assets/README.md': 'licenses/Artwork-provenance.md',
     'packaging/licenses/Unicode.txt': 'licenses/Unicode.txt',
 }
@@ -305,6 +314,9 @@ def verify_archive(archive):
         actual = {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}
         if actual != expected:
             raise RuntimeError('ZIP hash manifest mismatch or incomplete inventory')
+        if any(name.lower().endswith('.zip') or name.startswith(('third_party/source_archives/', 'vendor/'))
+               for name in files):
+            raise RuntimeError('Build-time source archive leaked into a portable ZIP')
         build = json.loads(files['BUILD.json'])
         if build['package_kind'] not in ('runtime', 'tests') or set(build['runtime_binary_sha256']) != set(RUNTIME_NAMES):
             raise RuntimeError('Invalid package kind or runtime hash inventory')
@@ -366,6 +378,7 @@ def _create_packages(root, binary_dir, destination, evidence, objdump, summary,
             if sha(stage / name) != hashes[name]:
                 raise RuntimeError(f'Binary changed during packaging: {name}')
         for source, target in {**RUNTIME_FILES, **(TEST_FILES if kind == 'tests' else {})}.items():
+            (stage / target).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source_file(root, source), stage / target)
         for dependency in DEPENDENCIES.values():
             shutil.copyfile(root / 'vendor' / dependency['folder'] / 'License.txt',

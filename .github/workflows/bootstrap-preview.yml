@@ -1,0 +1,205 @@
+name: Bootstrap LLVM editor preview
+on:
+  push:
+    branches: [feature/bootstrap-llvm-preview-20261024, feature/bootstrap-llvm-preview-20261024-r1, feature/bootstrap-llvm-preview-20261024-r2, feature/bootstrap-llvm-preview-20261024-r3, feature/notepad-024-responsive-preview-20261026, wip, main, feature/notepad-main-bootstrap-20261029]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: bootstrap-preview-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  windows-preview:
+    # Independent layered preview. The old complete C-native workflow still runs;
+    # its results must be reviewed separately before delivering this ZIP.
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONOPTIMIZE: '0'
+      CC: gcc
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: core.autocrlf
+      GIT_CONFIG_VALUE_0: 'false'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Initialize preview output from runner environment
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (!$env:RUNNER_TEMP) { throw 'RUNNER_TEMP unavailable' }
+          $previewOutput = Join-Path $env:RUNNER_TEMP 'ru-bootstrap-preview'
+          "PREVIEW_OUTPUT=$previewOutput" >> $env:GITHUB_ENV
+      - name: Check out exact preview source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: editor
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - name: Read reviewed immutable compiler pin
+        id: pins
+        run: python editor/tools/prepare_bootstrap_preview.py pins
+      - name: Check out exact validated native bootstrap compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: uppet/ru-language
+          ref: ${{ steps.pins.outputs.compiler_commit }}
+          path: language
+          persist-credentials: false
+      - name: Install native DLL-only MinGW tools
+        id: msys2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+      - name: Set real x64 SDK and CRT environment
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$vs -or $LASTEXITCODE) { throw 'x64 Visual Studio tools unavailable' }
+          $vars = & cmd.exe /d /s /c "call `"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set"
+          if ($LASTEXITCODE) { throw 'vcvars64 failed' }
+          $allow = @('PATH','INCLUDE','LIB','LIBPATH','WindowsSdkDir','WindowsSDKVersion','VCToolsInstallDir','VCToolsVersion')
+          foreach ($line in $vars) {
+            $pair = $line -split '=', 2
+            if ($pair.Length -eq 2 -and $allow -contains $pair[0]) { "$($pair[0])=$($pair[1])" >> $env:GITHUB_ENV }
+          }
+      - name: Prepare pinned LLVM 14
+        working-directory: language
+        run: python tools/prepare_workspace.py --with-llvm
+      - name: Freeze all reviewed source and application tool identities
+        run: python editor/tools/prepare_bootstrap_preview.py prepare --ru-root language --output "$env:PREVIEW_OUTPUT" --mingw-root "${{ steps.msys2.outputs.msys2-location }}/mingw64"
+      - name: Confirm pinned native-fixture compiler discovery
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $config = Get-Content "$env:PREVIEW_OUTPUT/base-config.json" -Raw | ConvertFrom-Json
+          $actual = (Get-Command gcc -ErrorAction Stop).Source
+          if ([System.IO.Path]::GetFullPath($actual) -ine [System.IO.Path]::GetFullPath($config.mingw_tool_paths.cc)) { throw 'Native fixture compiler differs from pinned MinGW tool' }
+          gcc --version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Fail-closed cheap contract preflight before self-compilation
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m unittest discover -s editor/tests -p 'test_bootstrap*.py' -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_windows_ci.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_package.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_gui_instance_tabs.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_i18n.py --catalog-only
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_i18n_models.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_single_instance_state.py --ru-root language --output "$env:PREVIEW_OUTPUT/instance-state-controls"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_single_instance_admission.py --ru-root language --output "$env:PREVIEW_OUTPUT/instance-admission-controls"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -I editor/tools/test_markdown_step_metrics.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-step-controls"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -I editor/tools/test_markdown_bulk_guards.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-bulk-guard-controls"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Fresh three-stage self-compilation and fixed point
+        working-directory: language
+        run: python tools/bootstrap.py verify --directory bin/bootstrap/preview-ci
+      - name: Require complete M4 and native frontend contracts
+        working-directory: language
+        run: |
+          python tools/verify_bootstrap_native_ci.py report --directory bin/bootstrap/preview-ci
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tools/verify_bootstrap_native_ci.py frontend --directory bin/bootstrap/preview-ci
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tools/verify_bootstrap_native_ci.py windows --directory bin/bootstrap/preview-ci
+      - name: Build pinned source DLLs and exact native helpers
+        run: python editor/tools/prepare_bootstrap_dependencies.py --config "$env:PREVIEW_OUTPUT/base-config.json" --output "$env:PREVIEW_OUTPUT/dependencies"
+      - name: Compile editor and probes using actual stage3 LLVM backend
+        run: python editor/tools/prepare_bootstrap_preview.py build --output "$env:PREVIEW_OUTPUT"
+      - name: Actual stage3 original and instance/tab fixtures with exact runtime DLLs
+        run: python editor/tools/verify_bootstrap_recent_policies.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --output "$env:PREVIEW_OUTPUT/recent-fixtures"
+      - name: B7 functional smoke only
+        run: python editor/tools/verify_bootstrap_editor_windows.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --output "$env:PREVIEW_OUTPUT/smoke-acceptance.json"
+      - name: Same-binary active GUI budgets, recent files and instance/tab acceptance
+        run: python editor/tools/verify_bootstrap_product_windows.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --output "$env:PREVIEW_OUTPUT/product"
+      - name: Package only the exact GUI-tested bootstrap preview and verify ZIP bytes
+        run: python editor/tools/package_bootstrap_preview.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --product-receipt "$env:PREVIEW_OUTPUT/product/product-preview.json" --mingw-root "${{ steps.msys2.outputs.msys2-location }}/mingw64" --output "$env:PREVIEW_OUTPUT/dist/ru_notepad-bootstrap-llvm-preview-windows-x64.zip"
+      - name: Preserve exact tested runtime as NOT ACCEPTED diagnostic evidence
+        if: always()
+        id: diagnostic_runtime
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((Test-Path "$env:PREVIEW_OUTPUT/gate-config.json") -and (Test-Path "$env:PREVIEW_OUTPUT/product/product-preview.json")) {
+            python editor/tools/verify_bootstrap_product_windows.py --collect-diagnostic --config "$env:PREVIEW_OUTPUT/gate-config.json" --product-receipt "$env:PREVIEW_OUTPUT/product/product-preview.json" --output "$env:PREVIEW_OUTPUT/diagnostic-runtime"
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            "collected=true" >> $env:GITHUB_OUTPUT
+          }
+      - name: Upload NOT ACCEPTED runtime for independent inspection only
+        if: ${{ always() && steps.diagnostic_runtime.outputs.collected == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: NOT-ACCEPTED-diagnostic-runtime-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/ru-bootstrap-preview/diagnostic-runtime/ru_notepad.exe
+            ${{ runner.temp }}/ru-bootstrap-preview/diagnostic-runtime/Scintilla.dll
+            ${{ runner.temp }}/ru-bootstrap-preview/diagnostic-runtime/Lexilla.dll
+            ${{ runner.temp }}/ru-bootstrap-preview/diagnostic-runtime/RuSyntax.dll
+            ${{ runner.temp }}/ru-bootstrap-preview/diagnostic-runtime/compile-proof.json
+            ${{ runner.temp }}/ru-bootstrap-preview/diagnostic-runtime/NOT_ACCEPTED.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve bounded synthetic build and GUI evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bootstrap-preview-evidence-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/ru-bootstrap-preview/**/*.json
+            ${{ runner.temp }}/ru-bootstrap-preview/**/*.log
+            language/bin/bootstrap/preview-ci/verification.json
+            language/bin/bootstrap/preview-ci/report.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Preserve emitted IR for independent source and final-link identity review
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bootstrap-preview-ir-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/ru-bootstrap-preview/app/application.ll
+            ${{ runner.temp }}/ru-bootstrap-preview/argv/application.ll
+            ${{ runner.temp }}/ru-bootstrap-preview/dll/application.ll
+            ${{ runner.temp }}/ru-bootstrap-preview/recent-fixtures/*.ll
+            ${{ runner.temp }}/ru-bootstrap-preview/app/intermediate-console.exe.metadata.c
+            ${{ runner.temp }}/ru-bootstrap-preview/app/intermediate-console.exe.frontend.ll
+            ${{ runner.temp }}/ru-bootstrap-preview/argv/intermediate-console.exe.metadata.c
+            ${{ runner.temp }}/ru-bootstrap-preview/argv/intermediate-console.exe.frontend.ll
+            ${{ runner.temp }}/ru-bootstrap-preview/dll/intermediate-console.exe.metadata.c
+            ${{ runner.temp }}/ru-bootstrap-preview/dll/intermediate-console.exe.frontend.ll
+            ${{ runner.temp }}/ru-bootstrap-preview/recent-fixtures/*.metadata.c
+            editor/packaging/application-native-oracle.json
+            language/bin/bootstrap/preview-ci/stage2.exe.frontend.ll
+            language/bin/bootstrap/preview-ci/stage3.exe.frontend.ll
+            language/bin/bootstrap/preview-ci/stage2.exe.metadata.c
+            language/bin/bootstrap/preview-ci/stage3.exe.metadata.c
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload labelled preview package (not all-native release acceptance)
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ru-notepad-bootstrap-llvm-preview-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/ru-bootstrap-preview/dist/*.zip
+            ${{ runner.temp }}/ru-bootstrap-preview/dist/*.sha256
+            ${{ runner.temp }}/ru-bootstrap-preview/dist/*.receipt.json
+          if-no-files-found: error
+          retention-days: 14

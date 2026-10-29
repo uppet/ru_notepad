@@ -33,7 +33,17 @@ New native gates cover strict UTF-8/UTF-16/legacy boundaries, staged-write cance
 
 Registration tests operate only inside a disposable HKCU test namespace; they do not choose defaults. HDROP tests cover bounded Unicode path ownership and malformed data. A separate detached GUI gate must inject file drops through the actual visible Scintilla child (rather than only the parent), observe exact opened text, responsiveness during a partial load, cancellation without a partial tab or remaining queue, and normal WM_CLOSE/exit0. Large generated fixtures are deleted and never uploaded; only bounded synthetic logs, hashes and counts are artifacts. The required total is 835 individual assertions across 21 assertion results, plus two detached GUI results (23 required results). The successful run above establishes these exact synthetic cases, not every filesystem or interactive path.
 
-## 0.1.4 Ru syntax gates (pending)
+## 0.1.4 Ru syntax history and CI status
+
+The latest [repair4 run 38952771302](https://github.com/uppet/ru_notepad/actions/runs/38952771302) has green Linux and Windows jobs. Its original `native-acceptance.json` confirms **1,427 native assertions / 32 passed results**, with no required skips or cleanup kills. Both original ZIPs passed independent verification of their inventories, shared runtime bytes, build receipts, manifests, licenses and bounded evidence, and were delivered.
+
+That exact 0.1.4 build provides the historical baseline for the separate 0.1.5 candidate:
+
+- The complete 1,000,000-byte Chinese GUI corpus was styled in **16.000 seconds**, with head-token styles first observed at **250 ms**. The latter is the first 250 ms snapshot's observation bound, not a precise styling latency. Corpus SHA-256: `ecf8dca884444a5e54e1f40dc6af01cf5e7830ed6fe902d3adf6fdf255f9b3fa`.
+- All six real 100 KB insertion/Backspace operations completed re-highlighting: beginning **3.265 / 3.172 seconds**, middle **2.235 / 2.234 seconds**, and end **1.265 / 1.266 seconds**, in insertion/deletion order. Maximum observed WM_NULL response across these edits was **16 ms**.
+- The same 1 MB corpus completed in **10.45263 seconds** synchronously and **14.78825 seconds** through the main-window timer. These controls are distinct from detached GUI wall time.
+
+The observer recorded 1,193 synchronous messages, including 257 WM_NULL probes and 65 bounded snapshots. Its recorded observer time of `0.0` comes from the coarse Windows Python 3.12 monotonic clock used by this run; it does **not** establish zero overhead or precise sub-tick response latency. These are exact-build historical measurements, not a measured 0.1.5 speedup. The earlier failures and measurements below remain historical evidence.
 
 The first [0.1.4 run 38927433174](https://github.com/uppet/ru_notepad/actions/runs/38927433174)
 passed the full Linux oracle/sanitizer job, including LeakSanitizer, but failed
@@ -78,7 +88,7 @@ measurements did not run. The normal application fixture passed 63 assertions
 then rejected a setup state in which newly pending UI work could legitimately
 defer posting. No ZIP was produced.
 
-The next revision makes that fixture setup retry within a fixed bound while
+The repair4 revision made that fixture setup retry within a fixed bound while
 still requiring a real queued continuation before close. It also bounds the
 GUI observer: full completion snapshots are spaced by at least 250 ms and
 WM_NULL probes by at least 50 ms, with actual synchronous message counts and
@@ -96,7 +106,7 @@ actual corpus builders must still match the complete original UTF-8 bytes in
 both portable backends. Portable diagnostic controls check fixed output,
 privacy, failure recovery and request caps separately from native message proof.
 
-This revision retains every 0.1.3 assertion and adds 8 shortcut and 8 suffix-policy
+The 0.1.4 gate retains every 0.1.3 assertion and adds 8 shortcut and 8 suffix-policy
 cases, 338 production lexer/fold-policy cases, 125 real Scintilla container cases,
 73 main-window integration cases, 8 separate main-timer measurement cases,
 and an isolated 8-case Ru run without Lexilla, and three 8-case helper rejection runs
@@ -129,7 +139,33 @@ and Backspace at the beginning, middle and end, with each response/completion
 time recorded and final style/fold probes checked. Native cases compare all
 text/style bytes and fold levels against fresh scans after unequal-length edits
 and edits made while earlier work is pending. Passing a finite timing-value check alone is not a usability
-claim. No 0.1.4 Windows pass is claimed until the exact-commit CI run succeeds.
+claim. The latest green run and independent original-artifact verification are identified above.
+
+## 0.1.5 bulk-transport baseline (accepted)
+
+This independent candidate pins the reviewed Ru 0.21.6 toolchain for one owned-memory U32LE snapshot per existing event batch. It preserves the scanner DLL ABI, lexical/folding policy, corpus, scheduling limits, 30-second GUI deadline and all six edit measurements. The external-file-change/reload proposal is separate and is not implemented here.
+
+The native container suite adds 24 production bulk-decoder assertions, including exact equality to the previous decoder and malformed bounds/high bits/order. Its required count is **149**, with **1,451 total assertions / 32 results**. The Ubuntu helper job additionally requires **23 exact arithmetic/control-flow assertions per backend** using the unchanged production decoder with ordinary Ru snapshot stubs. These portable controls do not establish native-memory behavior or application performance. All original helper oracle and sanitizer gates remain required.
+
+The language API's Windows acceptance is recorded in [language CI 38951630488](https://github.com/uppet/ru-language/actions/runs/38951630488). The [0.1.5 application run 38957923664](https://github.com/uppet/ru_notepad/actions/runs/38957923664) passed both jobs, all 1,451 native assertions / 32 results, both portable decoder controls and full ASan/UBSan/LSan. The original runtime/tests packages passed independent verification. Its exact 1 MB GUI completion was 16.65236 seconds; six edit completions were 1.472–3.307 seconds. This single-run comparison does not establish a clear end-to-end speedup. Earlier local full-LSan execution failed in the traced environment; that local failure is not counted as acceptance.
+
+## 0.1.6 direct-publication baseline (accepted)
+
+The candidate changes only the eligible three-message style-publication route. See [ownership and fallback constraints](direct-style-publication.md). All prior 1,451 native assertions remain required. The new 36-assertion direct-versus-message equivalence and lifecycle suite brings the required total to **1,487 assertions / 33 results**; the [corrected exact-build run](https://github.com/uppet/ru_notepad/actions/runs/38984124830) passed them all, including both earlier failing test groups and the full 500,039,680-byte roundtrip. Both original packages passed independent verification. A separate same-run, interleaved eight-row comparison covers cooperative and detached GUI paths with the same corpus, completion deadline, six edit cases, input/paint probes and normal closure. Valid timing evidence may show no benefit; a passed correctness gate is not itself a performance claim. The completed twenty-row baseline study stays available as a historical, pinned reproduction rather than accepting changed production inputs.
+
+The [paired run](https://github.com/uppet/ru_notepad/actions/runs/38984124849) completed three preflights and all eight rows. Its two detached-GUI pairs measured 10.248–11.456 seconds for direct publication and 15.126–15.128 seconds for messages. The separate product runner completed the same 1 MB file in 14.859 seconds; these are different machines/runs and must not be combined into a paired effect estimate.
+
+## 0.1.7 conservative Ru policy prefix (product pending)
+
+Only the common-token batch-policy path changes. An initially empty structural context can use a conservative fast prefix; the first unsupported event and the rest of that batch use the original loop. Full nested-state/output/style/fold comparisons in the interpreter and host C cover the unchanged 196 input plans, 19,627 batches, 2,554 events and 21,504 context transitions, plus four checkpoint edits and 13 additional boundary/error scenarios. Twelve source mutations check that the duplicated shortcut and original fallback cannot silently diverge.
+
+The candidate must still pass all **1,487 native assertions / 33 results**, original scanner oracle/sanitizer gates and the full-file safety tests. Its new Windows paired experiment keeps direct publication enabled on both sides, changes only the exact policy source, and retains the same corpus, complete-output validation, 30-second deadline, six edits, input/paint responsiveness and orderly closure. Linux policy-only observations justify this experiment but are not Windows or GUI acceptance. See [the policy contract and measurement limits](ru-policy-fastpath-experiment.md).
+
+The historical [same-route run38998372873](https://github.com/uppet/ru_notepad/actions/runs/38998372873) completed its three preflights and eight rows. That comparison does not substitute for complete product acceptance or for the reconstructed Markdown candidate.
+
+## 0.1.8 Markdown Stage A (pending)
+
+The new candidate retains the prior complete product gates and adds real portable policy/extension tests, native heading/lifecycle and main-window integration fixtures, and a separately measured GUI group. Exact counts are enforced by `tools/windows_ci.py`, not inferred from this document. Three GUI input shapes target long-line coloring, an unclosed fence and many-line expansion. Native tests compare complete small-fixture text and fold levels; GUI style probes are bounded samples. New Windows execution is required before any package is accepted. No Enter continuation or renderer is included.
 
 ## Packaging
 

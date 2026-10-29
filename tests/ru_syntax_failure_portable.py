@@ -7,6 +7,7 @@ bit guards and real context ownership remain Windows fixture obligations.
 """
 import argparse
 import io
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -44,6 +45,8 @@ def run_ru(source):
         path = Path(directory) / 'probe.ru'
         path.write_text(source, encoding='utf-8')
         (path.parent / 'scanner_stub.ru').write_text(SCANNER_STUB, encoding='utf-8')
+        for name in ('i18n.ru', 'i18n_catalog.ru'):
+            shutil.copyfile(ROOT / 'src' / name, path.parent / name)
         Interpreter(stdout=output).execute(parse(source), source_path=path)
     return output.getvalue()
 
@@ -54,6 +57,8 @@ def run_c(source):
         executable = Path(directory) / 'probe'
         path.write_text(source, encoding='utf-8')
         (path.parent / 'scanner_stub.ru').write_text(SCANNER_STUB, encoding='utf-8')
+        for name in ('i18n.ru', 'i18n_catalog.ru'):
+            shutil.copyfile(ROOT / 'src' / name, path.parent / name)
         built = subprocess.run([sys.executable, str(RU_ROOT / 'ru'), 'build',
                                 '--cc', args.cc, str(path), '-o', str(executable)],
                                capture_output=True, text=True, timeout=120)
@@ -76,7 +81,8 @@ def initialization_source():
     last = source.index(last_anchor, first)
     # Preserve the real selection try/rescue and its direct module calls. Only
     # the scanner module is an ordinary Ru ownership model in these host tests.
-    return ("词 取 外言 './scanner_stub.ru'.\n" + function_source(path, '_初始化失败')
+    return ("词 取 外言 './scanner_stub.ru'.\n本地 取 外言 './i18n.ru'.\n"
+            + function_source(path, '_警告') + function_source(path, '_初始化失败')
             + '算 初始化探针:\n' + source[first:last] + '    得 初.\n法\n')
 
 
@@ -130,15 +136,15 @@ HELPER_PROBE = """
 词 其 设置 1.
 初 取 初始化探针.
 确认 (初['lexical'] == 空 且 (初['points'] 其 量) == 0 且 (词 其 活数) == 0) 'first failure owns no context'.
-确认 (初['warning'] 其 含 'first step failed') 'first failure warning survives rescue'.
+确认 ((_警告 初) 其 含 'first step failed') 'first failure warning survives rescue'.
 词 其 设置 2.
 初 取 初始化探针.
 确认 ((词 其 第二步) 且 (词 其 见态)['references'] == 0 且 (词 其 见态)['native'] == 空 且 (词 其 活数) == 0) 'second failure releases its context once'.
 确认 (初['lexical'] == 空 且 (初['points'] 其 量) == 0) 'second failure cannot publish a released context'.
-确认 ((初['warning'] 其 含 'second step failed') 且 (初['warning'] 其 含 'editable as plain text')) 'second failure warning survives rescue'.
+确认 (((_警告 初) 其 含 'second step failed') 且 ((_警告 初) 其 含 'editable as plain text')) 'second failure warning survives rescue'.
 词 其 设置 0.
 初 取 初始化探针.
-确认 (初['lexical'] != 空 且 (初['points'] 其 量) == 1 且 (词 其 活数) == 2 且 初['warning'] == '') 'successful initialization owns both roots'.
+确认 (初['lexical'] != 空 且 (初['points'] 其 量) == 1 且 (词 其 活数) == 2 且 (_警告 初) == '' 且 非 初['warningHelper']) 'successful initialization owns both roots'.
 词 其 释放 初['lexical'].
 词 其 释放 (初['points'])[0][1].
 确认 ((词 其 活数) == 0) 'successful roots release independently'.
@@ -163,6 +169,26 @@ def actual_fixture_rescue():
     return '次数 取 [0].\n' + function_source(path, '确认') + probe
 
 
+def actual_fixture_warning():
+    # Execute the real native fixture's visible-warning assertion too. The
+    # internal state now stores a key, so inspecting that key as display text
+    # would otherwise survive portable tests and fail only on Windows.
+    source = (ROOT / 'tests/ru_syntax_native.ru').read_text(encoding='utf-8')
+    first_anchor, last_anchor = '    初警告 取 ', '    初始化故障[0] 取 空.'
+    if source.count(first_anchor) != 1 or source.count(last_anchor) != 1:
+        raise AssertionError('native fixture warning projection anchors must be unique')
+    first = source.index(first_anchor)
+    probe = source[first:source.index(last_anchor, first)]
+    call = '如语 其 _警告 失败初态'
+    if probe.count(call) != 1:
+        raise AssertionError('native fixture must inspect the real lazy warning projection')
+    probe = probe.replace(call, '_警告 失败初态')
+    state = ("失败初态 取 {'warning':'error.syntax.ru_initialization',"
+             "'warningArgs':['injected initial checkpoint copy failure'],"
+             "'warningHelper':假}.\n")
+    return state + probe
+
+
 class FailureRegressions(unittest.TestCase):
     def test_original_scalar_rescue_scope_interpreter(self):
         self.assertEqual(run_ru(ORIGINAL_SCOPE), '真\n假\n')
@@ -178,11 +204,11 @@ class FailureRegressions(unittest.TestCase):
         self.assertEqual(run_c(actual_fixture_rescue()), run_ru(actual_fixture_rescue()))
 
     def test_actual_initialization_helper_interpreter(self):
-        self.assertEqual(len(run_ru(INITIALIZE + HELPER_PROBE).splitlines()), 7)
+        self.assertEqual(len(run_ru(INITIALIZE + HELPER_PROBE + actual_fixture_warning()).splitlines()), 8)
 
     def test_actual_initialization_helper_generated_c(self):
-        expected = run_ru(INITIALIZE + HELPER_PROBE)
-        self.assertEqual(run_c(INITIALIZE + HELPER_PROBE), expected)
+        expected = run_ru(INITIALIZE + HELPER_PROBE + actual_fixture_warning())
+        self.assertEqual(run_c(INITIALIZE + HELPER_PROBE + actual_fixture_warning()), expected)
 
 
 if __name__ == '__main__':

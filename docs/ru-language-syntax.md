@@ -1,10 +1,10 @@
 # Ru highlighting and structural folding
 
-`ru_notepad` 0.1.4 includes a source-derived Ru lexical and folding policy in `src/ru_lexical.ru`, with a bounded application-internal C scanning hot path in `native/ru_scan.c` (`RuSyntax.dll`). The independent pure-Ru scanner remains the test oracle. Scintilla owns document/style storage; Ru supplies the exact keyword/style table and owns all structural pairing and fold decisions. This is not a renamed C, Python, or generic Chinese-keyword lexer. Ru highlighting does not depend on the optional Lexilla DLL used for C/C++ and JSON.
+`ru_notepad` 0.1.7 preserves a source-derived Ru lexical and folding policy in `src/ru_lexical.ru`, with a bounded application-internal C scanning hot path in `native/ru_scan.c` (`RuSyntax.dll`). The independent pure-Ru scanner remains the test oracle. Scintilla owns document/style storage; Ru supplies the exact keyword/style table and owns all structural pairing and fold decisions. This is not a renamed C, Python, or generic Chinese-keyword lexer. Ru highlighting does not depend on the optional Lexilla DLL used for C/C++ and JSON.
 
 ## Language baseline
 
-The original policy follows the pinned Ru 0.21.3 language source (public baseline `dd6cb81b`); the editor-only conditional-chain extension is described below:
+The lexical/folding policy was originally derived from the Ru 0.21.3 language source (public baseline `dd6cb81b`). The build pins Ru 0.22.1, retaining the generic owned-memory bulk-read transport introduced with the earlier Ru 0.21.6 pin. The editor-only conditional-chain extension is described below; the original policy sources are:
 
 - `rulang/frontend.py`: `KEYWORDS`, `NUMBER`, `comment_marker`, `block_comment_end`, `lex`, and the `Parser` declaration, literal, reference, statement and expression rules
 - `rulang/language-spec.md`: sections 2–4, including contextual scope/recovery delimiters
@@ -12,7 +12,7 @@ The original policy follows the pinned Ru 0.21.3 language source (public baselin
 The complete reserved-word set is:
 
 ```text
-显 取 为 得 完 破 若 则 另若 另 然 循 次 环 算 作 法 其
+显 取 为 得 完 破 续 若 则 另若 另 然 循 次 环 算 作 法 其
 且 或 非 空 真 假 典 成 对 形 象 如 新 外言 尽取 尽 试 救 卒
 ```
 
@@ -27,6 +27,12 @@ ASCII and Chinese full-width punctuation follow the exact frontend aliases. `:=`
 `另若` is one complete reserved word, not two nested openers. A chain shares one `然`; `另 若` remains a nested `若` and needs its own closer. Longer names such as `另若值` are not split. The branch condition enters expression context until `则`; it does not push an additional fold frame. Strings and comments do not create branches.
 
 This update changes editing vocabulary and structural policy only. The native scanner consumes the same Ru-provided table, so its C ABI and implementation do not change. The application continues to compile its existing syntax with the pinned Ru compiler; highlighting a Ru 0.23.0 file does not upgrade the compiler or prove the document executes. No application code is migrated to the new syntax.
+
+## Ru 0.24.0 continue editing support
+
+`续` is one complete statement keyword. It is colored like `破` and `完`, but does not open or close a folding frame. The enclosing `循 … 环` remains the fold boundary. The existing `完` styling and procedure-closing `为` behavior are unchanged. A statement-position `续` can confirm a previously tentative callable body, just like the other statement-only keywords; it is not accepted as a callable parameter name or type.
+
+Longer names such as `续值`, `_续` and `续2` remain ordinary names; strings and comments containing `续` do not create syntax or folds. Pure-Ru and native-scanner tests exercise single-byte UTF-8 feeds as well as whole-input scans. Native vocabulary still comes from the Ru-owned table, with no C scanner ABI change. This is editing support, not a claim that malformed or out-of-loop uses compile.
 
 ## Comments and incomplete input
 
@@ -64,6 +70,8 @@ For a multiline callable, `段`, or `典` header, the fold body starts on the li
 `native/ru_scan.h` defines ABI version `0x00010000`. All buffers belong to the caller. Configuration initialization validates and copies the Ru-provided vocabulary into a fixed-size configuration buffer. No native function retains an input pointer, document handle, callback, or Scintilla pointer. Checkpoints copy independent native lexical state and Ru structural state; temporary input/output buffers are not checkpointed.
 
 One feed accepts at most 65,536 input bytes and returns at most 64 packed lexical events (two `uint64_t` words each), plus a raw per-byte style buffer. The bridge uses a smaller retained input window and an explicit input offset, so a capacity-limited batch does not reread the document. Result fields distinguish newly accepted input bytes from styled absolute bytes. Lookahead and partial UTF-8 carry total at most 16 bytes; names retain at most 16 scalars/64 bytes, never their whole text. `OUTPUT_FULL` preserves unaccepted input and always makes observable progress. Empty non-EOF input may wait for more text. EOF can be resumed after `OUTPUT_FULL` and repeated safely after completion.
+
+The adapter takes one `读U32LE阵` snapshot of at most 256 words from its existing 1,024-byte event buffer per batch. The words retain the same ABI layout: low header, high header, length and line. It rejects a high header word of 131,072 or greater before combining an exact header below 2^49, then preserves all lexical bounds and ordering checks before policy dispatch. The API returns detached ordinary numeric arrays from live owned memory; it does not expose or dereference raw pointers. Native Windows application validation and same-corpus timing remain separate release gates.
 
 Native events describe completed names, number/string starts, punctuation, block-comment boundaries and physical line ends. `批处理` consumes them through the very same `_记词` and `_行折` functions used by the pure-Ru oracle. Exact names are classified using `词表配置`; ordinary long names never generate a document-length correction. Styles are published in one `SCI_SETSTYLINGEX` batch, followed by bounded keyword corrections and Ru fold updates. Tentative-header cancellation explicitly repairs earlier header flags, preserving other constructs sharing the same line.
 

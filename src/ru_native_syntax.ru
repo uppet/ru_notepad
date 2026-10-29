@@ -1,10 +1,11 @@
 # Bounded UTF-8 primitive scanner. Ru owns keyword configuration and all folding.
 # The helper retains no pointers; buffers and snapshot copies are caller-owned.
+本地 取 外言 'i18n.ru'.
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
 策 取 外言 'ru_lexical.ru'.
 _存活数 取 [0].
-_库态 取 {'ready':假,'warning':'','library':空,'config':空,'stateSize':0}.
+_库态 取 {'ready':假,'warning':'','warningArgs':[],'library':空,'config':空,'stateSize':0}.
 _事件型 取 密 其 结构 [['head',密 其 u64],['tail',密 其 u64]].
 _事件名 取 [].
 _事件域 取 [].
@@ -26,10 +27,12 @@ _GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名
 法
 _路径 取 (窗 其 目录)+'RuSyntax.dll'.
 _路径存 取 密 其 UTF16 _路径.
-_预载 取 窗 其 结果 ((窗 其 LoadLibraryExW) 其 调用 [_路径存,空,2304]).
+_预载成果 取 (窗 其 LoadLibraryExW) 其 调用 [_路径存,空,2304].
+_预载 取 窗 其 结果 _预载成果.
 _路径存 其 关闭.
 若 _预载 其 为空 则
-    _库态 其 增 'warning' 'Ru highlighting is unavailable: RuSyntax.dll could not be loaded. Extract the complete package. Your documents remain editable as plain text.'.
+    _库态 其 增 'warning' 'error.syntax.ru_missing'.
+    _库态 其 增 'warningArgs' ([((_预载成果 其 错误码) 为 句)]).
 另
     试
         若 非 (_有导出 _预载 'ru_scan_abi') 则 卒 'RuSyntax.dll does not export the required scanner API.'. 然
@@ -62,12 +65,14 @@ _路径存 其 关闭.
         _库态 其 增 'stateSize' _态长.
         _库态 其 增 'ready' 真.
     救 原因
-        _库态 其 增 'warning' ('Ru highlighting is unavailable: '+(原因 为 句)+' Restore RuSyntax.dll from the complete package. Your documents remain editable as plain text.').
+        _库态 其 增 'warning' 'error.syntax.ru_unavailable'.
+        _库态 其 增 'warningArgs' ([(原因 为 句)]).
     终
     窗 其 结果 ((窗 其 FreeLibrary) 其 调用 [_预载]).
 然
 算 初始化:
-    得 _库态['warning'].
+    若 _库态['warning'] == '' 则 得 ''. 然
+    得 本地 其 格式 (_库态['warning']) (_库态['warningArgs']).
 法
 算 可用:
     得 _库态['ready'].
@@ -78,7 +83,7 @@ _路径存 其 关闭.
     得 {'references':1,'processed':0,'received':0,'line':0,'native':存,'policy':折态,'input':空,'inputLength':0,'offset':0,'eof':假,'styles':空,'events':空,'result':空}.
 法
 算 新状态:
-    若 非 _库态['ready'] 则 卒 _库态['warning']. 然
+    若 非 _库态['ready'] 则 卒 初始化. 然
     存 取 密 其 缓冲 _库态['stateSize'].
     若 (窗 其 结果 (_StateInit 其 调用 [存,_库态['stateSize']])) 其 数 != 0 则 存 其 关闭. 卒 'The Ru scanner could not initialize its bounded state.'. 然
     得 _容器 存 (策 其 新状态).
@@ -128,6 +133,34 @@ _路径存 其 关闭.
     若 (头 其 位段 49 15) != 0 则 卒 'Ru scanner returned oversized event head bits.'. 然
     得 头 其 位段 0 49.
 法
+算 _解事件 存 项数 为 数 始 为 数 字节 为 数 行 为 数:
+    # One detached little-endian snapshot of the existing 1024-byte event ABI.
+    # Reject bits49..63 before combining two exact u32 words into a <2^49 head.
+    若 项数 < 0 或 项数 > 64 或 项数 % 1 != 0 则 卒 'Ru scanner returned an invalid batch size.'. 然
+    事件们 取 [].
+    字们 取 存 其 读U32LE阵 0 (项数*4).
+    项位 取 0.
+    字位 取 0.
+    循 项数 次
+        高 取 字们[字位+1].
+        若 高 >= 131072 则 卒 'Ru scanner returned oversized event head bits.'. 然
+        头数 取 字们[字位]+高*4294967296.
+        元码 取 头数 % 16777216.
+        项始 取 (头数-元码)/16777216.
+        种 取 元码 % 256.
+        码色 取 (元码-种)/256.
+        码 取 码色 % 256.
+        色 取 (码色-码)/256.
+        项长 取 字们[字位+2].
+        项行 取 字们[字位+3].
+        若 种 < 1 或 种 > 7 或 色 > 9 或 项长 == 0 或 项始+项长 > 字节 或 项行 > 行 或 (种 != 1 且 项始 < 始) 或 (种 == 1 且 色 != 8 且 项长 > 64) 则 卒 'Ru scanner returned an invalid lexical event.'. 然
+        若 项位 > 0 且 项始 < 事件们[项位-1][3] 则 卒 'Ru scanner returned unordered lexical events.'. 然
+        事件们 其 增 [种,码,色,项始,项长,项行].
+        项位 取 项位+1.
+        字位 取 字位+4.
+    环
+    得 事件们.
+法
 算 扫描 态 文 为 句 结束 为 事实 上限 为 数:
     若 态['references'] <= 0 则 卒 'Cannot resume a released Ru scanner checkpoint.'. 然
     若 态['input'] == 空 或 态['offset'] >= 态['inputLength'] 则
@@ -170,26 +203,7 @@ _路径存 其 关闭.
     收到 取 态['received']+已取.
     若 始 != 态['processed'] 或 始+已色 != 字节 或 字节 > 收到 或 收到-字节 > 16 或 收到 > 32000000 或 行 < 态['line'] 或 行 > 字节 或 (已毕 == 1 且 (末标 != 1 或 位+已取 != 长 或 字节 != 收到)) 则 卒 'Ru scanner returned inconsistent byte or line coordinates.'. 然
     态 其 增 'offset' (位+已取).
-    事件们 取 [].
-    项位 取 0.
-    循 项数 次
-        项 取 (态['events']) 其 读 _事件名[项位].
-        头 取 项 其 读 'head'.
-        尾 取 项 其 读 'tail'.
-        头数 取 _头数 头.
-        元码 取 头数 % 16777216.
-        项始 取 (头数-元码)/16777216.
-        种 取 元码 % 256.
-        码色 取 (元码-种)/256.
-        码 取 码色 % 256.
-        色 取 (码色-码)/256.
-        项长 取 尾 其 位段 0 32.
-        项行 取 尾 其 位段 32 32.
-        若 种 < 1 或 种 > 7 或 色 > 9 或 项长 == 0 或 项始+项长 > 字节 或 项行 > 行 或 (种 != 1 且 项始 < 始) 或 (种 == 1 且 色 != 8 且 项长 > 64) 则 卒 'Ru scanner returned an invalid lexical event.'. 然
-        若 项位 > 0 且 项始 < 事件们[项位-1][3] 则 卒 'Ru scanner returned unordered lexical events.'. 然
-        事件们 其 增 [种,码,色,项始,项长,项行].
-        项位 取 项位+1.
-    环
+    事件们 取 _解事件 态['events'] 项数 始 字节 行.
     态 其 增 'processed' 字节.
     态 其 增 'received' 收到.
     态 其 增 'line' 行.

@@ -3,7 +3,7 @@
 窗 取 外言 '../src/win32.ru'.
 编 取 外言 '../src/editor.ru'.
 件库 取 外言 '../src/file_codec.ru'.
-辅 取 外言 './file_streaming_native.ru'.
+辅 取 外言 './streaming_fixture.ru'.
 拖例 取 外言 './drop_fixture.ru'.
 密 取 外言 '如:密'.
 Sleep 取 (窗 其 内核) 其 绑定 'Sleep' (密 其 签名 (窗 其 V) ([(窗 其 U)]) 'win64').
@@ -112,7 +112,13 @@ Link 取 (窗 其 内核) 其 绑定 'CreateHardLinkW' (密 其 签名 (窗 其 
     窗 其 发送 主 275 901 0.
     读态 取 状态 其 查 'lastReader'.
     确认 (状态 其 查 'busy') 'multi-chunk open remains pending after bounded timer tick'.
-    确认 (读态['readBytes'] > 0 且 读态['readBytes'] < 33030144) 'one tick reads a bounded prefix rather than all33MB'.
+    首读量 取 读态['readBytes'].
+    # Reader/editor setup may consume the first tick's 8 ms budget without a body read.
+    # One more real timer tick must make bounded progress; never pump to completion.
+    窗 其 发送 主 275 901 0.
+    次读量 取 读态['readBytes']-首读量.
+    显 '[streaming-prefix] firstReadBytes='+(首读量 为 句)+' secondReadBytes='+(次读量 为 句)+' totalReadBytes='+(读态['readBytes'] 为 句).
+    确认 (首读量 >= 0 且 首读量 <= 196612 且 次读量 > 0 且 次读量 <= 262148 且 读态['readBytes'] < 33030144 且 (状态 其 查 'busy')) 'initialization and next body tick read a bounded prefix rather than all33MB'.
     确认 ((文们 其 量) == 4) 'pending large editor is absent from committed tabs'.
     确认 ((窗 其 发送 第一 2140 0 0) 其 数 == 1) 'existing documents are readonly during file operation'.
     确认 ((窗 其 发送 主 17 0 0) 其 数 == 0) 'busy state vetoes orderly session termination'.

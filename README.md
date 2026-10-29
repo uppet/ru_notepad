@@ -2,17 +2,45 @@
 
 A small Windows text editor written mostly in **Ru**. Open a file, edit it in a native Scintilla control, and keep several documents in tabs. Ru handles the menus, document state, encoding choices, save policy, and search commands.
 
-**Status: 0.1.4 preview development for Windows x64.** The released 0.1.3 build passed [835 native Windows assertions and two GUI gates](https://github.com/uppet/ru_notepad/actions/runs/38887294845), including a full 500,039,680-byte editor roundtrip. New 0.1.4 Ru syntax features require their own exact-build CI receipt. Use samples or copies while testing; full Notepad++ parity remains a longer-term goal.
+**Status: 0.1.8 Windows x64 preview.** The separately delivered seven-language/MIT baseline passed [Windows acceptance](https://github.com/uppet/ru_notepad/actions/runs/39395780914): 3,852 assertions / 42 result groups. Its 100,000-line Markdown double-Undo case took about 20.7 seconds, so interactive performance is still inadequate. Use copies while testing.
+
+This new candidate adds previous-match search (Shift+F3), whole-word matching and an optional wrap-around setting. Its Windows acceptance is pending; the earlier baseline result does not validate these additions. See [literal search behavior](docs/literal-search.md).
+
+## Bootstrap LLVM preview candidate
+
+The current candidate adds configurable single-instance shell opening and a tab
+right-click close menu, alongside **File > Recent files** and the native-bootstrap
+LLVM build of the editor. Single-instance mode defaults on; its persisted setting
+applies on the next launch, with `--multi-instance` as a one-launch override.
+Batch close confirms/saves every target before removing tabs: cancellation removes
+none, but completed disk saves are not rolled back. See [behavior and limits](docs/single-instance-and-tabs.md). Fresh validation is still required before delivery;
+older preview results do not certify this candidate. The actual bootstrap-built
+executable must pass the product GUI checks, recent-file flows, and actual
+two-process single-instance/tab-menu flows, and its ZIP
+must preserve the tested binary identities. The existing C-built native fixture
+suite remains separate baseline evidence, not a claim that every fixture was
+compiled with bootstrap LLVM. See [preview scope and evidence](docs/bootstrap-llvm-preview.md).
+
+The experimental `wij` Markdown dense/incremental implementation is intentionally
+not included. Interpreter explicit-stack work is also separate and does not block
+this preview's build plan.
+
+## Interface languages
+
+English, Simplified Chinese, Japanese, Korean, Spanish, Russian and Italian are included. UI language is separate from syntax language. Automated baseline acceptance passed; actual IME and different-DPI experience still needs manual validation. See [interface language behavior and acceptance](docs/internationalization.md).
 
 ## What is included
 
 - A standalone Windows x64 app with Scintilla, Lexilla and the application-owned RuSyntax DLL; Python is not needed to run them
+- [Recent files](docs/recent-files.md) in the File menu, with a bounded per-user history and clear command
 - Tabs, undo/redo, and prompts before closing unsaved documents
 - UTF-8, UTF-8 BOM, UTF-16 LE/BE, explicit Windows-1252, and GBK
 - Save-conflict checks and lossless-encoding checks
-- Literal search/replace, case matching, and replace-all as one undo operation
+- Literal search/replace with forward/backward, case/whole-word and wrap options; replace-all as one undo operation
 - Ru lexical tables and structural-folding policy, with a bounded application-owned C scanner for the UTF-8 hot path and incremental background styling
-- C/C++ and JSON syntax highlighting from native Lexilla; automatic extension detection and a Language menu
+- C/C++, JSON and Markdown syntax highlighting from native Lexilla; automatic extension detection and a Language menu
+- Native C/C++ folds for brace blocks, multiline comments and preprocessor conditionals
+- Conservative Markdown heading folds, with a per-document on/off command
 - Current-line EOL and Enter insertion mode shown separately, including mixed-EOL files
 - Tab-expanded Unicode columns, reverse tab switching, and zoom reset
 - Unicode multi-file command-line and filesystem drag/drop opening, with duplicate-file identity checks
@@ -20,9 +48,13 @@ A small Windows text editor written mostly in **Ru**. Open a file, edit it in a 
 - Bounded streaming open/save, with a cancellable warning before reading files over 500,000,000 bytes
 - An original AI-generated icon
 
-There is no fixed 4 MiB file limit. At most 64 documents and 64 queued paths are allowed. Scintilla retains the full document in RAM, so available memory still limits usable sizes. Files of at least 32,000,000 bytes open in labelled plain-text large-file mode with highlighting and wrap disabled; this is a performance mode, not an opening limit. Files over exactly 500,000,000 bytes require consent before body reads. Cancel is checked between bounded I/O chunks; one slow disk call or long-line layout can still block. Embedded NUL and invalid Unicode are rejected rather than silently changed. There is no crash recovery yet. Additional languages, regex parity, plugins, macros, split views, accessibility validation, and broader performance validation remain future work. `.ru` files select the Ru-owned container lexer. Folding tolerates incomplete edits conservatively and is not a full parser or syntax validator.
+There is no fixed 4 MiB file limit. At most 64 documents and 64 queued paths are allowed. Scintilla retains the full document in RAM, so available memory still limits usable sizes. Files of at least 32,000,000 bytes open in labelled plain-text large-file mode with highlighting and wrap disabled; this is a performance mode, not an opening limit. Files over exactly 500,000,000 bytes require consent before body reads. Cancel is checked between bounded I/O chunks; one slow disk call or long-line layout can still block. Embedded NUL and invalid Unicode are rejected rather than silently changed. There is no crash recovery yet. Additional syntax languages, regex parity, plugins, macros, split views, accessibility validation, and broader performance validation remain future work. `.ru` files select the Ru-owned container lexer. Folding tolerates incomplete edits conservatively and is not a full parser or syntax validator.
 
-For Ru files, click the folding margin or use View > Collapse all Ru folds / Expand all Ru folds (Ctrl+Shift+[ / Ctrl+Shift+]). New/opened and successfully saved-as `.ru` paths select Ru automatically; Language > Ru / 如言 enables it manually. Switching tabs retains fold state; switching to plain text restores all hidden lines. The 32 MB plain-text performance mode also disables Ru folding.
+For Ru files, click the folding margin or use View > Collapse all folds / Expand all folds (Ctrl+Shift+[ / Ctrl+Shift+]). New/opened and successfully saved-as `.ru` paths select Ru automatically; Language > Ru / 如言 enables it manually. Switching tabs retains fold state; switching to plain text restores all hidden lines. The 32 MB plain-text performance mode also disables Ru folding.
+
+For C/C++, the fold margin and the same collapse/expand commands use native Lexilla folding for braces, multiline comments and preprocessor conditionals. Strings and comment contents do not create brace folds. Ordinary editing remains incrementally styled; an explicit collapse-all may scan the full file. The 32 MB plain-text mode disables C/C++ folding.
+
+For Markdown, `.md` and `.markdown` suffixes are recognized case-insensitively. Language > Markdown selects it manually. The same fold margin and collapse/expand commands work with heading sections; View > Toggle Markdown heading folds disables or restores this feature per tab. Folding recognizes a documented conservative subset of ATX/setext headings, excluding fenced code, indented code and selected raw/container contexts. Lexilla's older coloring rules are distinct from this fold policy. See [Markdown editing scope](docs/markdown-editing.md).
 
 ## Trying the preview
 
@@ -48,7 +80,7 @@ Python is used only to run the Ru compiler and build/test tools. Ru application 
 - [Feature roadmap](docs/notepadpp-parity-roadmap.md)
 - [Icon provenance](assets/README.md)
 
-`python tools/build.py --help` lists the explicit compiler and toolchain arguments. Downloaded dependencies, local tool installations, generated C, binaries, and test output are kept out of the source repository.
+`python tools/build.py --help` lists the explicit compiler and toolchain arguments. The two reviewed upstream source ZIPs and notices are tracked as fixed build inputs. Extracted dependencies, local tools, generated C, binaries and test output stay out of the source repository; source ZIPs are excluded from user packages.
 
 ## License
 

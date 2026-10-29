@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import struct
 import subprocess
 import sys
@@ -27,6 +28,27 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import package as portable
 
 ROOT = Path(__file__).resolve().parents[1]
+# Read reviewed source catalogs once, before launching/timing the GUI. Pending
+# work and failures must not become false-success when Windows UI is non-English.
+_STATUS_KEYS = ('status.opening', 'status.styling_ru', 'status.folding_markdown',
+                'status.heading_folds_off', 'error.syntax.markdown_disabled')
+_STATUS_CATALOG = {}
+for _catalog_name in ('ui', 'errors'):
+    _STATUS_CATALOG.update(json.loads((ROOT / 'locales' / (_catalog_name + '.json')).read_text(encoding='utf-8')))
+_STATUS_PREFIXES = {key: tuple(dict.fromkeys(value.split('{0}', 1)[0].rstrip('. ')
+                                          for value in _STATUS_CATALOG[key].values()))
+                    for key in _STATUS_KEYS}
+del _STATUS_CATALOG
+
+
+def status_contains(text, key):
+    return any(fragment in text for fragment in _STATUS_PREFIXES[key])
+
+
+def status_startswith(text, key):
+    return text.lstrip().startswith(_STATUS_PREFIXES[key])
+
+
 MAX_LOG_BYTES = 1024 * 1024
 MAIN_CLASS = 'RuNotepad.Main.0.1'
 BINARY_NAMES = list(portable.BINARY_NAMES)
@@ -35,9 +57,9 @@ NATIVE_CONSOLE_TESTS = (
     ('document_policy', r'^TOTAL PASS: 23\s*$'),
     ('ui_arguments', r'^TOTAL PASS: 19\s*$'),
     ('file_codec_flags', r'^TOTAL PASS: 80\s*$'),
-    ('editor_native', r'^TOTAL PASS: 27\s*$'),
+    ('editor_native', r'^TOTAL PASS: 102\s*$'),
     ('app_native', r'^TOTAL PASS: 23\s*$'),
-    ('app_features_native', r'^TOTAL PASS: 23\s*$'),
+    ('app_features_native', r'^TOTAL PASS: 59\s*$'),
     ('app_streaming_native', r'^APP_STREAMING_TESTS_PASS=63\s*$'),
     ('file_codec_tests', r'^FILE_CODEC_TESTS_PASS=73\s*$'),
     ('file_streaming_native', r'^FILE_STREAMING_TESTS_PASS=99\s*$'),
@@ -47,13 +69,22 @@ NATIVE_CONSOLE_TESTS = (
     ('associations_native', r'^TOTAL PASS: 36\s*$'),
     ('file_drop_native', r'^TOTAL PASS: 38\s*$'),
     ('shortcuts', r'^TOTAL PASS: 42\s*$'),
-    ('syntax_policy', r'^TOTAL PASS: 108\s*$'),
+    ('syntax_policy', r'^TOTAL PASS: 134\s*$'),
     ('status_native', r'^TOTAL PASS: 21\s*$'),
-    ('syntax_native', r'^TOTAL PASS: 82\s*$'),
+    ('syntax_native', r'^TOTAL PASS: 144\s*$'),
     ('app_ru_native', r'^TOTAL PASS: 73\s*$'),
     ('app_ru_timer_native', r'^TOTAL PASS: 8\s*$'),
-    ('ru_lexical_policy', r'^TOTAL PASS: 380\s*$'),
-    ('ru_syntax_native', r'^TOTAL PASS: 125\s*$'),
+    ('ru_lexical_policy', r'^TOTAL PASS: 422\s*$'),
+    ('ru_syntax_native', r'^TOTAL PASS: 149\s*$'),
+    ('ru_direct_styling_native', r'^TOTAL PASS: 36\s*$'),
+    ('markdown_policy', r'^TOTAL PASS: 221\s*$'),
+    ('markdown_selection_policy', r'^TOTAL PASS: 31\s*$'),
+    ('markdown_native', r'^TOTAL PASS: 58\s*$'),
+    ('app_markdown_native', r'^TOTAL PASS: 73\s*$'),
+    ('markdown_direct_native', r'^TOTAL PASS: 114\s*$'),
+    ('i18n_policy', r'^TOTAL PASS: 289\s*$'),
+    ('i18n_settings_native', r'^TOTAL PASS: 69\s*$'),
+    ('app_i18n_native', r'^TOTAL PASS: 1606\s*$'),
 )
 SYNTAX_FALLBACK_TESTS = (
     ('syntax_missing_lexilla', '--expect-missing', False),
@@ -63,6 +94,8 @@ SYNTAX_FALLBACK_TESTS = (
     ('ru_syntax_bad_helper', '--expect-bad-helper', False),
     ('ru_syntax_wrong_helper_abi', '--expect-wrong-helper-abi', False),
 )
+WRONG_LEXER_PREFLIGHT_MARKER = 'WRONG_LEXER_FIXTURE_PREFLIGHT loadable=1 createlexer_missing=1 released=1'
+WRONG_LEXER_PREFLIGHT_FIELDS = {'loadable', 'createlexer_missing', 'released', 'library_sha256'}
 SYNTAX_FALLBACK_EXECUTABLES = {name: 'ru_syntax_native.exe' for name, _, _ in
                                SYNTAX_FALLBACK_TESTS if name.startswith('ru_syntax_')}
 HELPER_FALLBACK_LAYOUTS = {'ru_syntax_missing_helper': 'missing',
@@ -74,11 +107,11 @@ CONSOLE_EXECUTABLES = {'editor_largefile_native': 'editor_streaming_native',
                        'app_ru_timer_native': 'app_ru_native'}
 FIXTURE_ARGUMENT_TESTS = {'file_codec_tests', 'file_streaming_native', 'app_streaming_native',
                         'editor_streaming_native', 'editor_largefile_native', 'app_ru_native',
-                        'app_ru_timer_native'}
+                        'app_ru_timer_native', 'app_markdown_native', 'app_i18n_native'}
 CONSOLE_TIMEOUT_SECONDS = {'file_streaming_native': 300, 'app_streaming_native': 180,
                            'editor_streaming_native': 300,
                            'editor_largefile_native': 900, 'app_ru_native': 180,
-                           'app_ru_timer_native': 60}
+                           'app_ru_timer_native': 60, 'ru_direct_styling_native': 120, 'app_markdown_native': 240, 'markdown_direct_native': 180, 'app_i18n_native': 240}
 LARGE_FILE_MIN_FREE_BYTES = 2 * 1024 * 1024 * 1024
 GUI_FILE_CHECKS = ('cli_unicode_paths', 'cli_exact_text', 'drop_unicode_paths',
                    'drop_exact_text', 'child_drop_routed', 'busy_observed', 'busy_responsive',
@@ -96,7 +129,7 @@ GUI_RU_CHECKS = ('initial_mod_event_mask', 'timer_mod_event_mask', 'cli_unicode_
                  'edit_fixture_loaded', 'edit_all_operations',
                  'edit_style_fold_probes', 'edit_dirty_transitions', 'edit_source_bytes_preserved',
                  'edit_undo_clean')
-GUI_NAMES = {'main-gui-smoke', 'main-gui-file-entry', 'main-gui-ru-syntax'}
+GUI_NAMES = {'main-gui-smoke', 'main-gui-file-entry', 'main-gui-ru-syntax', 'main-gui-markdown'}
 # Byte/work bounds are deterministic acceptance limits. Elapsed time is
 # measured and reported, not compared with an invented hardware-independent SLA.
 RU_PERFORMANCE_SIZES = (100000, 1000000)
@@ -125,7 +158,7 @@ GUI_RU_EDIT_MEASUREMENT = ('Real child WM_CHAR/Backspace length-changing input; 
     'production Reset Zoom 504 status refresh and WM_NULL polling; bounded style/fold/context probes.')
 GUI_RU_TIMER_FIELDS = {'size', 'wall_ms', 'first_head_style_ms', 'max_response_ms', 'probes',
                        'source_sha256', 'style_probes', 'last_probe', 'responsiveness',
-                       'observer', 'diagnostics', 'head_style_measurement'}
+                       'observer', 'diagnostics', 'head_style_measurement', 'clock', 'clock_measurement'}
 GUI_RU_RESPONSE_TIMEOUT_MS = 5000
 GUI_RU_RESPONSE_MEASUREMENT = ('Synthetic queued RIGHT/LEFT navigation and natural invalidated-region '
     'service while Ru styling remains pending; no text edits, forced paint or pixel-render claim. '
@@ -137,19 +170,129 @@ SCANNER_PREFLIGHT_SOURCES = ('tools/test_ru_scan.py', 'src/ru_lexical.ru',
 SCANNER_PREFLIGHT_REPORT_FIELDS = {'cases', 'chunk_checks', 'ru_assertions_per_backend',
                                   'library_sha256', 'source_sha256', 'sanitizer'}
 SCANNER_SANITIZER_SUCCESS = 'PASS: 20000 ASan/UBSan bounded random buffer cases'
+SCANNER_CASES = 169
+SCANNER_CHUNK_CHECKS = 1014
+SCANNER_BACKEND_ASSERTIONS = 338
 HELPER_POLICY_EVIDENCE_FILES = ('helper-policy.stdout.log', 'helper-policy.stderr.log',
     'cleanup-control.stdout.log', 'cleanup-control.stderr.log',
     'bridge-failure.stdout.log', 'bridge-failure.stderr.log',
     'timer-corpus.stdout.log', 'timer-corpus.stderr.log',
     'diagnostic-control.stdout.log', 'diagnostic-control.stderr.log',
+    'event-bulk.stdout.log', 'event-bulk.stderr.log',
+    'policy-prefix.stdout.log', 'policy-prefix.stderr.log',
+    'policy-prefix-order.stdout.log', 'policy-prefix-order.stderr.log',
     'scanner-build.log', 'differential-python.log', 'differential-build.log',
     'differential-c.log', 'sanitize-build.log', 'sanitize.log', 'report.json')
-HELPER_POLICY_COMMIT = 'dd6cb81b52a426408f7076d82a84c2fdfb644263'
-HELPER_POLICY_TREE = '346d9f3f19c64f50f25b9f47ce92df1ea804bdb8'
+HELPER_POLICY_COMMIT = '85c7821fda35aa79deeaf67b4d430f24ddd7f07f'
+HELPER_POLICY_TREE = 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba'
+POLICY_PREFIX_BASELINE_COMMIT = 'a5f5fd825767cd5af662cba792f5ce352991c21e'
+POLICY_PREFIX_BASELINE_TREE = 'e8a402fb3eb551bfe416b8aee0aaaf942d2d4f4a'
+POLICY_PREFIX_BASELINE_SHA256 = 'f78589e247186890855526f7bb3624d34e4004bb8fbc69587c96d38c826a602c'
+POLICY_PREFIX_SOURCES = ('tools/test_ru_policy_fast.py', 'tools/verify_ru_policy_fast_outputs.py',
+                         'tests/fixtures/ru_policy_fast_plan.json')
+# Only these bounded synthetic proof files are published. Generated Ru/C,
+# compiler output, executable files and local work directories are excluded.
+POLICY_PREFIX_EVIDENCE_LIMITS = {
+    'report.json': 64 * 1024, 'fixture-manifest.json': 256 * 1024,
+    'ordered-output-validation.json': 16 * 1024,
+    'interpreter.log': 64 * 1024,
+    **{f'host-c-{shard}.log': 64 * 1024 for shard in range(4)},
+}
+POLICY_PREFIX_WRAPPER_LOGS = ('policy-prefix.stdout.log', 'policy-prefix.stderr.log',
+                            'policy-prefix-order.stdout.log', 'policy-prefix-order.stderr.log')
+POLICY_PREFIX_EXECUTION_SUCCESS = ('POLICY_FAST_EXECUTION_PASS cases=196 batches=19627 events=2554 '
+                                   'transitions=21504 shards=4 edits=4 boundaries=13 mutations=12\n')
+POLICY_PREFIX_ORDER_SUCCESS = 'POLICY_FAST_ORDER_PASS\n'
+POLICY_PREFIX_EXECUTION_STAGES = frozenset((
+    'startup', 'fresh-output', 'source-guards', 'scanner-build', 'fixture-generation',
+    'interpreter', 'final-source-check',
+    *(f'build-{shard}' for shard in range(4)), *(f'host-c-{shard}' for shard in range(4))))
+POLICY_PREFIX_ORDER_STAGES = frozenset(('startup', 'local-artifacts', 'validator-controls', 'public-evidence'))
+BULK_EVENT_CASES = (
+    'all 384 fields of the full batch',
+    'near-32-MB exact metadata',
+    'zero event batch',
+    'delayed long identifier',
+    'delayed 64-byte keyword',
+    'equal event positions',
+    'high word 131072',
+    'high word 2147483648',
+    'high word 4294967295',
+    'last event high bits',
+    'invalid count -1',
+    'invalid count 0.5',
+    'invalid count 65',
+    'kind zero',
+    'kind eight',
+    'style ten',
+    'zero length',
+    'full unsigned length',
+    'full unsigned line',
+    'end beyond bytes',
+    'non-token before start',
+    'keyword length 65',
+    'decreasing positions',
+)
 GUI_CANCEL_FIXTURE_BYTES = 128 * 1024 * 1024
 MAX_GUI_DROP_BATCHES = 4
 MAX_GUI_DROP_PAYLOAD_BYTES = 65536
 SYSTEM_DLLS = portable.SYSTEM_DLLS
+PERFORMANCE_CLOCK_FIELDS = {'clock_name', 'implementation', 'resolution', 'monotonic', 'adjustable'}
+PERFORMANCE_CLOCK_MEASUREMENT = ('Python perf_counter elapsed time; reported clock resolution is not '
+    'physical input or paint accuracy. Application tick quantization, polling cadence and measured '
+    'observer costs still limit interpretation; milliseconds are rounded to three decimals.')
+
+
+def validate_performance_clock(record, *, require_windows=False):
+    if (not isinstance(record, dict) or set(record) != PERFORMANCE_CLOCK_FIELDS or
+            record['clock_name'] != 'perf_counter' or
+            not isinstance(record['implementation'], str) or
+            not 1 <= len(record['implementation']) <= 128 or
+            not record['implementation'].isprintable() or
+            type(record['resolution']) not in (int, float) or
+            not math.isfinite(record['resolution']) or record['resolution'] <= 0 or
+            record['monotonic'] is not True or record['adjustable'] is not False):
+        raise RuntimeError('CI performance clock metadata is missing or malformed')
+    if require_windows and record['implementation'] != 'QueryPerformanceCounter()':
+        raise RuntimeError('Native Windows CI performance clock must use QueryPerformanceCounter')
+
+
+def performance_clock_record():
+    info = time.get_clock_info('perf_counter')
+    record = dict(clock_name='perf_counter', implementation=info.implementation,
+                  resolution=info.resolution, monotonic=info.monotonic, adjustable=info.adjustable)
+    validate_performance_clock(record, require_windows=sys.platform == 'win32')
+    return record
+
+
+class PerformanceClock:
+    """One local elapsed-time domain; no global state survives mocked-clock restoration."""
+    def __init__(self, previous=None):
+        self.previous = previous
+
+    def __call__(self):
+        value = time.perf_counter()
+        if (type(value) not in (int, float) or not math.isfinite(value) or
+                (self.previous is not None and
+                 (type(self.previous) not in (int, float) or not math.isfinite(self.previous) or
+                  value < self.previous or not math.isfinite(value - self.previous)))):
+            raise RuntimeError('CI performance clock is nonfinite or moved backwards')
+        self.previous = value
+        return value
+
+
+def finish_result_clock(result, clock, started):
+    """A failed final timestamp must not discard executed/cleanup/partial evidence."""
+    if started is None:
+        result['seconds'] = None
+        return
+    try:
+        result['seconds'] = round(clock() - started, 3)
+    except RuntimeError as exc:
+        result.update(passed=False, seconds=None, seconds_valid=False, clock_error=str(exc))
+        result.setdefault('error', str(exc))
+        if clock.previous is not None:
+            result['last_good_seconds'] = round(clock.previous - started, 3)
 
 
 def sha(path):
@@ -204,6 +347,12 @@ class Windows:
         self.user.GetUpdateRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT), wintypes.BOOL]
         self.user.GetUpdateRect.restype = wintypes.BOOL
         self.kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        self.kernel.LoadLibraryExW.argtypes = [wintypes.LPCWSTR, wintypes.HANDLE, wintypes.DWORD]
+        self.kernel.LoadLibraryExW.restype = wintypes.HMODULE
+        self.kernel.GetProcAddress.argtypes = [wintypes.HMODULE, wintypes.LPCSTR]
+        self.kernel.GetProcAddress.restype = ctypes.c_void_p
+        self.kernel.FreeLibrary.argtypes = [wintypes.HMODULE]
+        self.kernel.FreeLibrary.restype = wintypes.BOOL
         self.kernel.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
         self.kernel.GlobalAlloc.restype = wintypes.HGLOBAL
         self.kernel.GlobalLock.argtypes = [wintypes.HGLOBAL]
@@ -260,6 +409,22 @@ class Windows:
         buffer = ctypes.create_unicode_buffer(length + 1)
         self.scalar(hwnd, 0x000D, length + 1, ctypes.addressof(buffer))
         return buffer.value
+
+    def markdown_status(self, hwnd):
+        # This numeric status changes while the GUI is processing messages.
+        # A separate WM_GETTEXTLENGTH can become stale before WM_GETTEXT and
+        # truncate a growing marker. Read once with the existing inspection
+        # limit plus one overflow sentinel and the terminating NUL. A buffer
+        # of limit+1 cannot distinguish a full permitted value from truncation.
+        limit = 4096
+        buffer = ctypes.create_unicode_buffer(limit + 2)
+        copied = self.scalar(hwnd, 0x000D, limit + 2, ctypes.addressof(buffer))
+        value = buffer.value
+        if copied > limit:
+            raise RuntimeError('Synthetic GUI text exceeds the bounded inspection limit')
+        if copied != len(value.encode('utf-16-le', 'surrogatepass')) // 2:
+            raise RuntimeError('Synthetic GUI text copy count is inconsistent')
+        return value
 
     def control(self, hwnd, identifier):
         child = self.user.GetDlgItem(hwnd, identifier)
@@ -491,19 +656,102 @@ def collect_ru_gui_measurement(result, stdout):
         result['measurement_error'] = str(exc)
 
 
+MARKDOWN_DIRECT_GC_ENV = {'RU_GC_THRESHOLD': '64', 'RU_GC_STATS': '1'}
+
+
+def validate_markdown_direct_gc(record):
+    if (not isinstance(record, dict) or set(record) != {'threshold', 'stats_enabled', 'live', 'freed', 'collections'} or
+            type(record['threshold']) is not int or record['threshold'] != 64 or
+            record['stats_enabled'] is not True or
+            any(type(record[key]) is not int or not 0 <= record[key] <= 2**53 - 1
+                for key in ('live', 'freed', 'collections')) or
+            record['freed'] <= 0 or record['collections'] < 2):
+        raise RuntimeError('Markdown direct native GC-stress evidence is missing or invalid')
+
+
+def parse_markdown_direct_gc(stderr):
+    # Native runtime writes exactly this one fixed numeric line at process exit.
+    # One collection could be cleanup only; require an additional actual GC.
+    text = stderr.replace('\r\n', '\n')
+    match = re.fullmatch(r'RU_GC live=([0-9]{1,16}) freed=([0-9]{1,16}) collections=([0-9]{1,16})\n', text)
+    if match is None:
+        raise RuntimeError('Markdown direct native GC-stress output is malformed')
+    record = dict(zip(('live', 'freed', 'collections'), map(int, match.groups())))
+    record.update(threshold=64, stats_enabled=True)
+    validate_markdown_direct_gc(record)
+    return record
+
+
+
+FOLD_ROUTE_METRIC_FIELDS = ('bulkCalls', 'bulkLines', 'fallbackBatches', 'directCalls',
+    'directLines', 'maxPlanBytes', 'ownedBufferBytes', 'bulkUs', 'metric_valid')
+FOLD_ROUTE_ORDER = ('fallback', 'bulk', 'perline')
+
+
+def validate_markdown_route_metrics(records):
+    if not isinstance(records, list) or len(records) != 3:
+        raise RuntimeError('Markdown route metrics require all three actual control routes')
+    for record, route in zip(records, FOLD_ROUTE_ORDER):
+        if (not isinstance(record, dict) or set(record) != {'route', *FOLD_ROUTE_METRIC_FIELDS} or
+                record['route'] != route or
+                any(type(record[key]) is not int or not 0 <= record[key] <= 2**53 - 1
+                    for key in FOLD_ROUTE_METRIC_FIELDS) or record['metric_valid'] != 1 or
+                record['bulkLines'] > 64 * record['bulkCalls'] or
+                record['directLines'] != record['directCalls']):
+            raise RuntimeError('Markdown route metrics have malformed fields or counters')
+        if route == 'bulk':
+            if (record['bulkCalls'] < 1 or record['bulkLines'] < 1 or
+                    record['fallbackBatches'] != 0 or record['directCalls'] != 0 or
+                    record['maxPlanBytes'] not in range(48, 1057, 16) or record['ownedBufferBytes'] != 1088):
+                raise RuntimeError('Markdown bulk control lacks actual bounded Apply calls')
+        elif (any(record[key] != 0 for key in ('bulkCalls', 'bulkLines', 'maxPlanBytes', 'ownedBufferBytes', 'bulkUs')) or
+                (route == 'fallback' and (record['fallbackBatches'] < 1 or record['directCalls'] != 0)) or
+                (route == 'perline' and (record['fallbackBatches'] != 0 or record['directCalls'] < 1))):
+            raise RuntimeError('Markdown fallback or perline control counters disagree with its route')
+    return records
+
+
+def parse_markdown_route_metrics(stdout):
+    # Fixed numeric observations from this child's current bounded stdout only.
+    # No cached receipt, arbitrary path, source text, or inferred line count.
+    text = stdout.replace('\r\n', '\n')
+    lines = re.findall(r'^FOLD_METRICS1 ([^\r\n]{1,512})\n', text, re.M)
+    if len(lines) != 3 or text.count('FOLD_METRICS') != 3:
+        raise RuntimeError('Markdown route metric marker count or framing is malformed')
+    records = []
+    for line, route in zip(lines, FOLD_ROUTE_ORDER):
+        parts = line.split(' ')
+        if len(parts) != 1 + len(FOLD_ROUTE_METRIC_FIELDS) or parts[0] != 'route=' + route:
+            raise RuntimeError('Markdown route metric field inventory or order is malformed')
+        record = {'route': route}
+        for name, part in zip(FOLD_ROUTE_METRIC_FIELDS, parts[1:]):
+            if re.fullmatch(re.escape(name) + r'=(0|[1-9][0-9]{0,15})', part) is None:
+                raise RuntimeError('Markdown route metric integer is malformed')
+            record[name] = int(part.split('=', 1)[1])
+        records.append(record)
+    return validate_markdown_route_metrics(records)
+
 def run_console(api, name, command, evidence, marker, timeout=120, expected_assertions=None, cwd=None):
+    clock = PerformanceClock()
     out, err = evidence / f'{name}.stdout.log', evidence / f'{name}.stderr.log'
     result = {'name': name, 'passed': False, 'executed': False, 'cleanup_killed': False}
-    started = time.monotonic()
+    started = None
     process = None
     try:
+        started = clock()
         with out.open('xb') as stdout, err.open('xb') as stderr:
-            process = subprocess.Popen(command, cwd=cwd or ROOT, stdout=stdout, stderr=stderr)
+            options = {}
+            if name == 'markdown_direct_native':
+                # Isolated child-only instrumentation, never the GUI or other tests.
+                environment = os.environ.copy()
+                environment.update(MARKDOWN_DIRECT_GC_ENV)
+                options['env'] = environment
+            process = subprocess.Popen(command, cwd=cwd or ROOT, stdout=stdout, stderr=stderr, **options)
             result['executed'] = True
-            deadline = time.monotonic() + timeout
+            deadline = clock() + timeout
             while process.poll() is None:
                 api.no_dialog(process.pid)
-                if time.monotonic() >= deadline:
+                if clock() >= deadline:
                     raise RuntimeError(f'{name}: exceeded {timeout}-second execution deadline')
                 if out.stat().st_size > MAX_LOG_BYTES or err.stat().st_size > MAX_LOG_BYTES:
                     raise RuntimeError(f'{name}: exceeded synthetic log size limit')
@@ -522,6 +770,20 @@ def run_console(api, name, command, evidence, marker, timeout=120, expected_asse
             raise RuntimeError(f'{name}: exact unique success marker missing or failure reported')
         if expected_assertions is not None and result['assertions_passed'] != expected_assertions:
             raise RuntimeError(f'{name}: expected {expected_assertions} individual PASS lines, got {result["assertions_passed"]}')
+        fixture_markers = re.findall(r'^WRONG_LEXER_FIXTURE_PREFLIGHT[^\r\n]*', stdout_text, re.M)
+        if name == 'syntax_bad_lexer':
+            if (fixture_markers != [WRONG_LEXER_PREFLIGHT_MARKER] or
+                    stdout_text.count('WRONG_LEXER_FIXTURE_PREFLIGHT') != 1 or
+                    'WRONG_LEXER_FIXTURE_PREFLIGHT' in stderr_text):
+                raise RuntimeError('Wrong-lexer native fixture preflight marker is missing or malformed')
+            result['native_fixture_preflight'] = True
+        elif 'WRONG_LEXER_FIXTURE_PREFLIGHT' in stdout_text + stderr_text:
+            raise RuntimeError('Unexpected wrong-lexer fixture preflight marker')
+        if name == 'markdown_direct_native':
+            result['gc_stress'] = parse_markdown_direct_gc(stderr_text)
+            result['bulk_route_metrics'] = parse_markdown_route_metrics(stdout_text)
+        elif 'FOLD_METRICS' in stdout_text + stderr_text:
+            raise RuntimeError('Unexpected Markdown route metric marker')
         if name == 'ru_syntax_native':
             result['performance'] = parse_ru_performance(stdout_text)
         if name in RU_GUI_CONSOLE_MEASUREMENTS:
@@ -539,13 +801,26 @@ def run_console(api, name, command, evidence, marker, timeout=120, expected_asse
             cap_log(path)
         if name in RU_GUI_CONSOLE_MEASUREMENTS and out.is_file():
             collect_ru_gui_measurement(result, bounded_text(out))
-        result['seconds'] = round(time.monotonic() - started, 3)
+        finish_result_clock(result, clock, started)
     return result
 
 
 def scanner_preflight_sources(root):
     return portable.native_source_snapshot(root) | {
         name: sha(portable.source_file(root, name)) for name in SCANNER_PREFLIGHT_SOURCES}
+
+
+def helper_policy_baseline(root):
+    baseline = root / '.ci/policy-baseline'
+    def git(*args):
+        return subprocess.check_output(['git', '-C', str(baseline), *args], text=True, timeout=30).strip()
+    commit, tree = git('rev-parse', 'HEAD'), git('rev-parse', 'HEAD^{tree}')
+    if (commit != POLICY_PREFIX_BASELINE_COMMIT or tree != POLICY_PREFIX_BASELINE_TREE or
+            git('status', '--porcelain') or
+            sha(portable.source_file(baseline, 'src/ru_lexical.ru')) != POLICY_PREFIX_BASELINE_SHA256):
+        raise RuntimeError('Policy-prefix gate requires the clean reviewed public baseline commit/tree/policy')
+    return {'baseline_commit': commit, 'baseline_tree': tree,
+            'baseline_source_sha256': POLICY_PREFIX_BASELINE_SHA256}
 
 
 def helper_policy_inputs(root):
@@ -555,13 +830,141 @@ def helper_policy_inputs(root):
     commit, tree = git('rev-parse', 'HEAD'), git('rev-parse', 'HEAD^{tree}')
     if commit != HELPER_POLICY_COMMIT or tree != HELPER_POLICY_TREE or git('status', '--porcelain'):
         raise RuntimeError('Helper-policy gate requires the clean reviewed Ru compiler commit/tree')
-    return {'ru_commit': commit, 'ru_tree': tree, 'source_sha256': scanner_preflight_sources(root) | {
+    return {'ru_commit': commit, 'ru_tree': tree, **helper_policy_baseline(root),
+            'source_sha256': scanner_preflight_sources(root) | {
         name: sha(portable.source_file(root, name))
         for name in ('tools/windows_ci.py', '.github/workflows/windows.yml',
                      'tools/test_cleanup_paths.py', 'tests/ru_syntax_failure_portable.py',
                      'src/main.ru', 'src/ru_syntax.ru', 'tests/ru_syntax_native.ru',
                      'tests/app_ru_native.ru', 'tools/test_ru_timer_corpus.py',
-                     'tools/test_syntax_diagnostics.py')}}
+                     'tools/test_syntax_diagnostics.py', 'src/ru_native_syntax.ru',
+                     'tools/ru_cli_diagnostics.py', 'tools/test_ru_cli_diagnostics.py',
+                     'tools/test_i18n.py', 'tools/test_i18n_runner.py', 'tools/test_i18n_models.py',
+                     'tests/syntax_warning_portable.py', 'tools/generate_i18n.py',
+                     'src/i18n.ru', 'src/i18n_catalog.ru', 'src/i18n_layout.ru',
+                     'src/syntax.ru', 'src/markdown_syntax.ru', 'src/markdown_policy.ru',
+                     'locales/ui.json', 'locales/errors.json', 'tests/i18n_policy.ru',
+                     'tests/ru_event_bulk_portable.py', *POLICY_PREFIX_SOURCES)}}
+
+
+def policy_prefix_expected_inputs(inputs):
+    sources = inputs['source_sha256']
+    return {key: inputs[key] for key in ('baseline_commit', 'baseline_tree', 'baseline_source_sha256')} | {
+        'toolchain_commit': inputs['ru_commit'], 'toolchain_tree': inputs['ru_tree'],
+        'candidate_sha256': sources['src/ru_lexical.ru'],
+        'test_script_sha256': sources['tools/test_ru_policy_fast.py'],
+        'verifier_source_sha256': sources['tools/verify_ru_policy_fast_outputs.py'],
+        'canonical_plan_sha256': sources['tests/fixtures/ru_policy_fast_plan.json'],
+    }
+
+
+def policy_prefix_evidence_file(root, name):
+    if name not in POLICY_PREFIX_EVIDENCE_LIMITS:
+        raise RuntimeError('Unexpected policy-prefix evidence name')
+    paths = (root / 'build', root / 'build/policy-fast', root / 'build/policy-fast' / name)
+    for index, path in enumerate(paths):
+        info = path.lstat()
+        if (stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400 or
+                not (stat.S_ISDIR(info.st_mode) if index < 2 else stat.S_ISREG(info.st_mode))):
+            raise RuntimeError('Missing or linked policy-prefix evidence path')
+    if info.st_size > POLICY_PREFIX_EVIDENCE_LIMITS[name]:
+        raise RuntimeError('Policy-prefix evidence exceeds its fixed byte budget')
+    return paths[-1]
+
+
+def policy_prefix_evidence_bytes(root, name):
+    path = policy_prefix_evidence_file(root, name)
+    with path.open('rb') as stream:
+        data = stream.read(POLICY_PREFIX_EVIDENCE_LIMITS[name] + 1)
+    if len(data) > POLICY_PREFIX_EVIDENCE_LIMITS[name]:
+        raise RuntimeError('Policy-prefix evidence grew beyond its fixed byte budget')
+    return data
+
+
+def policy_prefix_wrapper_valid(name, text, complete):
+    if len(text.encode('utf-8')) > 64 * 1024:
+        return False
+    if name.endswith('stdout.log'):
+        expected = POLICY_PREFIX_ORDER_SUCCESS if '-order.' in name else POLICY_PREFIX_EXECUTION_SUCCESS
+        return text == expected or (not complete and text == '')
+    if complete:
+        return text == ''
+    if text == '':
+        return True
+    ordered = '-order.' in name
+    marker = 'POLICY_FAST_VERIFY_FAIL' if ordered else 'POLICY_FAST_FAIL'
+    match = re.fullmatch(marker + r' stage=([a-z0-9-]+) code=(validation|command|timeout|usage) detail_sha256=[0-9a-f]{64}\n', text)
+    stages = POLICY_PREFIX_ORDER_STAGES if ordered else POLICY_PREFIX_EXECUTION_STAGES
+    return match is not None and match[1] in stages and (not ordered or match[2] == 'validation')
+
+
+def verify_policy_prefix_evidence(root, inputs, texts):
+    import verify_ru_policy_fast_outputs as policy_proof
+    for name in POLICY_PREFIX_EVIDENCE_LIMITS:
+        policy_prefix_evidence_file(root, name)
+    if any(not policy_prefix_wrapper_valid(name, texts[name], True) for name in POLICY_PREFIX_WRAPPER_LOGS):
+        raise RuntimeError('Policy-prefix proof requires both exact success markers and empty stderr')
+    result = policy_proof.validate_public_evidence(
+        root / 'build/policy-fast', policy_prefix_expected_inputs(inputs))
+    if not isinstance(result, dict) or result.get('status') != 'passed':
+        raise RuntimeError('Policy-prefix ordered proof did not pass')
+    return result
+
+
+def collect_policy_prefix_evidence(root, directory, destination):
+    """Publish complete validated proof, or fixed failure metadata only.
+
+    Failed compiler/runtime text is never a public diagnostic. Each raw proof
+    file is hashed only after its normal-file and fixed-size checks pass.
+    """
+    files, wrappers, texts, proof_bytes = {}, {}, {}, {}
+    for name in POLICY_PREFIX_EVIDENCE_LIMITS:
+        try:
+            data = policy_prefix_evidence_bytes(root, name)
+            proof_bytes[name] = data
+            files[name] = {'status': 'available', 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
+        except FileNotFoundError:
+            files[name] = {'status': 'missing'}
+        except (OSError, RuntimeError):
+            files[name] = {'status': 'invalid_or_over_budget'}
+    for name in POLICY_PREFIX_WRAPPER_LOGS:
+        path = directory / name
+        try:
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400 or
+                    info.st_size > 64 * 1024):
+                raise ValueError('Unsafe wrapper')
+            with path.open('rb') as stream:
+                data = stream.read(64 * 1024 + 1)
+            text = data.decode('utf-8')
+            if not policy_prefix_wrapper_valid(name, text, False):
+                raise ValueError('Unexpected wrapper')
+            texts[name] = text
+            (destination / name).write_bytes(data)
+            wrappers[name] = {'status': 'verified', 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
+        except FileNotFoundError:
+            wrappers[name] = {'status': 'missing'}
+        except (OSError, UnicodeError, ValueError):
+            wrappers[name] = {'status': 'withheld_invalid_output'}
+    verified = False
+    if (all(item['status'] == 'available' for item in files.values()) and
+            all(item['status'] == 'verified' for item in wrappers.values())):
+        try:
+            inputs = json.loads(bounded_text(portable.checked_file(directory / 'helper-policy-inputs.json')))
+            verify_policy_prefix_evidence(root, inputs, texts)
+            verified = all(policy_prefix_evidence_bytes(root, name) == proof_bytes[name]
+                           for name in POLICY_PREFIX_EVIDENCE_LIMITS)
+        except Exception:
+            # Fixed failure status only: a validation exception may quote the
+            # original compiler/source text and must not enter this artifact.
+            verified = False
+    if verified:
+        for name in POLICY_PREFIX_EVIDENCE_LIMITS:
+            (destination / ('policy-prefix-' + name)).write_bytes(proof_bytes[name])
+    record = {'schema': 1, 'complete_proof_verified': verified,
+              'files': files, 'wrappers': wrappers}
+    save_json(destination / 'policy-prefix-collection.json', record)
+    return record
 
 
 def helper_policy_action(action, root):
@@ -576,11 +979,14 @@ def helper_policy_action(action, root):
         destination.mkdir(parents=True, exist_ok=False)
         names = (*HELPER_POLICY_EVIDENCE_FILES, 'helper-policy-inputs.json', 'helper-policy-acceptance.json')
         for name in names:
+            if name in POLICY_PREFIX_WRAPPER_LOGS:
+                continue  # fixed public grammar is checked separately below
             path = directory / name
             if path.exists() or path.is_symlink():
                 portable.checked_file(path)
                 cap_log(path)
                 shutil.copyfile(path, destination / name)
+        collect_policy_prefix_evidence(root, directory, destination)
         return {'collected': sorted(path.name for path in destination.iterdir())}
     inputs = helper_policy_inputs(root)
     recorded = json.loads(bounded_text(portable.checked_file(directory / 'helper-policy-inputs.json')))
@@ -591,7 +997,8 @@ def helper_policy_action(action, root):
     report = json.loads(texts['report.json'])
     if (not isinstance(report, dict) or set(report) != SCANNER_PREFLIGHT_REPORT_FIELDS or
             any(type(report[key]) is not int or report[key] != count for key, count in
-                (('cases', 163), ('chunk_checks', 978), ('ru_assertions_per_backend', 326))) or
+                (('cases', SCANNER_CASES), ('chunk_checks', SCANNER_CHUNK_CHECKS),
+                 ('ru_assertions_per_backend', SCANNER_BACKEND_ASSERTIONS))) or
             report['sanitizer'] != SCANNER_SANITIZER_SUCCESS):
         raise RuntimeError('Linux helper policy lacks exact differential/fuzz/sanitizer success')
     if (json.loads(texts['helper-policy.stdout.log']) != report or texts['helper-policy.stderr.log'].strip() or
@@ -600,10 +1007,10 @@ def helper_policy_action(action, root):
         raise RuntimeError('Linux helper-policy transcript/DLL/source identity mismatch')
     for name in ('differential-python.log', 'differential-c.log'):
         text = texts[name]
-        if (re.findall(r'^TOTAL PASS: ([0-9]+)\s*$', text, re.M) != ['326'] or
-                len(re.findall(r'^PASS:', text, re.M)) != 326 or
+        if (re.findall(r'^TOTAL PASS: ([0-9]+)\s*$', text, re.M) != [str(SCANNER_BACKEND_ASSERTIONS)] or
+                len(re.findall(r'^PASS:', text, re.M)) != SCANNER_BACKEND_ASSERTIONS or
                 re.search(r'^(FAIL:|SKIP:)', text, re.M)):
-            raise RuntimeError('Linux helper policy lacks 326 full style/fold assertions in each real backend')
+            raise RuntimeError('Linux helper policy lacks 338 full style/fold assertions in each real backend')
     if texts['sanitize.log'].strip() != SCANNER_SANITIZER_SUCCESS:
         raise RuntimeError('Linux helper policy lacks the real clean ASan/UBSan execution marker')
     cleanup = texts['cleanup-control.stdout.log']
@@ -640,13 +1047,20 @@ def helper_policy_action(action, root):
             diagnostic_control.validate(body)
         except ValueError as exc:
             raise RuntimeError('Linux diagnostic control lacks exact safe production projections') from exc
+    bulk_body = ''.join(f'PASS: {label}\n' for label in BULK_EVENT_CASES) + 'TOTAL PASS: 23\n'
+    bulk_expected = ('BACKEND: python\n' + bulk_body + 'BACKEND: c\n' + bulk_body +
+                     'RU_EVENT_BULK_PORTABLE_PASS: 2 backends, 23 assertions each\n')
+    if texts['event-bulk.stdout.log'] != bulk_expected or texts['event-bulk.stderr.log']:
+        raise RuntimeError('Linux bulk-event control requires all 23 exact cases in both real backends with empty stderr')
     failure_text = texts['bridge-failure.stderr.log']
     if (texts['bridge-failure.stdout.log'].strip() != 'RU_SYNTAX_FAILURE_PORTABLE_PASS: 6' or
             not re.search(r'^Ran 6 tests in [0-9.]+s$', failure_text, re.M) or
             not re.search(r'^OK$', failure_text, re.M) or
             re.search(r'^(FAILED|ERROR:|FAIL:|OK \(skipped=)', failure_text, re.M)):
         raise RuntimeError('Linux bridge failure controls require all six ordinary Ru tests without skips')
-    result = {'passed': True, 'executed': True, 'report': report, **inputs}
+    prefix_proof = verify_policy_prefix_evidence(root, inputs, texts)
+    result = {'passed': True, 'executed': True, 'report': report,
+              'policy_prefix': prefix_proof, **inputs}
     save_json(directory / 'helper-policy-acceptance.json', result)
     return result
 
@@ -659,7 +1073,7 @@ def validate_scanner_preflight(record, binary_hashes, root):
     report = record.get('report')
     if not isinstance(report, dict) or set(report) != SCANNER_PREFLIGHT_REPORT_FIELDS:
         raise RuntimeError('Exact-DLL scanner preflight report is missing or malformed')
-    expected = {'cases': 163, 'chunk_checks': 978, 'ru_assertions_per_backend': 0}
+    expected = {'cases': SCANNER_CASES, 'chunk_checks': SCANNER_CHUNK_CHECKS, 'ru_assertions_per_backend': 0}
     if any(type(report[key]) is not int or report[key] != value for key, value in expected.items()):
         raise RuntimeError('Exact-DLL scanner preflight did not execute all deterministic boundary/fuzz cases')
     if report['sanitizer'] is not None:
@@ -672,6 +1086,7 @@ def validate_scanner_preflight(record, binary_hashes, root):
 
 
 def run_scanner_preflight(api, binary_dir, evidence):
+    clock = PerformanceClock()
     name = portable.SCANNER_PREFLIGHT_NAME
     out, err = evidence / (name + '.stdout.log'), evidence / (name + '.stderr.log')
     result = {'name': name, 'passed': False, 'executed': False, 'cleanup_killed': False,
@@ -683,14 +1098,15 @@ def run_scanner_preflight(api, binary_dir, evidence):
     command = [sys.executable, '-I', str(ROOT / 'tools/test_ru_scan.py'),
                '--library', str(library), '--fuzz', '100']
     process = None
-    started = time.monotonic()
+    started = None
     try:
+        started = clock()
         with out.open('xb') as stdout, err.open('xb') as stderr:
             process = subprocess.Popen(command, cwd=ROOT, stdout=stdout, stderr=stderr)
             result['executed'] = True
             while process.poll() is None:
                 api.no_dialog(process.pid)
-                if time.monotonic() - started >= 180:
+                if clock() - started >= 180:
                     raise RuntimeError('Exact-DLL scanner preflight exceeded 180 seconds')
                 if out.stat().st_size > MAX_LOG_BYTES or err.stat().st_size > MAX_LOG_BYTES:
                     raise RuntimeError('Exact-DLL scanner preflight exceeded synthetic log size limit')
@@ -714,26 +1130,28 @@ def run_scanner_preflight(api, binary_dir, evidence):
                 result['passed'] = False
         for path in (out, err):
             cap_log(path)
-        result['seconds'] = round(time.monotonic() - started, 3)
+        finish_result_clock(result, clock, started)
     return result
 
 
 def run_gui(api, binary_dir, evidence, *, name='main-gui-smoke', arguments=(),
             exercise=None, log_prefix='main-launcher'):
+    clock = PerformanceClock()
     result = {'name': name, 'passed': False, 'executed': False,
               'main_hwnd_seen': False, 'close_posted': False, 'cleanup_killed': False,
               'detached_from_console': True}
-    started = time.monotonic()
+    started = None
     process = None
     # The dedicated bin dir was just built by this CI run; reject stale logs.
     if list(binary_dir.glob('ru_notepad-*.log')):
         result['error'] = 'Refusing stale launcher logs in fresh test binary directory'
         return result
     try:
+        started = clock()
         process = subprocess.Popen([str(binary_dir / 'ru_notepad.exe'), *map(str, arguments)], cwd=binary_dir,
                                    creationflags=0x00000008)  # DETACHED_PROCESS
         result['executed'] = True
-        deadline = time.monotonic() + 30
+        deadline = clock() + 30
         hwnd = None
         while hwnd is None:
             windows = api.no_dialog(process.pid)
@@ -745,14 +1163,14 @@ def run_gui(api, binary_dir, evidence, *, name='main-gui-smoke', arguments=(),
                 hwnd = visible_main[0]
             elif len(visible_main) > 1:
                 raise RuntimeError('More than one main HWND belongs to the application')
-            if time.monotonic() >= deadline:
+            if clock() >= deadline:
                 raise RuntimeError('No visible main HWND within 30 seconds')
             time.sleep(0.1)
         result['main_hwnd_seen'] = True
         result['window_class'] = MAIN_CLASS
         # Let queued startup work run, then prove that the actual event loop responds.
-        settle_until = time.monotonic() + 1
-        while time.monotonic() < settle_until:
+        settle_until = clock() + 1
+        while clock() < settle_until:
             api.no_dialog(process.pid)
             if process.poll() is not None:
                 raise RuntimeError('GUI terminated while checking startup stability')
@@ -763,10 +1181,10 @@ def run_gui(api, binary_dir, evidence, *, name='main-gui-smoke', arguments=(),
             result.update(exercise(process, hwnd))
         api.close(hwnd)
         result['close_posted'] = True
-        deadline = time.monotonic() + 15
+        deadline = clock() + 15
         while process.poll() is None:
             api.no_dialog(process.pid)
-            if time.monotonic() >= deadline:
+            if clock() >= deadline:
                 raise RuntimeError('GUI did not exit normally within 15 seconds after WM_CLOSE')
             time.sleep(0.1)
         result['exit_code'] = process.returncode
@@ -779,12 +1197,14 @@ def run_gui(api, binary_dir, evidence, *, name='main-gui-smoke', arguments=(),
         required = ('[launcher] Starting Ru program.', '[startup] menu installed',
                     '[startup] initial document ready', '[startup] main window shown',
                     '[launcher] Ru program returned with status 0.')
-        if name in {'main-gui-file-entry', 'main-gui-ru-syntax'}:
+        if name in {'main-gui-file-entry', 'main-gui-ru-syntax', 'main-gui-markdown'}:
             required += ('[operation] open started', '[operation] open completed')
         if name == 'main-gui-file-entry':
             required += ('[operation] cancelled',)
         if any(marker not in text for marker in required):
             raise RuntimeError('Launcher log does not prove full startup and normal return 0')
+        if 'FOLD_METRICS' in text:
+            raise RuntimeError('Unexpected Markdown route metric marker in GUI launcher log')
         if re.search(r'initialization failed|exited before returning|fatal|FAIL:', text, re.I):
             raise RuntimeError('Launcher log records an error despite the exit code')
         result['passed'] = True
@@ -801,19 +1221,20 @@ def run_gui(api, binary_dir, evidence, *, name='main-gui-smoke', arguments=(),
         for index, path in enumerate(logs[:4]):
             cap_log(path)
             shutil.copyfile(path, evidence / f'{log_prefix}-{index}.log')
-        result['seconds'] = round(time.monotonic() - started, 3)
+        finish_result_clock(result, clock, started)
     return result
 
 
 def wait_gui(api, process, predicate, failure, timeout=30):
-    deadline = time.monotonic() + timeout
+    clock = PerformanceClock()
+    deadline = clock() + timeout
     while True:
         api.no_dialog(process.pid)
         if process.poll() is not None:
             raise RuntimeError('GUI exited while checking synthetic file operations')
         if predicate():
             return
-        if time.monotonic() >= deadline:
+        if clock() >= deadline:
             raise RuntimeError(failure)
         time.sleep(0.01)
 
@@ -849,6 +1270,7 @@ def write_gui_cancel_fixture(path):
 
 
 def run_gui_file_entry(api, binary_dir, fixtures, evidence):
+    clock = PerformanceClock()
     isolated = Path(fixtures) / 'gui-file-entry'
     isolated.mkdir()
     fixture_hashes = {}
@@ -878,7 +1300,7 @@ def run_gui_file_entry(api, binary_dir, fixtures, evidence):
         checks = {}
         tab_count = lambda: api.scalar(api.control(hwnd, 10), 0x1304)
         status = lambda: api.text(api.control(hwnd, 11))
-        busy = lambda: status().lstrip().startswith('Opening:')
+        busy = lambda: status_startswith(status(), 'status.opening')
         wait_gui(api, process, lambda: tab_count() == 3 and not busy(),
                  'Unicode command-line files did not finish opening')
         verify_gui_documents(api, hwnd, {path.name: expected[path.name] for path in cli})
@@ -901,8 +1323,8 @@ def run_gui_file_entry(api, binary_dir, fixtures, evidence):
         wait_gui(api, process, lambda: not busy(), 'GUI cancel operation did not complete')
         # Give an incorrectly retained queued path enough event-loop turns to
         # expose itself before checking exact final tabs and original contents.
-        until = time.monotonic() + 0.5
-        while time.monotonic() < until:
+        until = clock() + 0.5
+        while clock() < until:
             api.no_dialog(process.pid)
             api.responsive(hwnd)
             time.sleep(0.01)
@@ -973,7 +1395,7 @@ GUI_RU_SNAPSHOT_TIME_FIELDS = {'work_ms', 'gap_ms', 'max_tick_ms', 'max_gap_ms'}
 GUI_RU_SNAPSHOT_INTEGER_FIELDS = {'seq', 'ok', 'generation', 'revision', 'pending',
     'bytes', 'feed', 'read_bytes', 'restart', 'chunks', 'ticks', 'posts',
     'continuation_ticks', 'queue_yields', 'stale_messages', 'text_notifications',
-    'style_notifications', 'fold_notifications'}
+    'style_notifications', 'fold_notifications', 'entry_yields', 'post_yields'}
 GUI_RU_HEAD_MEASUREMENT = ('First observed matching head-token styles are an upper bound; '
     'full scalar snapshots are sampled no more often than every 250 ms, not a paint measurement.')
 
@@ -994,8 +1416,9 @@ def gui_ru_observer_record():
 
 class GuiRuObserver:
     """Count actual synchronous calls, including text()'s two scalar calls."""
-    def __init__(self, api, record, started):
+    def __init__(self, api, record, started, clock=None):
         self.api, self.record, self.started = api, record, started
+        self.clock = PerformanceClock(started) if clock is None else clock
         self.current = None
         self.originals = {}
         self.shadows = {}
@@ -1011,7 +1434,7 @@ class GuiRuObserver:
         def measured(*args, **kwargs):
             if self.current is not None and self.current['messages'] >= GUI_RU_SNAPSHOT_MESSAGE_LIMIT:
                 raise RuntimeError('GUI Ru snapshot exceeded its 32 synchronous message limit')
-            begin = time.monotonic()
+            begin = self.clock()
             if begin - self.started > GUI_RU_TIMER_TIMEOUT_SECONDS:
                 raise RuntimeError('GUI 1 MB open and Ru timer styling exceeded 30 seconds')
             if name == 'responsive':
@@ -1028,13 +1451,13 @@ class GuiRuObserver:
             try:
                 return self.originals[name](*args, **kwargs)
             finally:
-                elapsed = (time.monotonic() - begin) * 1000
+                elapsed = (self.clock() - begin) * 1000
                 self.record['query_wall_ms'] += elapsed
                 self.record['max_query_ms'] = max(self.record['max_query_ms'], elapsed)
         return measured
 
     def snapshot(self, callback):
-        begin = time.monotonic()
+        begin = self.clock()
         current = {'start_ms': round((begin - self.started) * 1000, 3),
                    'wall_ms': 0.0, 'messages': 0, 'final': False}
         previous = self.record['snapshots']
@@ -1048,12 +1471,12 @@ class GuiRuObserver:
             current['final'] = bool(callback())
             return current['final']
         finally:
-            current['wall_ms'] = round((time.monotonic() - begin) * 1000, 3)
+            self.current = None
             self.record['snapshot_count'] += 1
+            self.record['max_snapshot_messages'] = max(self.record['max_snapshot_messages'], current['messages'])
+            current['wall_ms'] = round((self.clock() - begin) * 1000, 3)
             self.record['snapshot_wall_ms'] += current['wall_ms']
             self.record['max_snapshot_ms'] = max(self.record['max_snapshot_ms'], current['wall_ms'])
-            self.record['max_snapshot_messages'] = max(self.record['max_snapshot_messages'], current['messages'])
-            self.current = None
 
     def __exit__(self, *unused):
         for name in self.originals:
@@ -1097,15 +1520,16 @@ def parse_gui_ru_snapshots(text):
         expected = fields if values.get('ok') == 1 else {'seq', 'ok'}
         if (set(values) != expected or values.get('ok') not in (0, 1) or
                 values.get('seq') != len(records) + 1 or
-                (values.get('ok') == 1 and values['pending'] not in (0, 1))):
+                (values.get('ok') == 1 and (values['pending'] not in (0, 1) or values['entry_yields'] + values['post_yields'] != values['queue_yields']))):
             raise RuntimeError('GUI Ru diagnostic snapshot shape or sequence is malformed')
         records.append(values)
     return records
 
 
 class GuiRuDiagnostics:
-    def __init__(self, api, hwnd, binary_dir, record):
+    def __init__(self, api, hwnd, binary_dir, record, clock=None):
         self.api, self.hwnd, self.binary_dir, self.record = api, hwnd, binary_dir, record
+        self.clock = PerformanceClock() if clock is None else clock
         record.update(message=GUI_RU_DIAGNOSTIC_MESSAGE, capture_limit_ms=1000,
                       requests=[], receipts=[], captures=[], post_wall_ms=0.0, log_reads=0,
                       log_read_wall_ms=0.0, max_log_read_ms=0.0)
@@ -1114,18 +1538,18 @@ class GuiRuDiagnostics:
     def request(self, phase):
         if phase not in ('baseline', 'pending', 'final') or len(self.record['requests']) >= 3:
             raise RuntimeError('GUI Ru diagnostic request is outside its bounded phases')
-        begin = time.monotonic()
+        begin = self.clock()
         entry = {'phase': phase, 'post_wall_ms': 0.0, 'accepted': False}
         self.record['requests'].append(entry)
         try:
             self.api.post_ru_snapshot(self.hwnd)
             entry['accepted'] = True
         finally:
-            entry['post_wall_ms'] = round((time.monotonic() - begin) * 1000, 3)
+            entry['post_wall_ms'] = round((self.clock() - begin) * 1000, 3)
             self.record['post_wall_ms'] = round(sum(item['post_wall_ms'] for item in self.record['requests']), 3)
 
     def read(self):
-        begin = time.monotonic()
+        begin = self.clock()
         if self.record['log_reads'] >= 44:
             raise RuntimeError('GUI Ru diagnostic log reads exceeded their fixed bound')
         self.record['log_reads'] += 1
@@ -1143,27 +1567,27 @@ class GuiRuDiagnostics:
             self.record['receipts'] = records
             return len(records)
         finally:
-            elapsed = (time.monotonic() - begin) * 1000
+            elapsed = (self.clock() - begin) * 1000
             self.record['log_read_wall_ms'] = round(self.record['log_read_wall_ms'] + elapsed, 3)
             self.record['max_log_read_ms'] = round(max(self.record['max_log_read_ms'], elapsed), 3)
 
     def capture(self, expected):
-        begin = time.monotonic()
+        begin = self.clock()
         first_read = self.record['log_reads']
         entry = {'phase': self.record['requests'][-1]['phase'], 'wall_ms': 0.0, 'log_reads': 0}
         self.record['captures'].append(entry)
         try:
             while True:
                 count = self.read()
-                elapsed = time.monotonic() - begin
+                elapsed = self.clock() - begin
                 if elapsed > GUI_RU_DIAGNOSTIC_TIMEOUT_SECONDS:
                     raise RuntimeError('GUI Ru diagnostic receipt did not arrive within its separate 1-second limit')
                 if count == expected:
                     return
                 time.sleep(GUI_RU_RESPONSE_INTERVAL_MS / 1000)
         finally:
-            entry['wall_ms'] = round((time.monotonic() - begin) * 1000, 3)
             entry['log_reads'] = self.record['log_reads'] - first_read
+            entry['wall_ms'] = round((self.clock() - begin) * 1000, 3)
 
 
 def validate_gui_ru_observer(record, wall_ms, probes):
@@ -1241,6 +1665,7 @@ def validate_gui_ru_diagnostics(record):
                 receipt['seq'] != index + 1 or receipt['ok'] != 1 or receipt['pending'] not in (0, 1)):
             raise RuntimeError('GUI Ru diagnostic receipt is incomplete or malformed')
         if (not 0 <= receipt['bytes'] <= receipt['feed'] <= receipt['read_bytes'] <= GUI_RU_TIMER_BYTES or
+                receipt['entry_yields'] + receipt['post_yields'] != receipt['queue_yields'] or
                 receipt['continuation_ticks'] > min(receipt['ticks'], receipt['posts']) or
                 receipt['max_tick_ms'] > receipt['work_ms'] + 0.000001 or
                 receipt['max_gap_ms'] > receipt['gap_ms'] + 0.000001):
@@ -1257,10 +1682,13 @@ def validate_gui_ru_diagnostics(record):
         raise RuntimeError('GUI Ru same-generation diagnostic counters moved backwards')
 
 
-def validate_gui_ru_timer(record):
+def validate_gui_ru_timer(record, *, require_windows_clock=False):
     data, probes = gui_ru_timer_fixture()
     if not isinstance(record, dict) or set(record) != GUI_RU_TIMER_FIELDS:
         raise RuntimeError('GUI Ru timer performance record is missing or malformed')
+    validate_performance_clock(record['clock'], require_windows=require_windows_clock)
+    if record['clock_measurement'] != PERFORMANCE_CLOCK_MEASUREMENT:
+        raise RuntimeError('GUI Ru timing must disclose clock and observation limits')
     if (type(record['size']) is not int or record['size'] != len(data) or
             record['source_sha256'] != hashlib.sha256(data).hexdigest() or
             record['style_probes'] != probes or
@@ -1276,7 +1704,7 @@ def validate_gui_ru_timer(record):
             type(last['length']) is not int or last['length'] != len(data) or
             type(last['end_styled']) is not int or not 0 <= last['end_styled'] <= len(data) or
             not isinstance(last['status'], str) or not last['status'].strip() or len(last['status']) > 512 or
-            'Styling Ru' in last['status'] or last['status'].lstrip().startswith('Opening:') or
+            status_contains(last['status'], 'status.styling_ru') or status_startswith(last['status'], 'status.opening') or
             not isinstance(last['style_matches'], dict) or set(last['style_matches']) != set(probes) or
             any(value is not True for value in last['style_matches'].values())):
         raise RuntimeError('GUI Ru timer final bounded diagnostic probe is incomplete or malformed')
@@ -1321,15 +1749,16 @@ def validate_gui_ru_responsiveness(record, wall_ms):
         raise RuntimeError('GUI Ru invalidated region was not naturally serviced within its styling window')
 
 
-def run_gui_ru_responsiveness(api, process, hwnd, editor, record, timer_started, still_styling):
+def run_gui_ru_responsiveness(api, process, hwnd, editor, record, timer_started, still_styling, clock=None):
     # A single bounded interaction on the untouched 1 MB corpus. All waits use
     # the original timer-stage deadline; no new completion window is created.
+    clock = PerformanceClock(timer_started) if clock is None else clock
     record.update(measurement=GUI_RU_RESPONSE_MEASUREMENT, navigation=[], paint={})
     if api.scalar(editor, 2008) != 0 or not still_styling():  # SCI_GETCURRENTPOS
         raise RuntimeError('GUI Ru responsiveness probe did not begin at BOF while styling was pending')
-    input_started = time.monotonic()
+    input_started = clock()
     api.post_navigation(editor, 'RIGHT')
-    paint_started = time.monotonic()
+    paint_started = clock()
     initial_pending = api.invalidate_for_paint(editor)
     paint = record['paint']
     paint.update(invalidations=1, pending_observed=initial_pending,
@@ -1338,13 +1767,13 @@ def run_gui_ru_responsiveness(api, process, hwnd, editor, record, timer_started,
         api.no_dialog(process.pid)
         if process.poll() is not None:
             raise RuntimeError('GUI exited during pending-style input/paint probes')
-        now = time.monotonic()
+        now = clock()
         if now - timer_started > GUI_RU_TIMER_TIMEOUT_SECONDS:
             raise RuntimeError('GUI 1 MB open and Ru timer styling exceeded 30 seconds')
         if len(record['navigation']) < 2:
             expected = GUI_RU_NAVIGATION[len(record['navigation'])]
             position = api.scalar(editor, 2008)
-            input_ms = (time.monotonic() - input_started) * 1000
+            input_ms = (clock() - input_started) * 1000
             if input_ms > GUI_RU_RESPONSE_TIMEOUT_MS:
                 raise RuntimeError('GUI Ru queued navigation exceeded the existing 5-second response limit')
             if position == expected['after']:
@@ -1353,13 +1782,13 @@ def run_gui_ru_responsiveness(api, process, hwnd, editor, record, timer_started,
                 if not pending:
                     raise RuntimeError('GUI Ru queued navigation was only observed after styling completed')
                 if len(record['navigation']) == 1:
-                    input_started = time.monotonic()
+                    input_started = clock()
                     api.post_navigation(editor, 'LEFT')
             elif position != expected['before']:
                 raise RuntimeError('GUI Ru queued navigation reached an unexpected UTF-8 caret position')
         if not paint['cleared']:
             pending_region = api.paint_pending(editor)
-            paint_ms = (time.monotonic() - paint_started) * 1000
+            paint_ms = (clock() - paint_started) * 1000
             paint['wall_ms'] = round(paint_ms, 3)
             if paint_ms > GUI_RU_RESPONSE_TIMEOUT_MS:
                 raise RuntimeError('GUI Ru paint-region service exceeded the existing 5-second response limit')
@@ -1437,11 +1866,12 @@ def validate_gui_ru_edits(record):
 
 
 def run_gui_ru_edits(api, process, hwnd, source, record):
+    clock = PerformanceClock()
     original, probes, folds, _ = gui_ru_edit_fixture()
     source_sha = hashlib.sha256(original).hexdigest()
     def status_done():
         status = api.text(api.control(hwnd, 11))
-        return bool(status.strip()) and 'Styling Ru' not in status and not status.lstrip().startswith('Opening:')
+        return bool(status.strip()) and not status_contains(status, 'status.styling_ru') and not status_startswith(status, 'status.opening')
     def expected_data(operation):
         position = operation['position']
         inserted = operation['operation'] == 'insert'
@@ -1491,7 +1921,7 @@ def run_gui_ru_edits(api, process, hwnd, source, record):
             raise RuntimeError('Ru GUI edit caret did not reach the requested byte position')
         metrics = dict(operation, wall_ms=0.0, max_response_ms=0.0, probes=0)
         record['operations'].append(metrics)
-        started = time.monotonic()
+        started = clock()
         finished = None
         try:
             if operation['operation'] == 'insert':
@@ -1504,12 +1934,12 @@ def run_gui_ru_edits(api, process, hwnd, source, record):
                 api.no_dialog(process.pid)
                 if process.poll() is not None:
                     raise RuntimeError('GUI exited during a real length-changing Ru edit')
-                response = time.monotonic()
+                response = clock()
                 api.responsive(hwnd)
-                metrics['max_response_ms'] = max(metrics['max_response_ms'], (time.monotonic() - response) * 1000)
+                metrics['max_response_ms'] = max(metrics['max_response_ms'], (clock() - response) * 1000)
                 metrics['probes'] += 1
                 complete = state_matches(data, shifted, True, position)
-                elapsed = time.monotonic() - started
+                elapsed = clock() - started
                 if elapsed > 30:
                     raise RuntimeError('Real length-changing Ru edit exceeded 30 seconds')
                 if complete:
@@ -1517,7 +1947,7 @@ def run_gui_ru_edits(api, process, hwnd, source, record):
                     break
                 time.sleep(0.01)
         finally:
-            metrics['wall_ms'] = round((finished if finished is not None else time.monotonic() - started) * 1000, 3)
+            metrics['wall_ms'] = round((finished if finished is not None else clock() - started) * 1000, 3)
             metrics['max_response_ms'] = round(metrics['max_response_ms'], 3)
         if sha(source) != source_sha:
             raise RuntimeError('Real Ru GUI editing changed the source file without a save')
@@ -1540,6 +1970,7 @@ def run_gui_ru_edits(api, process, hwnd, source, record):
 
 
 def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
+    clock = PerformanceClock()
     isolated = Path(fixtures) / 'gui-ru-syntax'
     isolated.mkdir()
     fixture_hashes = {}
@@ -1561,7 +1992,8 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
     timer_record = {'size': len(timer_data), 'wall_ms': 0.0, 'first_head_style_ms': None, 'max_response_ms': 0.0,
                     'probes': 0, 'source_sha256': timer_sha, 'style_probes': timer_probes,
                     'last_probe': None, 'responsiveness': {}, 'observer': gui_ru_observer_record(),
-                    'diagnostics': {}, 'head_style_measurement': GUI_RU_HEAD_MEASUREMENT}
+                    'diagnostics': {}, 'head_style_measurement': GUI_RU_HEAD_MEASUREMENT,
+                    'clock': {}, 'clock_measurement': PERFORMANCE_CLOCK_MEASUREMENT}
     edit_source = inputs / '真实编辑 十万字节 😀.ru'
     edit_data, edit_probes, edit_folds, _ = gui_ru_edit_fixture()
     edit_source.write_bytes(edit_data)
@@ -1571,6 +2003,7 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
                    'fold_probes': edit_folds, 'operations': [], 'undo_commands': 0}
 
     def exercise(process, hwnd):
+        timer_record['clock'] = performance_clock_record()
         checks = {}
         tab_count = lambda: api.scalar(api.control(hwnd, 10), 0x1304)
         wait_gui(api, process, lambda: tab_count() == 2 and
@@ -1644,10 +2077,10 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
         # This is the production timer path, in the same detached process.
         # Inspect only 16 token bytes, never fetch or scan the 1 MB document
         # cross-process. The native suite independently checks complete bytes.
-        diagnostics = GuiRuDiagnostics(api, hwnd, isolated, timer_record['diagnostics'])
+        diagnostics = GuiRuDiagnostics(api, hwnd, isolated, timer_record['diagnostics'], clock)
         diagnostics.request('baseline')
         diagnostics.capture(1)
-        started = time.monotonic()
+        started = clock()
         finished_elapsed = None
         active = status_handle = None
         matched_head = {}
@@ -1676,7 +2109,7 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
             if not clean:
                 raise RuntimeError('GUI timer styling made the 1 MB document dirty')
             status = api.text(status_handle)
-            status_done = bool(status.strip()) and 'Styling Ru' not in status and not status.lstrip().startswith('Opening:')
+            status_done = bool(status.strip()) and not status_contains(status, 'status.styling_ru') and not status_startswith(status, 'status.opening')
             matched = {}
             if length == len(timer_data):
                 for label, probe in timer_probes.items():
@@ -1690,10 +2123,10 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
                         matched[label] = all(values)
                 matched_head = {label: value for label, value in matched.items() if label.startswith('head')}
                 if all(matched_head.values()) and timer_record['first_head_style_ms'] is None:
-                    timer_record['first_head_style_ms'] = round((time.monotonic() - started) * 1000, 3)
+                    timer_record['first_head_style_ms'] = round((clock() - started) * 1000, 3)
             last.update(status=status[:512], style_matches=matched)
             needs_responsiveness = (not timer_record['responsiveness'] and length == len(timer_data) and
-                'Styling Ru' in status and not all(matched[name] for name in matched if name.startswith('tail')))
+                status_contains(status, 'status.styling_ru') and not all(matched[name] for name in matched if name.startswith('tail')))
             if not (length == len(timer_data) and clean and all(matched.values()) and status_done):
                 return False
             # The immutable <=30s success point follows all 16 fresh style
@@ -1704,44 +2137,44 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
             last.update(length=length, clean=clean, status=status[:512])
             api.verify_owned_handles(process.pid, active, status_handle)
             return (length == len(timer_data) and clean and bool(status.strip()) and
-                    'Styling Ru' not in status and not status.lstrip().startswith('Opening:'))
+                    not status_contains(status, 'status.styling_ru') and not status_startswith(status, 'status.opening'))
 
         try:
-            with GuiRuObserver(api, timer_record['observer'], started) as observer:
+            with GuiRuObserver(api, timer_record['observer'], started, clock) as observer:
                 api.drop(editor, [timer_source])
                 checks['timer_child_drop_routed'] = True
                 while True:
                     api.no_dialog(process.pid)
                     if process.poll() is not None:
                         raise RuntimeError('GUI exited during the 1 MB Ru timer stage')
-                    now = time.monotonic()
+                    now = clock()
                     if now - started > GUI_RU_TIMER_TIMEOUT_SECONDS:
                         raise RuntimeError('GUI 1 MB open and Ru timer styling exceeded 30 seconds')
                     if now >= next_response:
-                        response_started = time.monotonic()
+                        response_started = clock()
                         try:
                             api.responsive(hwnd)
                         finally:
                             timer_record['probes'] = timer_record['observer']['wm_null_calls']
                             timer_record['max_response_ms'] = max(timer_record['max_response_ms'],
-                                (time.monotonic() - response_started) * 1000)
-                        next_response = time.monotonic() + GUI_RU_RESPONSE_INTERVAL_MS / 1000
+                                (clock() - response_started) * 1000)
+                        next_response = clock() + GUI_RU_RESPONSE_INTERVAL_MS / 1000
                     complete = False
-                    if time.monotonic() >= next_snapshot:
+                    if clock() >= next_snapshot:
                         complete = observer.snapshot(snapshot)
-                        next_snapshot = time.monotonic() + GUI_RU_SNAPSHOT_INTERVAL_MS / 1000
+                        next_snapshot = clock() + GUI_RU_SNAPSHOT_INTERVAL_MS / 1000
                     if needs_responsiveness:
                         needs_responsiveness = False
                         diagnostics.request('pending')
                         def still_styling():
-                            return ('Styling Ru' in api.text(status_handle) and
+                            return (status_contains(api.text(status_handle), 'status.styling_ru') and
                                 not all(api.scalar(active, 2010, position) == probe['style']
                                     for label, probe in timer_probes.items() if label.startswith('tail')
                                     for position in range(probe['offset'], probe['offset'] + probe['length'])))
                         run_gui_ru_responsiveness(api, process, hwnd, active,
-                            timer_record['responsiveness'], started, still_styling)
+                            timer_record['responsiveness'], started, still_styling, clock)
                         checks.update(timer_queued_navigation=True, timer_paint_region_serviced=True)
-                    elapsed = time.monotonic() - started
+                    elapsed = clock() - started
                     if elapsed > GUI_RU_TIMER_TIMEOUT_SECONDS:
                         raise RuntimeError('GUI 1 MB open and Ru timer styling exceeded 30 seconds')
                     if complete:
@@ -1751,23 +2184,30 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
                         break
                     # No busy spin or catch-up burst: the next send is due at
                     # least 50 ms after the last completed WM_NULL query.
-                    delay = min(next_response, next_snapshot, started + GUI_RU_TIMER_TIMEOUT_SECONDS) - time.monotonic()
+                    delay = min(next_response, next_snapshot, started + GUI_RU_TIMER_TIMEOUT_SECONDS) - clock()
                     time.sleep(max(0.001, delay))
             if sha(timer_source) != timer_sha:
                 raise RuntimeError('GUI timer styling modified the 1 MB source file')
             checks['timer_source_bytes_preserved'] = True
         finally:
-            timer_record['wall_ms'] = round((finished_elapsed if finished_elapsed is not None
-                                            else time.monotonic() - started) * 1000, 3)
-            timer_record['max_response_ms'] = round(timer_record['max_response_ms'], 3)
             failing = sys.exc_info()[0] is not None
+            clock_error = None
+            try:
+                timer_record['wall_ms'] = round((finished_elapsed if finished_elapsed is not None
+                                                else clock() - started) * 1000, 3)
+            except RuntimeError as exc:
+                timer_record.update(wall_ms=None, clock_error=str(exc))
+                clock_error = exc
+            timer_record['max_response_ms'] = round(timer_record['max_response_ms'], 3)
             try:
                 diagnostics.request('final')
                 diagnostics.capture(len(timer_record['diagnostics']['requests']))
             except Exception as exc:
                 timer_record['diagnostics']['error'] = str(exc)
-                if not failing:
+                if not failing and clock_error is None:
                     raise
+            if clock_error is not None and not failing:
+                raise clock_error
         validate_gui_ru_timer(timer_record)
         checks.update(run_gui_ru_edits(api, process, hwnd, edit_source, edit_record))
         return checks
@@ -1789,6 +2229,754 @@ def run_gui_ru_syntax(api, binary_dir, fixtures, evidence):
     if sha(edit_source) != edit_sha:
         result.update(passed=False, edit_source_bytes_preserved=False,
                       error='GUI normal-close flow modified the 100 KB Ru source file')
+    return result
+
+
+# Markdown Stage A is deliberately separate from the unchanged Ru observer gate.
+GUI_MARKDOWN_BYTES = 1000000
+GUI_MARKDOWN_TIMEOUT_SECONDS = 30
+GUI_MARKDOWN_PENDING = 'Folding Markdown'
+GUI_MARKDOWN_CHECKS = ('menu_selection', 'fold_headers', 'collapse_expand', 'fold_option',
+    'plain_restores_visibility', 'clean_small_bytes', 'source_bytes_preserved',
+    'bounded_large_probes', 'real_edit_input_paint', 'active_undo_clean')
+GUI_MARKDOWN_MEASUREMENT = ('Detached production GUI; a 100 KB/5000-newline collapsed-heading input plus 1 MB single-line and unclosed-fence inputs, real WM_CHAR and '
+    'Backspace, queued RIGHT/LEFT input and natural invalidated-region service requested after '
+    'observing pending Markdown folds. Completion may follow pending work. Fixed 16-byte '
+    'head/tail style samples, fold/status/length/dirty checks are not whole-content style proof. '
+    'EOF caret/scroll requests ordinary native styling; no forced paint or full-document colourise. '
+    'Elapsed time includes numeric status diagnostics and read-only process-memory sampling overhead. '
+    'bulkLines/directLines count completed assignments, not distinct lines. ownedBufferBytes is the peak '
+    'per-call owned plan/result capacity, not live process memory or total Ru/helper stack memory. '
+    'bulkUs cumulatively measures the typed Apply FFI and result-wrapper interval per scan identity.')
+# v1 remains available only for explicit historical validation/reproduction.
+GUI_MARKDOWN_LEGACY_MEASUREMENT = GUI_MARKDOWN_MEASUREMENT
+GUI_MARKDOWN_SCHEMA = 'ru-notepad-markdown-v3'
+
+
+def gui_markdown_operations(kind, *, legacy=False):
+    if kind not in ('many-lines', 'singleline', 'unclosed-fence'):
+        raise RuntimeError('Unknown Markdown GUI case')
+    return ('open', 'insert', 'backspace') if kind == 'unclosed-fence' and not legacy else ('open', 'insert', 'backspace', 'undo')
+
+
+def gui_markdown_deprecated():
+    return [{'case': 'unclosed-fence', 'operation': 'undo', 'status': 'deprecated',
+             'executed': False, 'blocking': False, 'passed': None,
+             'reason': 'TODO: investigate 1 MB unclosed-fence serial double-Undo folding latency',
+             'original_budget_ms': 30000}]
+
+
+def gui_markdown_teardown():
+    # Expected evidence shape, not evidence that a real close occurred.
+    return {'case': 'unclosed-fence', 'method': 'close-tab-discard', 'dirty_before': True,
+            'discard_confirmed': True,
+            'source_sha256': hashlib.sha256(gui_markdown_fixture('unclosed-fence')[0]).hexdigest()}
+
+
+GUI_MARKDOWN_STAGE_FIELDS = {'operation', 'length', 'dirty', 'source_sha256', 'wall_ms',
+    'probes', 'observer', 'responsiveness', 'last_probe', 'last_progress', 'undo_commands', 'collapsed_before_edit', 'memory', 'phase_timing'}
+
+
+def gui_markdown_fixture(kind):
+    if kind == 'singleline':
+        data = b'a' * GUI_MARKDOWN_BYTES
+        probes = [{'offset': 0, 'length': 8, 'style': 0},
+                  {'offset': len(data) - 8, 'length': 8, 'style': 0}]
+        folds = [{'line': 0, 'header': False}]
+    elif kind in ('many-lines', 'unclosed-fence'):
+        head = b'# Heading\n' if kind == 'many-lines' else b'# Heading\n\n~~~\n'
+        tail = b'abcdefgh' if kind == 'many-lines' else b'codebody'
+        fill = b'plain text\n' if kind == 'many-lines' else b'code text\n'
+        count = GUI_MARKDOWN_BYTES - len(head) - len(tail)
+        data = head + (fill * (count // len(fill) + 1))[:count] + tail
+        if kind == 'many-lines':
+            data = head + (b'p' * 18 + b'\r\n') * 4998 + b'x' * 21 + b'\nabcdefgh'
+        # Pinned Lexilla 5.5.4 defaults header.eolfill=0: only # is style6.
+        probes = [{'offset': 0, 'length': 1, 'style': 6},
+                  {'offset': 2, 'length': 7, 'style': 0},
+                  {'offset': len(data) - 8, 'length': 8,
+                   'style': 0 if kind == 'many-lines' else 21}]
+        folds = [{'line': 0, 'header': True}, {'line': 2, 'header': False}]
+    else:
+        raise RuntimeError('Unknown bounded Markdown GUI corpus')
+    return data, probes, folds
+
+
+def markdown_expected(kind, operation):
+    data, probes, folds = gui_markdown_fixture(kind)
+    inserted = operation == 'insert'
+    if inserted:
+        data = data[:8] + b'x' + data[8:]
+    return data, [dict(p, offset=p['offset'] + int(inserted and p['offset'] >= 8)) for p in probes], folds
+
+
+MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS = ('seq', 'via', 'id', 'gen', 'rev', 'phase', 'pending', 'length',
+                              'feed', 'published', 'tick', 'work_us', 'gap_us', 'bulkCalls', 'bulkLines',
+                              'fallbackBatches', 'directCalls', 'directLines', 'maxPlanBytes',
+                              'bulkUs', 'ownedBufferBytes', 'metric_valid')
+MARKDOWN_DIAGNOSTIC_STEP_FIELDS = ('feedStepCount', 'feedStepUs', 'publishStepCount', 'publishStepUs',
+    'lifecycleStepCount', 'lifecycleStepUs', 'visibilityStepCount', 'visibilityStepUs',
+    'stepErrors', 'stepMetricValid', 'entry_yields', 'post_yields')
+MARKDOWN_DIAGNOSTIC_FIELDS = MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS + MARKDOWN_DIAGNOSTIC_STEP_FIELDS
+MARKDOWN_DIAGNOSTIC_MAX_CHARS = 1536
+
+
+def validate_markdown_diagnostic(record, *, legacy=False):
+    fields = MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS if legacy else MARKDOWN_DIAGNOSTIC_FIELDS
+    if not isinstance(record, dict) or set(record) != set(fields):
+        raise RuntimeError('Markdown numeric phase projection is invalid')
+    if not legacy:
+        if (any(type(record[key]) is not int or not 0 <= record[key] <= 9007199254740991
+                for key in MARKDOWN_DIAGNOSTIC_STEP_FIELDS) or
+                record['stepMetricValid'] != 1 or record['stepErrors'] != 0 or
+                any(record[kind+'StepCount'] == 0 and record[kind+'StepUs'] != 0
+                    for kind in ('feed', 'publish', 'lifecycle', 'visibility'))):
+            raise RuntimeError('Markdown step metric projection is invalid')
+    _validate_markdown_diagnostic_legacy({key:record[key] for key in MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS})
+    return record
+
+
+def _validate_markdown_diagnostic_legacy(record):
+    if (not isinstance(record, dict) or set(record) != set(MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS) or
+            any(type(record[key]) is not int or not 0 <= record[key] <= 9007199254740991
+                for key in MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS) or
+            not 1 <= record['seq'] <= 4096 or record['via'] not in (0, 1) or record['id'] < 1 or record['gen'] < 1 or
+            record['phase'] not in range(5) or record['pending'] not in (0, 1) or
+            (record['phase'] == 4) != (record['pending'] == 0) or
+            (record['via'] == 1 and record['pending'] != 0) or
+            not 0 <= record['feed'] <= record['length'] <= 32000000 or
+            record['published'] > record['length'] + 1 or record['metric_valid'] != 1 or
+            record['bulkLines'] > 64 * record['bulkCalls'] or
+            record['directLines'] > record['directCalls'] or
+            (not record['pending'] and (record['directLines'] != record['directCalls'] or
+                record['bulkLines'] + record['directLines'] > record['published'] or
+                record['fallbackBatches'] > record['published'])) or
+            record['maxPlanBytes'] not in (0, *range(48, 1057, 16)) or
+            record['ownedBufferBytes'] not in (0, 1088) or
+            (record['maxPlanBytes'] == 0) != (record['ownedBufferBytes'] == 0) or
+            (record['bulkCalls'] > 0 and record['ownedBufferBytes'] != 1088) or
+            (record['bulkCalls'] == 0 and (record['bulkLines'] != 0 or record['bulkUs'] != 0))):
+        raise RuntimeError('Markdown numeric phase projection is invalid')
+    return record
+
+
+def parse_markdown_diagnostic(status, *, legacy=False):
+    # Never retain status prose, paths, source text or arbitrary error strings.
+    if '[MDP' not in status:
+        return None
+    fields = MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS if legacy else MARKDOWN_DIAGNOSTIC_FIELDS
+    version, maximum = ('MDP2', 760) if legacy else ('MDP3', 1528)
+    match = re.search(r' \[' + version + r' ([^\[\]\r\n]{1,' + str(maximum) + r'})\]$', status)
+    if match is None or status.count('[MDP') != 1 or len(match.group(0)) > MARKDOWN_DIAGNOSTIC_MAX_CHARS:
+        raise RuntimeError('Markdown numeric phase marker is malformed')
+    parts = match.group(1).split(' ')
+    if len(parts) != len(fields):
+        raise RuntimeError('Markdown numeric phase field inventory changed')
+    result = {}
+    for name, part in zip(fields, parts):
+        if re.fullmatch(re.escape(name) + r'=(0|[1-9][0-9]{0,15})', part) is None:
+            raise RuntimeError('Markdown numeric phase field is malformed')
+        result[name] = int(part.split('=', 1)[1])
+    return validate_markdown_diagnostic(result, legacy=legacy)
+
+
+def markdown_diagnostic_failure(status):
+    # Record structure only on rejected, already-bounded status reads. Never
+    # retain status prose, marker text, paths, source bytes or arbitrary errors.
+    start = status.find('[MDP')
+    suffix = status[start:] if start >= 0 else ''
+    return {'status_code_units': len(status.encode('utf-16-le', 'surrogatepass')) // 2,
+        'marker_occurrences': status.count('[MDP'),
+        'marker_suffix_code_units': len(suffix.encode('utf-16-le', 'surrogatepass')) // 2,
+        'ends_with_closing_bracket': suffix.endswith(']'),
+        'opening_brackets': suffix.count('['), 'closing_brackets': suffix.count(']'),
+        'control_characters': sum(ord(char) < 32 or ord(char) == 127 for char in suffix),
+        'non_ascii_characters': sum(ord(char) > 127 for char in suffix)}
+
+
+GUI_MARKDOWN_MEMORY_MEASUREMENT = ('Read-only K32GetProcessMemoryInfo on the already-owned child process handle, '
+    'once per existing at-most-4-Hz GUI snapshot. sampledWorkingSetPeak is the maximum observed working set, '
+    'not an instantaneous stage peak or RSS delta. processPeakWorkingSet is the OS cumulative process-lifetime '
+    'peak, including earlier stages. External API cost is separate from synchronous GUI-message cost; '
+    'stage elapsed and snapshot wall time include both.')
+
+
+class MarkdownMemoryCounters(ctypes.Structure):
+    # Fixed Windows DWORD widths keep host schema controls platform-independent.
+    # https://learn.microsoft.com/windows/win32/api/psapi/ns-psapi-process_memory_counters
+    _fields_ = [('cb', ctypes.c_uint32), ('PageFaultCount', ctypes.c_uint32)] + [
+        (name, ctypes.c_size_t) for name in ('PeakWorkingSetSize', 'WorkingSetSize',
+        'QuotaPeakPagedPoolUsage', 'QuotaPagedPoolUsage', 'QuotaPeakNonPagedPoolUsage',
+        'QuotaNonPagedPoolUsage', 'PagefileUsage', 'PeakPagefileUsage')]
+
+
+def markdown_memory_record():
+    return {'measurement': GUI_MARKDOWN_MEMORY_MEASUREMENT, 'sample_count': 0,
+        'sampledWorkingSetPeak': 0, 'processPeakWorkingSet': 0,
+        'query_wall_ms': 0.0, 'max_query_ms': 0.0, 'samples': []}
+
+
+class MarkdownProcessMemory:
+    def __init__(self, process, record, started, clock):
+        if sys.platform != 'win32':
+            raise RuntimeError('Markdown process memory requires actual Windows execution')
+        # Popen owns this exact launched process handle. No OpenProcess, PID
+        # reopening, new access rights, handle closing, or UI messages occur.
+        if not getattr(process, '_handle', None):
+            raise RuntimeError('Markdown process memory requires the owned launcher handle')
+        self.process, self.record, self.started, self.clock = process, record, started, clock
+        self.kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        self.query = self.kernel.K32GetProcessMemoryInfo
+        self.query.argtypes = [wintypes.HANDLE, ctypes.POINTER(MarkdownMemoryCounters), wintypes.DWORD]
+        self.query.restype = wintypes.BOOL
+
+    def sample(self):
+        if len(self.record['samples']) >= 121:
+            raise RuntimeError('Markdown process memory exceeded its bounded snapshot count')
+        counters = MarkdownMemoryCounters()
+        counters.cb = ctypes.sizeof(counters)
+        begin = self.clock()
+        try:
+            if not self.query(int(self.process._handle), ctypes.byref(counters), ctypes.sizeof(counters)):
+                raise RuntimeError('Markdown process memory query failed')
+        finally:
+            elapsed = round((self.clock() - begin) * 1000, 3)
+            self.record['query_wall_ms'] = round(self.record['query_wall_ms'] + elapsed, 3)
+            self.record['max_query_ms'] = max(self.record['max_query_ms'], elapsed)
+        sample = {'start_ms': round((begin - self.started) * 1000, 3), 'query_wall_ms': elapsed,
+            'workingSetBytes': int(counters.WorkingSetSize),
+            'processPeakWorkingSetBytes': int(counters.PeakWorkingSetSize)}
+        if (not 0 <= sample['workingSetBytes'] <= sample['processPeakWorkingSetBytes'] <= 9007199254740991 or
+                sample['processPeakWorkingSetBytes'] == 0 or
+                (self.record['samples'] and sample['processPeakWorkingSetBytes'] <
+                    self.record['samples'][-1]['processPeakWorkingSetBytes'])):
+            raise RuntimeError('Markdown process memory query returned invalid counters')
+        self.record['samples'].append(sample)
+        self.record['sample_count'] += 1
+        self.record['sampledWorkingSetPeak'] = max(self.record['sampledWorkingSetPeak'], sample['workingSetBytes'])
+        self.record['processPeakWorkingSet'] = max(self.record['processPeakWorkingSet'], sample['processPeakWorkingSetBytes'])
+
+
+def validate_markdown_memory(record, observer, wall_ms):
+    if (not isinstance(record, dict) or set(record) != {'measurement', 'sample_count',
+            'sampledWorkingSetPeak', 'processPeakWorkingSet', 'query_wall_ms', 'max_query_ms', 'samples'} or
+            record['measurement'] != GUI_MARKDOWN_MEMORY_MEASUREMENT or
+            type(record['sample_count']) is not int or not 1 <= record['sample_count'] <= 121 or
+            not isinstance(record['samples'], list) or len(record['samples']) != record['sample_count'] or
+            record['sample_count'] != observer['snapshot_count'] or
+            any(type(record[key]) is not int or not 0 <= record[key] <= 9007199254740991
+                for key in ('sampledWorkingSetPeak', 'processPeakWorkingSet')) or
+            record['processPeakWorkingSet'] == 0 or
+            any(not finite_nonnegative(record[key]) or record[key] > wall_ms + 0.001
+                for key in ('query_wall_ms', 'max_query_ms'))):
+        raise RuntimeError('Markdown process memory evidence is missing or malformed')
+    previous_peak = 0
+    for sample, snapshot in zip(record['samples'], observer['snapshots']):
+        if (not isinstance(sample, dict) or set(sample) != {'start_ms', 'query_wall_ms',
+                'workingSetBytes', 'processPeakWorkingSetBytes'} or
+                any(not finite_nonnegative(sample[key]) for key in ('start_ms', 'query_wall_ms')) or
+                any(type(sample[key]) is not int or not 0 <= sample[key] <= 9007199254740991
+                    for key in ('workingSetBytes', 'processPeakWorkingSetBytes')) or
+                sample['processPeakWorkingSetBytes'] == 0 or
+                sample['workingSetBytes'] > sample['processPeakWorkingSetBytes'] or
+                sample['processPeakWorkingSetBytes'] < previous_peak or
+                sample['start_ms'] < snapshot['start_ms'] - 0.001 or
+                sample['start_ms'] + sample['query_wall_ms'] > snapshot['start_ms'] + snapshot['wall_ms'] + 0.002):
+            raise RuntimeError('Markdown process memory sample lacks an actual bounded snapshot')
+        previous_peak = sample['processPeakWorkingSetBytes']
+    if (record['sampledWorkingSetPeak'] != max(s['workingSetBytes'] for s in record['samples']) or
+            record['processPeakWorkingSet'] != max(s['processPeakWorkingSetBytes'] for s in record['samples']) or
+            abs(record['query_wall_ms'] - sum(s['query_wall_ms'] for s in record['samples'])) > 0.001 or
+            record['max_query_ms'] != max(s['query_wall_ms'] for s in record['samples'])):
+        raise RuntimeError('Markdown process memory summaries disagree with measured samples')
+
+def validate_markdown_progress(progress, *, complete=False, expected_length=None, expected_dirty=None, legacy_diagnostic=False):
+    if (not isinstance(progress, dict) or set(progress) != {'opened', 'length', 'dirty', 'status', 'tail_requested', 'diagnostic'} or
+            type(progress['opened']) is not bool or type(progress['tail_requested']) is not bool or
+            progress['status'] not in ('not-open', 'opening', 'folding', 'failure', 'complete', 'unknown')):
+        raise RuntimeError('Markdown bounded partial progress is malformed')
+    if not progress['opened']:
+        if (progress['length'] is not None or progress['dirty'] is not None or progress['status'] != 'not-open' or
+                progress['tail_requested'] or progress['diagnostic'] is not None):
+            raise RuntimeError('Markdown unopened progress contains invented observations')
+    elif (type(progress['length']) is not int or not 0 <= progress['length'] <= 32000000 or
+          type(progress['dirty']) is not bool):
+        raise RuntimeError('Markdown observed partial size or dirty flag is malformed')
+    if progress['diagnostic'] is not None:
+        validate_markdown_diagnostic(progress['diagnostic'], legacy=legacy_diagnostic)
+    if complete and (not progress['opened'] or progress['length'] != expected_length or
+            progress['dirty'] is not expected_dirty or progress['status'] != 'complete' or
+            not progress['tail_requested'] or progress['diagnostic'] is None or
+            progress['diagnostic']['pending'] != 0 or
+            progress['diagnostic']['length'] != expected_length or
+            progress['diagnostic']['feed'] != expected_length):
+        raise RuntimeError('Markdown completion lacks bounded phase evidence')
+    if complete and not legacy_diagnostic:
+        diagnostic = progress['diagnostic']
+        if ((diagnostic['feed'] > 0 and diagnostic['feedStepCount'] == 0) or
+                (diagnostic['published'] > 0 and diagnostic['publishStepCount'] == 0)):
+            raise RuntimeError('Markdown completion lacks actual measured step counts')
+
+
+def markdown_status_complete(status):
+    # The production failure status still contains the language name and may
+    # coexist with already-published headers and completed native colours.
+    # It must never be accepted as a completed heading-fold scan.
+    if status_contains(status, 'error.syntax.markdown_disabled'):
+        raise RuntimeError('Markdown GUI reported a production folding failure')
+    return ('Markdown' in status and not status_contains(status, 'status.folding_markdown') and
+            not status_contains(status, 'status.heading_folds_off') and not status_startswith(status, 'status.opening'))
+
+
+def validate_gui_markdown_responsiveness(record, wall_ms):
+    if not isinstance(record, dict) or set(record) != {'navigation', 'paint'}:
+        raise RuntimeError('Markdown GUI input/paint evidence is missing')
+    navigation = record['navigation']
+    if not isinstance(navigation, list) or len(navigation) != 2:
+        raise RuntimeError('Markdown GUI queued navigation evidence is incomplete')
+    if any(not isinstance(item, dict) for item in navigation):
+        raise RuntimeError('Markdown GUI navigation entries must be records')
+    before = navigation[0].get('before') if navigation else None
+    if type(before) is not int or before not in (8, 9):
+        raise RuntimeError('Markdown GUI input did not start at the real edit caret')
+    for actual, key, start, end in zip(navigation, ('RIGHT', 'LEFT'), (before, before + 1), (before + 1, before)):
+        if (set(actual) != {'key', 'before', 'after', 'wall_ms', 'request_pending'} or
+                actual['key'] != key or type(actual['before']) is not int or actual['before'] != start or
+                type(actual['after']) is not int or actual['after'] != end or
+                type(actual['request_pending']) is not bool or (key == 'RIGHT' and actual['request_pending'] is not True) or not finite_nonnegative(actual['wall_ms']) or
+                actual['wall_ms'] > min(wall_ms, GUI_RU_RESPONSE_TIMEOUT_MS)):
+            raise RuntimeError('Markdown GUI queued input request/completion is invalid')
+    paint = record['paint']
+    if (not isinstance(paint, dict) or set(paint) != {'invalidations', 'pending_observed',
+            'already_serviced', 'cleared', 'wall_ms', 'request_pending'} or
+            type(paint['invalidations']) is not int or paint['invalidations'] != 1 or
+            type(paint['pending_observed']) is not bool or type(paint['already_serviced']) is not bool or
+            paint['pending_observed'] == paint['already_serviced'] or paint['cleared'] is not True or
+            paint['request_pending'] is not True or not finite_nonnegative(paint['wall_ms']) or
+            paint['wall_ms'] > min(wall_ms, GUI_RU_RESPONSE_TIMEOUT_MS)):
+        raise RuntimeError('Markdown GUI natural paint request/completion is invalid')
+
+
+def validate_gui_markdown(record, *, require_windows_clock=False, legacy=False, legacy_diagnostic=False):
+    # Twelve-stage reproduction uses today's binary/MDP3. Old MDP2 is a
+    # separate explicit offline historical switch, never a default fallback.
+    if legacy_diagnostic and not legacy:
+        raise RuntimeError('Historical phase metrics require explicit historical scope')
+    fields = {'measurement', 'clock', 'cases'}
+    if not legacy:
+        fields |= {'schema', 'deprecated', 'teardown'}
+    if (not isinstance(record, dict) or set(record) != fields or
+            record['measurement'] != GUI_MARKDOWN_MEASUREMENT or
+            not isinstance(record['cases'], list) or len(record['cases']) != 3):
+        raise RuntimeError('Markdown GUI bounded evidence is missing or malformed')
+    if not legacy:
+        # JSON comparison preserves bool/int distinctions (False is not 0).
+        if (record['schema'] != GUI_MARKDOWN_SCHEMA or
+                json.dumps(record['deprecated'], sort_keys=True) != json.dumps(gui_markdown_deprecated(), sort_keys=True) or
+                json.dumps(record['teardown'], sort_keys=True) != json.dumps(gui_markdown_teardown(), sort_keys=True)):
+            raise RuntimeError('Markdown deprecated case or real discard teardown evidence is invalid')
+    validate_performance_clock(record['clock'], require_windows=require_windows_clock)
+    for case, kind in zip(record['cases'], ('many-lines', 'singleline', 'unclosed-fence')):
+        data, probes, folds = gui_markdown_fixture(kind)
+        if (not isinstance(case, dict) or set(case) != {'kind', 'size', 'source_sha256', 'style_probes', 'fold_probes', 'stages'} or
+                case['kind'] != kind or type(case['size']) is not int or case['size'] != len(data) or
+                case['source_sha256'] != hashlib.sha256(data).hexdigest() or case['style_probes'] != probes or
+                case['fold_probes'] != folds or
+                any(type(probe[key]) is not int for probe in case['style_probes'] for key in ('offset', 'length', 'style')) or
+                any(type(probe['line']) is not int or type(probe['header']) is not bool for probe in case['fold_probes']) or
+                not isinstance(case['stages'], list) or len(case['stages']) != len(gui_markdown_operations(kind, legacy=legacy))):
+            raise RuntimeError('Markdown GUI corpus, fixed probes or stage inventory changed')
+        for stage, operation in zip(case['stages'], gui_markdown_operations(kind, legacy=legacy)):
+            expected, styles, _ = markdown_expected(kind, operation)
+            dirty = operation in ('insert', 'backspace')
+            if (not isinstance(stage, dict) or set(stage) != GUI_MARKDOWN_STAGE_FIELDS or
+                    stage['operation'] != operation or type(stage['length']) is not int or stage['length'] != len(expected) or
+                    stage['dirty'] is not dirty or stage['collapsed_before_edit'] is not (kind == 'many-lines' and dirty) or stage['source_sha256'] != case['source_sha256'] or
+                    not finite_nonnegative(stage['wall_ms']) or stage['wall_ms'] > 30000 or
+                    type(stage['probes']) is not int or stage['probes'] < 1 or
+                    type(stage['undo_commands']) is not int or
+                    (not 1 <= stage['undo_commands'] <= 2 if operation == 'undo' else stage['undo_commands'] != 0)):
+                raise RuntimeError('Markdown GUI bounded stage metadata is invalid')
+            validate_markdown_phase_timing(stage['phase_timing'], stage['wall_ms'],
+                                           operation, stage['undo_commands'])
+            validate_markdown_progress(stage['last_progress'], complete=True, expected_length=len(expected), expected_dirty=dirty, legacy_diagnostic=legacy_diagnostic)
+            last = stage['last_probe']
+            if (not isinstance(last, dict) or set(last) != {'length', 'dirty', 'end_styled', 'status_done',
+                    'styles_match', 'style_samples', 'folds_match', 'context_match', 'lexer', 'tail_requested', 'children_visible'} or
+                    type(last['length']) is not int or last['length'] != len(expected) or last['dirty'] is not dirty or
+                    type(last['end_styled']) is not int or last['end_styled'] != len(expected) or type(last['lexer']) is not int or last['lexer'] != 98 or
+                    any(last[key] is not True for key in ('status_done', 'styles_match', 'folds_match', 'context_match', 'tail_requested', 'children_visible'))):
+                raise RuntimeError('Markdown GUI final fixed style/fold/text probe failed')
+            samples = last['style_samples']
+            positions = [position for probe in styles
+                         for position in range(probe['offset'], probe['offset'] + probe['length'])]
+            expected_styles = [probe['style'] for probe in styles for _ in range(probe['length'])]
+            if (not isinstance(samples, dict) or set(samples) != {'positions', 'expected', 'actual'} or
+                    any(not isinstance(samples[key], list) or len(samples[key]) != 16 or
+                        any(type(value) is not int for value in samples[key]) for key in samples) or
+                    samples['positions'] != positions or samples['expected'] != expected_styles or
+                    any(not 0 <= value <= 255 for value in samples['actual']) or
+                    samples['actual'] != expected_styles):
+                raise RuntimeError('Markdown GUI fixed style sample evidence is invalid or mismatched')
+            validate_gui_ru_observer(stage['observer'], stage['wall_ms'], stage['probes'])
+            validate_markdown_memory(stage['memory'], stage['observer'], stage['wall_ms'])
+            if kind == 'unclosed-fence' and operation == 'open':
+                diagnostic = stage['last_progress']['diagnostic']
+                if diagnostic['bulkCalls'] < 1 or diagnostic['bulkLines'] < 1:
+                    raise RuntimeError('Registered production fence fixture did not actually use bulk publication')
+            if dirty:
+                validate_gui_markdown_responsiveness(stage['responsiveness'], stage['wall_ms'])
+            elif stage['responsiveness'] != {}:
+                raise RuntimeError('Unexpected Markdown GUI input/paint stage')
+
+
+def validate_markdown_phase_timing(timing, wall_ms, operation, undo_commands):
+    """Validate sampled diagnostic timings without replacing completion proofs.
+
+    Length/savepoint is not byte equality. Status text is not a complete fold or
+    paint proof. Undo timestamps are command returns (not dispatch times), and
+    WM_NULL durations are synchronous response samples, not user-input latency.
+    """
+    fields = {'length_savepoint_observed_ms', 'status_complete_observed',
+              'undo_returned_ms', 'max_wm_null_probe_ms'}
+    if not isinstance(timing, dict) or set(timing) != fields:
+        raise RuntimeError('Markdown phase timing schema is invalid')
+    for key in ('length_savepoint_observed_ms', 'max_wm_null_probe_ms'):
+        if not finite_nonnegative(timing[key]) or timing[key] > wall_ms:
+            raise RuntimeError('Markdown phase timing is outside the stage')
+    returned = timing['undo_returned_ms']
+    expected_ids = list(range(1, undo_commands + 1)) if operation == 'undo' else [0]
+    count = undo_commands if operation == 'undo' else 0
+    if (not isinstance(returned, list) or len(returned) != count or
+            any(not finite_nonnegative(value) or value > wall_ms for value in returned) or
+            returned != sorted(returned)):
+        raise RuntimeError('Markdown Undo command-return timings are invalid')
+    observed = timing['status_complete_observed']
+    if not isinstance(observed, list) or len(observed) != len(expected_ids):
+        raise RuntimeError('Markdown status observations are incomplete')
+    previous = 0.0
+    for item, identity in zip(observed, expected_ids):
+        if (not isinstance(item, dict) or set(item) != {'undo_commands', 'elapsed_ms'} or
+                type(item['undo_commands']) is not int or item['undo_commands'] != identity or
+                not finite_nonnegative(item['elapsed_ms']) or
+                not previous <= item['elapsed_ms'] <= wall_ms):
+            raise RuntimeError('Markdown status observation timing is invalid')
+        stamp = item['elapsed_ms']
+        if operation == 'undo' and (stamp < returned[identity - 1] or
+                (identity < undo_commands and stamp > returned[identity])):
+            raise RuntimeError('Markdown Undo status/command ordering is invalid')
+        previous = stamp
+
+
+def observe_markdown_phase(timings, elapsed_ms, length, dirty, expected_length,
+                           expected_dirty, done, undo_commands):
+    """Record sampled phases, not exact native completion or latency bounds.
+
+    Uses the existing snapshot only: no extra native messages, changed actions,
+    timer budget, timeout, or acceptance condition. Undo command counts stay distinct.
+    These are sampled length/savepoint and status-text observations only; neither
+    certifies document bytes, complete fold state, natural paint, or input latency.
+    """
+    if length == expected_length and dirty == expected_dirty and timings['length_savepoint_observed_ms'] is None:
+        timings['length_savepoint_observed_ms'] = round(elapsed_ms, 3)
+    if done and not any(item['undo_commands'] == undo_commands for item in timings['status_complete_observed']):
+        timings['status_complete_observed'].append({'undo_commands': undo_commands,
+                                        'elapsed_ms': round(elapsed_ms, 3)})
+
+
+def run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, action):
+    clock = PerformanceClock()
+    original, _, _ = gui_markdown_fixture(kind)
+    expected, styles, folds = markdown_expected(kind, operation)
+    style_positions = [position for probe in styles
+                       for position in range(probe['offset'], probe['offset'] + probe['length'])]
+    expected_styles = [probe['style'] for probe in styles for _ in range(probe['length'])]
+    started = clock()  # Includes the opening drop or actual input and all observers.
+    stage.update(operation=operation, length=len(expected), dirty=operation in ('insert', 'backspace'),
+        source_sha256=hashlib.sha256(original).hexdigest(), wall_ms=0.0, probes=0,
+        observer=gui_ru_observer_record(), responsiveness={}, last_probe={},
+        last_progress={'opened': False, 'length': None, 'dirty': None, 'status': 'not-open', 'tail_requested': False, 'diagnostic': None},
+        undo_commands=0, collapsed_before_edit=False, memory=markdown_memory_record(),
+        phase_timing={'length_savepoint_observed_ms': None, 'status_complete_observed': [],
+                      'undo_returned_ms': [], 'max_wm_null_probe_ms': 0.0})
+    editor = status_handle = None
+    tail_requested = False
+    opened = False
+    next_response = next_snapshot = 0.0
+    response = stage['responsiveness']
+    input_started = paint_started = None
+    navigation_before = None
+    navigation_pending = []
+    try:
+        memory = MarkdownProcessMemory(process, stage['memory'], started, clock)
+        with GuiRuObserver(api, stage['observer'], started, clock) as observer:
+            if kind == 'many-lines' and stage['dirty']:
+                stage['collapsed_before_edit'] = not bool(api.scalar(api.editor(hwnd), 2228, 1))
+                if not stage['collapsed_before_edit']:
+                    raise RuntimeError('Many-line heading must be collapsed at the real edit boundary')
+            action()
+            if operation == 'undo':
+                stage['undo_commands'] = 1
+                stage['phase_timing']['undo_returned_ms'].append(round((clock() - started) * 1000, 3))
+            def snapshot():
+                nonlocal editor, status_handle, tail_requested, input_started, paint_started, navigation_before, opened
+                memory.sample()
+                if not opened:
+                    if api.text(hwnd).removeprefix('* ') != source.name + ' · ru_notepad':
+                        return False
+                    opened = True
+                editor, status_handle = api.editor(hwnd), api.control(hwnd, 11)
+                length = api.scalar(editor, 2006)
+                dirty = bool(api.scalar(editor, 2159))
+                status = api.markdown_status(status_handle)
+                pending = status_contains(status, 'status.folding_markdown')
+                state = ('failure' if status_contains(status, 'error.syntax.markdown_disabled') else
+                         'opening' if status_startswith(status, 'status.opening') else
+                         'folding' if pending else 'complete' if markdown_status_complete(status) else 'unknown')
+                stage['last_progress'] = {'opened': True, 'length': length, 'dirty': dirty,
+                    'status': state, 'tail_requested': tail_requested, 'diagnostic': None}
+                # Preserve observations before any completion/style gate. Reuse
+                # the existing status read; no extra observer message is sent.
+                try:
+                    stage['last_progress']['diagnostic'] = parse_markdown_diagnostic(status)
+                except RuntimeError:
+                    stage['diagnostic_failure'] = markdown_diagnostic_failure(status)
+                    raise
+                validate_markdown_progress(stage['last_progress'])
+                done = markdown_status_complete(status)
+                observe_markdown_phase(stage['phase_timing'], (clock() - started) * 1000,
+                    length, dirty, len(expected), stage['dirty'], done, stage['undo_commands'])
+                if stage['dirty'] and not response and pending and length == len(expected):
+                    # Capture pending before each request. Do not require it to
+                    # remain pending when queued work completes on a fast host.
+                    navigation_before = api.scalar(editor, 2008)
+                    if navigation_before != (9 if operation == 'insert' else 8):
+                        raise RuntimeError('Markdown real edit caret differs from the expected input')
+                    input_started = clock()
+                    api.post_navigation(editor, 'RIGHT')
+                    navigation_pending.append({'key': 'RIGHT', 'before': navigation_before,
+                        'after': navigation_before + 1, 'request_pending': True})
+                    paint_started = clock()
+                    initial = api.invalidate_for_paint(editor)
+                    response.update(navigation=[], paint={'invalidations': 1, 'pending_observed': initial,
+                        'already_serviced': not initial, 'cleared': False, 'wall_ms': 0.0, 'request_pending': True})
+                input_done = not stage['dirty'] or (response and len(response['navigation']) == 2 and response['paint']['cleared'])
+                if length != len(expected) or dirty != stage['dirty'] or not input_done:
+                    # Backspace followed by Undo may need the second undo group.
+                    if operation == 'undo' and done and dirty and stage['undo_commands'] < 2:
+                        if not api.scalar(editor, 2174):
+                            raise RuntimeError('Markdown edit lost its undo history')
+                        api.command(hwnd, 201)
+                        stage['undo_commands'] += 1
+                        stage['phase_timing']['undo_returned_ms'].append(round((clock() - started) * 1000, 3))
+                        tail_requested = False
+                    return False
+                if not tail_requested:
+                    # Real caret/scroll requests native offscreen styling. The
+                    # same original 30-second wall deadline includes this work.
+                    api.scalar(editor, 2025, len(expected))
+                    api.scalar(editor, 2169)
+                    tail_requested = True
+                    stage['last_progress']['tail_requested'] = True
+                    return False
+                if not done:
+                    return False
+                # Retain exactly the existing sixteen scalar query results, also
+                # on failure. No extra messages or source text are collected.
+                actual_styles = [api.scalar(editor, 2010, position) for position in style_positions]
+                style_match = actual_styles == expected_styles
+                fold_match = all([bool(api.scalar(editor, 2223, probe['line']) & 0x2000) == probe['header'] for probe in folds])
+                # Four actual bytes around each real edit, separate from the
+                # sixteen fixed head/tail style bytes. Never read whole content.
+                context = bytes(api.scalar(editor, 2007, position) & 255 for position in range(6, 10))
+                children_visible = bool(api.scalar(editor, 2228, 1)) if kind == 'many-lines' else True
+                end_styled = api.scalar(editor, 2028)
+                lexer = api.scalar(editor, 4002)
+                # Final independent length/dirty recheck is in the same bounded snapshot.
+                length, dirty = api.scalar(editor, 2006), bool(api.scalar(editor, 2159))
+                stage['last_probe'] = {'length': length, 'dirty': dirty, 'end_styled': end_styled,
+                    'status_done': done, 'styles_match': style_match,
+                    'style_samples': {'positions': style_positions, 'expected': expected_styles, 'actual': actual_styles},
+                    'folds_match': fold_match,
+                    'context_match': context == expected[6:10], 'lexer': lexer, 'tail_requested': tail_requested,
+                    'children_visible': children_visible}
+                api.verify_owned_handles(process.pid, editor, status_handle)
+                return (length == len(expected) and dirty == stage['dirty'] and end_styled == len(expected) and
+                        lexer == 98 and style_match and fold_match and children_visible and context == expected[6:10] and
+                        stage['last_progress']['diagnostic'] is not None and
+                        stage['last_progress']['diagnostic']['pending'] == 0 and
+                        stage['last_progress']['diagnostic']['length'] == len(expected) and
+                        stage['last_progress']['diagnostic']['feed'] == len(expected))
+            while True:
+                api.no_dialog(process.pid)
+                if process.poll() is not None:
+                    raise RuntimeError('GUI exited during a bounded Markdown stage')
+                now = clock()
+                if now - started > GUI_MARKDOWN_TIMEOUT_SECONDS:
+                    raise RuntimeError('Markdown GUI open/edit exceeded its original 30-second deadline')
+                if now >= next_response:
+                    probe_started = clock()
+                    api.responsive(hwnd)
+                    stage['phase_timing']['max_wm_null_probe_ms'] = max(
+                        stage['phase_timing']['max_wm_null_probe_ms'],
+                        round((clock() - probe_started) * 1000, 3))
+                    stage['probes'] += 1
+                    next_response = clock() + 0.05
+                if response and len(response['navigation']) < 2:
+                    step = navigation_pending[-1]
+                    caret = api.scalar(editor, 2008)
+                    if caret == step['after']:
+                        elapsed = (clock() - input_started) * 1000
+                        response['navigation'].append(dict(step, wall_ms=round(elapsed, 3)))
+                        if len(response['navigation']) == 1:
+                            # The return key records its own observed state;
+                            # completion of RIGHT need not remain pending.
+                            left_pending = status_contains(api.text(status_handle), 'status.folding_markdown')
+                            input_started = clock()
+                            api.post_navigation(editor, 'LEFT')
+                            navigation_pending.append({'key': 'LEFT', 'before': navigation_before + 1,
+                                'after': navigation_before, 'request_pending': left_pending})
+                    if (clock() - input_started) * 1000 > GUI_RU_RESPONSE_TIMEOUT_MS:
+                        raise RuntimeError('Markdown queued navigation exceeded five seconds')
+                if response and not response['paint']['cleared']:
+                    if not api.paint_pending(editor):
+                        response['paint'].update(cleared=True, wall_ms=round((clock() - paint_started) * 1000, 3))
+                    if (clock() - paint_started) * 1000 > GUI_RU_RESPONSE_TIMEOUT_MS:
+                        raise RuntimeError('Markdown invalidated region was not naturally serviced within five seconds')
+                if now >= next_snapshot:
+                    complete = observer.snapshot(snapshot)
+                    elapsed = clock() - started
+                    if elapsed > GUI_MARKDOWN_TIMEOUT_SECONDS:
+                        raise RuntimeError('Markdown GUI final proof exceeded its original 30-second deadline')
+                    next_snapshot = clock() + 0.25
+                    if complete:
+                        break
+                time.sleep(0.01)
+    finally:
+        stage['wall_ms'] = round((clock() - started) * 1000, 3)
+    if sha(source) != stage['source_sha256']:
+        raise RuntimeError('Markdown GUI input changed source bytes without a save')
+
+
+def discard_deprecated_markdown(api, process, hwnd, source):
+    """Ordinary owned GUI close + explicit No, never a forged savepoint."""
+    import gui_instance_tabs as tabs
+    editor = api.editor(hwnd)
+    if api.text(hwnd) != '* ' + source.name + ' · ru_notepad':
+        raise RuntimeError('Deprecated Markdown cleanup target is not the fixture')
+    if not api.scalar(editor, 2159):
+        raise RuntimeError('Deprecated Markdown cleanup must observe the real dirty state')
+    count = api.scalar(api.control(hwnd, 10), 0x1304)
+    if count < 2:
+        raise RuntimeError('Deprecated Markdown cleanup has no surviving clean tab')
+    tabs._post_command(api, hwnd, 105)
+    tabs._button(api, process, 7)  # IDNO: discard only this synthetic dirty buffer.
+    wait_gui(api, process, lambda: api.scalar(api.control(hwnd, 10), 0x1304) == count - 1
+             and not api.scalar(api.editor(hwnd), 2159), 'Deprecated Markdown tab did not close cleanly')
+    if sha(source) != gui_markdown_teardown()['source_sha256']:
+        raise RuntimeError('Deprecated Markdown discard changed the original fixture')
+    return gui_markdown_teardown()
+
+
+def run_gui_markdown(api, binary_dir, fixtures, evidence, *, reproduce_deprecated=False):
+    isolated = Path(fixtures) / 'gui-markdown'
+    isolated.mkdir()
+    hashes = {}
+    for name in portable.RUNTIME_NAMES:
+        shutil.copyfile(binary_dir / name, isolated / name)
+        hashes[name] = sha(isolated / name)
+        if hashes[name] != sha(binary_dir / name):
+            raise RuntimeError('Markdown GUI runtime differs from the packaged snapshot')
+    record = {'measurement': GUI_MARKDOWN_MEASUREMENT, 'clock': performance_clock_record(), 'cases': []}
+    if not reproduce_deprecated:
+        record.update(schema=GUI_MARKDOWN_SCHEMA, deprecated=gui_markdown_deprecated(), teardown={})
+    small = isolated / '标题 折叠 😀.markdown'
+    original = b'# Heading\nbody\n## Child\ninside\n# Next\nlast\n'
+    small.write_bytes(original)
+    sources = {}
+    for kind in ('many-lines', 'singleline', 'unclosed-fence'):
+        source = isolated / (kind + '.md')
+        source.write_bytes(gui_markdown_fixture(kind)[0])
+        sources[kind] = source
+    def exercise(process, hwnd):
+        checks = {}
+        api.drop(api.editor(hwnd), [small])
+        def ready():
+            editor = api.editor(hwnd)
+            return (api.text(hwnd) == small.name + ' · ru_notepad' and api.scalar(editor, 4002) == 98 and
+                    markdown_status_complete(api.text(api.control(hwnd, 11))) and
+                    all(api.scalar(editor, 2223, line) & 0x2000 for line in (0, 2, 4)))
+        wait_gui(api, process, ready, 'Small Markdown fixture did not open with headings')
+        checks['menu_selection'] = checks['fold_headers'] = True
+        editor = api.editor(hwnd)
+        api.command(hwnd, 505)
+        wait_gui(api, process, lambda: not api.scalar(editor, 2228, 1), 'Markdown collapse did not hide a child')
+        api.command(hwnd, 506)
+        wait_gui(api, process, lambda: api.scalar(editor, 2228, 1), 'Markdown expand did not restore a child')
+        checks['collapse_expand'] = True
+        api.command(hwnd, 505)
+        api.command(hwnd, 507)
+        wait_gui(api, process, lambda: api.scalar(editor, 2228, 1) and status_contains(api.text(api.control(hwnd, 11)), 'status.heading_folds_off'),
+                 'Markdown fold option did not expand and disable')
+        api.command(hwnd, 507)
+        wait_gui(api, process, ready, 'Markdown fold option did not restore headings')
+        checks['fold_option'] = True
+        api.command(hwnd, 505)
+        api.command(hwnd, 701)
+        wait_gui(api, process, lambda: api.scalar(editor, 2228, 1) and not api.scalar(editor, 2223, 0) & 0x2000,
+                 'Plain-text selection left Markdown child lines hidden')
+        checks['plain_restores_visibility'] = True
+        api.command(hwnd, 705)
+        wait_gui(api, process, ready, 'Markdown menu did not restore headings')
+        if api.editor_bytes(hwnd) != original or api.scalar(editor, 2159) or small.read_bytes() != original:
+            raise RuntimeError('Markdown menus changed small-document bytes or clean state')
+        checks['clean_small_bytes'] = True
+        for kind, source in sources.items():
+            data, styles, folds = gui_markdown_fixture(kind)
+            case = {'kind': kind, 'size': len(data), 'source_sha256': sha(source),
+                'style_probes': styles, 'fold_probes': folds, 'stages': []}
+            record['cases'].append(case)
+            for operation in gui_markdown_operations(kind, legacy=reproduce_deprecated):
+                stage = {}
+                case['stages'].append(stage)
+                if operation != 'open':
+                    editor = api.editor(hwnd)
+                    api.scalar(editor, 2025, 9 if operation == 'backspace' else 8)
+                    if kind == 'many-lines' and operation in ('insert', 'backspace'):
+                        api.command(hwnd, 505)
+                        if api.scalar(editor, 2228, 1):
+                            raise RuntimeError('Many-line Markdown heading was not collapsed before editing')
+                def action():
+                    if operation == 'open':
+                        api.drop(api.editor(hwnd), [source])
+                    elif operation == 'insert':
+                        api.scalar(editor, 0x0102, ord('x'), 1)
+                        api.command(hwnd, 504)
+                    elif operation == 'backspace':
+                        api.scalar(editor, 0x0100, 8, 1)
+                        api.scalar(editor, 0x0101, 8, 0xc0000001)
+                        api.command(hwnd, 504)
+                    else:
+                        api.command(hwnd, 201)
+                run_gui_markdown_stage(api, process, hwnd, source, kind, operation, stage, action)
+        if sha(small) != hashlib.sha256(original).hexdigest():
+            raise RuntimeError('Markdown GUI small source changed')
+        if not reproduce_deprecated:
+            record['teardown'] = discard_deprecated_markdown(api, process, hwnd, sources['unclosed-fence'])
+        validate_gui_markdown(record, legacy=reproduce_deprecated)
+        checks.update(source_bytes_preserved=True, bounded_large_probes=True, real_edit_input_paint=True, active_undo_clean=True)
+        return checks
+    try:
+        result = run_gui(api, isolated, evidence, name='main-gui-markdown', exercise=exercise,
+                         log_prefix='main-markdown-launcher', arguments=('--markdown-phase-diagnostics',))
+    finally:
+        api.release_drops()
+    result.update(fixture_binary_sha256=hashes, markdown_performance=record)
+    result['source_bytes_preserved'] = (sha(small) == hashlib.sha256(original).hexdigest() and all(
+            sha(source) == hashlib.sha256(gui_markdown_fixture(kind)[0]).hexdigest() for kind, source in sources.items()))
+    if not result['source_bytes_preserved']:
+        result.update(passed=False, source_bytes_preserved=False,
+                      error='Markdown normal-close flow changed synthetic source bytes')
     return result
 
 
@@ -1844,8 +3032,9 @@ def syntax_fallback_layout(name):
     executable = SYNTAX_FALLBACK_EXECUTABLES.get(name, 'syntax_native.exe')
     layout = {executable: executable, 'Scintilla.dll': 'Scintilla.dll'}
     if name == 'syntax_bad_lexer':
-        # A real loadable DLL without CreateLexer, never a mock failure flag.
-        layout['Lexilla.dll'] = 'Scintilla.dll'
+        # A real DLL without CreateLexer or process-global window registration.
+        # A second renamed Scintilla can fail DllMain when the real one is loaded.
+        layout['Lexilla.dll'] = portable.NATIVE_HELPER_NAME
     if name in HELPER_FALLBACK_LAYOUTS:
         layout['Lexilla.dll'] = 'Lexilla.dll'
     helper_mode = HELPER_FALLBACK_LAYOUTS.get(name)
@@ -1854,6 +3043,31 @@ def syntax_fallback_layout(name):
             'Scintilla.dll' if helper_mode == 'bad-exports' else
             portable.NATIVE_WRONG_ABI_NAME if helper_mode == 'wrong-abi' else portable.NATIVE_HELPER_NAME)
     return layout
+
+
+def validate_wrong_lexer_preflight(record, expected_hash):
+    if (not isinstance(record, dict) or set(record) != WRONG_LEXER_PREFLIGHT_FIELDS or
+            any(record[field] is not True for field in ('loadable', 'createlexer_missing', 'released')) or
+            record['library_sha256'] != expected_hash):
+        raise RuntimeError('Wrong-lexer fixture preflight did not prove exact loadable missing-export bytes and release')
+
+
+def preflight_wrong_lexer(api, library, expected_hash):
+    """Probe the exact staged bytes before launching the native child; no symbol calls."""
+    record = dict(loadable=False, createlexer_missing=False, released=False,
+                  library_sha256=sha(library))
+    if record['library_sha256'] != expected_hash:
+        raise RuntimeError('Wrong-lexer fixture changed before its loader preflight')
+    handle = api.kernel.LoadLibraryExW(str(library.resolve(strict=True)), None, 2304)
+    if handle:
+        record['loadable'] = True
+        try:
+            record['createlexer_missing'] = not bool(api.kernel.GetProcAddress(handle, b'CreateLexer'))
+        finally:
+            record['released'] = bool(api.kernel.FreeLibrary(handle))
+    if sha(library) != expected_hash:
+        raise RuntimeError('Wrong-lexer fixture changed during its loader preflight')
+    return record
 
 
 def run_syntax_fallbacks(api, binary_dir, fixtures, evidence):
@@ -1869,8 +3083,21 @@ def run_syntax_fallbacks(api, binary_dir, fixtures, evidence):
             fixture_hashes[target] = sha(isolated / target)
             if fixture_hashes[target] != sha(binary_dir / source):
                 raise RuntimeError('Syntax fallback fixture differs from the tested binaries')
-        result = dict(run_console(api, name, [str(isolated / executable), argument],
-            evidence, r'^TOTAL PASS: 8\s*$', expected_assertions=8, cwd=isolated))
+        preflight = None
+        preflight_error = None
+        try:
+            if name == 'syntax_bad_lexer':
+                preflight = preflight_wrong_lexer(api, isolated / 'Lexilla.dll', fixture_hashes['Lexilla.dll'])
+                validate_wrong_lexer_preflight(preflight, fixture_hashes['Lexilla.dll'])
+        except Exception:
+            preflight_error = 'Wrong-lexer fixture OS preflight failed'
+        if preflight_error is not None:
+            result = dict(name=name, passed=False, executed=False, cleanup_killed=False, error=preflight_error)
+        else:
+            result = dict(run_console(api, name, [str(isolated / executable), argument],
+                evidence, r'^TOTAL PASS: 8\s*$', expected_assertions=8, cwd=isolated))
+        if preflight is not None:
+            result['fixture_preflight'] = preflight
         result['fixture_binary_sha256'] = fixture_hashes
         results.append(result)
     return results
@@ -1899,6 +3126,11 @@ def validate_acceptance(summary, root=None):
             raise RuntimeError(f'Native acceptance test did not pass normally: {test["name"]}')
         if test['name'] not in GUI_NAMES and test.get('assertions_passed') != expected_assertions(test['name']):
             raise RuntimeError(f'Native acceptance assertion count mismatch: {test["name"]}')
+        if test['name'] == 'markdown_direct_native':
+            validate_markdown_direct_gc(test.get('gc_stress'))
+            validate_markdown_route_metrics(test.get('bulk_route_metrics'))
+        elif 'gc_stress' in test or 'bulk_route_metrics' in test:
+            raise RuntimeError('Unexpected Markdown direct GC-stress or route metric evidence')
         if test['name'] == 'ru_syntax_native':
             validate_ru_performance(test.get('performance'))
         if test['name'] in RU_GUI_CONSOLE_MEASUREMENTS:
@@ -1909,18 +3141,29 @@ def validate_acceptance(summary, root=None):
                                for target, source in syntax_fallback_layout(test['name']).items()}
             if test.get('fixture_binary_sha256') != expected_hashes:
                 raise RuntimeError('Syntax fallback fixture does not match the packaged test binaries')
+        if test['name'] == 'syntax_bad_lexer':
+            validate_wrong_lexer_preflight(test.get('fixture_preflight'),
+                                           summary['tested_binary_sha256'][portable.NATIVE_HELPER_NAME])
+            if test.get('native_fixture_preflight') is not True:
+                raise RuntimeError('Wrong-lexer native fixture preflight evidence is missing')
+        elif 'fixture_preflight' in test or 'native_fixture_preflight' in test:
+            raise RuntimeError('Unexpected wrong-lexer fixture preflight evidence')
         if test['name'] in GUI_NAMES and not all(test.get(key) for key in
                 ('main_hwnd_seen', 'close_posted', 'detached_from_console')):
             raise RuntimeError('GUI acceptance lacks ordinary visible-window startup/close')
         if test['name'] == 'main-gui-ru-syntax':
             if not all(test.get(key) for key in GUI_RU_CHECKS):
                 raise RuntimeError('GUI Ru acceptance lacks a required style/fold/visibility/clean-state check')
-            validate_gui_ru_timer(test.get('timer_performance'))
+            validate_gui_ru_timer(test.get('timer_performance'), require_windows_clock=True)
             validate_gui_ru_edits(test.get('edit_performance'))
+        if test['name'] == 'main-gui-markdown':
+            if not all(test.get(key) is True for key in GUI_MARKDOWN_CHECKS):
+                raise RuntimeError('Markdown GUI acceptance lacks a required check')
+            validate_gui_markdown(test.get('markdown_performance'), require_windows_clock=True)
         if test['name'] == 'main-gui-file-entry':
             if not all(test.get(key) for key in GUI_FILE_CHECKS):
                 raise RuntimeError('GUI file-entry acceptance lacks a required Unicode/drop/cancel check')
-        if test['name'] in {'main-gui-file-entry', 'main-gui-ru-syntax'}:
+        if test['name'] in {'main-gui-file-entry', 'main-gui-ru-syntax', 'main-gui-markdown'}:
             hashes = {name: summary['tested_binary_sha256'][name] for name in portable.RUNTIME_NAMES}
             if test.get('fixture_binary_sha256') != hashes:
                 raise RuntimeError('GUI fixture does not match the packaged runtime binaries')
@@ -1998,6 +3241,9 @@ def main():
             summary['tests'].append(result)
             print(json.dumps(result), flush=True)
             result = run_gui_ru_syntax(api, binary_dir, fixtures, evidence)
+            summary['tests'].append(result)
+            print(json.dumps(result), flush=True)
+            result = run_gui_markdown(api, binary_dir, fixtures, evidence)
             summary['tests'].append(result)
             print(json.dumps(result), flush=True)
         validate_acceptance(summary)

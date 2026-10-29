@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "old": {
+    "commit": "95ee638f705f0fd75292da7eda150559dbe8fc3a",
+    "tree": "f4c871d89e26c8eef03fd901f8f9aa0ad4d7e354"
+  },
+  "new": {
+    "commit": "85c7821fda35aa79deeaf67b4d430f24ddd7f07f",
+    "tree": "a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba"
+  },
+  "approval_commit": "85c7821fda35aa79deeaf67b4d430f24ddd7f07f",
+  "expected_heap_size": {
+    "old": 32,
+    "new": 48
+  },
+  "replacements": [
+    {
+      "new": "struct RuHeap { RuHeap *transient_prev, *transient_next; size_t permanent_roots; size_t roots; unsigned mark; int kind; RuHeap *next; };\n",
+      "old": "struct RuHeap { size_t permanent_roots; size_t roots; unsigned mark; int kind; RuHeap *next; };\n",
+      "scope": "runtime"
+    },
+    {
+      "scope": "runtime",
+      "old": "} RuModuleFailure;\nstatic RuModuleFailure *ru_module_failures;\nstatic RuHeap *ru_heap;\nstatic Env *ru_envs;\ntypedef struct RuScratch { void (*cleanup)(void *); void *data; struct RuScratch *next; } RuScratch;\nstatic RuScratch *ru_scratch;\n",
+      "new": "} RuModuleFailure;\nstatic RuModuleFailure *ru_module_failures;\nstatic RuHeap *ru_heap;\nstatic RuHeap *ru_transient_roots;\nstatic Env *ru_envs;\ntypedef struct RuScratch { void (*cleanup)(void *); void *data; struct RuScratch *next; } RuScratch;\nstatic RuScratch *ru_scratch;\n"
+    },
+    {
+      "scope": "runtime",
+      "old": "static Val v_num(double n) { Val v = {0}; v.kind = RU_NUM; v.n = n; return v; }\nstatic Val v_fact(int n) { Val v = {0}; v.kind = RU_FACT; v.n = !!n; return v; }\nstatic Val v_null(void) { Val v = {0}; v.kind = RU_NULL; return v; }\nstatic Val v_copy(Val v)\n{\n    if (v.heap) { if (v.heap->roots == SIZE_MAX) ru_fail(0, \"值引用过多\"); ++v.heap->roots; }\n    return v;\n}\nstatic void v_drop(Val v)\n{\n    if (v.heap) { if (!v.heap->roots) ru_fail(0, \"内部错误：值的根计数失衡\"); --v.heap->roots; }\n}\n/* Persistent roots belong to escaped state, never to an abandoned call frame. */\nstatic Val v_pin(Val value)\n{\n    value = v_copy(value);\n    if (value.heap) ++value.heap->permanent_roots;\n    return value;\n}\nstatic void v_unpin(Val value)\n",
+      "new": "static Val v_num(double n) { Val v = {0}; v.kind = RU_NUM; v.n = n; return v; }\nstatic Val v_fact(int n) { Val v = {0}; v.kind = RU_FACT; v.n = !!n; return v; }\nstatic Val v_null(void) { Val v = {0}; v.kind = RU_NULL; return v; }\n/* An allocation-free index of heaps with roots > permanent_roots.\n * The index is not a GC root set: permanently rooted heaps may be absent. */\nstatic void rn_transient_link(RuHeap *heap)\n{\n    heap->transient_prev = NULL; heap->transient_next = ru_transient_roots;\n    if (ru_transient_roots) ru_transient_roots->transient_prev = heap;\n    ru_transient_roots = heap;\n}\nstatic void rn_transient_unlink(RuHeap *heap)\n{\n    if (heap->transient_prev) heap->transient_prev->transient_next = heap->transient_next;\n    else if (ru_transient_roots == heap) ru_transient_roots = heap->transient_next;\n    else return; /* Already unlisted, including zero-root GC victims. */\n    if (heap->transient_next) heap->transient_next->transient_prev = heap->transient_prev;\n    heap->transient_prev = NULL; heap->transient_next = NULL;\n}\nstatic Val v_copy(Val v)\n{\n    if (v.heap) { if (v.heap->roots == SIZE_MAX) ru_fail(0, \"值引用过多\"); if (v.heap->roots == v.heap->permanent_roots) rn_transient_link(v.heap);\n        ++v.heap->roots; }\n    return v;\n}\nstatic void v_drop(Val v)\n{\n    if (v.heap) { if (!v.heap->roots) ru_fail(0, \"内部错误：值的根计数失衡\"); --v.heap->roots;\n        if (v.heap->roots == v.heap->permanent_roots) rn_transient_unlink(v.heap); }\n}\n/* Persistent roots belong to escaped state, never to an abandoned call frame. */\nstatic Val v_pin(Val value)\n{\n    if (value.heap) {\n        if (value.heap->roots == SIZE_MAX) ru_fail(0, \"值引用过多\");\n        ++value.heap->roots; ++value.heap->permanent_roots;\n    }\n    return value;\n}\nstatic void v_unpin(Val value)\n"
+    },
+    {
+      "scope": "runtime",
+      "old": "    if (value.heap) {\n        if (!value.heap->permanent_roots) ru_fail(0, \"内部错误：永久根计数失衡\");\n        --value.heap->permanent_roots;\n    }\n    v_drop(value);\n}\nstatic void *ru_native_scratch_realloc(void *data, size_t size)\n{\n",
+      "new": "    if (value.heap) {\n        if (!value.heap->permanent_roots) ru_fail(0, \"内部错误：永久根计数失衡\");\n        --value.heap->permanent_roots;\n        if (!value.heap->roots) ru_fail(0, \"内部错误：值的根计数失衡\");\n        --value.heap->roots;\n    }\n}\nstatic void *ru_native_scratch_realloc(void *data, size_t size)\n{\n"
+    },
+    {
+      "scope": "runtime",
+      "old": "    if (ru_live >= ru_next_gc) ru_gc();\n    h=(RuHeap *)ru_alloc(size,line); memset(h,0,size);\n    h->kind=kind; h->roots=1; h->next=ru_heap; ru_heap=h; ++ru_live;\n    return h;\n}\nstatic Val ru_string_alloc(size_t len, int line)\n",
+      "new": "    if (ru_live >= ru_next_gc) ru_gc();\n    h=(RuHeap *)ru_alloc(size,line); memset(h,0,size);\n    h->kind=kind; h->roots=1; h->next=ru_heap; ru_heap=h; ++ru_live;\n    rn_transient_link(h);\n    return h;\n}\nstatic Val ru_string_alloc(size_t len, int line)\n"
+    },
+    {
+      "scope": "runtime",
+      "old": "    Env **slot; RuBinding *b;\n    if(env->managed) {\n        if(!env->gc.roots) ru_fail(0,\"内部错误：环境根计数失衡\");\n        --env->gc.roots; return;\n    }\n    slot=&ru_envs; b=env->bindings;\n    while(*slot && *slot!=env) slot=&(*slot)->registry_next;\n",
+      "new": "    Env **slot; RuBinding *b;\n    if(env->managed) {\n        if(!env->gc.roots) ru_fail(0,\"内部错误：环境根计数失衡\");\n        --env->gc.roots;\n        if (env->gc.roots == env->gc.permanent_roots) rn_transient_unlink(&env->gc);\n        return;\n    }\n    slot=&ru_envs; b=env->bindings;\n    while(*slot && *slot!=env) slot=&(*slot)->registry_next;\n"
+    },
+    {
+      "new": "static void ru_heap_dispose(RuHeap *heap)\n{\n    rn_transient_unlink(heap);\n",
+      "old": "static void ru_heap_dispose(RuHeap *heap)\n{\n",
+      "scope": "runtime"
+    },
+    {
+      "scope": "runtime",
+      "old": "    while(ru_envs) env_free(ru_envs);\n    while(ru_scratch) ru_scratch_free(ru_scratch->data);\n    /* Fatal exit invalidates roots still held by native frames. */\n    if(ru_failed) for(h=ru_heap;h;h=h->next) h->roots=0;\n    ru_gc();\n    if(getenv(\"RU_GC_STATS\")) fprintf(stderr,\"RU_GC live=%zu freed=%zu collections=%zu\\n\",ru_live,ru_freed,ru_collections);\n    /* Dispose of remaining temporaries on process exit. */\n",
+      "new": "    while(ru_envs) env_free(ru_envs);\n    while(ru_scratch) ru_scratch_free(ru_scratch->data);\n    /* Fatal exit invalidates roots still held by native frames. */\n    if(ru_failed) for(h=ru_heap;h;h=h->next) { rn_transient_unlink(h); h->roots=0; }\n    ru_gc();\n    if(getenv(\"RU_GC_STATS\")) fprintf(stderr,\"RU_GC live=%zu freed=%zu collections=%zu\\n\",ru_live,ru_freed,ru_collections);\n    /* Dispose of remaining temporaries on process exit. */\n"
+    },
+    {
+      "scope": "runtime",
+      "old": "    RuNativeTrap *trap = (RuNativeTrap *)calloc(1, sizeof(*trap));\n    RuHeap *heap; size_t count = 0;\n    if (!trap) return NULL;\n    for (heap = ru_heap; heap; heap = heap->next) if (heap->roots > heap->permanent_roots) ++count;\n    trap->roots = (RuNativeRoot *)malloc((count ? count : 1) * sizeof(*trap->roots));\n    if (!trap->roots) { free(trap); return NULL; }\n    for (heap = ru_heap; heap; heap = heap->next) if (heap->roots > heap->permanent_roots) {\n        trap->roots[trap->root_count].heap = heap;\n        trap->roots[trap->root_count++].transient = heap->roots - heap->permanent_roots;\n    }\n",
+      "new": "    RuNativeTrap *trap = (RuNativeTrap *)calloc(1, sizeof(*trap));\n    RuHeap *heap; size_t count = 0;\n    if (!trap) return NULL;\n    for (heap = ru_transient_roots; heap; heap = heap->transient_next) ++count;\n    if (count > SIZE_MAX / sizeof(*trap->roots)) { free(trap); return NULL; }\n    trap->roots = (RuNativeRoot *)malloc((count ? count : 1) * sizeof(*trap->roots));\n    if (!trap->roots) { free(trap); return NULL; }\n    for (heap = ru_transient_roots; heap; heap = heap->transient_next) {\n        trap->roots[trap->root_count].heap = heap;\n        trap->roots[trap->root_count++].transient = heap->roots - heap->permanent_roots;\n    }\n"
+    },
+    {
+      "scope": "runtime",
+      "old": "    /* Persistent roots have changed legitimately during the callback; restore\n     * only abandoned frame roots. Entry transient roots keep their heaps alive. */\n    ru_panic_clear();\n    for (heap = ru_heap; heap; heap = heap->next) {\n        RuNativeRoot key, *saved; key.heap = heap; key.transient = 0;\n        saved = (RuNativeRoot *)bsearch(&key, trap->roots, trap->root_count, sizeof(*trap->roots), rn_root_compare);\n        heap->roots = heap->permanent_roots + (saved ? saved->transient : 0);\n        heap->mark = 0;\n    }\n    while (ru_scratch != (RuScratch *)trap->scratch) ru_scratch_free(ru_scratch->data);\n    ru_call_depth = trap->call_depth; ru_source = trap->source;\n",
+      "new": "    /* Persistent roots have changed legitimately during the callback; restore\n     * only abandoned frame roots. Entry transient roots keep their heaps alive. */\n    ru_panic_clear();\n    ru_transient_roots = NULL;\n    for (heap = ru_heap; heap; heap = heap->next) {\n        RuNativeRoot key, *saved; key.heap = heap; key.transient = 0;\n        saved = (RuNativeRoot *)bsearch(&key, trap->roots, trap->root_count, sizeof(*trap->roots), rn_root_compare);\n        heap->roots = heap->permanent_roots + (saved ? saved->transient : 0);\n        heap->mark = 0;\n        heap->transient_prev = NULL; heap->transient_next = NULL;\n        if (heap->roots > heap->permanent_roots) rn_transient_link(heap);\n    }\n    while (ru_scratch != (RuScratch *)trap->scratch) ru_scratch_free(ru_scratch->data);\n    ru_call_depth = trap->call_depth; ru_source = trap->source;\n"
+    },
+    {
+      "scope": "generator_banner",
+      "old": "/* Generated by ru 0.22.0. Standalone C99; source AST is not embedded. */\n",
+      "new": "/* Generated by ru 0.22.1. Standalone C99; source AST is not embedded. */\n"
+    }
+  ]
+}

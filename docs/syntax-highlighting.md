@@ -1,16 +1,17 @@
-# Syntax highlighting in 0.1.4 preview
+# Syntax highlighting in 0.1.8 preview
 
 ## Supported languages
 
 The application owns colours and native integration in `src/syntax.ru`; its
 `识别` / `名称` wrappers delegate to the exact pure production policy in
 `src/syntax_policy.ru`. Scintilla
-owns text, rendering, selection and undo. C/C++ and JSON use native Lexilla lexers; Ru uses its own container policy:
+owns text, rendering, selection and undo. C/C++, JSON and Markdown use native Lexilla lexers; Ru uses its own container policy:
 
 | File suffix, case-insensitive | Display | Implementation |
 | --- | --- | --- |
 | `.c`, `.h`, `.cc`, `.hh`, `.cpp`, `.hpp`, `.cxx`, `.hxx`, `.c++`, `.h++`, `.inl` | C / C++ | `cpp` (`SCLEX_CPP=3`) |
 | `.json` | JSON | `json` (`SCLEX_JSON=120`) |
+| `.md`, `.markdown` | Markdown | `markdown` (`SCLEX_MARKDOWN=98`), independent Ru heading folds |
 | `.ru` | Ru / 如言 | Ru-owned Scintilla container policy (`SCLEX_CONTAINER=0`) |
 | Other suffixes, no suffix, new unsaved documents | Plain text | No lexer |
 
@@ -45,9 +46,14 @@ notifications remain independent. Scintilla completes its internal style/fold,
 layout and undo handling before this parent-notification filter. Native controls
 retain the default full subscription to test the unused-notification path.
 
-The fold margin and View menu operate on Ru folds. Ctrl+Shift+[ / ] collapse/expand
+The fold margin and View menu operate on Ru, Markdown and C/C++ folds.
+C/C++ enables Lexilla brace, multiline-comment and preprocessor folding; the
+application routes margin clicks and collapse/expand commands to the owning
+Scintilla document. Native incremental lexing maintains levels after edits.
+C++ packed next-line levels are not mistaken for header flags. Explicit
+collapse-all may style to EOF, while ordinary selection and edits stay lazy. Ctrl+Shift+[ / ] collapse/expand
 all folds. Re-selecting Ru or switching tabs retains existing folds; changing to
-plain/C++/JSON first restores hidden text. Fold state is in-memory only; sessions
+another language first restores hidden text. Fold state is in-memory only; sessions
 and crash recovery are not implemented.
 
 ## Dependency and source pin
@@ -119,7 +125,7 @@ not make those runtime failures recoverable; the compiler is unchanged.
 Public module operations:
 
 - `初始化`: cached warning string, empty on success; no retry or late module loading.
-- `识别 路`: extension mapping to `ru`, `cpp`, `json` or `plain`.
+- `识别 路`: extension mapping to `ru`, `cpp`, `json`, `markdown` or `plain`.
 - `名称 语言`: truthful status-bar label.
 - `选择 柄 语言`: applies the requested supported language, returning the actual
   language; unavailable or unknown languages return `plain`.
@@ -219,10 +225,13 @@ passed; see that run's exact-commit results and distribution validation receipt.
 ## Ru-owned native acceptance
 
 The production lexical policy has **380 portable assertions**, replaying small
-fixtures at different scalar boundaries. The real Scintilla bridge adds **125
+fixtures at different scalar boundaries. The real Scintilla bridge requires **149
 assertions** for byte styles, fold levels, incomplete multiline edits, bounded
 reads, checkpoint convergence, stale document generations, fallback visibility,
-and text/savepoint/undo preservation. Length-changing insertion/deletion at the
+and text/savepoint/undo preservation. This includes 24 new bulk-decoder cases
+covering old/new event equality, malformed bounds/high bits/order and detached
+results; 23 arithmetic/control-flow cases per portable backend supplement them.
+Length-changing insertion/deletion at the
 beginning, middle and end is compared byte-for-byte and fold-for-fold with a fresh
 scan; further edits while work is pending must converge to the latest document. An isolated **8-assertion** run omits
 Lexilla.dll and proves that Ru styling and folding still work with RuSyntax.dll.
@@ -257,17 +266,84 @@ they do not scan or read document text. Diagnostic collection cannot turn a
 post-deadline completion into a pass. The gate also measures representative
 100 KB real insertion/Backspace at
 the beginning, middle and end. These are required
-Windows gates for 0.1.4; a local compile is not evidence that they passed.
+Windows gates. The 0.1.5 baseline passed 1,451 assertions across 32 results;
+the corrected 0.1.6 direct-publication run passed 1,487 assertions / 33 results
+and its same-run route comparison. The 0.1.7 Ru policy-prefix candidate retains
+those gates and requires its own exact-build acceptance and same-direct-route
+comparison; those results remain pending. See [the direct-publication contract](direct-style-publication.md).
 
 Physical mouse interaction, non-US keyboard layouts and IME composition still
 need manual acceptance. Keyboard shortcuts use Windows virtual-key positions;
 the View menu and fold margin provide alternatives on layouts where brackets
 require different modifier combinations.
 
+## Markdown Stage A
+
+Markdown uses Lexilla only for style bytes. `markdown_policy.ru` and `markdown_syntax.ru` implement a separate conservative heading folder. See [editing scope](markdown-editing.md) and the [exact policy subset](markdown-policy-subset.md). Selection uses a token and live-thread/document checks before and after each setup message. Owners must invalidate before changing documents or destroying windows; arbitrary subclasses swapping a document while forwarding the same mutation are outside this contract.
+
+C++ folding regression coverage adds 56 native syntax assertions and eight real
+application command/margin assertions (2,071 assertions across the existing
+39 product groups). These are required tests, not a claim they have passed.
+The separate known Markdown double-undo deadline remains unchanged.
+
+The native fixtures also delete a collapsed C++ header and undo it, replace
+the document with real STYLES_NONE storage, and append an actual 32 MiB ASCII
+string to a collapsed styled document. Above the byte threshold, new collapse
+requests are refused while margin expansion and expand-all remain available.
+
+The first Windows C++ candidate exposed a real runtime type error: the bridge
+converted a native fold result to a Ru number, then called the native-integer
+`位段` method on that number. The repaired margin route uses the shared numeric
+header-bit predicate. Twenty-six additional portable policy assertions execute
+that exact predicate on interpreter and native C, including packed high bits,
+signed levels, boundaries and invalid numeric values. An unchanged failing
+expression is retained as a negative control on both backends. These additions
+do not replace the 138 native syntax and 31 application feature assertions or
+the required Windows acceptance run.
+
+The second Windows run passed application features, then the growth fixture
+failed after 126 syntax assertions: one 32 MiB UTF8 allocation exceeded the
+runtime's 16 MiB buffer cap. The fixture now appends 32 actual 1 MiB chunks
+inside one Scintilla undo action (2078/2079). Its exact 33,554,454-byte length,
+visibility, savepoint, single-undo and restored-folding assertions remain intact.
+Independent buffer controls allocate, round-trip and close all 32 buffers on
+both runtimes and retain the oversized allocation as a failing negative control.
+On Linux, direct native imports are unsupported; `tools/test_growth_buffers.py`
+uses the compiler's test-only POSIX platform adapter for these real memory
+checks, without changing the allocator or buffer cap. This is not Windows ABI
+evidence. On Windows the script uses the unmodified CLI/backends. Windows
+acceptance must now execute all 144 syntax assertions; these allocation
+controls do not establish Windows folding or undo results.
+
+The third full Windows run passed the real 33,554,454-byte length, but exposed
+an invalid fixture premise: its final empty line belonged to the collapsed fold.
+Scintilla's automatic SHOW expands that hidden EOF line before SCI_APPENDTEXT.
+Dedicated Windows run 39365371547 measured options 256 unchanged and confirmed
+expansion on the first append. With a visible `int padding;` line at EOF, the
+34-byte document remained collapsed after real growth to 33,554,466 bytes;
+margin expansion, all-line visibility, one undo to clean text, and folding
+restoration all worked. The production code does not need changing.
+
+The main threshold-growth fixture now uses that measured visible-EOF setup.
+Five additional assertions retain the original 22-byte hidden-EOF behavior and
+undo, plus one asserts the new fixture's visible-EOF/collapsed-body precondition.
+Syntax acceptance is 144 (previous 138 plus 6), total product assertions 2077
+in 39 groups. State values are printed before the growth assertion. The
+one-shot push diagnostic trigger is removed; a complete Windows regression
+run remains required before packaging. No earlier failed run is relabelled.
+
 ## Conditional-chain editing validation
 
 `另若` is recognized as one keyword and shares the existing conditional frame;
 spaced `另 若` remains nested. The interpreter and native scanner consume the
 same Ru-owned keyword table. This is editor support, not an upgrade of the
-bundled compiler pin. Six new fixtures add 42 assertions to the existing 338,
-for 380 total, preserving original fixture coverage and all acceptance gates.
+bundled compiler pin.
+
+The historical fast-prefix proof retains the exact `a5f5fd8` baseline identity,
+frozen 196-case input plan and all 12 source-guard mutations. Its comparison
+applies the same narrowly pinned conditional-chain semantics to both policies;
+schema 2 records the original baseline hash separately from the adapted hash.
+This verifies the prefix optimization under the extended grammar, not unchanged
+historical grammar output or a new performance result. The original lexical
+fixture bytes remain checked after removing only the hash-pinned six-case
+addition; its 42 assertions bring the full oracle from 338 to 380.

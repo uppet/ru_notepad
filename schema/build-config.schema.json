@@ -1,0 +1,310 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Reviewed bootstrap LLVM build inputs (not self-authenticating)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "ru_source",
+    "app_source",
+    "bootstrap_directory",
+    "verification",
+    "tool_paths",
+    "tool_sha256",
+    "app_baseline"
+  ],
+  "properties": {
+    "schema": {
+      "const": "ru-notepad-bootstrap-llvm-config-v1"
+    },
+    "ru_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "commit",
+        "tree"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    },
+    "app_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "commit",
+        "tree"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    },
+    "bootstrap_directory": {
+      "type": "string",
+      "minLength": 1
+    },
+    "verification": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tool_paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clang",
+        "llvm-as",
+        "llvm-link",
+        "opt",
+        "llvm-dis",
+        "llc",
+        "linker",
+        "resource-compiler"
+      ],
+      "properties": {
+        "clang": {
+          "type": "string",
+          "minLength": 1
+        },
+        "llvm-as": {
+          "type": "string",
+          "minLength": 1
+        },
+        "llvm-link": {
+          "type": "string",
+          "minLength": 1
+        },
+        "opt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "llvm-dis": {
+          "type": "string",
+          "minLength": 1
+        },
+        "llc": {
+          "type": "string",
+          "minLength": 1
+        },
+        "linker": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resource-compiler": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "tool_sha256": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clang",
+        "llvm-as",
+        "llvm-link",
+        "opt",
+        "llvm-dis",
+        "llc",
+        "linker",
+        "resource-compiler"
+      ],
+      "properties": {
+        "clang": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "llvm-as": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "llvm-link": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "opt": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "llvm-dis": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "llc": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "linker": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "resource-compiler": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "app_baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "tree"
+      ],
+      "properties": {
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "reviewed_changes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "before",
+              "after"
+            ],
+            "properties": {
+              "before": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                ]
+              },
+              "after": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "entry_source": {
+      "enum": [
+        "src/main.ru",
+        "tests/bootstrap_pipeline/argv_probe.ru",
+        "tests/bootstrap_pipeline/dll_abi_probe.ru"
+      ]
+    },
+    "mingw_tool_paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cc",
+        "cxx",
+        "make",
+        "windres",
+        "ar",
+        "ranlib",
+        "objdump"
+      ],
+      "properties": {
+        "cc": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cxx": {
+          "type": "string",
+          "minLength": 1
+        },
+        "make": {
+          "type": "string",
+          "minLength": 1
+        },
+        "windres": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ar": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ranlib": {
+          "type": "string",
+          "minLength": 1
+        },
+        "objdump": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "mingw_tool_sha256": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cc",
+        "cxx",
+        "make",
+        "windres",
+        "ar",
+        "ranlib",
+        "objdump"
+      ],
+      "properties": {
+        "cc": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "cxx": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "make": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "windres": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "ar": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "ranlib": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "objdump": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

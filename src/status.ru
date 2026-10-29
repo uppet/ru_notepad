@@ -1,5 +1,6 @@
 # Scintilla status queries only. No document bytes or save state are changed.
 窗 取 外言 'win32.ru'.
+本地 取 外言 'i18n.ru'.
 算 信息 柄:
     位 取 (窗 其 发送 柄 2008 0 0) 其 数.
     行 取 (窗 其 发送 柄 2166 位 0) 其 数.
@@ -26,7 +27,8 @@
 法
 算 文本 柄:
     值 取 信息 柄.
-    得 'Ln '+((值 其 查 'line') 为 句)+'  Col '+((值 其 查 'column') 为 句)+
-        '    '+((值 其 查 'bytes') 为 句)+' bytes    Line EOL: '+(值 其 查 'lineEol')+
-        '    Enter: '+(值 其 查 'insertEol').
+    行尾 取 值 其 查 'lineEol'.
+    若 行尾 == 'None (EOF)' 则 行尾 取 本地 其 文本 'status.eof'. 然
+    若 行尾 == 'Unknown' 则 行尾 取 本地 其 文本 'status.unknown'. 然
+    得 本地 其 格式 'status.position' ([(值 其 查 'line'),(值 其 查 'column'),(值 其 查 'bytes'),行尾,(值 其 查 'insertEol')]).
 法

@@ -342,7 +342,7 @@ def main():
     if not lib:
         lib=BUILD/'libRuSyntax.so';run(['gcc','-std=c99','-O2','-Wall','-Wextra','-Werror','-fPIC','-shared',ROOT/'native/ru_scan.c','-o',lib],'scanner-build.log')
     sc=Scanner(lib.resolve());check_boundaries(sc);check_sanitizer_environment();cases=fixtures();rng=random.Random(0x213)
-    atoms=['算','作','为','若','然','真','取','得','典','成','段','落','终','解.','释。','批.','#','//',"'",'“','”','\\','1e-2','0x12','(',')','[',']','{','}',':',',','.','_x','é٢','𐐀','😀','\n','\r','\t',' ']
+    atoms=['算','作','为','续','完','破','若','然','真','取','得','典','成','段','落','终','解.','释。','批.','#','//',"'",'“','”','\\','1e-2','0x12','(',')','[',']','{','}',':',',','.','_x','é٢','𐐀','😀','\n','\r','\t',' ']
     for i in range(args.fuzz):cases.append((f'fuzz-{i}',''.join(rng.choice(atoms) for _ in range(rng.randrange(1,45)))))
     total=0
     for name,text in cases:

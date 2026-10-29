@@ -1,5 +1,6 @@
 # Opt-in HKCU candidate registration. Importing this module performs no writes.
 # Windows owns defaults: no UserChoice/hash, extension default or HKLM changes.
+本地 取 外言 'i18n.ru'.
 密 取 外言 '如:密'.
 策略 取 外言 './associations_policy.ru'.
 _PTR 取 密 其 指针.
@@ -26,7 +27,7 @@ _ShellExecuteW 取 _壳 其 绑定 'ShellExecuteW' (密 其 签名 _PTR ([_PTR,_
 _SHChangeNotify 取 _壳 其 绑定 'SHChangeNotify' (密 其 签名 _VOID ([_I32,_U32,_PTR,_PTR]) 'win64').
 
 作 _检查 码 为 数:
-    若 码 != 0 则 卒 '无法更新打开方式候选项（Windows 错误 '+(码 为 句)+'）。'. 然
+    若 码 != 0 则 卒 (本地 其 格式 'error.association.update' ([(码 为 句)])). 然
 为
 
 算 程序路径:
@@ -34,10 +35,10 @@ _SHChangeNotify 取 _壳 其 绑定 'SHChangeNotify' (密 其 签名 _VOID ([_I3
     循
         存 取 密 其 缓冲 (容量*2).
         长 取 ((_GetModuleFileNameW 其 调用 [空,存,容量]) 其 值) 其 数.
-        若 长 == 0 则 存 其 关闭. 卒 '无法取得当前程序的完整路径。'. 然
+        若 长 == 0 则 存 其 关闭. 卒 (本地 其 文本 'error.association.app_path'). 然
         若 长 < 容量 则
             验 取 (_WideCharToMultiByte 其 调用 [65001,128,存,长,空,0,空,空]) 其 值.
-            若 验 其 为空 或 长 > 32000 则 存 其 关闭. 卒 '当前程序路径无效或过长。'. 然
+            若 验 其 为空 或 长 > 32000 则 存 其 关闭. 卒 (本地 其 文本 'error.association.invalid_path'). 然
             路 取 存 其 解UTF16.
             存 其 关闭.
             策略 其 命令 路.
@@ -45,7 +46,7 @@ _SHChangeNotify 取 _壳 其 绑定 'SHChangeNotify' (密 其 签名 _VOID ([_I3
         然
         存 其 关闭.
         容量 取 容量*2.
-        若 容量 > 65536 则 卒 '当前程序路径过长。'. 然
+        若 容量 > 65536 则 卒 (本地 其 文本 'error.association.long_path'). 然
     环
 法
 
@@ -217,7 +218,7 @@ _SHChangeNotify 取 _壳 其 绑定 'SHChangeNotify' (密 其 签名 _VOID ([_I3
 作 配置注册 配:
     根们 取 _根们 配.
     若 根们[0] == 'foreign' 或 根们[1] == 'foreign' 或 根们[2] == 'foreign' 则
-        卒 '已有其他位置的程序或用户设置占用这些候选项；未覆盖。请先在原程序中移除注册。'.
+        卒 (本地 其 文本 'error.association.occupied').
     然
     项们 取 策略 其 计划 (配 其 查 'exe').
     # Complete conflict preflight before the first mutation.
@@ -226,7 +227,7 @@ _SHChangeNotify 取 _壳 其 绑定 'SHChangeNotify' (密 其 签名 _VOID ([_I3
         项 取 项们[位].
         值 取 查询值 配 项[0] 项[1].
         若 (值 其 查 'exists') 且 非 (_相同 值 项[2] 项[3]) 则
-            卒 '打开方式候选项已被修改；为保护现有设置，本次没有覆盖。'.
+            卒 (本地 其 文本 'error.association.changed').
         然
         位 取 位+1.
     环
@@ -283,7 +284,7 @@ _SHChangeNotify 取 _壳 其 绑定 'SHChangeNotify' (密 其 签名 _VOID ([_I3
 作 配置注销 配:
     根们 取 _根们 配.
     若 根们[0] == 'foreign' 或 根们[1] == 'foreign' 或 根们[2] == 'foreign' 则
-        卒 '候选项不属于当前程序位置；未删除其他程序或用户的设置。'.
+        卒 (本地 其 文本 'error.association.not_owned').
     然
     项们 取 策略 其 计划 (配 其 查 'exe').
     位 取 项们 其 量.
@@ -336,5 +337,5 @@ _SHChangeNotify 取 _壳 其 绑定 'SHChangeNotify' (密 其 签名 _VOID ([_I3
     果 取 _ShellExecuteW 其 调用 [窗口,动,路,空,空,1].
     动 其 关闭.
     路 其 关闭.
-    若 (果 其 值) 其 数 <= 32 则 卒 '无法打开 Windows 默认应用设置，请从系统设置中手动选择。'. 然
+    若 (果 其 值) 其 数 <= 32 则 卒 (本地 其 格式 'error.association.settings' ([(((果 其 值) 其 数) 为 句)])). 然
 为

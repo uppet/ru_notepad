@@ -1,4 +1,4 @@
-ru_notepad 0.1.4-preview · Windows x64 便携预览
+ru_notepad 0.1.8-preview · Windows x64 便携预览
 
 重要：这是实验性便携预览。请以 BUILD.json 查看这个包的实际验证结果。
 交叉编译不等于 Windows 实跑；Windows CI 包仅在列明的原生测试和
@@ -28,7 +28,7 @@ ru_notepad 0.1.4-preview · Windows x64 便携预览
 多文档标签；独立撤销/重做；打开/保存/另存为；脏文档保存询问；
 UTF-8/BOM、UTF-16 LE/BE、显式 Windows-1252 和 GBK；
 文字查找/替换、大小写选项、一次撤销的全部替换；行号、折行和缩放。
-Lexilla 提供真实 C/C++、JSON 高亮，可按扩展名自动选择或在 Language 菜单手选。
+Lexilla 提供真实 C/C++、JSON、Markdown 高亮，可按扩展名自动选择或在 Language 菜单手选。
 如言 .ru 按 0.21.3 语言规则高亮和折叠：词表及结构策略由 Ru 编写，
 应用自有 RuSyntax.dll 用有界 C 扫描加速 UTF-8 热路径和批量着色。
 打开或另存为 .ru 自动识别；Language > Ru / 如言 可手选。
@@ -78,5 +78,12 @@ OPTIONAL-ACL-TESTS.txt。不要对真实文档直接运行其 probe 程序。
 反馈请附 Windows 版本、重现步骤、BUILD.json 的版本标识和测试结果。
 无需发送私密文档、密码或唯一原件。
 
-程序逻辑主要用 Ru 编写并编译为本机代码；编辑器核心为 Scintilla 5.6.7，C/C++、JSON 使用 Lexilla 5.5.4，如言由本项目 Ru 策略配合 RuSyntax.dll 的 C 扫描辅助实现。
+程序逻辑主要用 Ru 编写并编译为本机代码；编辑器核心为 Scintilla 5.6.7，C/C++、JSON、Markdown 使用 Lexilla 5.5.4，如言由本项目 Ru 策略配合 RuSyntax.dll 的 C 扫描辅助实现。
 图标为原创 GPT 生成。依赖许可见 licenses，详细说明见 README.txt。
+
+Markdown 第一阶段
+.md 和 .markdown 自动识别，也可在 Language > Markdown 手选。
+View > Toggle Markdown heading folds 可按标签关闭标题折叠，保留高亮。
+支持保守的 ATX/setext 标题折叠子集；折叠规则与 Lexilla 着色方言分别说明。
+尚不包含列表/引用回车续行或渲染预览。当前包的实测范围以 BUILD.json 为准。
+长单行原生着色和展开不能被 Ru 的8毫秒调度预算抢占；不要视为硬响应上限。

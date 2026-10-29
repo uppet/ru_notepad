@@ -271,6 +271,109 @@ memcmp 取 比较库 其 绑定 'memcmp' (密 其 签名 (窗 其 I) ([(窗 其 
         确认 ((窗 其 发送 柄 2183 0 0) 其 数 == 大小 且 (样式 柄 35000) == 8 且 合['editReadBytes'] >= 65536) 'net-zero edit revisits styles published beyond an intermediate checkpoint'.
     然
 为
+# Test-only reference of the old u64/member decoder. Production uses _解事件.
+算 旧事件 存 项数 为 数:
+    事件们 取 [].
+    项位 取 0.
+    循 项数 次
+        项 取 存 其 读 (原桥 其 _事件名)[项位].
+        头 取 项 其 读 'head'.
+        尾 取 项 其 读 'tail'.
+        头数 取 原桥 其 _头数 头.
+        元码 取 头数 % 16777216.
+        项始 取 (头数-元码)/16777216.
+        种 取 元码 % 256.
+        码色 取 (元码-种)/256.
+        码 取 码色 % 256.
+        色 取 (码色-码)/256.
+        项长 取 尾 其 位段 0 32.
+        项行 取 尾 其 位段 32 32.
+        事件们 其 增 [种,码,色,项始,项长,项行].
+        项位 取 项位+1.
+    环
+    得 事件们.
+法
+算 同事件 甲 乙:
+    若 (甲 其 量) != (乙 其 量) 则 得 假. 然
+    位 取 0.
+    循 甲 其 量 次
+        若 (甲[位] 其 量) != 6 或 (乙[位] 其 量) != 6 则 得 假. 然
+        域 取 0.
+        循 6 次
+            若 甲[位][域] != 乙[位][域] 则 得 假. 然
+            域 取 域+1.
+        环
+        位 取 位+1.
+    环
+    得 真.
+法
+作 写事件 存 位 为 数 头 尾:
+    项 取 存 其 读 (原桥 其 _事件名)[位].
+    项 其 写 'head' ((密 其 u64) 其 值 头).
+    项 其 写 'tail' ((密 其 u64) 其 值 尾).
+为
+作 拒批 存 项数 为 数 始 为 数 字节 为 数 行 为 数 原因文 为 句 标签 为 句:
+    拒 取 [假].
+    试
+        原桥 其 _解事件 存 项数 始 字节 行.
+    救 原因
+        拒[0] 取 (原因 为 句) 其 含 原因文.
+    终
+    确认 拒[0] 标签.
+为
+作 批事件验收:
+    存 取 (原桥 其 _事件批型) 其 新建.
+    预期 取 [].
+    位 取 0.
+    循 64 次
+        种 取 位 % 7+1. 码 取 (位*47) % 256. 色 取 位 % 10.
+        始 取 位*128. 长 取 位 % 63+1.
+        写事件 存 位 (始*16777216+色*65536+码*256+种) (位*4294967296+长).
+        预期 其 增 [种,码,色,始,长,位].
+        位 取 位+1.
+    环
+    旧 取 旧事件 存 64.
+    批新 取 原桥 其 _解事件 存 64 0 8192 64.
+    确认 ((同事件 批新 旧) 且 (同事件 批新 预期)) 'production bulk decoder matches all six old-decoder fields across a full 64-event batch'.
+    写事件 存 63 '562949953421313' 1.
+    拒批 存 64 0 8192 64 'oversized event head bits' 'production bulk decoder checks high bits in the last event of a full batch'.
+    写事件 存 0 '536870895877895' 1.
+    边新 取 原桥 其 _解事件 存 1 0 32000000 0.
+    确认 ((同事件 边新 (旧事件 存 1)) 且 (同事件 边新 ([[7,255,9,31999999,1,0]]))) 'production bulk decoder preserves exact near-32-MB event coordinates and unsigned metadata'.
+    坏头们 取 ['562949953421313','9223372036854775809','18446744073709551615'].
+    位 取 0.
+    循 坏头们 其 量 次
+        写事件 存 0 坏头们[位] 1.
+        拒批 存 1 0 32000000 0 'oversized event head bits' ('production bulk decoder rejects high-bit corruption '+(位 为 句)+' before combining words').
+        位 取 位+1.
+    环
+    确认 (((原桥 其 _解事件 存 0 0 0 0) 其 量) == 0) 'production bulk decoder ignores stale event bytes when the native count is zero'.
+    拒批 存 65 0 8192 64 'invalid batch size' 'production bulk decoder rejects a count exceeding its 1024-byte event capacity'.
+    拒批 存 (-1) 0 8192 64 'invalid batch size' 'production bulk decoder rejects a negative count'.
+    拒批 存 0.5 0 8192 64 'invalid batch size' 'production bulk decoder rejects a fractional count'.
+    # Each malformed lexical value reaches the same production snapshot path.
+    坏项们 取 [[0,1],[8,1],[655362,1],[2,0],[2,4294967295],[2,'18446744069414584321'],[1677721602,1],[262145,65]].
+    位 取 0.
+    循 坏项们 其 量 次
+        写事件 存 0 坏项们[位][0] 坏项们[位][1].
+        拒批 存 1 0 100 0 'invalid lexical event' ('production bulk decoder rejects malformed kind/style/length/position/line '+(位 为 句)).
+        位 取 位+1.
+    环
+    写事件 存 0 2 1.
+    拒批 存 1 1 100 0 'invalid lexical event' 'production bulk decoder rejects a non-token before the styled range'.
+    写事件 存 0 524289 100.
+    迟词 取 原桥 其 _解事件 存 1 32 100 0.
+    确认 (同事件 迟词 ([[1,0,8,0,100,0]])) 'production bulk decoder preserves long identifier events starting before the styled range'.
+    写事件 存 0 262145 64.
+    确认 (同事件 (原桥 其 _解事件 存 1 32 100 0) ([[1,0,4,0,64,0]])) 'production bulk decoder preserves the 64-byte delayed keyword boundary'.
+    写事件 存 0 167772162 1.
+    写事件 存 1 150994946 1.
+    拒批 存 2 0 100 0 'unordered lexical events' 'production bulk decoder rejects decreasing event positions'.
+    写事件 存 1 167772163 1.
+    确认 (同事件 (原桥 其 _解事件 存 2 0 100 0) ([[2,0,0,10,1,0],[3,0,0,10,1,0]])) 'production bulk decoder preserves equal-position event ordering'.
+    存 其 关闭.
+    确认 (同事件 批新 预期) 'decoded event rows remain detached after source mutation and closure'.
+为
 算 元初 参数 为 句 阵:
     库 取 密 其 动态库 ((窗 其 目录)+'Scintilla.dll').
     实例 取 窗 其 成功 ((窗 其 GetModuleHandleW) 其 调用 [空]) 'instance'.
@@ -341,6 +444,7 @@ memcmp 取 比较库 其 绑定 'memcmp' (密 其 签名 (窗 其 I) ([(窗 其 
         显 'TOTAL PASS: '+(次数[0] 为 句).
         得 0.
     然
+    批事件验收.
     边头 取 (密 其 u64) 其 值 '536870895877895'.
     边码 取 原桥 其 _头数 边头.
     确认 (边码 == 536870895877895 且 (边码-(边码 % 16777216))/16777216 == 31999999 且 边码 % 256 == 7 且 ((边码 % 65536)-(边码 % 256))/256 == 255 且 ((边码 % 16777216)-(边码 % 65536))/65536 == 9) 'checked low49 decoding preserves event coordinates near the 32 MB boundary'.
@@ -360,7 +464,9 @@ memcmp 取 比较库 其 绑定 'memcmp' (密 其 签名 (窗 其 I) ([(窗 其 
     终
     确认 (初始化故障[1] 且 (初始化故障[0])['references'] == 0 且 (初始化故障[0])['native'] == 空 且 (原桥 其 存活上下文) == 活前) 'initial checkpoint failure releases the already-created native context exactly once'.
     确认 (失败初态['lexical'] == 空 且 (失败初态['points'] 其 量) == 0) 'failed initialization returns no released context or checkpoint to the plain fallback'.
-    确认 ((失败初态['warning'] 其 含 'Ru scanner initialization failed:') 且 (失败初态['warning'] 其 含 'injected initial checkpoint copy failure') 且 (失败初态['warning'] 其 含 'editable as plain text')) 'initial checkpoint failure keeps its specific visible warning outside rescue scope'.
+    # Internal warning is now a stable key; assert the real lazy UI projection.
+    初警告 取 如语 其 _警告 失败初态.
+    确认 ((初警告 其 含 'Ru scanner initialization failed:') 且 (初警告 其 含 'injected initial checkpoint copy failure') 且 (初警告 其 含 'editable as plain text')) 'initial checkpoint failure keeps its specific visible warning outside rescue scope'.
     初始化故障[0] 取 空.
     原文 取 "算 示范:\n    若 真 则\n        得 '甲😀'.\n    另\n        得 42.\n    然\n法\n".
     编 其 设文本 甲 原文.

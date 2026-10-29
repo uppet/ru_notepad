@@ -4,8 +4,11 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][string]$RuRoot,
+    [string]$ResearchBaselineRoot,
     [Parameter(Mandatory=$true)][string]$MsysRoot,
-    [switch]$RunAclTests
+    [switch]$RunAclTests,
+    [switch]$RunCallbackResearch,
+    [switch]$RunMarkdownOwnedProfile
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -21,6 +24,43 @@ function Resolve-Application([string]$Name) {
         throw "No usable application path for: $Name"
     }
     return [string]$Command.Source
+}
+
+# Validate ordinary download bytes before any archive extraction or build.
+function Expand-VerifiedArchive(
+    [string]$Archive, [string]$DestinationPath,
+    [long]$ExpectedSize, [string]$ExpectedSha256
+) {
+    if (-not (Test-Path -LiteralPath $Archive -PathType Leaf)) {
+        throw 'Official archive is missing; refusing extraction or execution.'
+    }
+    if ((Get-Item -LiteralPath $Archive).Length -ne $ExpectedSize) {
+        throw 'Official archive size mismatch; refusing extraction or execution.'
+    }
+    $Stream = [System.IO.File]::OpenRead($Archive)
+    try {
+        $Magic = [byte[]]::new(4)
+        if ($Stream.Read($Magic, 0, 4) -ne 4 -or
+            $Magic[0] -ne 0x50 -or $Magic[1] -ne 0x4b -or
+            $Magic[2] -ne 0x03 -or $Magic[3] -ne 0x04) {
+            throw 'Official archive ZIP magic mismatch; refusing extraction or execution.'
+        }
+    } finally {
+        $Stream.Dispose()
+    }
+    if ((Get-FileHash -LiteralPath $Archive -Algorithm SHA256).Hash.ToLowerInvariant() -cne $ExpectedSha256) {
+        throw 'Official archive SHA256 mismatch; refusing extraction or execution.'
+    }
+    $Zip = $null
+    try {
+        $Zip = [System.IO.Compression.ZipFile]::OpenRead($Archive)
+        if ($Zip.Entries.Count -eq 0) { throw 'Empty archive' }
+    } catch {
+        throw 'Official archive is a malformed ZIP; refusing extraction or execution.'
+    } finally {
+        if ($null -ne $Zip) { $Zip.Dispose() }
+    }
+    Expand-Archive -LiteralPath $Archive -DestinationPath $DestinationPath
 }
 
 $Root = Split-Path -Parent $PSScriptRoot
@@ -39,81 +79,284 @@ function Invoke-Checked([string]$Command, [string[]]$Arguments) {
     & $Command @Arguments
     if ($LASTEXITCODE -ne 0) { throw "Command failed with exit code ${LASTEXITCODE}: $Command" }
 }
+
+# Only the isolated diagnostic uses this private command sink. It deliberately
+# avoids Invoke-Checked's command echo and never prints child exception text.
+function Invoke-OwnedDiagnosticCommand([string]$Command, [string[]]$Arguments) {
+    $script:MarkdownOwnedCommandSequence++
+    $Log = Join-Path $Evidence ('command-{0:D3}.log' -f $script:MarkdownOwnedCommandSequence)
+    try {
+        & $Command @Arguments *> $Log
+        if ($LASTEXITCODE -ne 0) { throw 'Owned diagnostic command failed.' }
+    } catch {
+        Write-Host 'MARKDOWN_OWNED_PROFILE_COMMAND_FAILED=1'
+        throw 'Owned diagnostic command failed.'
+    }
+    Write-Host 'MARKDOWN_OWNED_PROFILE_COMMAND_COMPLETE=1'
+}
+
+# Research is separate from product acceptance. Even an unsuccessful research
+# sample must not prevent the original full product inventory from executing.
+function Invoke-ResearchThenAcceptance(
+    [string]$Command, [string[]]$ResearchArguments, [string[]]$AcceptanceArguments,
+    [bool]$ControlsPassed = $true
+) {
+    $ResearchPassed = $false
+    if ($ControlsPassed) {
+        try {
+            Invoke-Checked $Command $ResearchArguments
+            $ResearchPassed = $true
+        } catch {
+            Write-Host 'MARKDOWN_CALLBACK_RESEARCH_FAILED=1'
+        }
+    } else {
+        Write-Host 'MARKDOWN_CALLBACK_RESEARCH_CONTROLS_FAILED=1'
+    }
+    Invoke-Checked $Command $AcceptanceArguments
+    if (-not $ResearchPassed) {
+        throw 'Markdown callback research failed; full product execution was still attempted.'
+    }
+}
+# Optional measurements cannot mask product failure or turn product success into
+# failure. Every public fallback is fixed metadata, never exception text.
+function Invoke-OptionalMarkdownStudy(
+    [string]$Python, [string[]]$ControlArguments, [string[]]$RunArguments,
+    [string]$Evidence,
+    [ValidateSet('native-baseline','cpu-profile')][string]$Name
+) {
+    $SavedExit = $global:LASTEXITCODE
+    $Stage = 'host_controls'
+    try {
+        Invoke-Checked $Python $ControlArguments
+        $Stage = 'execution'
+        Invoke-Checked $Python $RunArguments
+    } catch {
+        Write-Host ('MARKDOWN_OPTIONAL_STUDY_FAILED=' + $Name)
+        try {
+            @{ schema = 1; diagnostic_only = $true; status = 'unavailable';
+                stage = $Stage; reason = 'optional_study_command_failed';
+                measurement_claimed = $false } | ConvertTo-Json -Depth 3 |
+                Set-Content -LiteralPath (Join-Path $Evidence ("markdown-" + $Name + "-runner-failure.json")) -Encoding utf8
+        } catch {
+            Write-Host 'MARKDOWN_OPTIONAL_STUDY_EVIDENCE_UNAVAILABLE=1'
+        }
+    } finally {
+        $global:LASTEXITCODE = $SavedExit
+    }
+}
 function Git-Value([string[]]$Arguments) {
-    $value = & $Git -C $RuRoot @Arguments
+    if ($RunMarkdownOwnedProfile) {
+        $value = & $Git -C $RuRoot @Arguments 2>> (Join-Path $Evidence 'compiler-identity.log')
+    } else {
+        $value = & $Git -C $RuRoot @Arguments
+    }
     if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the pinned Ru checkout.' }
     return ($value -join "`n").Trim()
 }
 
 Push-Location $Root
 try {
-    if ((Git-Value @('rev-parse','HEAD')) -ne 'dd6cb81b52a426408f7076d82a84c2fdfb644263') {
+    if ($RunMarkdownOwnedProfile) {
+        if ($RunCallbackResearch -or $RunAclTests) {
+            throw 'Select only the isolated owned Markdown diagnostic mode.'
+        }
+        & $Python '-I' (Join-Path $PSScriptRoot 'guard_markdown_owned_profile.py') '--guard-only'
+        if ($LASTEXITCODE -ne 0) { throw 'Owned diagnostic trigger rejected.' }
+        $Ci = Join-Path $Root 'build/markdown-owned-profile'
+        if (Test-Path -LiteralPath $Ci) { throw 'Use a fresh isolated diagnostic checkout.' }
+        $Evidence = Join-Path $Ci 'private'
+        $Output = Join-Path $Ci 'bin'
+        New-Item -ItemType Directory -Path $Evidence,$Output -ErrorAction Stop | Out-Null
+        $script:MarkdownOwnedCommandSequence = 0
+        Set-Alias -Name Invoke-Checked -Value Invoke-OwnedDiagnosticCommand -Scope Local
+
+    }
+    if ((Git-Value @('rev-parse','HEAD')) -ne '85c7821fda35aa79deeaf67b4d430f24ddd7f07f') {
         throw 'Ru public commit does not match the reviewed pin.'
     }
-    if ((Git-Value @('rev-parse','HEAD^{tree}')) -ne '346d9f3f19c64f50f25b9f47ce92df1ea804bdb8') {
+    if ((Git-Value @('rev-parse','HEAD^{tree}')) -ne 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba') {
         throw 'Ru compiler tree does not match the reviewed pin.'
     }
     if (Git-Value @('status','--porcelain')) { throw 'Ru checkout must be unmodified.' }
     foreach ($name in @('gcc.exe','g++.exe','windres.exe','ar.exe','ranlib.exe','objdump.exe','mingw32-make.exe')) {
         if (-not (Test-Path -LiteralPath (Join-Path $Bin $name) -PathType Leaf)) { throw "Missing official MinGW tool: $name" }
     }
-    $Ci = Join-Path $Root 'build/windows-ci'
-    if (Test-Path -LiteralPath $Ci) { throw 'Use a fresh checkout: build/windows-ci already exists.' }
-    $Evidence = Join-Path $Ci 'evidence'
-    $Output = Join-Path $Ci 'bin'
-    New-Item -ItemType Directory -Path $Evidence,$Output -Force | Out-Null
-    $packages = & (Join-Path $MsysRoot 'usr/bin/pacman.exe') -Q
-    if ($LASTEXITCODE -ne 0) { throw 'Could not record installed MSYS2 package versions.' }
-    $packages | Set-Content -LiteralPath (Join-Path $Evidence 'msys2-packages.log') -Encoding utf8
+    if ($RunMarkdownOwnedProfile) {
+        Invoke-Checked (Join-Path $MsysRoot 'usr/bin/pacman.exe') @('-Q')
+    } else {
+        $Ci = Join-Path $Root 'build/windows-ci'
+        if (Test-Path -LiteralPath $Ci) { throw 'Use a fresh checkout: build/windows-ci already exists.' }
+        $Evidence = Join-Path $Ci 'evidence'
+        $Output = Join-Path $Ci 'bin'
+        New-Item -ItemType Directory -Path $Evidence,$Output -Force | Out-Null
+        $packages = & (Join-Path $MsysRoot 'usr/bin/pacman.exe') -Q
+        if ($LASTEXITCODE -ne 0) { throw 'Could not record installed MSYS2 package versions.' }
+        $packages | Set-Content -LiteralPath (Join-Path $Evidence 'msys2-packages.log') -Encoding utf8
+    }
     Invoke-Checked (Join-Path $Bin 'gcc.exe') @('--version')
     Invoke-Checked $Python @('--version')
-    # Orchestration tests are separate from the native application acceptance.
-    Invoke-Checked $Python @('tools/test_windows_ci.py')
-    Invoke-Checked $Python @('tools/test_package.py')
-
-    $Downloads = Join-Path $Root 'vendor/downloads'
-    New-Item -ItemType Directory -Path $Downloads -Force | Out-Null
-    $Archive = Join-Path $Downloads 'scintilla567.zip'
-    Invoke-WebRequest -Uri 'https://www.scintilla.org/scintilla567.zip' -OutFile $Archive -TimeoutSec 120
-    if ((Get-FileHash -LiteralPath $Archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c') {
-        throw 'Official Scintilla archive hash mismatch; refusing extraction or execution.'
+    if (-not $RunMarkdownOwnedProfile) {
+        # Orchestration tests are separate from the native application acceptance.
+        Invoke-Checked $Python @('tools/test_windows_ci.py')
+        Invoke-Checked $Python @('tools/test_package.py')
+        Invoke-Checked $Python @('-I','tools/test_package_manual_preview.py')
+        Invoke-Checked $Python @('-I','tools/test_ru_cli_diagnostics.py','--ru-root',$RuRoot,'-v')
+        # Historical research is opt-in. Normal product CI does not execute a
+        # locked old-source experiment against a new application graph.
+        if ($RunCallbackResearch) {
+            # A research-only control failure prohibits research execution, but it
+            # does not suppress the independent original product builds/acceptance.
+            $ResearchControlsPassed = $false
+            try {
+                Invoke-Checked $Python @('tools/test_markdown_callback_cost.py')
+                $ResearchControlsPassed = $true
+            } catch {
+                Write-Host 'MARKDOWN_CALLBACK_RESEARCH_CONTROLS_FAILED=1'
+                $ControlFailure = @{
+                    schema = 2; research_only = $true; product_acceptance = 'not_claimed'
+                    status = 'failed'; samples = @()
+                    failure = @{ stage = 'host_controls'; code = 'research_controls_failed' }
+                }
+                $ControlFailure | ConvertTo-Json -Depth 4 |
+                    Set-Content -LiteralPath (Join-Path $Evidence 'markdown-callback-summary.json') -Encoding utf8
+            }
+        }
+        Invoke-Checked $Python @('-I','tools/test_i18n_runner.py','--ru-root',$RuRoot,'-v')
+        Invoke-Checked $Python @('tools/test_i18n_models.py')
+        Invoke-Checked $Python @('tools/test_i18n.py','--ru-root',$RuRoot,
+            '--cc',(Join-Path $Bin 'gcc.exe'),'--output',(Join-Path $Ci 'i18n-policy-evidence'))
+        Invoke-Checked $Python @('tools/test_markdown_portable.py','--ru-root',$RuRoot,
+            '--cc',(Join-Path $Bin 'gcc.exe'))
     }
+
+    # Run the complete helper suite on this host before admitting source bytes.
+    # The helper copies only reviewed in-repository ZIPs and never extracts.
+    Invoke-Checked $Python @('tools/test_source_archives.py')
+    Invoke-Checked $Python @('tools/prepare_source_archives.py','--root',$Root,
+        '--receipt',(Join-Path $Evidence 'source-archives.json'))
+    $Downloads = Join-Path $Root 'vendor/downloads'
+    $Archive = Join-Path $Downloads 'scintilla567.zip'
     if (Test-Path -LiteralPath (Join-Path $Root 'vendor/scintilla')) {
         throw 'Use a fresh checkout: vendor/scintilla already exists.'
     }
-    Expand-Archive -LiteralPath $Archive -DestinationPath (Join-Path $Root 'vendor')
+    Expand-VerifiedArchive -Archive $Archive -DestinationPath (Join-Path $Root 'vendor') `
+        -ExpectedSize 1904249 -ExpectedSha256 '2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c'
     $LexillaArchive = Join-Path $Downloads 'lexilla554.zip'
-    Invoke-WebRequest -Uri 'https://www.scintilla.org/lexilla554.zip' -OutFile $LexillaArchive -TimeoutSec 120
-    if ((Get-FileHash -LiteralPath $LexillaArchive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0') {
-        throw 'Official Lexilla archive hash mismatch; refusing extraction or execution.'
-    }
     if (Test-Path -LiteralPath (Join-Path $Root 'vendor/lexilla')) {
         throw 'Use a fresh checkout: vendor/lexilla already exists.'
     }
-    Expand-Archive -LiteralPath $LexillaArchive -DestinationPath (Join-Path $Root 'vendor')
+    Expand-VerifiedArchive -Archive $LexillaArchive -DestinationPath (Join-Path $Root 'vendor') `
+        -ExpectedSize 1598324 -ExpectedSha256 '5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0'
     # Native MinGW make uses the official Windows makefile and static C++ runtime.
     Invoke-Checked (Join-Path $Bin 'mingw32-make.exe') @(
         '-j2','-C',(Join-Path $Root 'vendor/scintilla/win32'),'../bin/Scintilla.dll',
         'CXX=g++.exe','WINDRES=windres.exe','AR=ar.exe','RANLIB=ranlib.exe'
     )
-    Invoke-Checked (Join-Path $Bin 'mingw32-make.exe') @(
+    $DiagnosticLexillaArgs = @()
+    if ($RunMarkdownOwnedProfile) { $DiagnosticLexillaArgs = @('windir=C:/Windows') }
+    Invoke-Checked (Join-Path $Bin 'mingw32-make.exe') (@(
         '-j2','-C',(Join-Path $Root 'vendor/lexilla/src'),'../bin/lexilla.dll',
         'CXX=g++.exe','WINDRES=windres.exe','AR=ar.exe','RANLIB=ranlib.exe',
         'LDFLAGS=-shared -static -mwindows -Wl,--kill-at -s'
-    )
+    ) + $DiagnosticLexillaArgs)
     Invoke-Checked $Python @('tools/check_static.py','--ru-root',$RuRoot)
     $BuildArgs = @('tools/build.py','--ru-root',$RuRoot,
         '--cc',(Join-Path $Bin 'gcc.exe'),'--cxx',(Join-Path $Bin 'g++.exe'),
         '--windres',(Join-Path $Bin 'windres.exe'),'--ar',(Join-Path $Bin 'ar.exe'),
         '--ranlib',(Join-Path $Bin 'ranlib.exe'),'--skip-scintilla','--skip-lexilla')
     Invoke-Checked $Python ($BuildArgs + @('--source','src/main.ru','--output',(Join-Path $Output 'ru_notepad.exe')))
-    foreach ($test in @('document_policy','ui_arguments','file_codec_flags','editor_native','app_native','app_features_native','file_codec_tests','file_codec_security_probe','syntax_native','syntax_policy','shortcuts','status_native','file_streaming_native','editor_streaming_native','associations_policy','associations_native','file_drop_native','app_streaming_native','ru_lexical_policy','ru_syntax_native','app_ru_native')) {
+    # This independent diagnostic stops before native acceptance and packaging.
+    # Only the sanitizer's single fixed-schema JSON is eligible for publication.
+    if ($RunMarkdownOwnedProfile) {
+        $Measurements = Join-Path $Ci 'measurements'
+        New-Item -ItemType Directory -Path $Measurements -ErrorAction Stop | Out-Null
+        Invoke-Checked $Python @((Join-Path $PSScriptRoot 'test_markdown_profile_public.py'),'-v')
+        Invoke-Checked $Python @((Join-Path $PSScriptRoot 'test_markdown_owned_profile.py'),
+            '--cc',(Join-Path $Bin 'gcc.exe'))
+        Invoke-Checked $Python @((Join-Path $PSScriptRoot 'run_markdown_owned_profile.py'),
+            '--ru-root',$RuRoot,'--binary-dir',$Output,'--evidence-dir',$Measurements,
+            '--cc',(Join-Path $Bin 'gcc.exe'),'--windres',(Join-Path $Bin 'windres.exe'))
+        return
+    }
+    # The bounded fold helper is a product input, unlike optional timing studies.
+    # Execute shared-core controls and the real DLL/foreign-owner tests before
+    # admitting any product native/GUI result; these are mandatory on Windows.
+    Invoke-Checked $Python @('-I','tools/test_markdown_fold_helper.py',
+        '--cc',(Join-Path $Bin 'gcc.exe'),'--runtime-dir',$Output,
+        '--output',(Join-Path $Evidence 'markdown-bulk-helper-controls.json'))
+    foreach ($test in @('document_policy','ui_arguments','file_codec_flags','editor_native','app_native','app_features_native','file_codec_tests','file_codec_security_probe','syntax_native','syntax_policy','shortcuts','status_native','file_streaming_native','editor_streaming_native','associations_policy','associations_native','file_drop_native','app_streaming_native','ru_lexical_policy','ru_syntax_native','app_ru_native','ru_direct_styling_native','markdown_policy','markdown_selection_policy','markdown_native','app_markdown_native','markdown_direct_native','i18n_policy','i18n_settings_native','app_i18n_native')) {
         Invoke-Checked $Python ($BuildArgs + @('--console','--source',"tests/$test.ru",'--output',(Join-Path $Output "$test.exe")))
     }
     $AcceptArgs = @('tools/windows_ci.py','--bin-dir',$Output,'--evidence-dir',$Evidence,
         '--mingw-root',$MinGW,'--objdump',(Join-Path $Bin 'objdump.exe'))
     if ($RunAclTests) { $AcceptArgs += '--acl' }
-    Invoke-Checked $Python $AcceptArgs
+    # Reserve the fresh-run identity before acceptance creates any receipt.
+    # A refused preview must not suppress the original product run.
+    $PreviewPrepared = $false
+    if (-not $RunCallbackResearch) {
+        try {
+            Invoke-Checked $Python @('tools/package_manual_preview.py','prepare',
+                '--objdump',(Join-Path $Bin 'objdump.exe'))
+            $PreviewPrepared = $true
+        } catch {
+            Write-Host 'MANUAL_PREVIEW_PREPARE_REFUSED=1'
+        }
+    }
+    if ($RunCallbackResearch) {
+        # The research EXE and its instrumented translation unit stay outside bin
+        # and the package inventory. Each compiler uses one binary for both modes.
+        # The candidate compiler must also match the accepted product pin. Both
+        # accepted pins and exact generated-C comparison are required before launch.
+        if ([string]::IsNullOrWhiteSpace($ResearchBaselineRoot)) {
+            $ResearchBaselineRoot = Join-Path $Root '.ci/ru-research-baseline'
+        }
+        $ResearchArgs = @('tools/run_markdown_callback_cost.py','--ru-root',$RuRoot,
+            '--old-ru-root',$ResearchBaselineRoot,'--new-ru-root',$RuRoot,
+            '--binary-dir',$Output,'--evidence-dir',$Evidence,
+            '--cc',(Join-Path $Bin 'gcc.exe'),'--windres',(Join-Path $Bin 'windres.exe'))
+        Invoke-ResearchThenAcceptance $Python $ResearchArgs $AcceptArgs -ControlsPassed $ResearchControlsPassed
+    } else {
+        try {
+            Invoke-Checked $Python $AcceptArgs
+        } finally {
+            # Diagnostics are separate runs AFTER the original acceptance. Their
+            # commands/JSON failures cannot replace its exception or exit status.
+            $ProductExit = $global:LASTEXITCODE
+            try {
+                # A known pending Markdown timeout may produce a clearly labelled
+                # manual preview while the original exception/exit stays failed.
+                if ($PreviewPrepared) {
+                    Invoke-Checked $Python @('tools/package_manual_preview.py','package',
+                        '--objdump',(Join-Path $Bin 'objdump.exe'),'--mingw-root',$MinGW)
+                }
+            } catch {
+                Write-Host 'MANUAL_PREVIEW_SAFETY_GATE_REFUSED=1'
+                if ($ProductExit -eq 0) { throw }
+            } finally {
+                $global:LASTEXITCODE = $ProductExit
+            }
+            try {
+                Invoke-OptionalMarkdownStudy $Python @('tools/test_markdown_native_baseline.py','-v') @(
+                    'tools/run_markdown_native_baseline.py','--cc',(Join-Path $Bin 'gcc.exe'),
+                    '--runtime-dir',$Output,'--output',(Join-Path $Evidence 'markdown-native-baseline.json')
+                ) $Evidence 'native-baseline'
+                Invoke-OptionalMarkdownStudy $Python @('tools/test_markdown_cpu_profile.py','-v') @(
+                    'tools/run_markdown_cpu_profile.py','--runtime-dir',$Output,
+                    '--output',(Join-Path $Evidence 'markdown-cpu-profile.json')
+                ) $Evidence 'cpu-profile'
+            } catch {
+                Write-Host 'MARKDOWN_OPTIONAL_DIAGNOSTICS_UNAVAILABLE=1'
+            } finally {
+                $global:LASTEXITCODE = $ProductExit
+            }
+        }
+    }
+} catch {
+    if ($RunMarkdownOwnedProfile) {
+        Write-Host 'MARKDOWN_OWNED_PROFILE_DIAGNOSTIC_FAILED=1'
+        exit 1
+    }
+    throw
 } finally {
     Pop-Location
 }

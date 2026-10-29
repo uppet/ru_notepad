@@ -5,7 +5,10 @@ These verify orchestration/fail-closed policy only. They are NOT native editor,
 GUI, DLL, file-codec, ACL, or Windows runtime acceptance evidence.
 """
 from pathlib import Path
+import ctypes
+import copy
 import hashlib
+import io
 import json
 import os
 import re
@@ -15,11 +18,171 @@ import struct
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 import xml.etree.ElementTree as ET
-from unittest.mock import patch
+import zipfile
+from unittest.mock import Mock, call, patch
 
 import windows_ci as ci
 import build as builder
+
+
+class MarkdownPhaseObservationTests(unittest.TestCase):
+    def test_text_and_two_serial_undo_fold_observations_are_separate(self):
+        timing = {'length_savepoint_observed_ms': None, 'status_complete_observed': []}
+        ci.observe_markdown_phase(timing, 100, 9, True, 8, False, False, 1)
+        self.assertIsNone(timing['length_savepoint_observed_ms'])
+        ci.observe_markdown_phase(timing, 12000, 9, True, 8, False, True, 1)
+        ci.observe_markdown_phase(timing, 12250, 9, True, 8, False, True, 1)
+        ci.observe_markdown_phase(timing, 12300, 8, False, 8, False, False, 2)
+        self.assertEqual(timing['length_savepoint_observed_ms'], 12300)
+        ci.observe_markdown_phase(timing, 24000, 8, False, 8, False, True, 2)
+        self.assertEqual(timing['status_complete_observed'], [
+            {'undo_commands': 1, 'elapsed_ms': 12000},
+            {'undo_commands': 2, 'elapsed_ms': 24000}])
+        self.assertEqual(timing['length_savepoint_observed_ms'], 12300)
+
+
+    def test_phase_schema_integrates_with_complete_markdown_receipt(self):
+        ci.validate_gui_markdown(markdown_evidence())
+
+    def test_phase_validator_rejects_missing_nonfinite_and_inconsistent_observations(self):
+        mutations = ('missing', 'null', 'nan', 'negative', 'late', 'bool_time',
+                     'duplicate', 'wrong_id', 'bool_id', 'status_before_return',
+                     'status_after_next_return', 'return_count', 'reversed_returns',
+                     'missing_final_status', 'unknown_field', 'wrong_kind')
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                record = markdown_evidence()
+                stage = record['cases'][0]['stages'][-1]
+                timing = stage['phase_timing']
+                if mutation == 'missing': del stage['phase_timing']
+                elif mutation == 'null': timing['length_savepoint_observed_ms'] = None
+                elif mutation == 'nan': timing['max_wm_null_probe_ms'] = float('nan')
+                elif mutation == 'negative': timing['length_savepoint_observed_ms'] = -1
+                elif mutation == 'late': timing['length_savepoint_observed_ms'] = 101
+                elif mutation == 'bool_time': timing['max_wm_null_probe_ms'] = True
+                elif mutation == 'duplicate': timing['status_complete_observed'][1]['undo_commands'] = 1
+                elif mutation == 'wrong_id': timing['status_complete_observed'][1]['undo_commands'] = 3
+                elif mutation == 'bool_id': timing['status_complete_observed'][0]['undo_commands'] = True
+                elif mutation == 'status_before_return': timing['status_complete_observed'][0]['elapsed_ms'] = 0
+                elif mutation == 'status_after_next_return': timing['status_complete_observed'][0]['elapsed_ms'] = 12
+                elif mutation == 'return_count': timing['undo_returned_ms'].pop()
+                elif mutation == 'reversed_returns': timing['undo_returned_ms'].reverse()
+                elif mutation == 'missing_final_status': timing['status_complete_observed'].pop()
+                elif mutation == 'unknown_field': timing['exact_text_done'] = True
+                elif mutation == 'wrong_kind': timing['status_complete_observed'] = {}
+                with self.assertRaises(RuntimeError):
+                    ci.validate_gui_markdown(record)
+
+    def test_non_undo_has_no_command_returns_and_one_status_observation(self):
+        record = markdown_evidence()
+        stage = record['cases'][0]['stages'][0]
+        ci.validate_markdown_phase_timing(stage['phase_timing'], 100, 'open', 0)
+        stage['phase_timing']['undo_returned_ms'] = [1.0]
+        with self.assertRaises(RuntimeError):
+            ci.validate_gui_markdown(record)
+
+
+class MarkdownDeprecatedCaseTests(unittest.TestCase):
+    def test_default_inventory_is_eleven_and_legacy_requires_explicit_opt_in(self):
+        record = markdown_evidence()
+        self.assertEqual([len(c['stages']) for c in record['cases']], [4, 4, 3])
+        self.assertIsNone(record['deprecated'][0]['passed'])
+        ci.validate_gui_markdown(record)
+        old = markdown_evidence(legacy=True)
+        ci.validate_gui_markdown(old, legacy=True, legacy_diagnostic=True)
+        with self.assertRaises(RuntimeError):ci.validate_gui_markdown(old,legacy=True)
+        current_repro=copy.deepcopy(old)
+        for case in current_repro['cases']:
+            for stage in case['stages']:
+                stage['last_progress']['diagnostic'].update(feedStepCount=1,feedStepUs=1,
+                    publishStepCount=1,publishStepUs=0,lifecycleStepCount=1,lifecycleStepUs=0,
+                    visibilityStepCount=0,visibilityStepUs=0,stepErrors=0,stepMetricValid=1,
+                    entry_yields=0,post_yields=0)
+        ci.validate_gui_markdown(current_repro,legacy=True)
+        with self.assertRaises(RuntimeError):ci.validate_gui_markdown(current_repro,legacy=True,legacy_diagnostic=True)
+        with self.assertRaises(RuntimeError): ci.validate_gui_markdown(old)
+        with self.assertRaises(RuntimeError): ci.validate_gui_markdown(record, legacy=True)
+        old['cases'][2]['stages'][3]['wall_ms'] = 30000.01
+        with self.assertRaises(RuntimeError): ci.validate_gui_markdown(old, legacy=True, legacy_diagnostic=True)
+
+    def test_deprecation_does_not_relax_any_active_stage_budget_or_correctness(self):
+        for case_id, case in enumerate(markdown_evidence()['cases']):
+            for stage_id in range(len(case['stages'])):
+                for field, value in [('wall_ms', 30000.01), ('length', 0), ('source_sha256', '0'*64)]:
+                    record = markdown_evidence()
+                    record['cases'][case_id]['stages'][stage_id][field] = value
+                    with self.subTest(case=case_id, stage=stage_id, field=field), self.assertRaises(RuntimeError):
+                        ci.validate_gui_markdown(record)
+
+    def test_deprecated_and_cleanup_metadata_are_exact_and_never_inferred_pass(self):
+        for section, field, value in [('deprecated', 'case', 'singleline'), ('deprecated', 'operation', 'open'),
+                ('deprecated', 'passed', True), ('deprecated', 'passed', False),
+                ('deprecated', 'executed', True), ('deprecated', 'executed', 0),
+                ('deprecated', 'blocking', True), ('deprecated', 'original_budget_ms', 60000),
+                ('teardown', 'dirty_before', False), ('teardown', 'discard_confirmed', False),
+                ('teardown', 'method', 'set-savepoint'), ('teardown', 'source_sha256', '0'*64)]:
+            record = markdown_evidence()
+            (record[section][0] if section == 'deprecated' else record[section])[field] = value
+            with self.subTest(section=section, field=field, value=value), self.assertRaises(RuntimeError):
+                ci.validate_gui_markdown(record)
+        for field in ('schema', 'deprecated', 'teardown'):
+            record = markdown_evidence(); del record[field]
+            with self.assertRaises(RuntimeError): ci.validate_gui_markdown(record)
+        record = markdown_evidence(); record['teardown'] = {}
+        with self.assertRaises(RuntimeError): ci.validate_gui_markdown(record)
+        record = markdown_evidence(); record['cases'][2]['stages'].append(markdown_evidence(legacy=True)['cases'][2]['stages'][3])
+        with self.assertRaises(RuntimeError): ci.validate_gui_markdown(record)
+
+    def test_real_discard_uses_owned_modal_no_and_requires_dirty_and_count_change(self):
+        import gui_instance_tabs as tabs
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'unclosed-fence.md'
+            source.write_bytes(ci.gui_markdown_fixture('unclosed-fence')[0])
+            api = Mock(); api.editor.return_value = 2; api.control.return_value = 3
+            api.text.return_value = '* ' + source.name + ' · ru_notepad'
+            state = {'dirty': True, 'count': 4}
+            api.scalar.side_effect = lambda hwnd, msg: state['dirty'] if msg == 2159 else state['count']
+            def no(*args):
+                self.assertEqual(args[-1], 7)
+                state.update(dirty=False, count=3)
+            with patch.object(tabs, '_post_command') as post, patch.object(tabs, '_button', side_effect=no), \
+                 patch.object(ci, 'wait_gui', side_effect=lambda api, proc, predicate, why: self.assertTrue(predicate())):
+                self.assertEqual(ci.discard_deprecated_markdown(api, Mock(), 1, source), ci.gui_markdown_teardown())
+                post.assert_called_once_with(api, 1, 105)
+            with patch.object(tabs, '_post_command') as post, self.assertRaises(RuntimeError):
+                ci.discard_deprecated_markdown(api, Mock(), 1, source)
+            post.assert_not_called()
+            state.update(dirty=True, count=4)
+            def timeout(api, proc, predicate, why):
+                self.assertFalse(predicate())
+                raise RuntimeError(why)
+            with patch.object(tabs, '_post_command'), patch.object(tabs, '_button'), \
+                 patch.object(ci, 'wait_gui', side_effect=timeout), self.assertRaises(RuntimeError):
+                ci.discard_deprecated_markdown(api, Mock(), 1, source)
+
+
+class SyntheticWindowText(ci.Windows):
+    """Controlled WM_GETTEXT payloads; no native API or platform override."""
+    def __init__(self, before, after, reported_count=None):
+        self.before, self.after = before, after
+        self.reported_count, self.calls = reported_count, []
+
+    def scalar(self, hwnd, message, wparam=0, lparam=0):
+        self.calls.append((hwnd, message, wparam))
+        if message == 0x000E:
+            return len(self.before.encode('utf-16-le', 'surrogatepass')) // 2
+        if message != 0x000D:
+            raise AssertionError('Unexpected window-text message')
+        encoded = self.after.encode('utf-16-le', 'surrogatepass')
+        units = [int.from_bytes(encoded[index:index + 2], 'little') for index in range(0, len(encoded), 2)]
+        count = min(len(units), wparam - 1)
+        buffer = ctypes.cast(lparam, ctypes.POINTER(ctypes.c_wchar))
+        for index, value in enumerate(units[:count]):
+            buffer[index] = chr(value)
+        buffer[count] = '\0'
+        return count if self.reported_count is None else self.reported_count
 
 
 def observer_evidence():
@@ -44,7 +207,88 @@ def observer_evidence():
         'captures': [{'phase': phase, 'wall_ms': 0.2, 'log_reads': 1} for phase in ('baseline', 'final')],
         'log_read_wall_ms': 0.2, 'max_log_read_ms': 0.1}
     return {'observer': observer, 'diagnostics': diagnostics,
+            'clock': {'clock_name': 'perf_counter', 'implementation': 'QueryPerformanceCounter()',
+                      'resolution': 1e-7, 'monotonic': True, 'adjustable': False},
+            'clock_measurement': ci.PERFORMANCE_CLOCK_MEASUREMENT,
             'head_style_measurement': ci.GUI_RU_HEAD_MEASUREMENT}
+
+
+def markdown_evidence(*, legacy=False):
+    """Synthetic schema fixture only; never evidence of running the GUI."""
+    record = {'measurement': ci.GUI_MARKDOWN_MEASUREMENT, 'clock': {
+        'clock_name': 'perf_counter', 'implementation': 'QueryPerformanceCounter()',
+        'resolution': 1e-7, 'monotonic': True, 'adjustable': False}, 'cases': []}
+    if not legacy:
+        record.update(schema=ci.GUI_MARKDOWN_SCHEMA, deprecated=ci.gui_markdown_deprecated(),
+                      teardown=ci.gui_markdown_teardown())
+    for kind in ('many-lines', 'singleline', 'unclosed-fence'):
+        data, probes, folds = ci.gui_markdown_fixture(kind)
+        case = {'kind': kind, 'size': len(data), 'source_sha256': hashlib.sha256(data).hexdigest(),
+                'style_probes': probes, 'fold_probes': folds, 'stages': []}
+        record['cases'].append(case)
+        for operation in ci.gui_markdown_operations(kind, legacy=legacy):
+            expected, styles, _ = ci.markdown_expected(kind, operation)
+            style_positions = [position for probe in styles
+                               for position in range(probe['offset'], probe['offset'] + probe['length'])]
+            style_values = [probe['style'] for probe in styles for _ in range(probe['length'])]
+            dirty = operation in ('insert', 'backspace')
+            observer = ci.gui_ru_observer_record()
+            observer.update(scalar_calls=30, wm_null_calls=1, sendmessage_calls=31,
+                query_wall_ms=10.0, max_query_ms=1.0, snapshot_count=1, snapshot_wall_ms=20.0,
+                max_snapshot_ms=20.0, max_snapshot_messages=30,
+                snapshots=[{'start_ms': 10.0, 'wall_ms': 20.0, 'messages': 30, 'final': True}],
+                response_starts_ms=[0.0])
+            before = 9 if operation == 'insert' else 8
+            response = {'navigation': [
+                {'key': 'RIGHT', 'before': before, 'after': before + 1, 'wall_ms': 1.0, 'request_pending': True},
+                {'key': 'LEFT', 'before': before + 1, 'after': before, 'wall_ms': 1.0, 'request_pending': False}],
+                'paint': {'invalidations': 1, 'pending_observed': False, 'already_serviced': True,
+                          'cleared': True, 'wall_ms': 1.0, 'request_pending': True}} if dirty else {}
+            case['stages'].append({'operation': operation, 'length': len(expected), 'dirty': dirty,
+                'source_sha256': case['source_sha256'], 'wall_ms': 100.0, 'probes': 1, 'observer': observer,
+                'responsiveness': response, 'undo_commands': 2 if operation == 'undo' else 0,
+                'collapsed_before_edit': kind == 'many-lines' and dirty,
+                'phase_timing': {'length_savepoint_observed_ms': 20.0,
+                    'status_complete_observed': ([{'undo_commands': 1, 'elapsed_ms': 10.0},
+                        {'undo_commands': 2, 'elapsed_ms': 20.0}] if operation == 'undo' else
+                        [{'undo_commands': 0, 'elapsed_ms': 20.0}]),
+                    'undo_returned_ms': [1.0, 11.0] if operation == 'undo' else [],
+                    'max_wm_null_probe_ms': 1.0},
+                'memory': {'measurement': ci.GUI_MARKDOWN_MEMORY_MEASUREMENT, 'sample_count': 1,
+                    'sampledWorkingSetPeak': 1048576, 'processPeakWorkingSet': 2097152,
+                    'query_wall_ms': 0.1, 'max_query_ms': 0.1, 'samples': [{'start_ms': 10.0,
+                    'query_wall_ms': 0.1, 'workingSetBytes': 1048576, 'processPeakWorkingSetBytes': 2097152}]},
+                'last_progress': {'opened': True, 'length': len(expected), 'dirty': dirty, 'status': 'complete', 'tail_requested': True,
+                    'diagnostic': {'seq': 1, 'via': 0, 'id': 1, 'gen': 1, 'rev': 0, 'phase': 4, 'pending': 0, 'length': len(expected), 'feed': len(expected), 'published': 1, 'tick': 1, 'work_us': 1, 'gap_us': 1, 'bulkCalls': 1, 'bulkLines': 1, 'fallbackBatches': 0,
+                        'directCalls': 0, 'directLines': 0, 'maxPlanBytes': 48, 'bulkUs': 1, 'ownedBufferBytes': 1088, 'metric_valid': 1}},
+                'last_probe': {'length': len(expected), 'dirty': dirty, 'end_styled': len(expected),
+                    'status_done': True, 'styles_match': True,
+                    'style_samples': {'positions': style_positions, 'expected': style_values, 'actual': list(style_values)},
+                    'folds_match': True, 'context_match': True,
+                    'lexer': 98, 'tail_requested': True, 'children_visible': True}})
+            if not legacy:
+                case['stages'][-1]['last_progress']['diagnostic'].update(
+                    feedStepCount=1, feedStepUs=1, publishStepCount=1, publishStepUs=0,
+                    lifecycleStepCount=1, lifecycleStepUs=0, visibilityStepCount=0, visibilityStepUs=0,
+                    stepErrors=0, stepMetricValid=1, entry_yields=0, post_yields=0)
+    return record
+
+
+def markdown_route_metrics():
+    """Synthetic validator controls only; never Windows measurements."""
+    records = [dict(route=route, **dict.fromkeys(ci.FOLD_ROUTE_METRIC_FIELDS, 0))
+               for route in ci.FOLD_ROUTE_ORDER]
+    for record in records:
+        record['metric_valid'] = 1
+    records[0]['fallbackBatches'] = 1
+    records[1].update(bulkCalls=1, bulkLines=1, maxPlanBytes=48, ownedBufferBytes=1088, bulkUs=1)
+    records[2].update(directCalls=1, directLines=1)
+    return records
+
+
+def markdown_route_markers():
+    return ''.join('FOLD_METRICS1 route=' + row['route'] + ''.join(' ' + key + '=' + str(row[key])
+        for key in ci.FOLD_ROUTE_METRIC_FIELDS) + '\n' for row in markdown_route_metrics())
 
 
 class NoDialogs:
@@ -91,6 +335,181 @@ class HarnessTests(unittest.TestCase):
         self.assertNotRegex(source, r'\(Get-Command[^\n]+\)\.Source')
         self.assertIn('Test-Path -LiteralPath (Join-Path $Bin $name) -PathType Leaf', source)
 
+    def powershell_archive_helper(self):
+        source = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        match = re.search(r'(?ms)^function Expand-VerifiedArchive\b.*?^}', source)
+        self.assertIsNotNone(match, 'Official archive extraction must use the shared helper')
+        return source, match.group(0)
+
+    def archive_test_powershell(self):
+        powershell = shutil.which('pwsh')
+        if powershell is None:
+            if sys.platform == 'win32':
+                self.fail('Windows CI must execute the real PowerShell archive regression')
+            self.skipTest('PowerShell archive execution unavailable: pwsh is absent on this non-Windows host')
+        return powershell
+
+    def test_official_archives_use_only_tested_offline_preparation(self):
+        source, helper = self.powershell_archive_helper()
+        tested = "Invoke-Checked $Python @('tools/test_source_archives.py')"
+        prepared = "Invoke-Checked $Python @('tools/prepare_source_archives.py','--root',$Root,"
+        self.assertLess(source.index(tested), source.index(prepared))
+        self.assertIn("'--receipt',(Join-Path $Evidence 'source-archives.json'))", source)
+        pins = (
+            ('scintilla', 'scintilla567.zip', '$Archive', 1904249,
+             '2309181e59e7da4659f890dbc128db7451ccd094748770e7be674b830494587c'),
+            ('lexilla', 'lexilla554.zip', '$LexillaArchive', 1598324,
+             '5e0a21356e4e2f19d6a38ecd1c8172d5a2b7b4542940568b023386080db90fe0'),
+        )
+        for name, filename, variable, size, digest in pins:
+            guarded_expand = (f"Expand-VerifiedArchive -Archive {variable} "
+                              "-DestinationPath (Join-Path $Root 'vendor') `\n"
+                              f"        -ExpectedSize {size} -ExpectedSha256 '{digest}'")
+            self.assertIn(guarded_expand, source)
+            self.assertLess(source.index(prepared), source.index(guarded_expand))
+            self.assertIn(f"$Root 'vendor/{name}'", source)
+            self.assertIn(f"$Downloads '{filename}'", source)
+        self.assertNotIn('Invoke-WebRequest', source)
+        self.assertNotRegex(source, r'(?i)https?://|curl|wget|Start-BitsTransfer')
+        self.assertEqual(source.count('Expand-VerifiedArchive -Archive '), 2)
+        self.assertEqual(source.count('Expand-Archive -'), 1)
+        self.assertIn('Expand-Archive -LiteralPath $Archive -DestinationPath $DestinationPath', helper)
+        self.assertLess(source.index(prepared), source.index("Invoke-Checked (Join-Path $Bin 'mingw32-make.exe')"))
+
+    def test_powershell_offline_test_or_helper_failure_blocks_extraction_and_build(self):
+        powershell = self.archive_test_powershell()
+        source, _ = self.powershell_archive_helper()
+        checked = re.search(r'(?ms)^function Invoke-Checked\b.*?^}', source).group(0)
+        # Execute the actual admission block and real checked subprocess exits.
+        # Synthetic scripts are used only to force both failure boundaries.
+        block = source[source.index("    Invoke-Checked $Python @('tools/test_source_archives.py')"):
+                       source.index("    Invoke-Checked $Python @('tools/check_static.py'")]
+        quote = lambda value: "'" + str(value).replace("'", "''") + "'"
+        for failed_stage in ('tests', 'prepare'):
+            with self.subTest(stage=failed_stage):
+                root = self.root / failed_stage
+                (root / 'tools').mkdir(parents=True)
+                (root / 'evidence').mkdir()
+                (root / 'tools/test_source_archives.py').write_text(
+                    'raise SystemExit(' + ('9' if failed_stage == 'tests' else '0') + ')\n', encoding='utf-8')
+                (root / 'tools/prepare_source_archives.py').write_text(
+                    "from pathlib import Path\nimport sys\nPath('helper-called').write_bytes(b'yes')\n"
+                    "Path(sys.argv[-1]).write_bytes(b'{\"passed\":true}')\nraise SystemExit(17)\n",
+                    encoding='utf-8')
+                script = root / 'probe.ps1'
+                script.write_text("Set-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n" + checked + f"""
+$Root = {quote(root)}
+$Evidence = Join-Path $Root 'evidence'
+$Bin = Join-Path $Root 'no-build-tools'
+$Python = {quote(sys.executable)}
+$script:Extractions = 0
+function Expand-VerifiedArchive {{ $script:Extractions++; throw 'Extraction must not run' }}
+Push-Location $Root
+$Failure = ''
+try {{
+{block}
+}} catch {{ $Failure = $_.Exception.Message }} finally {{ Pop-Location }}
+if ($Failure -notlike 'Command failed with exit code *' -or $script:Extractions -ne 0) {{
+    throw 'Offline preparation did not fail before extraction and build'
+}}
+Write-Output 'OFFLINE_FAILURE_GUARD_PASS'
+""", encoding='utf-8')
+                result = subprocess.run([powershell, '-NoProfile', '-NonInteractive', '-File', str(script)],
+                    capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn('OFFLINE_FAILURE_GUARD_PASS', result.stdout)
+                self.assertEqual((root / 'helper-called').exists(), failed_stage == 'prepare')
+                if failed_stage == 'prepare':
+                    self.assertTrue(json.loads((root / 'evidence/source-archives.json').read_text(encoding='utf-8'))['passed'])
+                self.assertFalse((root / 'vendor').exists())
+
+    def test_archive_powershell_host_controls_fail_windows_and_skip_only_when_absent(self):
+        for platform in ('win32', 'linux'):
+            with self.subTest(platform=platform, available=True), \
+                    patch.object(sys, 'platform', platform), \
+                    patch.object(shutil, 'which', return_value='synthetic-pwsh'):
+                self.assertEqual(self.archive_test_powershell(), 'synthetic-pwsh')
+        with patch.object(sys, 'platform', 'win32'), patch.object(shutil, 'which', return_value=None):
+            with self.assertRaisesRegex(self.failureException, 'Windows CI must execute'):
+                self.archive_test_powershell()
+        with patch.object(sys, 'platform', 'linux'), patch.object(shutil, 'which', return_value=None):
+            with self.assertRaisesRegex(unittest.SkipTest, 'pwsh is absent on this non-Windows host'):
+                self.archive_test_powershell()
+
+    def test_powershell_archive_guards_execute_before_extraction(self):
+        powershell = self.archive_test_powershell()
+        _, helper = self.powershell_archive_helper()
+        contents = {'scintilla/include/Scintilla.h': b'synthetic header\n',
+                    'scintilla/win32/makefile': b'synthetic makefile\n'}
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+            for name, data in contents.items():
+                archive.writestr(name, data)
+        valid = buffer.getvalue()
+        cases = []
+        for name, data, error in (
+                ('valid', valid, ''),
+                ('html', b'<!doctype html><html>browser challenge</html>', 'ZIP magic mismatch'),
+                ('size', valid, 'size mismatch'),
+                ('digest', valid, 'SHA256 mismatch'),
+                ('magic', b'HTML' + valid[4:], 'ZIP magic mismatch'),
+                ('malformed', b'PK\x03\x04broken central directory', 'malformed ZIP')):
+            archive_path = self.root / (name + '.zip')
+            archive_path.write_bytes(data)
+            cases.append({'name': name, 'archive': str(archive_path),
+                          'destination': str(self.root / (name + ' extracted')),
+                          'size': len(data) + int(name == 'size'),
+                          'sha256': '0' * 64 if name == 'digest' else hashlib.sha256(data).hexdigest(),
+                          'error': error})
+        case_file = self.root / 'archive cases.json'
+        case_file.write_text(json.dumps(cases), encoding='utf-8')
+        quote = lambda value: "'" + str(value).replace("'", "''") + "'"
+        # Exercise the actual production helper. The spy delegates to real
+        # extraction on success and proves invalid bytes never reach it.
+        script = self.root / 'archive probe.ps1'
+        script.write_text("Set-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\n" + helper + f"""
+$script:ExtractionCalls = 0
+function Expand-Archive([string]$LiteralPath, [string]$DestinationPath) {{
+    $script:ExtractionCalls++
+    Microsoft.PowerShell.Archive\\Expand-Archive -LiteralPath $LiteralPath -DestinationPath $DestinationPath
+}}
+$Cases = Get-Content -LiteralPath {quote(case_file)} -Raw | ConvertFrom-Json
+foreach ($Case in $Cases) {{
+    $Before = $script:ExtractionCalls
+    $Failure = ''
+    try {{
+        Expand-VerifiedArchive -Archive $Case.archive -DestinationPath $Case.destination `
+            -ExpectedSize $Case.size -ExpectedSha256 $Case.sha256
+    }} catch {{
+        $Failure = $_.Exception.Message
+    }}
+    if ($Case.error -eq '') {{
+        if ($Failure -ne '' -or $script:ExtractionCalls -ne ($Before + 1)) {{
+            throw "Valid ZIP was not extracted exactly once: $Failure"
+        }}
+    }} else {{
+        if ($Failure -notlike ('*' + $Case.error + '*')) {{
+            throw "Archive case $($Case.name) failed for the wrong reason: $Failure"
+        }}
+        if ($script:ExtractionCalls -ne $Before -or (Test-Path -LiteralPath $Case.destination)) {{
+            throw "Rejected archive case $($Case.name) reached extraction"
+        }}
+    }}
+    Write-Output ('ARCHIVE_GUARD_PASS ' + $Case.name)
+}}
+""", encoding='utf-8')
+        result = subprocess.run([powershell, '-NoProfile', '-NonInteractive', '-File', str(script)],
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ['ARCHIVE_GUARD_PASS ' + case['name'] for case in cases])
+        extracted = self.root / 'valid extracted'
+        self.assertEqual({path.relative_to(extracted).as_posix() for path in extracted.rglob('*')},
+                         set(contents) | {'scintilla', 'scintilla/include', 'scintilla/win32'})
+        self.assertEqual({path.relative_to(extracted).as_posix(): path.read_bytes()
+                          for path in extracted.rglob('*') if path.is_file()}, contents)
+        for case in cases[1:]:
+            self.assertFalse(Path(case['destination']).exists(), case['name'])
+
     @unittest.skipUnless(sys.platform == 'win32',
                          'PowerShell duplicate-PATH execution requires the Windows CI host')
     def test_powershell_duplicate_path_executes_only_first_application(self):
@@ -128,18 +547,27 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'document_policy': r'^TOTAL PASS: 23\s*$',
             'ui_arguments': r'^TOTAL PASS: 19\s*$',
             'file_codec_flags': r'^TOTAL PASS: 80\s*$',
-            'editor_native': r'^TOTAL PASS: 27\s*$',
+            'editor_native': r'^TOTAL PASS: 102\s*$',
             'app_native': r'^TOTAL PASS: 23\s*$',
-            'app_features_native': r'^TOTAL PASS: 23\s*$',
+            'app_features_native': r'^TOTAL PASS: 59\s*$',
             'app_streaming_native': r'^APP_STREAMING_TESTS_PASS=63\s*$',
             'shortcuts': r'^TOTAL PASS: 42\s*$',
-            'syntax_policy': r'^TOTAL PASS: 108\s*$',
+            'syntax_policy': r'^TOTAL PASS: 134\s*$',
             'status_native': r'^TOTAL PASS: 21\s*$',
-            'syntax_native': r'^TOTAL PASS: 82\s*$',
+            'syntax_native': r'^TOTAL PASS: 144\s*$',
             'app_ru_native': r'^TOTAL PASS: 73\s*$',
             'app_ru_timer_native': r'^TOTAL PASS: 8\s*$',
-            'ru_lexical_policy': r'^TOTAL PASS: 380\s*$',
-            'ru_syntax_native': r'^TOTAL PASS: 125\s*$',
+            'ru_lexical_policy': r'^TOTAL PASS: 422\s*$',
+            'ru_syntax_native': r'^TOTAL PASS: 149\s*$',
+            'ru_direct_styling_native': r'^TOTAL PASS: 36\s*$',
+            'markdown_policy': r'^TOTAL PASS: 221\s*$',
+            'markdown_selection_policy': r'^TOTAL PASS: 31\s*$',
+            'markdown_native': r'^TOTAL PASS: 58\s*$',
+            'app_markdown_native': r'^TOTAL PASS: 73\s*$',
+            'markdown_direct_native': r'^TOTAL PASS: 114\s*$',
+            'i18n_policy': r'^TOTAL PASS: 289\s*$',
+            'i18n_settings_native': r'^TOTAL PASS: 69\s*$',
+            'app_i18n_native': r'^TOTAL PASS: 1606\s*$',
             'file_codec_tests': r'^FILE_CODEC_TESTS_PASS=73\s*$',
             'file_streaming_native': r'^FILE_STREAMING_TESTS_PASS=99\s*$',
             'editor_streaming_native': r'^EDITOR_STREAMING_TESTS_PASS=21\s*$',
@@ -149,9 +577,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'file_drop_native': r'^TOTAL PASS: 38\s*$',
         }
         self.assertEqual(dict(ci.NATIVE_CONSOLE_TESTS), expected)
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 22)
-        # Twenty-two console gates, six actual fallbacks, three real GUIs and ACL.
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 32)
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 31)
+        # All 39 current gates remain, plus three independent i18n native consoles.
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 42)
 
     def test_console_and_gui_receipts_share_all_manifest_resource_inputs(self):
         common = {'packaging/app.rc', 'packaging/app.manifest', 'assets/app-icon.ico', 'VERSION'}
@@ -199,7 +627,11 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             self.assertEqual(ci.BINARY_NAMES.count(name + '.exe'), 1)
             self.assertIn(name + '.exe:', runner, 'Each executable needs a plain purpose label')
         for name in required:
-            self.assertRegex(runner, rf'(?m)^{name}\.exe(?: |$)')
+            if name == 'markdown_direct_native':
+                self.assertIn('cmd /d /c "set RU_GC_THRESHOLD=64&&set RU_GC_STATS=1&&markdown_direct_native.exe" >>test-results.txt 2>&1\n'
+                              'if not "%ERRORLEVEL%"=="0" set "FAILED=1"', runner)
+            else:
+                self.assertRegex(runner, rf'(?m)^{name}\.exe(?: |$)')
         self.assertIn('call :syntax_fallback missing-lexilla --expect-missing', runner)
         self.assertIn('call :syntax_fallback bad-lexer --expect-bad-lexer', runner)
         self.assertIn('call :syntax_fallback missing-ru-lexilla --expect-missing-lexilla ru_syntax_native', runner)
@@ -230,14 +662,121 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     self.assertIn(resolved.relative_to(ci.ROOT).as_posix(), snapshot)
 
     def test_reviewed_compiler_pin_is_consistent_across_all_build_entrypoints(self):
-        commit = 'dd6cb81b52a426408f7076d82a84c2fdfb644263'
-        tree = '346d9f3f19c64f50f25b9f47ce92df1ea804bdb8'
+        commit = '85c7821fda35aa79deeaf67b4d430f24ddd7f07f'
+        tree = 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba'
         self.assertEqual(builder.BASELINE_TREE, tree)
+        self.assertEqual(ci.HELPER_POLICY_COMMIT, commit)
+        self.assertEqual(ci.HELPER_POLICY_TREE, tree)
         script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
         workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
         self.assertIn(f"-ne '{commit}'", script)
         self.assertIn(f"-ne '{tree}'", script)
-        self.assertIn(f'ref: {commit}', workflow)
+        self.assertEqual(workflow.count(f'ref: {commit}'), 5)  # two acceptance jobs plus growth, focused and Markdown diagnostics
+
+    def test_historical_replays_retain_their_exact_compiler_pin(self):
+        historical = 'a2f6faa0f914781dea74cb6f0a7574f1dd6808ce'
+        sources = {
+            'policy-prefix-benchmark.yml': 'f91d9e8d008c48b00f98b5a19000639c18a61518',
+            'direct-style-benchmark.yml': 'a5f5fd825767cd5af662cba792f5ce352991c21e',
+            'ru-syntax-profile.yml': 'e3256f0453b3b11dd26b671f38628cf411ab24e8',
+        }
+        for name, source in sources.items():
+            workflow = (ci.ROOT / '.github/workflows' / name).read_text(encoding='utf-8')
+            self.assertIn(f'ref: {source}', workflow)
+            self.assertEqual(workflow.count(f'ref: {historical}'), 1)
+            self.assertNotIn(f'ref: {ci.HELPER_POLICY_COMMIT}', workflow)
+
+    def test_prefix_proof_locks_reviewed_bridge_pair_and_unchanged_scanner(self):
+        import test_ru_policy_fast as proof
+        self.assertEqual(set(proof.LOCALIZED_BRIDGE_SHA256),
+                         {'src/ru_native_syntax.ru', 'src/ru_syntax.ru'})
+        baseline = self.root / 'proof-baseline'
+        candidate = self.root / 'proof-candidate'
+        shared = ('native/ru_scan.c', 'native/ru_scan.h', 'tests/ru_lexical_policy.ru')
+        for root in (baseline, candidate):
+            for name in (*shared, *proof.LOCALIZED_BRIDGE_SHA256):
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ci.ROOT / name).read_bytes())
+        # Historical bytes are represented by their reviewed digests here; the
+        # real integration proof reads the exact public baseline checkout.
+        fixture_path = baseline / 'tests/ru_lexical_policy.ru'
+        fixture_path.write_bytes(proof.historical_fixture(fixture_path.read_bytes()))
+        real_sha = proof.sha
+        digests = {b'historical:' + (candidate / name).read_bytes(): before
+                   for name, (before, after) in proof.LOCALIZED_BRIDGE_SHA256.items()}
+        for name in proof.LOCALIZED_BRIDGE_SHA256:
+            (baseline / name).write_bytes(b'historical:' + (baseline / name).read_bytes())
+        def fixture_sha(data):
+            return digests.get(data, real_sha(data))
+        with patch.object(proof, 'sha', side_effect=fixture_sha):
+            proof.verify_shared_inputs(baseline, candidate)
+            for root in (baseline, candidate):
+                for name in (*shared, *proof.LOCALIZED_BRIDGE_SHA256):
+                    path = root / name
+                    original = path.read_bytes()
+                    path.write_bytes(original + b'changed')
+                    with self.assertRaises(AssertionError, msg=str(path)):
+                        proof.verify_shared_inputs(baseline, candidate)
+                    path.write_bytes(original)
+
+    def test_prefix_proof_elif_adaptation_is_exact_and_preserves_old_guards(self):
+        import test_ru_policy_fast as proof
+        import verify_ru_policy_fast_outputs as verifier
+        self.assertEqual(verifier.GRAMMAR_ADAPTATION, proof.GRAMMAR_ADAPTATION)
+        self.assertEqual(verifier.ADAPTED_BASE_SOURCE_SHA256, proof.ADAPTED_BASE_SOURCE_SHA256)
+        self.assertIn("'scope':" + repr(verifier.SCOPE),
+                      (ci.ROOT / 'tools/test_ru_policy_fast.py').read_text(encoding='utf-8'))
+        candidate = (ci.ROOT / 'src/ru_lexical.ru').read_text(encoding='utf-8')
+        before = candidate.replace(proof.PREFIX_SOURCE, '', 1).replace(
+            '    循 ((事件 其 量)-位) 次\n', '    循 事件 其 量 次\n', 1)
+        before = before.replace(
+            '    # close anything. The batch prefix duplicates only this exact transition;\n'
+            '    # tools/test_ru_policy_fast.py guards both copies and the original fallback.\n',
+            '    # close anything. Keep this shortcut inside the sole shared grammar policy.\n')
+        for old, new, count in reversed(proof.ELIF_SOURCE_REPLACEMENTS + proof.CONTINUE_SOURCE_REPLACEMENTS):
+            self.assertEqual(before.count(new), count)
+            before = before.replace(new, old)
+        self.assertEqual(proof.sha(before.encode()), proof.BASE_SOURCE_SHA256)
+        adapted = proof.adapt_baseline(before)
+        self.assertEqual(proof.sha(adapted.encode()), proof.ADAPTED_BASE_SOURCE_SHA256)
+        proof.verify_transition(adapted, candidate)
+        proof.verify_guard_rejections(adapted, candidate)
+        self.assertEqual(len(proof.GUARD_MUTATIONS), 12)
+        for source in (before + '\n', adapted, before.replace("'非':36", "'非':35", 1)):
+            with self.assertRaises(AssertionError):
+                proof.adapt_baseline(source)
+        for old, new, _ in proof.ELIF_SOURCE_REPLACEMENTS + proof.CONTINUE_SOURCE_REPLACEMENTS:
+            if (old, new, _) in proof.ELIF_SOURCE_REPLACEMENTS:
+                for previous, current, count in proof.CONTINUE_SOURCE_REPLACEMENTS:
+                    new = new.replace(previous, current)
+            self.assertIn(new, candidate)
+            with self.assertRaises(AssertionError):
+                proof.verify_transition(adapted, candidate.replace(new, old, 1))
+
+    def test_style_diagnostic_controls_are_mandatory_on_both_hosts(self):
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        self.assertIn('python -I tools/test_ru_cli_diagnostics.py --ru-root .ci/ru-language -v', workflow)
+        self.assertIn("@('-I','tools/test_ru_cli_diagnostics.py','--ru-root',$RuRoot,'-v')", script)
+        for directory in ('build/i18n-policy-evidence', 'build/windows-ci/i18n-policy-evidence'):
+            self.assertIn(directory + '/report.json', workflow)
+            self.assertIn(directory + '/*.log', workflow)
+            self.assertNotIn(directory + '/*.stdout', workflow)
+            self.assertNotIn(directory + '/*.stderr', workflow)
+        for private in ('build/ru-cli-diagnostics-evidence', 'build/i18n-policy-private',
+                        'build/diagnostic-control/build.log', 'build/bulk-candidate/portable/build.log'):
+            self.assertNotIn(private, workflow)
+        import inspect
+        inputs = inspect.getsource(ci.helper_policy_inputs)
+        self.assertIn("'tools/ru_cli_diagnostics.py'", inputs)
+        self.assertIn("'tools/test_ru_cli_diagnostics.py'", inputs)
+        self.assertIn('python -I tools/test_i18n_runner.py --ru-root .ci/ru-language -v', workflow)
+        self.assertIn("@('-I','tools/test_i18n_runner.py','--ru-root',$RuRoot,'-v')", script)
+        for source in ('tools/test_i18n_runner.py', 'tools/test_i18n.py',
+                       'tests/syntax_warning_portable.py', 'src/i18n_catalog.ru',
+                       'locales/ui.json', 'locales/errors.json'):
+            self.assertIn(repr(source), inputs)
 
     def test_new_feature_documentation_links_resolve(self):
         readme = (ci.ROOT / 'README.md').read_text(encoding='utf-8')
@@ -251,7 +790,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertNotIn('if errorlevel 1', runner.lower())
         lines = runner.split('\n:syntax_fallback\n', 1)[0].splitlines()
         commands = [index for index, line in enumerate(lines)
-                    if re.match(r'^[a-z_]+\.exe(?: |$)|^call :syntax_fallback ', line)]
+                    if (re.match(r'^[a-z0-9_]+\.exe(?: |$)|^call :syntax_fallback ', line) or
+                        line == 'cmd /d /c "set RU_GC_THRESHOLD=64&&set RU_GC_STATS=1&&markdown_direct_native.exe" >>test-results.txt 2>&1')]
         self.assertEqual(len(commands), len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS))
         for index in commands:
             self.assertEqual(lines[index + 1], 'if not "%ERRORLEVEL%"=="0" set "FAILED=1"')
@@ -296,9 +836,22 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         (binary / 'Lexilla.dll').write_bytes(b'synthetic correct lexer DLL')
         (binary / ci.portable.NATIVE_HELPER_NAME).write_bytes(b'synthetic correct native scanner DLL')
         (binary / ci.portable.NATIVE_WRONG_ABI_NAME).write_bytes(b'synthetic wrong ABI scanner DLL')
-        with patch.object(ci, 'run_console', return_value={'passed': True}) as run:
+        events = []
+        def preflight(api, library, expected_hash):
+            events.append('preflight')
+            self.assertEqual(library.read_bytes(), (binary / ci.portable.NATIVE_HELPER_NAME).read_bytes())
+            self.assertEqual(ci.sha(library), expected_hash)
+            return dict(loadable=True, createlexer_missing=True, released=True, library_sha256=expected_hash)
+        def console(api, name, *args, **kwargs):
+            events.append(name)
+            return {'passed': True}
+        with patch.object(ci, 'run_console', side_effect=console) as run, \
+             patch.object(ci, 'preflight_wrong_lexer', side_effect=preflight) as probe:
             results = ci.run_syntax_fallbacks(NoDialogs(), binary, fixtures, evidence)
         self.assertEqual(len(results), 6)
+        self.assertEqual(events, ['syntax_missing_lexilla', 'preflight', *[case[0] for case in ci.SYNTAX_FALLBACK_TESTS[1:]]])
+        probe.assert_called_once()
+        self.assertEqual(results[1]['fixture_preflight']['library_sha256'], ci.sha(binary / ci.portable.NATIVE_HELPER_NAME))
         for call, (name, argument, bad) in zip(run.call_args_list, ci.SYNTAX_FALLBACK_TESTS):
             isolated = fixtures / name
             executable = ci.SYNTAX_FALLBACK_EXECUTABLES.get(name, 'syntax_native.exe')
@@ -312,6 +865,122 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             for target, source in layout.items():
                 self.assertEqual((isolated / target).read_bytes(), (binary / source).read_bytes())
 
+    def test_wrong_lexer_layout_avoids_window_registration_and_matches_portable_runner(self):
+        layout = ci.syntax_fallback_layout('syntax_bad_lexer')
+        self.assertEqual(layout['Lexilla.dll'], ci.portable.NATIVE_HELPER_NAME)
+        self.assertEqual(layout['Scintilla.dll'], 'Scintilla.dll')
+        self.assertEqual(layout[ci.portable.NATIVE_HELPER_NAME], ci.portable.NATIVE_HELPER_NAME)
+        runner = (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8')
+        copies = [line for line in runner.splitlines() if line.startswith('if "%~1"=="bad-lexer" copy /b ')]
+        self.assertEqual(copies, ['if "%~1"=="bad-lexer" copy /b "RuSyntax.dll" "%FALLBACKDIR%\\Lexilla.dll" >nul || exit /b 1'])
+        source = (ci.ROOT / 'tests/syntax_native.ru').read_text(encoding='utf-8')
+        self.assertEqual(source.count(ci.WRONG_LEXER_PREFLIGHT_MARKER), 1)
+        self.assertIn("确认 (警告 其 含 'does not export CreateLexer') 'actual wrong DLL is caught before native symbol binding'.", source)
+        self.assertNotIn('Production warning:', source)
+        self.assertIn("Production import-time preflight has already run", source)
+        self.assertIn("若 策 其 含词 参数 '--expect-bad-lexer' 则 验错误词法库. 然", source)
+        self.assertEqual(ci.expected_assertions('syntax_bad_lexer'), 8)
+
+    def test_wrong_lexer_loader_preflight_secure_path_lifetime_and_hash(self):
+        library = self.root / 'Lexilla.dll'
+        library.write_bytes(b'synthetic exact helper bytes')
+        digest = ci.sha(library)
+        for mode in ('good', 'load-fails', 'export-present', 'release-fails', 'lookup-raises', 'changed'):
+            with self.subTest(mode=mode):
+                library.write_bytes(b'synthetic exact helper bytes')
+                api = Mock()
+                api.kernel.LoadLibraryExW.return_value = 0 if mode == 'load-fails' else 17
+                api.kernel.GetProcAddress.return_value = 123 if mode == 'export-present' else 0
+                api.kernel.FreeLibrary.return_value = 0 if mode == 'release-fails' else 1
+                if mode == 'lookup-raises':
+                    api.kernel.GetProcAddress.side_effect = RuntimeError('synthetic lookup failure')
+                if mode == 'changed':
+                    def mutate(_):
+                        library.write_bytes(b'changed')
+                        return 1
+                    api.kernel.FreeLibrary.side_effect = mutate
+                if mode in {'lookup-raises', 'changed'}:
+                    with self.assertRaises(RuntimeError):
+                        ci.preflight_wrong_lexer(api, library, digest)
+                else:
+                    record = ci.preflight_wrong_lexer(api, library, digest)
+                    self.assertEqual(record, dict(loadable=mode != 'load-fails',
+                        createlexer_missing=mode not in {'load-fails', 'export-present'},
+                        released=mode not in {'load-fails', 'release-fails'}, library_sha256=digest))
+                    if mode == 'good': ci.validate_wrong_lexer_preflight(record, digest)
+                    else:
+                        with self.assertRaises(RuntimeError): ci.validate_wrong_lexer_preflight(record, digest)
+                expected = [call.LoadLibraryExW(str(library.resolve()), None, 2304)]
+                if mode != 'load-fails':
+                    expected += [call.GetProcAddress(17, b'CreateLexer'), call.FreeLibrary(17)]
+                self.assertEqual(api.kernel.mock_calls, expected)
+        api = Mock()
+        with self.assertRaisesRegex(RuntimeError, 'before its loader preflight'):
+            ci.preflight_wrong_lexer(api, library, digest)
+        self.assertEqual(api.kernel.mock_calls, [])
+
+    def test_wrong_lexer_preflight_failure_never_launches_target(self):
+        for mode in ('loadable', 'createlexer_missing', 'released', 'exception'):
+            with self.subTest(mode=mode):
+                root = self.root / mode
+                binary, fixtures, evidence = (root / name for name in ('bin', 'fixtures', 'evidence'))
+                for folder in (binary, fixtures, evidence): folder.mkdir(parents=True)
+                for name in set(ci.syntax_fallback_layout('syntax_bad_lexer').values()):
+                    (binary / name).write_bytes(name.encode())
+                record = dict(loadable=True, createlexer_missing=True, released=True,
+                              library_sha256=ci.sha(binary / ci.portable.NATIVE_HELPER_NAME))
+                if mode != 'exception': record[mode] = False
+                with patch.object(ci, 'SYNTAX_FALLBACK_TESTS', (('syntax_bad_lexer', '--expect-bad-lexer', True),)), \
+                     patch.object(ci, 'preflight_wrong_lexer', return_value=record,
+                         side_effect=RuntimeError('synthetic private-path sentinel') if mode == 'exception' else None), \
+                     patch.object(ci, 'run_console') as run:
+                    result, = ci.run_syntax_fallbacks(NoDialogs(), binary, fixtures, evidence)
+                run.assert_not_called()
+                self.assertIs(result['passed'], False)
+                self.assertIs(result['executed'], False)
+                self.assertEqual(result['error'], 'Wrong-lexer fixture OS preflight failed')
+                self.assertNotIn('private-path', json.dumps(result))
+                if mode != 'exception': self.assertEqual(result['fixture_preflight'], record)
+
+    def test_wrong_lexer_native_marker_is_exact_unique_and_exclusive(self):
+        marker = ci.WRONG_LEXER_PREFLIGHT_MARKER
+        cases = [('good', 'syntax_bad_lexer', marker, ''),
+                 ('missing', 'syntax_bad_lexer', '', ''),
+                 ('duplicate', 'syntax_bad_lexer', marker + '\n' + marker, ''),
+                 ('false', 'syntax_bad_lexer', marker.replace('released=1', 'released=0'), ''),
+                 ('stderr', 'syntax_bad_lexer', marker, marker),
+                 ('wrong-case', 'syntax_missing_lexilla', marker, ''),
+                 ('prefixed', 'syntax_missing_lexilla', 'extra ' + marker, '')]
+        for label, name, text, error in cases:
+            with self.subTest(label=label):
+                evidence = self.root / label
+                evidence.mkdir()
+                stdout = text + '\n' + 'PASS: synthetic\n' * 8 + 'TOTAL PASS: 8\n'
+                code = f'import sys; print({stdout!r}); sys.stderr.write({error!r})'
+                with patch.object(ci, 'cleanup_process', side_effect=kill_synthetic):
+                    result = ci.run_console(NoDialogs(), name, [sys.executable, '-c', code],
+                        evidence, r'^TOTAL PASS: 8\s*$', expected_assertions=8)
+                self.assertEqual(result['passed'], label == 'good')
+                self.assertEqual(result.get('native_fixture_preflight'), True if label == 'good' else None)
+
+    def test_acceptance_requires_both_wrong_lexer_preflights_and_exact_hash(self):
+        for field in ('loadable', 'createlexer_missing', 'released', 'library_sha256', 'native_fixture_preflight'):
+            for mutation in ('missing', 'false', 'integer'):
+                with self.subTest(field=field, mutation=mutation):
+                    summary = self.acceptance()
+                    record = next(item for item in summary['tests'] if item['name'] == 'syntax_bad_lexer')
+                    target = record if field == 'native_fixture_preflight' else record['fixture_preflight']
+                    if mutation == 'missing': target.pop(field)
+                    else: target[field] = False if mutation == 'false' else 1
+                    with self.assertRaisesRegex(RuntimeError, '[Ww]rong-lexer'):
+                        ci.validate_acceptance(summary)
+        for field in ('fixture_preflight', 'native_fixture_preflight'):
+            summary = self.acceptance()
+            target = next(item for item in summary['tests'] if item['name'] == 'syntax_missing_lexilla')
+            target[field] = True
+            with self.assertRaisesRegex(RuntimeError, 'Unexpected wrong-lexer'):
+                ci.validate_acceptance(summary)
+
     def acceptance(self):
         summary = {'acl_requested': True, 'tests': [],
                    'tested_binary_sha256': {name: name + '-hash' for name in ci.BINARY_NAMES}}
@@ -324,6 +993,10 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 result.update(main_hwnd_seen=True, close_posted=True, detached_from_console=True)
             else:
                 result['assertions_passed'] = ci.expected_assertions(name)
+            if name == 'markdown_direct_native':
+                result['gc_stress'] = {'threshold': 64, 'stats_enabled': True,
+                                       'live': 0, 'freed': 100, 'collections': 4}
+                result['bulk_route_metrics'] = markdown_route_metrics()
             if name == 'ru_syntax_native':
                 result['performance'] = [{'size': size, 'initial_read_bytes': size,
                     'edit_read_bytes': 1024, 'reused_bytes': size - 1024, 'max_read': 1024,
@@ -335,6 +1008,15 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             if name in {case[0] for case in ci.SYNTAX_FALLBACK_TESTS}:
                 result['fixture_binary_sha256'] = {target: summary['tested_binary_sha256'][source]
                                                   for target, source in ci.syntax_fallback_layout(name).items()}
+            if name == 'syntax_bad_lexer':
+                result['fixture_preflight'] = dict(loadable=True, createlexer_missing=True, released=True,
+                    library_sha256=summary['tested_binary_sha256'][ci.portable.NATIVE_HELPER_NAME])
+                result['native_fixture_preflight'] = True
+            if name == 'main-gui-markdown':
+                result.update({key: True for key in ci.GUI_MARKDOWN_CHECKS})
+                result['markdown_performance'] = markdown_evidence()
+                result['fixture_binary_sha256'] = {binary: summary['tested_binary_sha256'][binary]
+                    for binary in ci.portable.RUNTIME_NAMES}
             if name in {'main-gui-file-entry', 'main-gui-ru-syntax'}:
                 checks = ci.GUI_FILE_CHECKS if name == 'main-gui-file-entry' else ci.GUI_RU_CHECKS
                 result.update({key: True for key in checks})
@@ -366,14 +1048,14 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         sources = ci.scanner_preflight_sources(root)
         return {'name': ci.portable.SCANNER_PREFLIGHT_NAME, 'passed': True, 'executed': True,
                 'cleanup_killed': False, 'exit_code': 0, 'source_sha256': sources,
-                'report': {'cases': 163, 'chunk_checks': 978, 'ru_assertions_per_backend': 0, 'sanitizer': None,
+                'report': {'cases': 169, 'chunk_checks': 1014, 'ru_assertions_per_backend': 0, 'sanitizer': None,
                     'library_sha256': hashes[ci.portable.NATIVE_HELPER_NAME],
                     'source_sha256': sources['native/ru_scan.c']}}
 
     def test_scanner_preflight_is_mandatory_and_binds_exact_counts_dll_and_sources(self):
         for mutation in ('missing', 'failed', 'unexecuted', 'killed', 'exit', 'wrong-cases',
                          'wrong-chunks', 'unexpected-differential', 'wrong-dll', 'wrong-source',
-                         'wrong-script', 'missing-report', 'extra-report', 'host-sanitizer', 'old-counts'):
+                         'wrong-script', 'missing-report', 'extra-report', 'host-sanitizer', 'old-counts', 'pre-continue-counts', 'omitted-fixture'):
             with self.subTest(mutation=mutation):
                 summary = self.acceptance()
                 record = summary['scanner_preflight']
@@ -383,9 +1065,11 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 if mutation == 'killed': record['cleanup_killed'] = True
                 if mutation == 'exit': record['exit_code'] = 1
                 if mutation == 'old-counts': record['report'].update(cases=157, chunk_checks=942)
+                if mutation == 'pre-continue-counts': record['report'].update(cases=163, chunk_checks=978)
+                if mutation == 'omitted-fixture': record['report'].update(cases=168, chunk_checks=1008)
                 if mutation == 'wrong-cases': record['report']['cases'] = 156
                 if mutation == 'wrong-chunks': record['report']['chunk_checks'] = 941
-                if mutation == 'unexpected-differential': record['report']['ru_assertions_per_backend'] = 326
+                if mutation == 'unexpected-differential': record['report']['ru_assertions_per_backend'] = 338
                 if mutation == 'wrong-dll': record['report']['library_sha256'] = 'different'
                 if mutation == 'wrong-source': record['report']['source_sha256'] = 'different'
                 if mutation == 'wrong-script': record['source_sha256']['tools/test_ru_scan.py'] = 'different'
@@ -397,7 +1081,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
 
     def scanner_preflight(self, mode='normal'):
         for relative in (*ci.SCANNER_PREFLIGHT_SOURCES, 'native/ru_scan.c',
-                         'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h'):
+                         'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h',
+                         'native/ru_markdown_fold.c', 'native/ru_markdown_fold.h'):
             path = self.root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('synthetic fixture\n')
@@ -420,7 +1105,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         (self.root / 'tools/test_ru_scan.py').write_text(code)
         with patch.object(ci, 'ROOT', self.root), patch.object(ci, 'cleanup_process', side_effect=kill_synthetic):
             if mode == 'timeout':
-                with patch.object(ci.time, 'monotonic', side_effect=iter((0, 181, 182))):
+                with patch.object(ci.time, 'perf_counter', side_effect=iter((0, 181, 182))):
                     result = ci.run_scanner_preflight(NoDialogs(), binary, evidence)
             else:
                 result = ci.run_scanner_preflight(NoDialogs(), binary, evidence)
@@ -446,14 +1131,37 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 for path in evidence.iterdir(): self.assertLessEqual(path.stat().st_size, ci.MAX_LOG_BYTES)
                 if mode == 'timeout': self.assertTrue(result['cleanup_killed'])
 
+    def test_scanner_gate_counts_match_read_only_fixture_inventory(self):
+        import test_ru_scan as scanner
+        # fixtures() reads only tracked Ru text and returns literals. Do not call
+        # main(), Scanner(), differential(), or load/build any native library.
+        cases = len(scanner.fixtures()) + 100
+        self.assertEqual(cases, 169)
+        self.assertEqual((ci.SCANNER_CASES, ci.SCANNER_CHUNK_CHECKS,
+                          ci.SCANNER_BACKEND_ASSERTIONS), (cases, cases * 6, cases * 2))
+
     def helper_policy_fixture(self):
         directory = self.root / 'build/logs/014/ru-scan'
         inputs = {'ru_commit': ci.HELPER_POLICY_COMMIT, 'ru_tree': ci.HELPER_POLICY_TREE,
-                  'source_sha256': {'native/ru_scan.c': 'c' * 64, 'tools/test_ru_scan.py': 'd' * 64}}
+                  'baseline_commit': ci.POLICY_PREFIX_BASELINE_COMMIT,
+                  'baseline_tree': ci.POLICY_PREFIX_BASELINE_TREE,
+                  'baseline_source_sha256': ci.POLICY_PREFIX_BASELINE_SHA256,
+                  'source_sha256': {'native/ru_scan.c': 'c' * 64, 'tools/test_ru_scan.py': 'd' * 64,
+                      'src/ru_lexical.ru': 'e' * 64,
+                      **{name: 'f' * 64 for name in ci.POLICY_PREFIX_SOURCES}}}
+        proof_dir = self.root / 'build/policy-fast'
+        proof_dir.mkdir(parents=True)
+        for name in ci.POLICY_PREFIX_EVIDENCE_LIMITS:
+            (proof_dir / name).write_text('{}\n', encoding='utf-8', newline='\n')
+        # This suite tests the outer orchestration contract. The proof verifier
+        # has its own real ordered-transcript/manifest negative controls.
+        import verify_ru_policy_fast_outputs as policy_proof
+        self.prefix_validator = self.enterContext(patch.object(
+            policy_proof, 'validate_public_evidence', return_value={'status': 'passed'}, create=True))
         with patch.object(ci, 'helper_policy_inputs', return_value=inputs):
             ci.helper_policy_action('prepare', self.root)
         (directory / 'libRuSyntax.so').write_bytes(b'synthetic host library')
-        report = {'cases': 163, 'chunk_checks': 978, 'ru_assertions_per_backend': 326,
+        report = {'cases': 169, 'chunk_checks': 1014, 'ru_assertions_per_backend': 338,
                   'sanitizer': ci.SCANNER_SANITIZER_SUCCESS,
                   'source_sha256': inputs['source_sha256']['native/ru_scan.c'],
                   'library_sha256': ci.sha(directory / 'libRuSyntax.so')}
@@ -462,7 +1170,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         for name in ('report.json', 'helper-policy.stdout.log'):
             (directory / name).write_text(json.dumps(report))
         for name in ('differential-python.log', 'differential-c.log'):
-            (directory / name).write_text('PASS: fixture\n' * 326 + 'TOTAL PASS: 326\n')
+            (directory / name).write_text('PASS: fixture\n' * 338 + 'TOTAL PASS: 338\n')
         (directory / 'sanitize.log').write_text(ci.SCANNER_SANITIZER_SUCCESS + '\n')
         (directory / 'cleanup-control.stdout.log').write_text(
             'BACKEND: python\n' + 'PASS: fixture\n' * 8 + 'TOTAL PASS: 8\n' +
@@ -474,12 +1182,17 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'RU_TIMER_CORPUS_PASS: 4\n')
         import test_syntax_diagnostics as diagnostic_control
         base = dict(zip(diagnostic_control.FIELDS, [1, 1, 9, 2, 1, 123, 124, 128, 0, 4, 5,
-            1.5, 2.25, 0.75, 1.25, 7, 6, 8, 1, 3, 0, 0]))
+            1.5, 2.25, 0.75, 1.25, 7, 6, 8, 1, 3, 0, 0, 3, 5]))
         records = [base, {'seq': 2, 'ok': 0}, {**base, 'seq': 3, 'pending': 0}, {'seq': 1, 'ok': 0}]
         body = 'PASS: fixture\n' * 10 + ''.join('RU_GUI_SNAPSHOT ' +
             ' '.join(f'{key}={value}' for key, value in record.items()) + '\n' for record in records) + 'TOTAL PASS: 10\n'
         (directory / 'diagnostic-control.stdout.log').write_text('BACKEND: python\n' + body +
             'BACKEND: c\n' + body + 'RU_DIAGNOSTIC_PORTABLE_PASS: 2\n')
+        bulk_body = ''.join(f'PASS: {label}\n' for label in ci.BULK_EVENT_CASES) + 'TOTAL PASS: 23\n'
+        (directory / 'event-bulk.stdout.log').write_text('BACKEND: python\n' + bulk_body +
+            'BACKEND: c\n' + bulk_body + 'RU_EVENT_BULK_PORTABLE_PASS: 2 backends, 23 assertions each\n')
+        (directory / 'policy-prefix.stdout.log').write_text(ci.POLICY_PREFIX_EXECUTION_SUCCESS, encoding='utf-8', newline='\n')
+        (directory / 'policy-prefix-order.stdout.log').write_text(ci.POLICY_PREFIX_ORDER_SUCCESS, encoding='utf-8', newline='\n')
         (directory / 'bridge-failure.stdout.log').write_text('RU_SYNTAX_FAILURE_PORTABLE_PASS: 6\n')
         (directory / 'bridge-failure.stderr.log').write_text('Ran 6 tests in 1.000s\n\nOK\n')
         return directory, inputs
@@ -491,13 +1204,18 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                        (ci.HELPER_POLICY_COMMIT, ci.HELPER_POLICY_TREE, ' M compiler.py')):
             with self.subTest(values=values), \
                  patch.object(ci.subprocess, 'check_output', side_effect=values), \
-                 patch.object(ci, 'scanner_preflight_sources', return_value={}):
+                 patch.object(ci, 'scanner_preflight_sources', return_value={}), \
+                 patch.object(ci, 'helper_policy_baseline', return_value={}):
                 if values == (ci.HELPER_POLICY_COMMIT, ci.HELPER_POLICY_TREE, ''):
                     result = ci.helper_policy_inputs(ci.ROOT)
                     self.assertEqual(result['ru_commit'], ci.HELPER_POLICY_COMMIT)
                     self.assertIn('.github/workflows/windows.yml', result['source_sha256'])
                     self.assertIn('tools/test_ru_timer_corpus.py', result['source_sha256'])
                     self.assertIn('tests/app_ru_native.ru', result['source_sha256'])
+                    self.assertIn('tests/ru_event_bulk_portable.py', result['source_sha256'])
+                    self.assertIn('src/ru_native_syntax.ru', result['source_sha256'])
+                    self.assertIn('tools/ru_cli_diagnostics.py', result['source_sha256'])
+                    self.assertIn('tools/test_ru_cli_diagnostics.py', result['source_sha256'])
                 else:
                     with self.assertRaisesRegex(RuntimeError, 'clean reviewed'):
                         ci.helper_policy_inputs(ci.ROOT)
@@ -514,12 +1232,181 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         (directory / 'helper-policy.stderr.log').write_bytes(b'x' * (ci.MAX_LOG_BYTES + 1))
         ci.helper_policy_action('collect', self.root)
         destination = self.root / 'build/helper-policy-evidence'
-        expected = {*ci.HELPER_POLICY_EVIDENCE_FILES, 'helper-policy-inputs.json', 'helper-policy-acceptance.json'}
+        expected = {*ci.HELPER_POLICY_EVIDENCE_FILES, 'helper-policy-inputs.json', 'helper-policy-acceptance.json',
+                    *('policy-prefix-' + name for name in ci.POLICY_PREFIX_EVIDENCE_LIMITS),
+                    'policy-prefix-collection.json'}
         self.assertEqual({path.name for path in destination.iterdir()}, expected)
         for path in destination.iterdir(): self.assertLessEqual(path.stat().st_size, ci.MAX_LOG_BYTES)
 
+    def test_policy_prefix_fixture_preserves_linux_wrapper_bytes_under_windows_default_newlines(self):
+        original_write_text = Path.write_text
+        def windows_default_write(path, text, encoding=None, errors=None, newline=None):
+            return original_write_text(path, text, encoding=encoding, errors=errors,
+                                       newline='\r\n' if newline is None else newline)
+        with patch.object(Path, 'write_text', windows_default_write):
+            directory, _ = self.helper_policy_fixture()
+        expected = {'policy-prefix.stdout.log': ci.POLICY_PREFIX_EXECUTION_SUCCESS,
+                    'policy-prefix-order.stdout.log': ci.POLICY_PREFIX_ORDER_SUCCESS}
+        for name, marker in expected.items():
+            self.assertEqual((directory / name).read_bytes(), marker.encode('utf-8'))
+        ci.helper_policy_action('collect', self.root)
+        destination = self.root / 'build/helper-policy-evidence'
+        record = json.loads((destination / 'policy-prefix-collection.json').read_text(encoding='utf-8'))
+        self.assertTrue(record['complete_proof_verified'])
+        for name in ci.POLICY_PREFIX_EVIDENCE_LIMITS:
+            self.assertEqual((destination / ('policy-prefix-' + name)).read_bytes(),
+                             (self.root / 'build/policy-fast' / name).read_bytes())
+        # The original implicit Windows newline mutation remains rejected. The
+        # collector must not normalize a noncanonical public wrapper to success.
+        shutil.rmtree(destination)
+        for name, marker in expected.items():
+            (directory / name).write_bytes(marker.replace('\n', '\r\n').encode('utf-8'))
+        ci.helper_policy_action('collect', self.root)
+        record = json.loads((destination / 'policy-prefix-collection.json').read_text(encoding='utf-8'))
+        self.assertFalse(record['complete_proof_verified'])
+        for name in expected:
+            self.assertEqual(record['wrappers'][name]['status'], 'withheld_invalid_output')
+            self.assertFalse((destination / name).exists())
+        for name in ci.POLICY_PREFIX_EVIDENCE_LIMITS:
+            self.assertFalse((destination / ('policy-prefix-' + name)).exists())
+
+    def test_policy_prefix_requires_exact_clean_public_baseline_and_source(self):
+        baseline = self.root / '.ci/policy-baseline'
+        (baseline / 'src').mkdir(parents=True)
+        (baseline / 'src/ru_lexical.ru').write_text('synthetic policy', encoding='utf-8')
+        good = (ci.POLICY_PREFIX_BASELINE_COMMIT, ci.POLICY_PREFIX_BASELINE_TREE, '')
+        for values, digest in ((good, ci.POLICY_PREFIX_BASELINE_SHA256),
+                               (('wrong', good[1], ''), ci.POLICY_PREFIX_BASELINE_SHA256),
+                               ((good[0], 'wrong', ''), ci.POLICY_PREFIX_BASELINE_SHA256),
+                               ((good[0], good[1], ' M src/ru_lexical.ru'), ci.POLICY_PREFIX_BASELINE_SHA256),
+                               (good, '0' * 64)):
+            with self.subTest(values=values, digest=digest), \
+                 patch.object(ci.subprocess, 'check_output', side_effect=values), \
+                 patch.object(ci, 'sha', return_value=digest):
+                if values == good and digest == ci.POLICY_PREFIX_BASELINE_SHA256:
+                    self.assertEqual(ci.helper_policy_baseline(self.root), {
+                        'baseline_commit': good[0], 'baseline_tree': good[1],
+                        'baseline_source_sha256': digest})
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'clean reviewed public baseline'):
+                        ci.helper_policy_baseline(self.root)
+
+    def test_policy_prefix_orchestration_binds_exact_sources_and_all_eight_files(self):
+        directory, inputs = self.helper_policy_fixture()
+        with patch.object(ci, 'helper_policy_inputs', return_value=inputs):
+            result = ci.helper_policy_action('verify', self.root)
+        self.assertEqual(result['policy_prefix'], {'status': 'passed'})
+        self.prefix_validator.assert_called_once_with(
+            self.root / 'build/policy-fast', ci.policy_prefix_expected_inputs(inputs))
+        self.assertEqual(set(ci.policy_prefix_expected_inputs(inputs)), {
+            'baseline_commit', 'baseline_tree', 'baseline_source_sha256',
+            'toolchain_commit', 'toolchain_tree', 'candidate_sha256',
+            'test_script_sha256', 'verifier_source_sha256', 'canonical_plan_sha256'})
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        for required in ('ref: ' + ci.POLICY_PREFIX_BASELINE_COMMIT,
+                         'path: .ci/policy-baseline',
+                         'python -I tools/test_ru_policy_fast.py --baseline .ci/policy-baseline --ru-root .ci/ru-language',
+                         'python -I tools/verify_ru_policy_fast_outputs.py'):
+            self.assertIn(required, workflow)
+
+    def test_policy_prefix_orchestration_rejects_missing_oversized_stderr_and_verifier_failure(self):
+        for mutation in (*ci.POLICY_PREFIX_EVIDENCE_LIMITS, 'oversized', 'wrapper-oversized',
+                         'stderr', 'order-stderr', 'verification-failed'):
+            with self.subTest(mutation=mutation):
+                shutil.rmtree(self.root / 'build', ignore_errors=True)
+                directory, inputs = self.helper_policy_fixture()
+                if mutation in ci.POLICY_PREFIX_EVIDENCE_LIMITS:
+                    (self.root / 'build/policy-fast' / mutation).unlink()
+                elif mutation == 'oversized':
+                    (self.root / 'build/policy-fast/report.json').write_bytes(b'x' * (64 * 1024 + 1))
+                elif mutation == 'wrapper-oversized':
+                    (directory / 'policy-prefix.stdout.log').write_bytes(b'x' * (64 * 1024 + 1))
+                elif mutation == 'stderr':
+                    (directory / 'policy-prefix.stderr.log').write_text('unexpected', encoding='utf-8')
+                elif mutation == 'order-stderr':
+                    (directory / 'policy-prefix-order.stderr.log').write_text('unexpected', encoding='utf-8')
+                else:
+                    self.prefix_validator.side_effect = ValueError('synthetic rejected transcript')
+                with patch.object(ci, 'helper_policy_inputs', return_value=inputs), \
+                     self.assertRaises((RuntimeError, ValueError, OSError)):
+                    ci.helper_policy_action('verify', self.root)
+                self.assertFalse((directory / 'helper-policy-acceptance.json').exists())
+
+    def test_policy_prefix_collector_refuses_linked_or_oversized_proof_and_excludes_private_outputs(self):
+        directory, inputs = self.helper_policy_fixture()
+        proof = self.root / 'build/policy-fast'
+        for name in ('differential-0', 'differential-0.c', 'private-source.ru'):
+            (proof / name).write_text('DO NOT PUBLISH', encoding='utf-8')
+        ci.helper_policy_action('collect', self.root)
+        files = {p.name for p in (self.root / 'build/helper-policy-evidence').iterdir()}
+        self.assertTrue(all('policy-prefix-' + name in files for name in ci.POLICY_PREFIX_EVIDENCE_LIMITS))
+        self.assertFalse(any('differential' in name and name.startswith('policy-prefix-') for name in files))
+        shutil.rmtree(self.root / 'build/helper-policy-evidence')
+        (proof / 'report.json').write_bytes(b'x' * (64 * 1024 + 1))
+        ci.helper_policy_action('collect', self.root)
+        collection = json.loads((self.root / 'build/helper-policy-evidence/policy-prefix-collection.json').read_text(encoding='utf-8'))
+        self.assertFalse(collection['complete_proof_verified'])
+        self.assertEqual(collection['files']['report.json']['status'], 'invalid_or_over_budget')
+        self.assertFalse((self.root / 'build/helper-policy-evidence/policy-prefix-report.json').exists())
+        with self.assertRaisesRegex(RuntimeError, 'Unexpected'):
+            ci.policy_prefix_evidence_file(self.root, '../private-source.ru')
+        if os.name != 'nt':
+            shutil.rmtree(proof)
+            outside = self.root / 'outside-proof'
+            outside.mkdir()
+            (outside / 'report.json').write_text('{}', encoding='utf-8')
+            proof.symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(RuntimeError, 'linked'):
+                ci.policy_prefix_evidence_file(self.root, 'report.json')
+
+    def test_policy_prefix_failed_compiler_text_is_withheld_from_public_artifact(self):
+        directory, inputs = self.helper_policy_fixture()
+        private = 'PRIVATE_COMPILER_SOURCE /workspace/private/source.ru:12 secret_fragment'
+        (directory / 'policy-prefix.stderr.log').write_text(private, encoding='utf-8')
+        (self.root / 'build/policy-fast/interpreter.log').write_text(private, encoding='utf-8')
+        self.prefix_validator.side_effect = ValueError(private)
+        ci.helper_policy_action('collect', self.root)
+        destination = self.root / 'build/helper-policy-evidence'
+        self.assertFalse((destination / 'policy-prefix.stderr.log').exists())
+        self.assertFalse((destination / 'policy-prefix-interpreter.log').exists())
+        for path in destination.iterdir():
+            self.assertNotIn('PRIVATE_COMPILER_SOURCE', path.read_text(encoding='utf-8'))
+            self.assertNotIn('/workspace/private', path.read_text(encoding='utf-8'))
+        record = json.loads((destination / 'policy-prefix-collection.json').read_text(encoding='utf-8'))
+        self.assertFalse(record['complete_proof_verified'])
+        self.assertEqual(record['wrappers']['policy-prefix.stderr.log']['status'], 'withheld_invalid_output')
+        self.assertEqual(record['files']['interpreter.log']['sha256'], hashlib.sha256(private.encode()).hexdigest())
+
+    def test_policy_prefix_collection_bounds_reads_and_withholds_changed_snapshot(self):
+        directory, inputs = self.helper_policy_fixture()
+        with patch.object(Path, 'open', return_value=io.BytesIO(b'x' * (64 * 1024 + 1))):
+            with self.assertRaisesRegex(RuntimeError, 'grew beyond'):
+                ci.policy_prefix_evidence_bytes(self.root, 'report.json')
+        def changed_after_validation(*args):
+            (self.root / 'build/policy-fast/interpreter.log').write_text('changed', encoding='utf-8')
+            return {'status': 'passed'}
+        self.prefix_validator.side_effect = changed_after_validation
+        ci.helper_policy_action('collect', self.root)
+        destination = self.root / 'build/helper-policy-evidence'
+        record = json.loads((destination / 'policy-prefix-collection.json').read_text(encoding='utf-8'))
+        self.assertFalse(record['complete_proof_verified'])
+        self.assertFalse((destination / 'policy-prefix-interpreter.log').exists())
+
+    def test_policy_prefix_wrapper_failure_grammar_preserves_only_fixed_diagnostics(self):
+        for name in ci.POLICY_PREFIX_WRAPPER_LOGS:
+            success = ci.POLICY_PREFIX_ORDER_SUCCESS if '-order.' in name else ci.POLICY_PREFIX_EXECUTION_SUCCESS
+            self.assertTrue(ci.policy_prefix_wrapper_valid(name, '' if 'stderr' in name else success, True))
+            self.assertFalse(ci.policy_prefix_wrapper_valid(name, 'unexpected source text', False))
+        error = 'POLICY_FAST_FAIL stage=host-c-0 code=command detail_sha256=' + 'a' * 64 + '\n'
+        self.assertTrue(ci.policy_prefix_wrapper_valid('policy-prefix.stderr.log', error, False))
+        self.assertFalse(ci.policy_prefix_wrapper_valid('policy-prefix.stderr.log', error, True))
+        self.assertFalse(ci.policy_prefix_wrapper_valid('policy-prefix.stderr.log', error + error, False))
+        self.assertFalse(ci.policy_prefix_wrapper_valid('policy-prefix.stdout.log', '', True))
+        self.assertFalse(ci.policy_prefix_wrapper_valid('policy-prefix.stderr.log', error.replace('host-c-0', 'private-source-name'), False))
+        self.assertFalse(ci.policy_prefix_wrapper_valid('policy-prefix-order.stderr.log', error.replace('POLICY_FAST_FAIL', 'POLICY_FAST_VERIFY_FAIL'), False))
+
     def test_linux_helper_policy_rejects_missing_or_partial_differential_sanitizer_and_source_results(self):
-        for mutation in ('missing', 'wrong-count', 'old-counts', 'wrong-library', 'wrong-source', 'changed-inputs',
+        for mutation in ('missing', 'wrong-count', 'old-counts', 'pre-continue-counts', 'omitted-fixture', 'wrong-library', 'wrong-source', 'changed-inputs',
                          'missing-sanitizer', 'partial-sanitizer', 'sanitizer-error', 'missing-python', 'missing-c',
                          'extra-total', 'failed-case', 'skipped-case', 'unexpected-stderr', 'oversize',
                          'missing-cleanup', 'partial-cleanup', 'cleanup-error',
@@ -532,7 +1419,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 report = json.loads((directory / 'report.json').read_text())
                 if mutation == 'missing': (directory / 'report.json').unlink()
                 if mutation == 'old-counts': report.update(cases=157, chunk_checks=942, ru_assertions_per_backend=314)
-                if mutation == 'wrong-count': report['chunk_checks'] = 977
+                if mutation == 'pre-continue-counts': report.update(cases=163, chunk_checks=978, ru_assertions_per_backend=326)
+                if mutation == 'omitted-fixture': report.update(cases=168, chunk_checks=1008, ru_assertions_per_backend=336)
+                if mutation == 'wrong-count': report['chunk_checks'] = 1013
                 if mutation == 'wrong-library': report['library_sha256'] = 'different'
                 if mutation == 'wrong-source': report['source_sha256'] = 'different'
                 if mutation == 'missing-sanitizer': report['sanitizer'] = None
@@ -540,15 +1429,15 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     report['sanitizer'] = ci.SCANNER_SANITIZER_SUCCESS + ' (LSan disabled by caller)'
                     (directory / 'sanitize.log').write_text(report['sanitizer'])
                 if mutation == 'changed-inputs': inputs = dict(inputs, ru_tree='different')
-                if mutation in ('wrong-count', 'old-counts', 'wrong-library', 'wrong-source', 'missing-sanitizer', 'partial-sanitizer'):
+                if mutation in ('wrong-count', 'old-counts', 'pre-continue-counts', 'omitted-fixture', 'wrong-library', 'wrong-source', 'missing-sanitizer', 'partial-sanitizer'):
                     for name in ('report.json', 'helper-policy.stdout.log'):
                         (directory / name).write_text(json.dumps(report))
                 if mutation == 'sanitizer-error': (directory / 'sanitize.log').write_text('runtime error: bad memory\n' + ci.SCANNER_SANITIZER_SUCCESS)
-                if mutation == 'missing-python': (directory / 'differential-python.log').write_text('TOTAL PASS: 326\n')
+                if mutation == 'missing-python': (directory / 'differential-python.log').write_text('TOTAL PASS: 338\n')
                 if mutation == 'missing-c': (directory / 'differential-c.log').unlink()
                 if mutation in ('extra-total', 'failed-case', 'skipped-case'):
                     with (directory / 'differential-python.log').open('a') as stream:
-                        stream.write({'extra-total': 'TOTAL PASS: 326', 'failed-case': 'FAIL: fixture', 'skipped-case': 'SKIP: fixture'}[mutation] + '\n')
+                        stream.write({'extra-total': 'TOTAL PASS: 338', 'failed-case': 'FAIL: fixture', 'skipped-case': 'SKIP: fixture'}[mutation] + '\n')
                 if mutation == 'unexpected-stderr': (directory / 'helper-policy.stderr.log').write_text('error')
                 if mutation == 'oversize': (directory / 'scanner-build.log').write_bytes(b'x' * (ci.MAX_LOG_BYTES + 1))
                 if mutation == 'missing-cleanup': (directory / 'cleanup-control.stdout.log').unlink()
@@ -571,6 +1460,28 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     ci.helper_policy_action('verify', self.root)
                 self.assertFalse((directory / 'helper-policy-acceptance.json').exists())
 
+    def test_linux_bulk_event_gate_rejects_missing_partial_duplicate_or_changed_evidence(self):
+        for mutation in ('missing', 'stderr', 'partial', 'duplicate', 'backend', 'case', 'count', 'skip', 'extra'):
+            with self.subTest(mutation=mutation):
+                shutil.rmtree(self.root / 'build', ignore_errors=True)
+                directory, inputs = self.helper_policy_fixture()
+                path = directory / 'event-bulk.stdout.log'
+                text = path.read_text()
+                if mutation == 'missing': path.unlink()
+                elif mutation == 'stderr': (directory / 'event-bulk.stderr.log').write_text('warning')
+                elif mutation == 'partial': path.write_text(text.split('BACKEND: c')[0])
+                elif mutation == 'duplicate': path.write_text(text + text)
+                elif mutation == 'extra': path.write_text(text + 'unexpected\n')
+                else:
+                    replacements = {'backend': ('BACKEND: c', 'BACKEND: python'),
+                        'case': ('PASS: high word 131072', 'PASS: high word 131071'),
+                        'count': ('TOTAL PASS: 23', 'TOTAL PASS: 22'),
+                        'skip': ('PASS: zero event batch', 'SKIP: zero event batch')}
+                    path.write_text(text.replace(*replacements[mutation]))
+                with patch.object(ci, 'helper_policy_inputs', return_value=inputs), self.assertRaises(RuntimeError):
+                    ci.helper_policy_action('verify', self.root)
+                self.assertFalse((directory / 'helper-policy-acceptance.json').exists())
+
     def test_workflow_requires_linux_oracle_sanitizer_before_windows_or_package_artifacts(self):
         workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text()
         helper = workflow.split('  helper-policy:\n', 1)[1].split('  windows-native:\n', 1)[0]
@@ -579,6 +1490,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertNotIn('continue-on-error', workflow)
         self.assertIn('python -I tools/test_ru_scan.py --ru-root .ci/ru-language --sanitize --fuzz 100', helper)
         self.assertIn('python -I tools/test_ru_timer_corpus.py --ru-root .ci/ru-language', helper)
+        self.assertIn('python -I tests/ru_event_bulk_portable.py --ru-root .ci/ru-language', helper)
+        self.assertIn('event-bulk.stdout.log', helper)
+        self.assertIn('event-bulk.stderr.log', helper)
         for action in ('prepare', 'verify', 'collect'):
             self.assertIn('--helper-policy-action ' + action, helper)
         self.assertIn('ASAN_OPTIONS:', helper)
@@ -591,18 +1505,45 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         summary = self.acceptance()
         ci.validate_acceptance(summary)
         new = {'ru_lexical_policy', 'ru_syntax_native', 'app_ru_native', 'app_ru_timer_native',
-               'ru_syntax_missing_lexilla', 'main-gui-ru-syntax', *ci.HELPER_FALLBACK_LAYOUTS}
+               'ru_direct_styling_native', 'markdown_policy', 'markdown_selection_policy',
+               'markdown_native', 'app_markdown_native', 'markdown_direct_native', 'main-gui-markdown',
+               'ru_syntax_missing_lexilla', 'main-gui-ru-syntax', *ci.HELPER_FALLBACK_LAYOUTS,
+               'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}
         prior = [test for test in summary['tests'] if test['name'] not in new]
         self.assertEqual(len(prior), 23)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 835 + 16)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 835 + 16 + 90 + 6 + 103)
 
-    def test_acceptance_requires_all_32_groups_and_exact_assertions(self):
+    def test_acceptance_preserves_original_33_groups_1487_assertions_and_adds_markdown(self):
         summary = self.acceptance()
         ci.validate_acceptance(summary)
-        self.assertEqual(len(summary['tests']), 32)
-        # Repair 3 preserves all 1401 prior assertions and adds nineteen actual
-        # native scheduler/lifecycle assertions in the same app executable.
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 1408 + 19 + 42)
+        self.assertEqual(len(summary['tests']), 42)
+        added = {'markdown_policy', 'markdown_selection_policy', 'markdown_native',
+                 'app_markdown_native', 'markdown_direct_native', 'main-gui-markdown',
+                 'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}
+        prior = [test for test in summary['tests'] if test['name'] not in added]
+        self.assertEqual(len(prior), 33)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487 + 90 + 6 + 103 + 42 + 42)
+        baseline = [test for test in summary['tests'] if test['name'] not in
+                    {'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
+        self.assertEqual(len(baseline), 39)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in baseline), 2077 + 103 + 42 + 42 + 3)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 2077 + 103 + 289 + 69 + 1606 + 42 + 42 + 3)
+
+    def test_direct_style_fixture_is_built_packaged_and_required(self):
+        name = 'ru_direct_styling_native'
+        self.assertIn(name + '.exe', ci.portable.TEST_NAMES)
+        self.assertEqual(ci.console_command(name, self.root, self.root),
+                         [str(self.root / (name + '.exe'))])
+        self.assertEqual(ci.CONSOLE_TIMEOUT_SECONDS[name], 120)
+        script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        self.assertIn("'ru_direct_styling_native'", script)
+        runner = (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8')
+        self.assertIn('ru_direct_styling_native.exe >>test-results.txt 2>&1\n'
+                      'if not "%ERRORLEVEL%"=="0" set "FAILED=1"', runner)
+        summary = self.acceptance()
+        summary['tests'] = [case for case in summary['tests'] if case['name'] != name]
+        with self.assertRaisesRegex(RuntimeError, 'inventory'):
+            ci.validate_acceptance(summary)
 
     def test_acceptance_rejects_missing_or_duplicated_syntax_branch(self):
         summary = self.acceptance()
@@ -676,7 +1617,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertIn('app_ru_native.exe "%TESTDIR%" --measure-ru-timer >>test-results.txt 2>&1\n'
                       'if not "%ERRORLEVEL%"=="0" set "FAILED=1"', runner)
         workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
-        self.assertIn('timeout-minutes: 60', workflow)
+        self.assertIn('timeout-minutes: 90', workflow)
         self.assertIn('-RunAclTests', workflow)
 
     def test_gui_cancel_fixture_has_fixed_byte_budget_and_bounded_writes(self):
@@ -886,12 +1827,12 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             except RuntimeError as exc:
                 return {'passed': False, 'error': str(exc)}
         ticks = [0.0]
-        def monotonic():
+        def perf_counter():
             ticks[0] += 0.1
             return ticks[0]
         with patch.object(ci, 'run_gui', side_effect=launch), \
              patch.object(ci, 'write_gui_cancel_fixture', side_effect=lambda path: path.write_bytes(b'small unit fixture')), \
-             patch.object(ci.time, 'monotonic', side_effect=monotonic), patch.object(ci.time, 'sleep'):
+             patch.object(ci.time, 'perf_counter', side_effect=perf_counter), patch.object(ci.time, 'sleep'):
             result = ci.run_gui_file_entry(api, binary, fixtures, evidence)
         self.assertTrue(api.released)
         return result, api
@@ -1105,7 +2046,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             except RuntimeError as exc:
                 return {'passed': False, 'error': str(exc)}
         ticks = [0.0]
-        def monotonic():
+        def perf_counter():
             ticks[0] += 0.0001
             return ticks[0]
         def sleep(seconds):
@@ -1120,7 +2061,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             return {name: True for name in ci.GUI_RU_EDIT_CHECKS}
         with patch.object(ci, 'run_gui', side_effect=launch), \
              patch.object(ci, 'run_gui_ru_edits', side_effect=edit_stage), \
-             patch.object(ci.time, 'monotonic', side_effect=monotonic), patch.object(ci.time, 'sleep', side_effect=sleep):
+             patch.object(ci.time, 'perf_counter', side_effect=perf_counter), patch.object(ci.time, 'sleep', side_effect=sleep):
             result = ci.run_gui_ru_syntax(api, binary, fixtures, evidence)
         return result, api
 
@@ -1248,6 +2189,128 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
                 ci.validate_gui_ru_timer(record)
 
+    def test_performance_clock_records_actual_bounded_metadata(self):
+        info = ci.time.get_clock_info('perf_counter')
+        record = ci.performance_clock_record()
+        self.assertEqual(record, {'clock_name': 'perf_counter', 'implementation': info.implementation,
+                                 'resolution': info.resolution, 'monotonic': info.monotonic,
+                                 'adjustable': info.adjustable})
+        self.assertEqual(set(record), ci.PERFORMANCE_CLOCK_FIELDS)
+        self.assertLess(len(json.dumps(record)), 300)
+        ci.validate_performance_clock(record)
+        self.assertIn('not physical input or paint accuracy', ci.PERFORMANCE_CLOCK_MEASUREMENT)
+
+    def test_performance_clock_metadata_rejects_malformed_nonfinite_or_coarse_windows_receipts(self):
+        good = observer_evidence()['clock']
+        ci.validate_performance_clock(good, require_windows=True)
+        mutations = [('clock_name', 'monotonic'), ('implementation', ''),
+                     ('implementation', 'x' * 129), ('implementation', 'bad\nclock'),
+                     ('implementation', None), ('resolution', 0), ('resolution', -1),
+                     ('resolution', True), ('resolution', '0.0000001'),
+                     ('resolution', float('nan')), ('resolution', float('inf')),
+                     ('resolution', float('-inf')), ('monotonic', False), ('monotonic', 1),
+                     ('adjustable', True), ('adjustable', 0)]
+        for field, value in mutations:
+            with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
+                ci.validate_performance_clock(dict(good, **{field: value}))
+        for record in (None, [], {}, dict(good, extra=1),
+                       {key: value for key, value in good.items() if key != 'resolution'}):
+            with self.subTest(record=record), self.assertRaises(RuntimeError):
+                ci.validate_performance_clock(record)
+        for implementation in ('GetTickCount64()', 'clock_gettime(CLOCK_MONOTONIC)',
+                               'QueryPerformanceCounter', 'QueryPerformanceCounter() forged'):
+            with self.subTest(implementation=implementation), self.assertRaisesRegex(RuntimeError, 'QueryPerformanceCounter'):
+                ci.validate_performance_clock(dict(good, implementation=implementation), require_windows=True)
+        info = type('ClockInfo', (), dict(good, resolution=float('nan')))()
+        with patch.object(ci.time, 'get_clock_info', return_value=info) as get_info:
+            with self.assertRaises(RuntimeError): ci.performance_clock_record()
+            get_info.assert_called_once_with('perf_counter')
+
+    def test_performance_clock_is_local_and_rejects_nonfinite_or_backwards_samples(self):
+        for bad in (float('nan'), float('inf'), float('-inf'), True, None, '1'):
+            with self.subTest(value=bad), patch.object(ci.time, 'perf_counter', return_value=bad):
+                with self.assertRaisesRegex(RuntimeError, 'nonfinite or moved backwards'):
+                    ci.PerformanceClock()()
+        with patch.object(ci.time, 'perf_counter', side_effect=[1.0, 1.0, 1.0002, 1.0001]):
+            clock = ci.PerformanceClock()
+            self.assertEqual(clock(), 1.0)
+            self.assertEqual(clock(), 1.0)  # Identical ticks remain valid, not invented elapsed time.
+            self.assertEqual(clock(), 1.0002)
+            with self.assertRaisesRegex(RuntimeError, 'moved backwards'): clock()
+        original = ci.time.perf_counter
+        with patch.object(ci.time, 'perf_counter', return_value=1e15):
+            self.assertEqual(ci.PerformanceClock()(), 1e15)
+        self.assertIs(ci.time.perf_counter, original)
+        restored = ci.PerformanceClock()
+        first, second = restored(), restored()
+        self.assertGreaterEqual(second, first)
+        with patch.object(ci.time, 'perf_counter', return_value=1.0):
+            for previous in (2.0, float('nan'), True):
+                with self.subTest(previous=previous), self.assertRaises(RuntimeError):
+                    ci.PerformanceClock(previous)()
+
+    def test_ru_observer_uses_precise_costs_when_monotonic_is_coarse(self):
+        class Fake:
+            def scalar(self, *args): return 1
+            def responsive(self, *args): return None
+        api = Fake()
+        scalar, responsive = api.scalar, api.responsive
+        record = ci.gui_ru_observer_record()
+        with patch.object(ci.time, 'monotonic', return_value=0.0) as coarse, \
+             patch.object(ci.time, 'perf_counter', side_effect=[.001, .002, .0024, .003, .1, .1003]):
+            with ci.GuiRuObserver(api, record, 0.0) as observer:
+                self.assertTrue(observer.snapshot(lambda: api.scalar(123, 2006)))
+                api.responsive(123)
+            coarse.assert_not_called()
+        self.assertEqual(record['query_wall_ms'], .7)
+        self.assertEqual(record['max_query_ms'], .4)
+        self.assertEqual(record['snapshot_wall_ms'], 2.0)
+        self.assertEqual(record['snapshots'][0]['wall_ms'], 2.0)
+        self.assertEqual(record['sendmessage_calls'], 2)
+        self.assertEqual(record['response_starts_ms'], [100.0])
+        self.assertEqual(api.scalar, scalar)
+        self.assertEqual(api.responsive, responsive)
+        ci.validate_gui_ru_observer(record, 101.0, 1)
+
+    def test_ru_diagnostic_post_and_log_costs_use_same_precise_clock(self):
+        class Fake:
+            def post_ru_snapshot(self, hwnd): pass
+        (self.root / 'ru_notepad-unit.log').write_text('RU_GUI_SNAPSHOT seq=1 ok=0\n')
+        record = {}
+        diagnostics = ci.GuiRuDiagnostics(Fake(), 123, self.root, record)
+        with patch.object(ci.time, 'monotonic', return_value=0.0) as coarse, \
+             patch.object(ci.time, 'perf_counter', side_effect=[1, 1.0004, 2, 2.0001, 2.0008, 2.0009, 2.001]):
+            diagnostics.request('baseline')
+            diagnostics.capture(1)
+            coarse.assert_not_called()
+        self.assertEqual(record['post_wall_ms'], .4)
+        self.assertEqual(record['log_read_wall_ms'], .7)
+        self.assertEqual(record['max_log_read_ms'], .7)
+        self.assertEqual(record['captures'], [{'phase': 'baseline', 'wall_ms': 1.0, 'log_reads': 1}])
+        self.assertEqual(record['receipts'], [{'seq': 1, 'ok': 0}])
+
+    def test_ru_observer_clock_failure_keeps_partial_counts_and_restores_wrappers(self):
+        class Fake:
+            def scalar(self, *args): return 1
+            def responsive(self, *args): return None
+        for bad, final in ((.19, .3), (.19, .19), (float('nan'), .3),
+                           (float('nan'), float('nan')), (float('inf'), .3), (float('inf'), float('inf'))):
+            api = Fake()
+            record = ci.gui_ru_observer_record()
+            with self.subTest(value=bad), \
+                 patch.object(ci.time, 'perf_counter', side_effect=[.1, .2, bad, final]):
+                with self.assertRaisesRegex(RuntimeError, 'nonfinite or moved backwards'):
+                    with ci.GuiRuObserver(api, record, 0.0) as observer:
+                        observer.snapshot(lambda: api.scalar(123, 2006))
+            self.assertEqual(record['scalar_calls'], 1)
+            self.assertEqual(record['sendmessage_calls'], 1)
+            self.assertEqual(record['snapshot_count'], 1)
+            self.assertEqual(record['snapshots'][0]['messages'], 1)
+            self.assertFalse(record['snapshots'][0]['final'])
+            self.assertNotIn('scalar', api.__dict__)
+            self.assertNotIn('responsive', api.__dict__)
+            self.assertIsNone(observer.current)
+
     def test_ru_observer_measures_nested_text_calls_and_restores_wrappers_after_failure(self):
         class Fake:
             def scalar(self, *args): return 1
@@ -1260,7 +2323,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         record = ci.gui_ru_observer_record()
         original = api.scalar
         with self.assertRaisesRegex(RuntimeError, 'synthetic failure'):
-            with ci.GuiRuObserver(api, record, ci.time.monotonic()) as observer:
+            with ci.GuiRuObserver(api, record, ci.time.perf_counter()) as observer:
                 observer.snapshot(lambda: api.text(123) == 'bounded')
                 api.responsive(123)
                 raise RuntimeError('synthetic failure')
@@ -1279,7 +2342,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             def responsive(self, *args): return None
         api = Fake()
         record = ci.gui_ru_observer_record()
-        with ci.GuiRuObserver(api, record, ci.time.monotonic()) as observer:
+        with ci.GuiRuObserver(api, record, ci.time.perf_counter()) as observer:
             with self.assertRaisesRegex(RuntimeError, '32 synchronous'):
                 observer.snapshot(lambda: [api.scalar(123, 2006) for _ in range(33)])
         self.assertEqual(record['scalar_calls'], 32)
@@ -1562,10 +2625,10 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 else: raise AssertionError('Unexpected edit menu command')
         api = EditWindows()
         ticks = [0.0]
-        def monotonic():
+        def perf_counter():
             ticks[0] += 0.1
             return ticks[0]
-        with patch.object(ci.time, 'monotonic', side_effect=monotonic), patch.object(ci.time, 'sleep'):
+        with patch.object(ci.time, 'perf_counter', side_effect=perf_counter), patch.object(ci.time, 'sleep'):
             try:
                 checks = ci.run_gui_ru_edits(api, process, 123, source, record)
                 result = {'passed': True, **checks}
@@ -1930,27 +2993,37 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         build = (ci.ROOT / 'tools/build.py').read_text(encoding='utf-8')
         self.assertNotIn('str(p.relative_to(ROOT))', build)
         self.assertNotIn('str(source.relative_to(ROOT))', build)
-        self.assertEqual(build.count('p.relative_to(ROOT).as_posix()'), 1)
+        self.assertEqual(build.count('p.relative_to(ROOT).as_posix()'), 2)
         self.assertIn('source.relative_to(ROOT).as_posix()', build)
 
     def test_build_snapshot_includes_imported_test_helpers(self):
-        for folder in ('src', 'tests'):
+        for folder in ('src', 'tests', 'locales', 'tools'):
             (self.root / folder).mkdir()
         (self.root / 'src/main.ru').write_text('main source')
         (self.root / 'tests/entry.ru').write_text('test entry')
         helper = self.root / 'tests/imported_helper.ru'
         helper.write_text('helper source')
-        for relative in ('native/ru_scan.c', 'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h'):
+        catalog = self.root / 'locales/ui.json'
+        catalog.write_text('catalog source')
+        generator = self.root / 'tools/generate_i18n.py'
+        generator.write_text('generator source')
+        for relative in ('native/ru_scan.c', 'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h',
+                         'native/ru_markdown_fold.c', 'native/ru_markdown_fold.h'):
             target = self.root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text('native input')
         with patch.object(builder, 'ROOT', self.root):
             before = builder.source_snapshot()
             self.assertEqual(set(before), {'src/main.ru', 'tests/entry.ru', 'tests/imported_helper.ru',
-                'native/ru_scan.c', 'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h'})
+                'native/ru_scan.c', 'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h',
+                'native/ru_markdown_fold.c', 'native/ru_markdown_fold.h',
+                'locales/ui.json', 'tools/generate_i18n.py'})
             helper.write_text('changed helper source')
+            catalog.write_text('changed catalog source')
+            generator.write_text('changed generator source')
             after = builder.source_snapshot()
-        self.assertNotEqual(before['tests/imported_helper.ru'], after['tests/imported_helper.ru'])
+        for name in ('tests/imported_helper.ru', 'locales/ui.json', 'tools/generate_i18n.py'):
+            self.assertNotEqual(before[name], after[name])
         self.assertTrue(all('\\' not in name and ':' not in name for name in after))
 
     def test_acceptance_rejects_each_missing_or_duplicated_required_group(self):
@@ -2031,7 +3104,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertFalse(result['passed'])
         self.assertLessEqual((self.root / 'fixture.stdout.log').stat().st_size, ci.MAX_LOG_BYTES)
 
-    def gui(self, mode='normal'):
+    def gui(self, mode='normal', bad_clock=None):
         binary = self.root / 'bin'
         evidence = self.root / 'evidence'
         binary.mkdir()
@@ -2039,8 +3112,10 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         process = type('SyntheticProcess', (), {'pid': 12345, 'finished': mode == 'early',
             'returncode': 0, 'poll': lambda self: self.returncode if self.finished else None})()
         clock = [0.0]
-        def monotonic():
+        def perf_counter():
             clock[0] += 0.2
+            if bad_clock is not None and clock[0] > 0.8:
+                return bad_clock
             return clock[0]
         def launch(*_, **__):
             if mode != 'missing-log':
@@ -2049,6 +3124,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                          '[launcher] Ru program returned with status 0.']
                 if mode == 'bad-log':
                     lines[-1] = '[launcher] Ru program exited before returning to the launcher.'
+                if mode == 'fold-metric-log':
+                    lines.append(markdown_route_markers())
                 (binary / 'ru_notepad-synthetic.log').write_text('\n'.join(lines), encoding='utf-8')
             return process
         class FakeWindows:
@@ -2067,10 +3144,62 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             return killed
         with patch.object(ci.subprocess, 'Popen', side_effect=launch) as start, \
              patch.object(ci, 'cleanup_process', side_effect=cleanup), \
-             patch.object(ci.time, 'monotonic', side_effect=monotonic), \
+             patch.object(ci.time, 'perf_counter', side_effect=perf_counter), \
              patch.object(ci.time, 'sleep'):
             result = ci.run_gui(FakeWindows(), binary, evidence)
         return result, start
+
+    def test_gui_persistent_bad_clock_preserves_failure_and_process_cleanup_evidence(self):
+        for bad in (float('nan'), 0.0):
+            for name in ('bin', 'evidence'): shutil.rmtree(self.root / name, ignore_errors=True)
+            result, launch = self.gui(bad_clock=bad)
+            with self.subTest(value=bad):
+                self.assertFalse(result['passed'])
+                self.assertTrue(result['executed'])
+                self.assertTrue(result['cleanup_killed'])
+                self.assertIn('performance clock', result['error'])
+                self.assertIn('performance clock', result['clock_error'])
+                self.assertIsNone(result['seconds'])
+                self.assertGreaterEqual(result['last_good_seconds'], 0)
+                self.assertEqual(launch.call_count, 1)
+                self.assertTrue((self.root / 'evidence/main-launcher-0.log').is_file())
+
+    def test_console_persistent_bad_final_clock_keeps_original_error_and_cleanup(self):
+        failed = [False]
+        class FailingApi:
+            def no_dialog(self, pid):
+                failed[0] = True
+                raise RuntimeError('original synthetic dialog failure')
+        def counter(): return float('nan') if failed[0] else 1.0
+        with patch.object(ci, 'cleanup_process', side_effect=kill_synthetic), \
+             patch.object(ci.time, 'perf_counter', side_effect=counter):
+            result = ci.run_console(FailingApi(), 'bad-clock',
+                [sys.executable, '-c', 'import time; time.sleep(5)'], self.root,
+                r'^TOTAL PASS: 1\s*$', timeout=3, expected_assertions=1)
+        self.assertFalse(result['passed'])
+        self.assertTrue(result['executed'])
+        self.assertTrue(result['cleanup_killed'])
+        self.assertEqual(result['error'], 'original synthetic dialog failure')
+        self.assertIn('performance clock', result['clock_error'])
+        self.assertIsNone(result['seconds'])
+        self.assertEqual(result['last_good_seconds'], 0.0)
+        self.assertTrue((self.root / 'bad-clock.stdout.log').is_file())
+        self.assertTrue((self.root / 'bad-clock.stderr.log').is_file())
+
+    def test_final_clock_failure_never_keeps_success_or_loses_partial_fields(self):
+        record = {'passed': True, 'executed': True, 'cleanup_killed': False, 'partial_bytes': 123}
+        with patch.object(ci.time, 'perf_counter', side_effect=[2.0, float('nan')]):
+            clock = ci.PerformanceClock()
+            started = clock()
+            ci.finish_result_clock(record, clock, started)
+        self.assertFalse(record['passed'])
+        self.assertEqual(record['partial_bytes'], 123)
+        self.assertTrue(record['executed'])
+        self.assertFalse(record['cleanup_killed'])
+        self.assertIsNone(record['seconds'])
+        self.assertFalse(record['seconds_valid'])
+        self.assertEqual(record['last_good_seconds'], 0.0)
+        self.assertEqual(record['error'], record['clock_error'])
 
     def test_gui_requires_detached_visible_responsive_normal_close(self):
         result, start = self.gui()
@@ -2132,6 +3261,1117 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         (license_dir / 'COPYING3').write_text('GNU GENERAL PUBLIC LICENSE', encoding='utf-8')
         with self.assertRaisesRegex(RuntimeError, 'Runtime Library Exception'):
             ci.copy_runtime_licenses(self.root / 'mingw', self.root / 'out')
+
+    def test_bounded_fold_helper_is_mandatory_before_native_acceptance_and_not_packaged(self):
+        script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        call = "Invoke-Checked $Python @('-I','tools/test_markdown_fold_helper.py',"
+        self.assertEqual(script.count(call), 1)
+        self.assertLess(script.index(call), script.index("$AcceptArgs = @('tools/windows_ci.py'"))
+        block = script[script.index(call):script.index("    foreach ($test", script.index(call))]
+        self.assertIn("'--runtime-dir',$Output", block)
+        self.assertIn("'--cc',(Join-Path $Bin 'gcc.exe')", block)
+        self.assertIn("'markdown-bulk-helper-controls.json'", block)
+        self.assertIn('python -I tools/test_markdown_fold_helper.py --cc gcc --sanitize', workflow)
+        self.assertIn("ASAN_OPTIONS: 'detect_leaks=1:halt_on_error=1:abort_on_error=1'", workflow)
+        self.assertIn('mkdir -p build/markdown-fold-helper-evidence', workflow)
+        self.assertIn('build/markdown-fold-helper-evidence/markdown-bulk-helper-controls.json', workflow)
+        self.assertEqual(ci.portable.NATIVE_COMPILE_SOURCES['RuSyntax.dll'],
+                         ('native/ru_scan.c', 'native/ru_markdown_fold.c'))
+        self.assertIn('user32', ci.portable.NATIVE_LINK_LIBRARIES)
+        for name in ('markdown_fold_windows.exe', 'markdown_fold_host.exe'):
+            self.assertNotIn(name, ci.BINARY_NAMES)
+            self.assertNotIn(name, ci.portable.TEST_NAMES)
+
+    def test_optional_markdown_studies_are_separate_from_product_acceptance(self):
+        script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        self.assertIn("[ValidateSet('native-baseline','cpu-profile')]", script)
+        self.assertIn("$Stage = 'host_controls'", script)
+        self.assertIn("$Stage = 'execution'", script)
+        self.assertIn("measurement_claimed = $false", script)
+        self.assertIn('$global:LASTEXITCODE = $SavedExit', script)
+        self.assertIn('$global:LASTEXITCODE = $ProductExit', script)
+        self.assertIn("Write-Host 'MARKDOWN_OPTIONAL_STUDY_EVIDENCE_UNAVAILABLE=1'", script)
+        tail = script[script.index('    } else {\n        try {\n            Invoke-Checked $Python $AcceptArgs'):]
+        self.assertLess(tail.index('Invoke-Checked $Python $AcceptArgs'), tail.index('Invoke-OptionalMarkdownStudy'))
+        for name in ('native_baseline', 'cpu_profile'):
+            self.assertIn('tools/test_markdown_' + name + '.py', tail)
+            self.assertIn('tools/run_markdown_' + name + '.py', tail)
+        self.assertNotIn('markdown_baseline.exe', ci.BINARY_NAMES)
+        self.assertNotIn('markdown_baseline.exe', ci.portable.TEST_NAMES)
+
+    def test_optional_markdown_powershell_preserves_product_exit_and_original_exception(self):
+        pwsh = shutil.which('pwsh')
+        if not pwsh:
+            if os.name == 'nt':
+                self.fail('Required Windows PowerShell optional-diagnostic control is unavailable')
+            self.skipTest('PowerShell 7 unavailable on this non-Windows host')
+        source = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        match = re.search(r'^function Invoke-OptionalMarkdownStudy\(.*?^}', source, re.M | re.S)
+        self.assertIsNotNone(match)
+        script = self.root / 'optional-control.ps1'
+        destination = str(self.root / 'study-evidence').replace("'", "''")
+        script.write_text("$ErrorActionPreference='Stop'\nSet-StrictMode -Version Latest\n" +
+            "function Invoke-Checked([string]$Command,[string[]]$Arguments) { " +
+            "$global:Calls.Add($Arguments[0]); $global:LASTEXITCODE=0; " +
+            "if ($Arguments[0] -like '*fail*') {$global:LASTEXITCODE=9; throw 'controlled command'} }\n" +
+            match.group(0) + "\n$Evidence='" + destination + "'\n" +
+            "New-Item -ItemType Directory -Path $Evidence | Out-Null\n" +
+            "foreach($mode in @('success','controls-fail','run-fail','write-fail')) {\n" +
+            "$global:Calls=[System.Collections.Generic.List[string]]::new(); $global:LASTEXITCODE=73\n" +
+            "$c=if($mode -eq 'controls-fail'){'controls-fail'}else{'controls'}\n" +
+            "$r=if($mode -in @('run-fail','write-fail')){'run-fail'}else{'run'}\n" +
+            "$d=$Evidence; if($mode -eq 'write-fail') {$d=Join-Path $Evidence 'regular'; Set-Content -LiteralPath $d -Value x}\n" +
+            "try { try {throw 'original product failure'} finally {\n" +
+            "Invoke-OptionalMarkdownStudy 'unused' @($c) @($r) $d 'native-baseline'\n" +
+            "} } catch {if($_.Exception.Message -ne 'original product failure'){throw 'product exception replaced'}}\n" +
+            "if($global:LASTEXITCODE -ne 73){throw 'product exit changed'}\n" +
+            "$expected=if($mode -eq 'controls-fail'){1}else{2}; if($global:Calls.Count -ne $expected){throw 'wrong command coverage'}\n" +
+            "}\nWrite-Output 'OPTIONAL_DIAGNOSTICS_CONTROLS_PASSED'\n", encoding='utf-8', newline='\n')
+        result = subprocess.run([pwsh, '-NoProfile', '-NonInteractive', '-File', str(script)],
+                                capture_output=True, timeout=30, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr.decode('utf-8', errors='replace'))
+        self.assertIn(b'OPTIONAL_DIAGNOSTICS_CONTROLS_PASSED', result.stdout)
+        self.assertEqual(result.stderr, b'')
+
+    def test_markdown_direct_gate_retains_original_inventory_and_requires_gc(self):
+        summary = self.acceptance()
+        direct = next(t for t in summary['tests'] if t['name'] == 'markdown_direct_native')
+        prior = [t for t in summary['tests'] if t['name'] not in
+                 {'markdown_direct_native', 'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
+        self.assertEqual(len(prior), 38)
+        self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1867 + 90 + 6 + 103 + 42 + 42 + 3)
+        self.assertEqual(direct['assertions_passed'], 114)
+        self.assertEqual(ci.console_command('markdown_direct_native', self.root, self.root),
+                         [str(self.root / 'markdown_direct_native.exe')])
+        self.assertEqual(ci.CONSOLE_TIMEOUT_SECONDS['markdown_direct_native'], 180)
+        self.assertIn('markdown_direct_native.exe', ci.portable.TEST_NAMES)
+        self.assertNotIn('markdown_direct_native.exe', ci.portable.RUNTIME_NAMES)
+        self.assertIn("'markdown_direct_native'", (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8'))
+        command = 'cmd /d /c "set RU_GC_THRESHOLD=64&&set RU_GC_STATS=1&&markdown_direct_native.exe"'
+        self.assertIn(command + ' >>test-results.txt 2>&1\nif not "%ERRORLEVEL%"=="0" set "FAILED=1"',
+                      (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8'))
+        for value in (None, {}, {'threshold': 64, 'stats_enabled': True, 'live': 0, 'freed': 0, 'collections': 1}):
+            with self.subTest(value=value), self.assertRaisesRegex(RuntimeError, 'GC-stress'):
+                direct['gc_stress'] = value
+                ci.validate_acceptance(summary)
+
+    def test_markdown_direct_gc_record_requires_actual_collection_and_exact_types(self):
+        good = {'threshold': 64, 'stats_enabled': True, 'live': 0, 'freed': 100, 'collections': 4}
+        ci.validate_markdown_direct_gc(good)
+        for ending in ('\n', '\r\n'):
+            self.assertEqual(ci.parse_markdown_direct_gc('RU_GC live=0 freed=100 collections=4' + ending), good)
+        for field, value in (('threshold', 63), ('threshold', True), ('stats_enabled', 1),
+                             ('live', -1), ('live', 2**53), ('freed', 0), ('freed', True),
+                             ('collections', 1), ('collections', 2.0)):
+            with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
+                ci.validate_markdown_direct_gc(dict(good, **{field: value}))
+        for text in ('', 'RU_GC live=0 freed=100 collections=4',
+                     'RU_GC live=0 freed=100 collections=4\r',
+                     'RU_GC live=0 freed=100 collections=1\n',
+                     'RU_GC live=0 freed=100 collections=4\nextra\n',
+                     'RU_GC live=0 freed=100 collections=4\n' * 2):
+            with self.subTest(text=text), self.assertRaises(RuntimeError):
+                ci.parse_markdown_direct_gc(text)
+
+    def test_markdown_route_metric_parser_requires_exact_measured_three_route_shape(self):
+        good, output = markdown_route_metrics(), markdown_route_markers()
+        for text in (output, output.replace('\n', '\r\n')):
+            self.assertEqual(ci.parse_markdown_route_metrics(text), good)
+        for mutation in ('missing', 'duplicate', 'order', 'unknown', 'truncated', 'private',
+                         'negative', 'float', 'leading-zero', 'overflow', 'no-bulk', 'line-bound',
+                         'buffer', 'plan', 'mixed', 'no-fallback', 'no-perline', 'invalid-clock'):
+            text = output
+            if mutation == 'missing': text = ''.join(text.splitlines(keepends=True)[1:])
+            elif mutation == 'duplicate': text += text.splitlines(keepends=True)[0]
+            elif mutation == 'order': text = ''.join(reversed(text.splitlines(keepends=True)))
+            elif mutation == 'unknown': text = text.replace('bulkCalls=', 'unknown=')
+            elif mutation == 'truncated': text = text[:-1]
+            elif mutation == 'private': text += 'FOLD_METRICS_PRIVATE_SENTINEL\n'
+            elif mutation == 'negative': text = text.replace('bulkCalls=1', 'bulkCalls=-1')
+            elif mutation == 'float': text = text.replace('bulkCalls=1', 'bulkCalls=1.0')
+            elif mutation == 'leading-zero': text = text.replace('bulkCalls=1', 'bulkCalls=01')
+            elif mutation == 'overflow': text = text.replace('bulkCalls=1', 'bulkCalls=9007199254740992')
+            elif mutation == 'no-bulk': text = text.replace('bulkCalls=1', 'bulkCalls=0')
+            elif mutation == 'line-bound': text = text.replace('bulkLines=1', 'bulkLines=65')
+            elif mutation == 'buffer': text = text.replace('ownedBufferBytes=1088', 'ownedBufferBytes=1089')
+            elif mutation == 'plan': text = text.replace('maxPlanBytes=48', 'maxPlanBytes=1057')
+            elif mutation == 'mixed': text = text.replace('fallbackBatches=0', 'fallbackBatches=1', 1)
+            elif mutation == 'no-fallback': text = text.replace('fallbackBatches=1', 'fallbackBatches=0')
+            elif mutation == 'no-perline': text = text.replace('directCalls=1', 'directCalls=0')
+            elif mutation == 'invalid-clock': text = text.replace('metric_valid=1', 'metric_valid=0')
+            with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
+                ci.parse_markdown_route_metrics(text)
+        for key in ci.FOLD_ROUTE_METRIC_FIELDS:
+            for value in (-1, True, 1.5, '1', 2**53):
+                records = json.loads(json.dumps(good))
+                records[1][key] = value
+                with self.subTest(key=key, value=value), self.assertRaises(RuntimeError):
+                    ci.validate_markdown_route_metrics(records)
+            records = json.loads(json.dumps(good))
+            records[1].pop(key)
+            with self.subTest(missing=key), self.assertRaises(RuntimeError):
+                ci.validate_markdown_route_metrics(records)
+
+    def test_markdown_route_metric_acceptance_binding_forbids_missing_or_other_groups(self):
+        summary = self.acceptance()
+        direct = next(row for row in summary['tests'] if row['name'] == 'markdown_direct_native')
+        direct.pop('bulk_route_metrics')
+        with self.assertRaisesRegex(RuntimeError, 'route metrics'):
+            ci.validate_acceptance(summary)
+        direct['bulk_route_metrics'] = markdown_route_metrics()
+        other = next(row for row in summary['tests'] if row['name'] == 'document_policy')
+        other['bulk_route_metrics'] = markdown_route_metrics()
+        with self.assertRaisesRegex(RuntimeError, 'Unexpected Markdown'):
+            ci.validate_acceptance(summary)
+
+    def test_markdown_route_metric_console_forbids_foreign_marker(self):
+        result = self.console('print("PASS: control");print("TOTAL PASS: 1");print(' + repr(markdown_route_markers()) + ')')
+        self.assertFalse(result['passed'])
+        self.assertIn('Unexpected Markdown route metric marker', result['error'])
+
+    def test_markdown_route_metric_gui_forbids_foreign_marker(self):
+        result, _ = self.gui(mode='fold-metric-log')
+        self.assertFalse(result['passed'])
+        self.assertIn('Unexpected Markdown route metric marker', result['error'])
+
+    def test_markdown_route_metric_console_rejects_missing_current_stdout_receipt(self):
+        code = "import sys;print('PASS: control');print('TOTAL PASS: 1');sys.stderr.write('RU_GC live=0 freed=100 collections=4\\n')"
+        result = ci.run_console(NoDialogs(), 'markdown_direct_native', [sys.executable, '-c', code],
+            self.root, r'^TOTAL PASS: 1\s*$', expected_assertions=1)
+        self.assertFalse(result['passed'])
+        self.assertIn('route metric marker', result['error'])
+        self.assertNotIn('bulk_route_metrics', result)
+
+    def test_markdown_direct_child_gc_environment_is_fixed_and_required(self):
+        code = ("import os,sys\n"
+                "assert os.environ['RU_GC_THRESHOLD'] == '64'\n"
+                "assert os.environ['RU_GC_STATS'] == '1'\n"
+                "print('PASS: child fixed GC environment')\nprint('TOTAL PASS: 1')\n"
+                f'print({markdown_route_markers()!r}, end="")\n'
+                "sys.stderr.write('RU_GC live=0 freed=100 collections=4\\n')\n")
+        before = dict(os.environ)
+        with patch.dict(os.environ, {'RU_GC_THRESHOLD': '999999', 'RU_GC_STATS': '0'}):
+            result = ci.run_console(NoDialogs(), 'markdown_direct_native',
+                                    [sys.executable, '-c', code], self.root,
+                                    r'^TOTAL PASS: 1\s*$', expected_assertions=1)
+            self.assertTrue(result['passed'], result)
+            self.assertEqual(result['gc_stress']['collections'], 4)
+            self.assertEqual(result['bulk_route_metrics'], markdown_route_metrics())
+            self.assertEqual(os.environ['RU_GC_THRESHOLD'], '999999')
+            self.assertEqual(os.environ['RU_GC_STATS'], '0')
+        self.assertEqual(dict(os.environ), before)
+
+    def test_callback_history_dispatch_is_literal_and_normal_product_is_separate(self):
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        source = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        historical = "d47b1836930c896fec29207e957880dd90c774c6"
+        checkout = ("ref: ${{ github.event_name == 'workflow_dispatch' && "
+                    "inputs.historical_callback && '" + historical + "' || github.sha }}")
+        self.assertEqual(workflow.count(checkout), 2)
+        self.assertIn('historical_callback:', workflow)
+        self.assertIn('type: boolean', workflow)
+        self.assertIn('default: false', workflow)
+        self.assertNotIn('inputs.ref', workflow)
+        baseline = workflow.split('      - name: Check out fixed pre-root-list research compiler', 1)[1]
+        baseline = baseline.split('      - name:', 1)[0]
+        self.assertIn("if: github.event_name == 'workflow_dispatch' && inputs.historical_callback", baseline)
+        self.assertIn('ref: 95ee638f705f0fd75292da7eda150559dbe8fc3a', baseline)
+        self.assertIn('[switch]$RunCallbackResearch', source)
+        self.assertNotIn('-RunCallbackResearch', workflow)
+        control_start = source.index('    if ($RunCallbackResearch) {')
+        control_end = source.index("    Invoke-Checked $Python @('tools/test_markdown_portable.py'", control_start)
+        self.assertIn("'tools/test_markdown_callback_cost.py'", source[control_start:control_end])
+        execution = source[source.index('    if ($RunCallbackResearch) {', control_end):]
+        self.assertIn('Invoke-ResearchThenAcceptance $Python $ResearchArgs $AcceptArgs', execution)
+        self.assertIn('    } else {\n        try {\n            Invoke-Checked $Python $AcceptArgs\n        } finally {', execution)
+        self.assertIn('-source-${{', workflow)
+        self.assertIn('-trigger-${{ github.sha }}', workflow)
+        # Historical runners and their exact source/parent checks are retained.
+        runner = (ci.ROOT / 'tools/run_markdown_callback_cost.py').read_text(encoding='utf-8')
+        self.assertIn("BASE_COMMIT = 'ce2ff998e778d9991462a78f245bd17cec32f940'", runner)
+        self.assertIn("BASE_TREE = '115c353c5206967854d58d726afe280d5b4350c2'", runner)
+        self.assertIn("'candidate_parent_mismatch'", runner)
+
+    def test_markdown_gate_preserves_old_counts_and_requires_exact_new_counts(self):
+        expected = {'markdown_policy': 221, 'markdown_selection_policy': 31,
+                    'markdown_native': 58, 'app_markdown_native': 73, 'markdown_direct_native': 114}
+        self.assertEqual({name: ci.expected_assertions(name) for name in expected}, expected)
+        self.assertEqual(ci.console_command('app_markdown_native', self.root, self.root),
+                         [str(self.root / 'app_markdown_native.exe'), str(self.root)])
+        for name in [*expected, 'main-gui-markdown']:
+            summary = self.acceptance()
+            summary['tests'] = [case for case in summary['tests'] if case['name'] != name]
+            with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, 'inventory'):
+                ci.validate_acceptance(summary)
+
+    def test_markdown_selection_invalidates_native_prefix_and_requires_natural_paint(self):
+        syntax = (ci.ROOT / 'src/syntax.ru').read_text(encoding='utf-8')
+        selection = syntax.split('算 _选择 态 柄, 语言 为 句:', 1)[1].split('算 选择 柄 语言 为 句:', 1)[0]
+        reset = '_发设 态 柄 2032 0 0.'
+        self.assertEqual(selection.count(reset), 1)
+        self.assertLess(selection.index('_清样式 态 柄.'), selection.index(reset))
+        self.assertLess(selection.index(reset), selection.index('已选 取 标语 其 选择 柄.'))
+        self.assertIn("若 语言 == 'markdown' 则\n        # CLEARDOCUMENTSTYLE", selection)
+        self.assertNotIn('4003', selection)
+        fixture = (ci.ROOT / 'tests/app_markdown_native.ru').read_text(encoding='utf-8')
+        natural = fixture.split('作 验自然配色 主 柄 页:', 1)[1].split('作 验选择重入 主:', 1)[0]
+        self.assertIn('2028 0 0) 其 数 == 0', natural)
+        self.assertLess(natural.index('窗 其 发送 主 273 701 0.'), natural.index('窗 其 发送 主 273 705 0.'))
+        self.assertLess(natural.index('窗 其 发送 主 273 705 0.'), natural.index('2028 0 0) 其 数 == 0'))
+        self.assertLess(natural.index('2028 0 0) 其 数 == 0'), natural.index('PeekMessageW'))
+        self.assertIn('_InvalidateRect 其 调用 [柄,空,0]', natural)
+        self.assertIn('PeekMessageW', natural)
+        self.assertIn('DispatchMessageW', natural)
+        self.assertIn("_选测['paints'] > 0", natural)
+        self.assertNotIn('4003', natural)
+        self.assertNotIn('UpdateWindow', natural)
+        self.assertIn('试 语 其 _发设 旧 柄 2032 0 0.', fixture)
+        self.assertIn('stale Markdown invalidation cannot reset a replacement document styled prefix', fixture)
+        callback = fixture.split('算 选择子过程 柄 消息 宽 长 号 引:', 1)[1].split('次数 取 [0].', 1)[0]
+        self.assertIn("若 码 == 2031 或 码 == 2032 或 码 == 4005 则 _选测 其 增 'writes' (_选测['writes']+1). 然", callback)
+        self.assertIn("若 码 == 2032 则 _选测 其 增 'styleStarts' (_选测['styleStarts']+1). 然", callback)
+        self.assertEqual(callback.count("_选测 其 增 'styleStarts'"), 1)
+        self.assertIn("_选测 其 增 'styleStarts' 0. _选测 其 增 'action' 'replace'.", fixture)
+        replacement_check = next(line for line in fixture.splitlines()
+            if 'stale Markdown invalidation cannot reset a replacement document styled prefix' in line)
+        self.assertIn("拒[0] 且 _选测['styleStarts'] == 0", replacement_check)
+        self.assertNotIn("_选测['writes']", replacement_check)
+        self.assertEqual(fixture.count('窗 其 发送 柄 4003 0 (-1).'), 1)
+        self.assertLess(fixture.index('    验自然配色 主 柄 页.'), fixture.index('窗 其 发送 柄 4003 0 (-1).'))
+
+    def test_markdown_replacement_counter_contract_rejects_contamination_and_missing_detection(self):
+        # Source-contract controls, not native callback execution evidence.
+        path = ci.ROOT / 'tests/app_markdown_native.ru'
+        source = path.read_text(encoding='utf-8')
+        original_read_text = Path.read_text
+        mutations = (
+            ("若 码 == 2032 则 _选测 其 增 'styleStarts'", "若 码 == 2031 或 码 == 2032 则 _选测 其 增 'styleStarts'"),
+            ("若 码 == 2032 则 _选测 其 增 'styleStarts'", "若 码 == 2031 则 _选测 其 增 'styleStarts'"),
+            ("拒[0] 且 _选测['styleStarts'] == 0", "拒[0] 且 _选测['writes'] == 0"),
+            ("_选测 其 增 'styleStarts' 0. _选测 其 增 'action' 'replace'.", "_选测 其 增 'action' 'replace'."),
+        )
+        for before, after in mutations:
+            with self.subTest(mutation=after):
+                self.assertEqual(source.count(before), 1)
+                mutated = source.replace(before, after)
+                def read_text(actual, *args, **kwargs):
+                    return mutated if actual == path else original_read_text(actual, *args, **kwargs)
+                with patch.object(Path, 'read_text', read_text), self.assertRaises(AssertionError):
+                    self.test_markdown_selection_invalidates_native_prefix_and_requires_natural_paint()
+
+    def test_markdown_publisher_keeps_reviewed_full_guards_and_prepared_expansion(self):
+        # Reviewed source contract only. Actual callback/contraction behavior is
+        # separately required from markdown_native and the detached GUI cases.
+        source = (ci.ROOT / 'src/markdown_syntax.ru').read_text(encoding='utf-8')
+        expected = {'_本态': '8a5ac21dfaed5a7acd9633c5ee30aed02517b6da4e61edd6724bb9da154653fe', '_须本态': 'ad619e1b49326aeb41de2f838a49662358aae6827f3f9603b16945ad224dd37e', '_护': 'd09426159fc731acf23725021e04cb93ad33dbe58526e9741f5806adf93d5445', '_讯': '5b1cac1da67dd9bf65ae91029f5622121301b70a03056a52d72e96ccd41ec9e2', '_全显': 'a2facd577a3085e305284e6e205a9c0d014773f06ef00070f51da71e8289cbf7', '_发布': 'f31481eadda2b032e94434f1fcb1739c41e2d81e9e07a1391f95d3e4d3a5c053', '_须直属': '8105e93a67e66078a2ccf57a377687c3d134626b74b11e627985cd7255f74bab', '登记直属': 'd528efc0163c27444df666080dd6522a7de514b626223bf0ce6c6fbf2e9acccd', '撤销直属': '11a975a7a865fc61009d3a6b5cdf0c2455b4e4355d47d9a1773567acee14ba3b', '_直护': '1196e2af8d48e4a4f37b07baf4059b8be846956e8cd9e55556b0d0724db28c7d', '_直发布': 'aca4265d0f732a9f63c5cfc4815d3d4b05fc7e6d79219a05bf770c704565d701', '_批移位': '92922d737d210319ee19b50aaf68d26840a1ed15c5bbb56f6aa1ccc69a0bfeb1', '_写批计划': '68d92c84edc831a296a616569d92d3911fce0f8552d0cc0fafe6271f2a0afef8', '_验批果': '699c0a3c5ff2192219f5c22f6880be40d36fcf7fd4d7ce941a2c2e23e100d063', '_批发布': '8a52cc9de55a4278e0bad85481f4879ef590389bcd923f764e7a520e352cca41', '_统计': '676fa1680bf762f7ee3be59afea75488949e208cb70a32f02d90787ed0c0dfed', '_统计时刻': '55ec9489e7c0421b0617e70b5953c732d3bfbdb3d0bc882153e3d0607e51bbf5', '_统计耗时': '1e51b386ebba4ebb1613196a14c9bdd64cacbade50eb8ab029ef596c3ddcd4aa', '_丢弃': '9a0ff8228817367569a13c16929e1917f42bbd5967c766fa7ffdbe3c33d52845', '状态': 'f08db18ea8c3afb3ba478fd36e2c81a805073737f9244196b72b7459397d7a4a'}
+        for name, digest in expected.items():
+            functions = re.findall(r'^算 ' + re.escape(name) + r'(?=[ \n])[^\n]*\n(.*?)^法$',
+                                   source, re.MULTILINE | re.DOTALL)
+            self.assertEqual(len(functions), 1, name)
+            code = '\n'.join(line.strip() for line in functions[0].splitlines()
+                             if line.strip() and not line.lstrip().startswith('#'))
+            if name == '状态':
+                self.assertEqual(code.count("'warning':(_警告 态)"), 1)
+                code = code.replace("'warning':(_警告 态)", "'warning':态['warning']")
+            self.assertEqual(hashlib.sha256(code.encode('utf-8')).hexdigest(), digest, name)
+        binding_blocks = {'_批库态 取': ('_批统计们 取', '01bd6f4bd7eedd46d287845b9dc2a7731e85e5f8a1ff7d089ddce2a6940d75ab'), '_批路径 取': ('_范围型 取', '70872c2451f22776d2d6d58756ceffa041ece2eaadfbc81709762b7a78637f03')}
+        for begin, (end, digest) in binding_blocks.items():
+            block = source.split(begin, 1)[1].split(end, 1)[0]
+            code = '\n'.join(line.strip() for line in block.splitlines()
+                if line.strip() and not line.lstrip().startswith('#'))
+            self.assertEqual(hashlib.sha256(code.encode('utf-8')).hexdigest(), digest, begin)
+        for name in ('折叠', '全折'):
+            function = re.findall(r'^算 ' + name + r'[^\n]*\n(.*?)^法$', source,
+                                  re.MULTILINE | re.DOTALL)
+            self.assertEqual(len(function), 1)
+            self.assertIn("或 态['pending']", function[0].splitlines()[1])
+        fixture = (ci.ROOT / 'tests/markdown_native.ru').read_text(encoding='utf-8')
+        self.assertIn('窗 其 发送 柄 2230 行 0', fixture)
+        self.assertIn('后查们 取 [2357,2183,2383]', fixture)
+        self.assertIn("新态 其 增 'ranges' ([[0,64,0,假]])", fixture)
+        self.assertIn("甲计 其 增 'invalidateAt' (写前+64)", fixture)
+        self.assertIn("甲计 其 增 'invalidateAt' (写前+65)", fixture)
+
+    def test_markdown_publisher_source_guard_contract_rejects_unsafe_mutations(self):
+        path = ci.ROOT / 'src/markdown_syntax.ru'
+        source = path.read_text(encoding='utf-8')
+        read_original = Path.read_text
+        mutations = (
+            ('    若 柄 == 空 则 得 假. 然\n    撤销直属 柄.', '    撤销直属 柄.'),
+            ("        _须直属 柄 态 权.\n        若 非 (借 其 为空) 且 _直接策略['enabled']", "        若 非 (借 其 为空) 且 _直接策略['enabled']"),
+            ("            _护 柄 态.\n            _须直属 柄 态 权.\n            果 取 结果存", "            _须直属 柄 态 权.\n            果 取 结果存"),
+            ("若 状码 != 0 且 状码 != 1 则 卒", "若 假 则 卒"),
+            ("字节数 取 _写批计划 计划 态 范围们 位 偏.", "字节数 取 32."),
+            ("_批版本 == 65536", "_批版本 == 1"),
+            ("['status',窗 其 U],['attempted',窗 其 U]", "['status',窗 其 U],['attempted',窗 其 IP]"),
+            ("    _护 柄 态.\n    范围们 取 态['ranges'].", "    范围们 取 态['ranges']."),
+            ('            窗 其 发送 柄 2222 行 层.\n            _护 柄 态.',
+             '            窗 其 发送 柄 2222 行 层.'),
+            ('            数量 取 数量+1.\n            偏 取 偏+1.',
+             '            窗 其 发送 柄 2383 0 0.\n            数量 取 数量+1.\n            偏 取 偏+1.'),
+            ("态['phase'] != 'scan' 或 非 态['pending']", "态['phase'] != 'scan'"),
+            ('    _讯 柄 态 2662 1 0.', '    _讯 柄 态 2226 0 0.'),
+            ('    _讯 柄 态 2663 0 0.', '    _讯 柄 态 2663 5 0.'),
+            ("若 文档 != 态['document'] 则 卒 'Stale Markdown document.'.", "若 假 则 卒 'Stale Markdown document.'."),
+            ("若 长 != 态['length'] 则 卒 'Markdown text changed without invalidation.'.", "若 假 则 卒 'Markdown text changed without invalidation.'."),
+            ('借 取 窗 其 发送 柄 2185 0 0.\n        _须直属 柄 态 权.\n        若 非 (借 其 为空) 则',
+             '借 取 窗 其 发送 柄 2185 0 0.\n        若 非 (借 其 为空) 则'),
+            ('                    _直护 柄 态 直.\n                    # G0,M1',
+             '                    # G0,M1'),
+            ("    _须本态 柄 态.\n    若 文档 != 态['document'] 则 卒 'Stale Markdown direct document.'.",
+             "    若 文档 != 态['document'] 则 卒 'Stale Markdown direct document.'."),
+        )
+        for before, after in mutations:
+            with self.subTest(mutation=after):
+                self.assertEqual(source.count(before), 1)
+                changed = source.replace(before, after)
+                def read_text(actual, *args, **kwargs):
+                    return changed if actual == path else read_original(actual, *args, **kwargs)
+                with patch.object(Path, 'read_text', read_text), self.assertRaises(AssertionError):
+                    self.test_markdown_publisher_keeps_reviewed_full_guards_and_prepared_expansion()
+
+    def test_markdown_gui_corpora_are_fixed_separate_shapes_and_sixteen_style_bytes(self):
+        sizes = {'many-lines': 100000, 'singleline': 1000000, 'unclosed-fence': 1000000}
+        for kind, size in sizes.items():
+            data, probes, folds = ci.gui_markdown_fixture(kind)
+            self.assertEqual(len(data), size)
+            self.assertEqual(sum(probe['length'] for probe in probes), 16)
+            self.assertEqual(probes[-1]['offset'] + probes[-1]['length'], len(data))
+            self.assertLessEqual(len(folds), 2)
+        self.assertEqual(ci.gui_markdown_fixture('many-lines')[0].count(b'\n'), 5000)
+        self.assertNotIn(b'\n', ci.gui_markdown_fixture('singleline')[0])
+        self.assertEqual(ci.gui_markdown_fixture('unclosed-fence')[0].count(b'~~~'), 1)
+        self.assertEqual(ci.gui_markdown_fixture('unclosed-fence')[1][-1]['style'], 21)
+        with self.assertRaises(RuntimeError): ci.gui_markdown_fixture('unknown')
+
+    def test_markdown_gui_receipt_rejects_missing_malformed_unbounded_or_inferred_evidence(self):
+        ci.validate_gui_markdown(markdown_evidence(), require_windows_clock=True)
+        mutations = ['missing-case', 'duplicate-case', 'missing-stage', 'wrong-source', 'wrong-size', 'wrong-probe',
+                     'wrong-fold', 'late', 'nonfinite', 'wrong-length', 'wrong-dirty', 'not-collapsed',
+                     'not-expanded', 'style', 'fold', 'context', 'status', 'end-only', 'lexer', 'tail', 'phase-length', 'phase-feed',
+                     'no-input', 'request-not-pending', 'paint-not-pending', 'not-cleared', 'slow-input',
+                     'oversized-snapshot', 'no-final-proof', 'undo-count', 'clock']
+        for mutation in mutations:
+            record = markdown_evidence()
+            case = record['cases'][0]
+            stage = case['stages'][1]
+            if mutation == 'missing-case': record['cases'].pop()
+            elif mutation == 'duplicate-case': record['cases'][1] = case
+            elif mutation == 'missing-stage': case['stages'].pop()
+            elif mutation == 'wrong-source': case['source_sha256'] = '0' * 64
+            elif mutation == 'wrong-size': case['size'] += 1
+            elif mutation == 'wrong-probe': case['style_probes'][0]['length'] += 1
+            elif mutation == 'wrong-fold': case['fold_probes'][0]['header'] = False
+            elif mutation == 'late': stage['wall_ms'] = 30000.001
+            elif mutation == 'nonfinite': stage['wall_ms'] = float('nan')
+            elif mutation == 'wrong-length': stage['length'] += 1
+            elif mutation == 'wrong-dirty': stage['dirty'] = False
+            elif mutation == 'not-collapsed': stage['collapsed_before_edit'] = False
+            elif mutation == 'not-expanded': stage['last_probe']['children_visible'] = False
+            elif mutation in ('style', 'fold', 'context'): stage['last_probe'][{'style': 'styles_match', 'fold': 'folds_match', 'context': 'context_match'}[mutation]] = False
+            elif mutation == 'status': stage['last_probe']['status_done'] = False
+            elif mutation == 'end-only': stage['last_probe']['styles_match'] = False
+            elif mutation == 'lexer': stage['last_probe']['lexer'] = 0
+            elif mutation == 'tail': stage['last_probe']['tail_requested'] = False
+            elif mutation == 'phase-length':
+                stage['last_progress']['diagnostic']['length'] -= 1
+                stage['last_progress']['diagnostic']['feed'] -= 1
+            elif mutation == 'phase-feed': stage['last_progress']['diagnostic']['feed'] -= 1
+            elif mutation == 'no-input': stage['responsiveness'] = {}
+            elif mutation == 'request-not-pending': stage['responsiveness']['navigation'][0]['request_pending'] = False
+            elif mutation == 'paint-not-pending': stage['responsiveness']['paint']['request_pending'] = False
+            elif mutation == 'not-cleared': stage['responsiveness']['paint']['cleared'] = False
+            elif mutation == 'slow-input': stage['responsiveness']['navigation'][0]['wall_ms'] = 5001
+            elif mutation == 'oversized-snapshot': stage['observer']['snapshots'][0]['messages'] = 33
+            elif mutation == 'no-final-proof': stage['observer']['snapshots'][0]['final'] = False
+            elif mutation == 'undo-count': case['stages'][-1]['undo_commands'] = 3
+            elif mutation == 'clock': record['clock']['implementation'] = 'monotonic()'
+            with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
+                ci.validate_gui_markdown(record, require_windows_clock=True)
+
+    def test_markdown_gui_requires_all_checks_and_exact_runtime(self):
+        for key in (*ci.GUI_MARKDOWN_CHECKS, 'fixture_binary_sha256'):
+            summary = self.acceptance()
+            case = next(case for case in summary['tests'] if case['name'] == 'main-gui-markdown')
+            case.pop(key)
+            with self.subTest(key=key), self.assertRaises(RuntimeError): ci.validate_acceptance(summary)
+
+    def test_markdown_gui_style_sample_schema_rejects_missing_forged_or_unbounded_values(self):
+        for mutation in ('missing', 'extra', 'short', 'long', 'tuple', 'bool', 'negative',
+                         'overflow', 'wrong-position', 'wrong-expected', 'mismatch-hidden-by-boolean'):
+            record = markdown_evidence()
+            last = record['cases'][0]['stages'][0]['last_probe']
+            samples = last['style_samples']
+            if mutation == 'missing': last.pop('style_samples')
+            elif mutation == 'extra': samples['text'] = 'must not be collected'
+            elif mutation == 'short': samples['actual'].pop()
+            elif mutation == 'long': samples['actual'].append(0)
+            elif mutation == 'tuple': samples['actual'] = tuple(samples['actual'])
+            elif mutation == 'bool': samples['actual'][1] = False
+            elif mutation == 'negative': samples['actual'][1] = -1
+            elif mutation == 'overflow': samples['actual'][1] = 256
+            elif mutation == 'wrong-position': samples['positions'][1] += 1
+            elif mutation == 'wrong-expected': samples['expected'][1] = 17
+            elif mutation == 'mismatch-hidden-by-boolean': samples['actual'][1] = 17
+            with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
+                ci.validate_gui_markdown(record, require_windows_clock=True)
+
+    def test_markdown_real_stage_preserves_actual_styles_when_mismatch_reaches_deadline(self):
+        now = [0.0]
+        with patch.object(ci.time, 'perf_counter', side_effect=lambda: now[0]), \
+             patch.object(ci.time, 'sleep', side_effect=lambda seconds: now.__setitem__(0, now[0] + seconds)):
+            self.run_markdown_stage_control(bad_style=True)
+
+    def test_markdown_real_pending_stage_retains_numeric_progress_without_extra_queries(self):
+        now = [0.0]
+        with patch.object(ci.time, 'perf_counter', side_effect=lambda: now[0]), \
+             patch.object(ci.time, 'sleep', side_effect=lambda seconds: now.__setitem__(0, now[0] + seconds)):
+            self.run_markdown_stage_control(pending_forever=True)
+
+    def test_markdown_real_stage_rejects_missing_phase_diagnostic_despite_ready_styles(self):
+        now = [0.0]
+        with patch.object(ci.time, 'perf_counter', side_effect=lambda: now[0]), \
+             patch.object(ci.time, 'sleep', side_effect=lambda seconds: now.__setitem__(0, now[0] + seconds)):
+            self.run_markdown_stage_control(missing_diagnostic=True)
+
+    def test_markdown_real_stage_rejects_stale_pending_marker_despite_ready_styles(self):
+        now = [0.0]
+        with patch.object(ci.time, 'perf_counter', side_effect=lambda: now[0]), \
+             patch.object(ci.time, 'sleep', side_effect=lambda seconds: now.__setitem__(0, now[0] + seconds)):
+            self.run_markdown_stage_control(stale_pending_diagnostic=True)
+
+    def markdown_marker(self, seq=9):
+        record = dict(markdown_evidence()['cases'][0]['stages'][0]['last_progress']['diagnostic'], seq=seq)
+        return ' [MDP3 ' + ' '.join(f'{name}={record[name]}' for name in ci.MARKDOWN_DIAGNOSTIC_FIELDS) + ']'
+
+    def test_markdown_status_legacy_length_then_text_reproduces_truncated_marker(self):
+        before, after = self.markdown_marker(9), self.markdown_marker(10)
+        api = SyntheticWindowText(before, after)
+        truncated = api.text(3)
+        self.assertEqual(truncated, after[:-1])
+        self.assertEqual([call[1] for call in api.calls], [0x000E, 0x000D])
+        with self.assertRaisesRegex(RuntimeError, '^Markdown numeric phase marker is malformed$'):
+            ci.parse_markdown_diagnostic(truncated)
+        api = SyntheticWindowText(before, after)
+        self.assertEqual(ci.parse_markdown_diagnostic(api.markdown_status(3))['seq'], 10)
+        self.assertEqual(api.calls, [(3, 0x000D, 4098)])
+
+    def test_markdown_status_single_read_accepts_growth_shrinkage_and_stable_markers(self):
+        short, long = self.markdown_marker(9), self.markdown_marker(10)
+        for before, after in ((short, long), (long, short), (long, long), ('', long)):
+            with self.subTest(before=len(before), after=len(after)):
+                api = SyntheticWindowText(before, after)
+                self.assertEqual(api.markdown_status(3), after)
+                ci.parse_markdown_diagnostic(after)
+                self.assertEqual(api.calls, [(3, 0x000D, 4098)])
+
+    def test_markdown_status_fixed_cap_preserves_utf16_boundary_and_rejects_overflow(self):
+        for text in ('', 'x' * 4095, 'x' * 4096, '甲😀' + 'x' * 4093):
+            with self.subTest(code_units=len(text.encode('utf-16-le')) // 2):
+                api = SyntheticWindowText('', text)
+                self.assertEqual(api.markdown_status(3).encode('utf-16-le', 'surrogatepass'), text.encode('utf-16-le'))
+                self.assertEqual(api.calls, [(3, 0x000D, 4098)])
+        for text in ('x' * 4097, 'x' * 8192, '甲😀' + 'x' * 4094):
+            api = SyntheticWindowText('', text)
+            with self.subTest(code_units=len(text.encode('utf-16-le')) // 2), self.assertRaisesRegex(RuntimeError, 'bounded inspection limit'):
+                api.markdown_status(3)
+            self.assertEqual(api.calls, [(3, 0x000D, 4098)])
+
+    def test_markdown_status_copy_mismatch_and_timeout_fail_without_retry(self):
+        for count in (-1, 0, 2, 4097):
+            api = SyntheticWindowText('', 'x', reported_count=count)
+            with self.subTest(count=count), self.assertRaises(RuntimeError):
+                api.markdown_status(3)
+            self.assertEqual(api.calls, [(3, 0x000D, 4098)])
+        api = SyntheticWindowText('', 'x\0y')
+        with self.assertRaisesRegex(RuntimeError, 'copy count is inconsistent'):
+            api.markdown_status(3)
+        self.assertEqual(api.calls, [(3, 0x000D, 4098)])
+        api = SyntheticWindowText('', 'x')
+        with patch.object(api, 'scalar', side_effect=RuntimeError('synthetic timeout')) as scalar:
+            with self.assertRaisesRegex(RuntimeError, '^synthetic timeout$'):
+                api.markdown_status(3)
+        scalar.assert_called_once()
+
+    def test_markdown_status_single_read_keeps_strict_parser_and_private_failure_shape(self):
+        marker = self.markdown_marker()
+        for malformed in (marker[:-1], marker + marker, marker.replace('seq=9', 'seq=9.0'),
+                          marker.replace('seq=9', 'seq=9e0'), marker + '\r', marker + 'PRIVATE_TEXT_SENTINEL'):
+            api = SyntheticWindowText('', 'PRIVATE_PATH_SENTINEL\\甲😀' + malformed)
+            status = api.markdown_status(3)
+            with self.subTest(marker=malformed), self.assertRaises(RuntimeError):
+                ci.parse_markdown_diagnostic(status)
+            failure = ci.markdown_diagnostic_failure(status)
+            self.assertTrue(all(type(value) in (int, bool) for value in failure.values()))
+            self.assertTrue(all(0 <= value <= 4096 for value in failure.values()))
+            self.assertNotIn('PRIVATE', json.dumps(failure))
+            self.assertEqual(failure['status_code_units'], len(status.encode('utf-16-le', 'surrogatepass')) // 2)
+        failure = ci.markdown_diagnostic_failure(marker[:-1])
+        self.assertEqual(failure['marker_occurrences'], 1)
+        self.assertEqual(failure['opening_brackets'], 1)
+        self.assertEqual(failure['closing_brackets'], 0)
+        self.assertFalse(failure['ends_with_closing_bracket'])
+
+    def test_markdown_real_stage_records_only_bounded_failure_structure(self):
+        self.run_markdown_stage_control(malformed_diagnostic=True)
+
+    def test_markdown_success_receipt_rejects_failure_diagnostics(self):
+        record = markdown_evidence()
+        stage = record['cases'][0]['stages'][0]
+        stage['diagnostic_failure'] = ci.markdown_diagnostic_failure(self.markdown_marker()[:-1])
+        with self.assertRaisesRegex(RuntimeError, 'bounded stage metadata'):
+            ci.validate_gui_markdown(record, require_windows_clock=True)
+
+    def test_markdown_numeric_phase_parser_rejects_unbounded_private_or_missing_fields(self):
+        marker = ' [MDP3 seq=1 via=0 id=2 gen=3 rev=0 phase=2 pending=1 length=1000000 feed=470180 published=47104 tick=123 work_us=100000 gap_us=200000 bulkCalls=736 bulkLines=47104 fallbackBatches=0 directCalls=0 directLines=0 maxPlanBytes=1056 bulkUs=1234 ownedBufferBytes=1088 metric_valid=1 feedStepCount=1 feedStepUs=1 publishStepCount=1 publishStepUs=1 lifecycleStepCount=1 lifecycleStepUs=0 visibilityStepCount=0 visibilityStepUs=0 stepErrors=0 stepMetricValid=1 entry_yields=0 post_yields=0]'
+        result = ci.parse_markdown_diagnostic('PRIVATE_PATH_SENTINEL' + marker)
+        self.assertEqual(result['phase'], 2)
+        self.assertNotIn('PRIVATE', json.dumps(result))
+        for bad in [marker + 'tail', marker.replace('seq=1', 'seq=0'), marker.replace('seq=1', 'seq=4097'),
+                    marker.replace('via=0', 'via=2'), marker.replace('via=0', 'via=1'),
+                    marker.replace('phase=2', 'phase=9'), marker.replace('phase=2', 'phase=4'),
+                    marker.replace('feed=470180', 'feed=1000001'), marker.replace('tick=123', 'tick=true'),
+                    marker.replace('tick=123', 'tick=01'), marker.replace('id=2', 'id=-1'),
+                    marker.replace('rev=0 ', ''), marker.replace('gen=3', 'private=3'),
+                    marker + marker, ' [MDP3 error=1]', marker.replace('gap_us=200000', 'gap_us=9999999999999999')]:
+            with self.subTest(bad=bad), self.assertRaises(RuntimeError): ci.parse_markdown_diagnostic(bad)
+        self.assertIsNone(ci.parse_markdown_diagnostic('ordinary Markdown status'))
+        self.assertLessEqual(len(marker), ci.MARKDOWN_DIAGNOSTIC_MAX_CHARS)
+        for field in ci.MARKDOWN_DIAGNOSTIC_FIELDS:
+            for value in (-1, True, 1.5, '1', 9007199254740992):
+                with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
+                    ci.validate_markdown_diagnostic(dict(result, **{field: value}))
+            missing = dict(result)
+            missing.pop(field)
+            with self.subTest(missing=field), self.assertRaises(RuntimeError):
+                ci.validate_markdown_diagnostic(missing)
+        for change in ({'bulkCalls': 0}, {'bulkLines': 47105}, {'directLines': 1},
+                       {'maxPlanBytes': 1057}, {'maxPlanBytes': 1041}, {'ownedBufferBytes': 1089},
+                       {'ownedBufferBytes': 0}, {'metric_valid': 0}):
+            with self.subTest(change=change), self.assertRaises(RuntimeError):
+                ci.validate_markdown_diagnostic(dict(result, **change))
+        terminal = dict(result, phase=4, pending=0)
+        ci.validate_markdown_diagnostic(terminal)
+        ci.validate_markdown_diagnostic(dict(terminal, bulkCalls=1, bulkLines=0,
+            fallbackBatches=1, published=1, maxPlanBytes=48))  # Valid zero-write prewrite fallback.
+        for change in ({'directCalls': 1}, {'published': 47103}, {'fallbackBatches': 47105}):
+            with self.subTest(terminal=change), self.assertRaises(RuntimeError):
+                ci.validate_markdown_diagnostic(dict(terminal, **change))
+        for bad in (marker.replace('MDP3', 'MDP1'), marker.replace('MDP3', 'MDP2'),
+                    marker.replace('bulkUs=1234', 'bulkUs=NaN'),
+                    marker.replace('metric_valid=1', 'metric_valid=1 extra=1')):
+            with self.subTest(marker=bad), self.assertRaises(RuntimeError):
+                ci.parse_markdown_diagnostic(bad)
+
+    def test_markdown_v3_step_metrics_and_explicit_legacy_contract(self):
+        record=markdown_evidence()['cases'][0]['stages'][0]['last_progress']['diagnostic']
+        ci.validate_markdown_diagnostic(record)
+        marker=' [MDP3 '+' '.join(f'{key}={record[key]}' for key in ci.MARKDOWN_DIAGNOSTIC_FIELDS)+']'
+        self.assertEqual(ci.parse_markdown_diagnostic(marker),record)
+        old={key:record[key] for key in ci.MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS}
+        old_marker=' [MDP2 '+' '.join(f'{key}={old[key]}' for key in ci.MARKDOWN_DIAGNOSTIC_LEGACY_FIELDS)+']'
+        with self.assertRaises(RuntimeError):ci.parse_markdown_diagnostic(old_marker)
+        with self.assertRaises(RuntimeError):ci.validate_markdown_diagnostic(old)
+        self.assertEqual(ci.parse_markdown_diagnostic(old_marker,legacy=True),old)
+        with self.assertRaises(RuntimeError):ci.parse_markdown_diagnostic(marker,legacy=True)
+        for field in ci.MARKDOWN_DIAGNOSTIC_STEP_FIELDS:
+            missing=dict(record);del missing[field]
+            with self.subTest(missing=field),self.assertRaises(RuntimeError):ci.validate_markdown_diagnostic(missing)
+            for value in (True,-1,1.5,float('nan'),float('inf'),9007199254740992):
+                with self.subTest(field=field,value=value),self.assertRaises(RuntimeError):
+                    ci.validate_markdown_diagnostic(dict(record,**{field:value}))
+        for delta in ({'stepMetricValid':0},{'stepMetricValid':2},{'stepErrors':1},
+                      *({kind+'StepCount':0,kind+'StepUs':1} for kind in ('feed','publish','lifecycle','visibility'))):
+            with self.subTest(delta=delta),self.assertRaises(RuntimeError):ci.validate_markdown_diagnostic(dict(record,**delta))
+        # Time granularity can legitimately yield zero us for a completed step.
+        ci.validate_markdown_diagnostic(dict(record,feedStepCount=1,feedStepUs=0))
+        # Per-scan steps and global scheduler counters have different reset scopes.
+        ci.validate_markdown_diagnostic(dict(record,feedStepCount=999,tick=1,entry_yields=3,post_yields=7))
+        self.assertLessEqual(len(marker),1536)
+        for field in ('feedStepCount','publishStepCount'):
+            empty=markdown_evidence()
+            projection=empty['cases'][0]['stages'][0]['last_progress']['diagnostic']
+            projection[field]=0;projection[field.replace('Count','Us')]=0
+            # Pending/isolated projection has no claim of measured final work.
+            ci.validate_markdown_diagnostic(projection)
+            with self.subTest(empty=field),self.assertRaisesRegex(RuntimeError,'actual measured step counts'):
+                ci.validate_gui_markdown(empty)
+        current=markdown_evidence();current['schema']='ru-notepad-markdown-v2'
+        with self.assertRaises(RuntimeError):ci.validate_gui_markdown(current)
+
+    def test_snapshot_yield_split_requires_exact_sum_without_extra_queries(self):
+        good=observer_evidence()['diagnostics']
+        good['receipts'][2].update(queue_yields=5,entry_yields=2,post_yields=3)
+        ci.validate_gui_ru_diagnostics(good)
+        def encoded(record):return ''.join('RU_GUI_SNAPSHOT '+' '.join(f'{key}={value}' for key,value in row.items())+'\n' for row in record['receipts'])
+        ci.parse_gui_ru_snapshots(encoded(good))
+        for field,value in (('entry_yields',1),('post_yields',4),('queue_yields',6),('entry_yields',True)):
+            broken=copy.deepcopy(good);broken['receipts'][2][field]=value
+            with self.subTest(field=field,value=value),self.assertRaises(RuntimeError):ci.validate_gui_ru_diagnostics(broken)
+            with self.assertRaises(RuntimeError):ci.parse_gui_ru_snapshots(encoded(broken))
+        for field in ('entry_yields','post_yields'):
+            broken=copy.deepcopy(good);del broken['receipts'][2][field]
+            with self.assertRaises(RuntimeError):ci.validate_gui_ru_diagnostics(broken)
+            with self.assertRaises(RuntimeError):ci.parse_gui_ru_snapshots(encoded(broken))
+
+    def test_markdown_memory_schema_rejects_fabricated_unbounded_or_mislabeled_peak(self):
+        baseline = markdown_evidence()['cases'][0]['stages'][0]
+        ci.validate_markdown_memory(baseline['memory'], baseline['observer'], baseline['wall_ms'])
+        for mutation in ('missing', 'type', 'overflow', 'zero', 'summary', 'cost', 'count',
+                         'measurement', 'outside', 'below', 'unknown', 'unsampled'):
+            stage = json.loads(json.dumps(baseline))
+            memory = stage['memory']
+            if mutation == 'missing': memory.pop('sampledWorkingSetPeak')
+            elif mutation == 'type': memory['samples'][0]['workingSetBytes'] = True
+            elif mutation == 'overflow': memory['samples'][0]['workingSetBytes'] = 9007199254740992
+            elif mutation == 'zero': memory['samples'][0]['processPeakWorkingSetBytes'] = 0
+            elif mutation == 'summary': memory['sampledWorkingSetPeak'] += 1
+            elif mutation == 'cost': memory['query_wall_ms'] = 1.0
+            elif mutation == 'count': memory['sample_count'] = 2
+            elif mutation == 'measurement': memory['measurement'] = 'instantaneous stage peak'
+            elif mutation == 'outside': memory['samples'][0]['start_ms'] = 40.0
+            elif mutation == 'below': memory['samples'][0]['processPeakWorkingSetBytes'] = 1
+            elif mutation == 'unknown': memory['samples'][0]['private'] = 'text'
+            elif mutation == 'unsampled': memory['samples'] = []
+            with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
+                ci.validate_markdown_memory(memory, stage['observer'], stage['wall_ms'])
+
+    def test_markdown_fence_specific_fixture_requires_actual_bulk_calls(self):
+        record = markdown_evidence()
+        diagnostic = record['cases'][2]['stages'][0]['last_progress']['diagnostic']
+        diagnostic.update(bulkCalls=0, bulkLines=0, bulkUs=0, maxPlanBytes=0,
+                          ownedBufferBytes=0, fallbackBatches=1)
+        ci.validate_markdown_diagnostic(diagnostic)  # Product fallback remains valid.
+        with self.assertRaisesRegex(RuntimeError, 'did not actually use bulk'):
+            ci.validate_gui_markdown(record)
+
+    def test_markdown_memory_query_requires_windows_and_owned_handle(self):
+        with patch.object(ci.sys, 'platform', 'linux'), self.assertRaisesRegex(RuntimeError, 'actual Windows'):
+            ci.MarkdownProcessMemory(object(), ci.markdown_memory_record(), 0, lambda: 0)
+        with patch.object(ci.sys, 'platform', 'win32'), self.assertRaisesRegex(RuntimeError, 'owned launcher handle'):
+            ci.MarkdownProcessMemory(object(), ci.markdown_memory_record(), 0, lambda: 0)
+        self.assertEqual(ctypes.sizeof(ci.MarkdownMemoryCounters), 72)
+
+    def test_markdown_memory_api_records_real_return_values_and_separate_cost(self):
+        def query(handle, pointer, size):
+            self.assertEqual((handle, size), (456, 72))
+            counters = ctypes.cast(pointer, ctypes.POINTER(ci.MarkdownMemoryCounters)).contents
+            self.assertEqual(counters.cb, 72)
+            counters.WorkingSetSize, counters.PeakWorkingSetSize = 123456, 234567
+            return 1
+        native = Mock(side_effect=query)
+        kernel = SimpleNamespace(K32GetProcessMemoryInfo=native)
+        record = ci.markdown_memory_record()
+        clock = iter((0.1, 0.1002))
+        with patch.object(ci.sys, 'platform', 'win32'), patch.object(ci.ctypes, 'WinDLL', return_value=kernel, create=True) as load:
+            collector = ci.MarkdownProcessMemory(SimpleNamespace(_handle=456), record, 0, lambda: next(clock))
+            collector.sample()
+        load.assert_called_once_with('kernel32', use_last_error=True)
+        self.assertEqual(native.call_count, 1)
+        self.assertEqual(record['samples'], [{'start_ms': 100.0, 'query_wall_ms': 0.2,
+            'workingSetBytes': 123456, 'processPeakWorkingSetBytes': 234567}])
+        self.assertEqual(record['sampledWorkingSetPeak'], 123456)
+        self.assertEqual(record['processPeakWorkingSet'], 234567)
+        self.assertEqual(record['query_wall_ms'], 0.2)
+        self.assertEqual(record['max_query_ms'], 0.2)
+        ci.validate_markdown_memory(record, {'snapshot_count': 1,
+            'snapshots': [{'start_ms': 100.0, 'wall_ms': 1.0}]}, 101.0)
+        self.assertEqual(native.argtypes, [ci.wintypes.HANDLE, ctypes.POINTER(ci.MarkdownMemoryCounters), ci.wintypes.DWORD])
+
+    def test_markdown_memory_success_can_report_trimmed_zero_current_set(self):
+        def query(handle, pointer, size):
+            counters = ctypes.cast(pointer, ctypes.POINTER(ci.MarkdownMemoryCounters)).contents
+            counters.WorkingSetSize, counters.PeakWorkingSetSize = 0, 234567
+            return 1
+        kernel = SimpleNamespace(K32GetProcessMemoryInfo=Mock(side_effect=query))
+        record = ci.markdown_memory_record()
+        clock = iter((0.1, 0.1002))
+        with patch.object(ci.sys, 'platform', 'win32'), patch.object(ci.ctypes, 'WinDLL', return_value=kernel, create=True):
+            collector = ci.MarkdownProcessMemory(SimpleNamespace(_handle=456), record, 0, lambda: next(clock))
+            collector.sample()
+        self.assertEqual(record['sampledWorkingSetPeak'], 0)
+        self.assertEqual(record['processPeakWorkingSet'], 234567)
+        ci.validate_markdown_memory(record, {'snapshot_count': 1,
+            'snapshots': [{'start_ms': 100.0, 'wall_ms': 1.0}]}, 101.0)
+
+    def test_markdown_memory_api_failure_cannot_invent_zero_usage(self):
+        for returned, working, peak in ((0, 0, 0), (1, 0, 0), (1, 2, 1)):
+            def query(handle, pointer, size):
+                counters = ctypes.cast(pointer, ctypes.POINTER(ci.MarkdownMemoryCounters)).contents
+                counters.WorkingSetSize, counters.PeakWorkingSetSize = working, peak
+                return returned
+            kernel = SimpleNamespace(K32GetProcessMemoryInfo=Mock(side_effect=query))
+            record = ci.markdown_memory_record()
+            clock = iter((0.1, 0.1002))
+            with patch.object(ci.sys, 'platform', 'win32'), patch.object(ci.ctypes, 'WinDLL', return_value=kernel, create=True):
+                collector = ci.MarkdownProcessMemory(SimpleNamespace(_handle=456), record, 0, lambda: next(clock))
+                with self.subTest(returned=returned, working=working, peak=peak), self.assertRaises(RuntimeError):
+                    collector.sample()
+            self.assertEqual(record['sample_count'], 0)
+            self.assertEqual(record['samples'], [])
+            self.assertEqual(record['query_wall_ms'], 0.2)
+
+    def test_markdown_real_stage_uses_bounded_observer_and_pending_requests(self):
+        self.run_markdown_stage_control()
+
+    def test_markdown_real_stage_rejects_production_failure_warning_despite_ready_native_styles(self):
+        self.run_markdown_stage_control(warning=True)
+
+    def run_markdown_stage_control(self, warning=False, bad_style=False, pending_forever=False, missing_diagnostic=False, stale_pending_diagnostic=False, malformed_diagnostic=False):
+        kind, operation = 'many-lines', 'insert'
+        original = ci.gui_markdown_fixture(kind)[0]
+        expected, probes, folds = ci.markdown_expected(kind, operation)
+        path = self.root / 'many-lines.md'
+        path.write_bytes(original)
+        class Process:
+            pid, _handle = 123, 456
+            def poll(self): return None
+        def memory_factory(process, record, started, clock):
+            collector = object.__new__(ci.MarkdownProcessMemory)
+            collector.process, collector.record = process, record
+            collector.started, collector.clock = started, clock
+            def query(handle, pointer, size):
+                self.assertEqual((handle, size), (456, ctypes.sizeof(ci.MarkdownMemoryCounters)))
+                counters = ctypes.cast(pointer, ctypes.POINTER(ci.MarkdownMemoryCounters)).contents
+                counters.WorkingSetSize, counters.PeakWorkingSetSize = 1048576, 2097152
+                return 1
+            collector.query = query
+            return collector
+        original_memory = ci.MarkdownProcessMemory
+        def mocked_memory(*args):
+            # Constructor is patched, so retain the real class explicitly.
+            with patch.object(ci, 'MarkdownProcessMemory', original_memory):
+                return memory_factory(*args)
+        memory_patch = patch.object(ci, 'MarkdownProcessMemory', side_effect=mocked_memory)
+        memory_patch.start()
+        self.addCleanup(memory_patch.stop)
+        class Api(ci.Windows):
+            def __init__(self):
+                self.caret, self.visible, self.status_reads = 9, False, 0
+                self.messages, self.navigation = [], []
+            def editor(self, hwnd): return 2
+            def control(self, hwnd, identifier): return 3
+            def no_dialog(self, pid): return []
+            def responsive(self, hwnd): pass
+            def verify_owned_handles(self, pid, *handles): pass
+            def text(self, hwnd):
+                self.scalar(hwnd, 0x000E)
+                self.scalar(hwnd, 0x000D)
+                return self.window_text(hwnd)
+            def window_text(self, hwnd):
+                if hwnd == 1: return '* ' + path.name + ' · ru_notepad'
+                self.status_reads += 1
+                marker = (' [MDP3 seq=1 via=0 id=2 gen=3 rev=0 phase=1 pending=1 length=' + str(len(expected)) +
+                          ' feed=470180 published=47104 tick=123 work_us=100000 gap_us=200000 bulkCalls=736 bulkLines=47104 fallbackBatches=0 directCalls=0 directLines=0 maxPlanBytes=1056 bulkUs=1234 ownedBufferBytes=1088 metric_valid=1 feedStepCount=1 feedStepUs=1 publishStepCount=1 publishStepUs=1 lifecycleStepCount=1 lifecycleStepUs=0 visibilityStepCount=0 visibilityStepUs=0 stepErrors=0 stepMetricValid=1 entry_yields=0 post_yields=0]')
+                # Use valid progress bounded to this smaller synthetic corpus.
+                marker = marker.replace('feed=470180', 'feed=47018')
+                if missing_diagnostic: marker = ''
+                if malformed_diagnostic: marker = marker[:-1]
+                if pending_forever or self.status_reads <= 2: return 'Folding Markdown...' + marker
+                if warning: return 'Ln 1 UTF-8 Markdown folding was disabled: synthetic publication failure'
+                if not stale_pending_diagnostic:
+                    marker = marker.replace('seq=1 via=0', 'seq=2 via=1').replace('phase=1 pending=1', 'phase=4 pending=0')
+                    marker = marker.replace('feed=47018 ', 'feed=' + str(len(expected)) + ' ')
+                return 'Ln 1 UTF-8 Markdown' + marker
+            def scalar(self, hwnd, message, wparam=0, lparam=0):
+                self.messages.append((hwnd, message, wparam, lparam))
+                if message == 0x000D and wparam:
+                    text = self.window_text(hwnd)
+                    buffer = ctypes.cast(lparam, ctypes.POINTER(ctypes.c_wchar))
+                    count = min(len(text), wparam - 1)
+                    for index, char in enumerate(text[:count]): buffer[index] = char
+                    buffer[count] = '\0'
+                    return count
+                if message == 2006: return len(expected)
+                if message == 2159: return 1
+                if message == 2008: return self.caret
+                if message == 2025: self.caret = wparam
+                if message == 2228: return int(self.visible)
+                if message == 2223: return 0x2400 if wparam == 0 else 0x400
+                if message == 2010:
+                    if bad_style and wparam == 2: return 17
+                    return next((probe['style'] for probe in probes if probe['offset'] <= wparam < probe['offset'] + probe['length']), 0)
+                if message == 2007: return expected[wparam]
+                if message == 2028: return len(expected)
+                if message == 4002: return 98
+                if message == 0x0102: self.visible = True
+                return 0
+            def post_navigation(self, hwnd, key):
+                self.navigation.append(key)
+                self.caret += 1 if key == 'RIGHT' else -1
+            def invalidate_for_paint(self, hwnd): return False
+            def paint_pending(self, hwnd): return False
+        api, stage = Api(), {}
+        if malformed_diagnostic:
+            with self.assertRaisesRegex(RuntimeError, '^Markdown numeric phase marker is malformed$'):
+                ci.run_gui_markdown_stage(api, Process(), 1, path, kind, operation, stage,
+                                         lambda: api.scalar(2, 0x0102, ord('x'), 1))
+            failure = stage['diagnostic_failure']
+            self.assertTrue(all(type(value) in (int, bool) and 0 <= value <= 4096 for value in failure.values()))
+            self.assertEqual(failure['marker_occurrences'], 1)
+            self.assertEqual(failure['closing_brackets'], 0)
+            self.assertFalse(failure['ends_with_closing_bracket'])
+            self.assertIsNone(stage['last_progress']['diagnostic'])
+            self.assertFalse(stage['last_probe'])
+            self.assertEqual([msg[1:3] for msg in api.messages if msg[0] == 3], [(0x000D, 4098)])
+            self.assertFalse(any(item['final'] for item in stage['observer']['snapshots']))
+            self.assertEqual(path.read_bytes(), original)
+            return
+        if pending_forever:
+            with self.assertRaisesRegex(RuntimeError, '30-second deadline'):
+                ci.run_gui_markdown_stage(api, Process(), 1, path, kind, operation, stage,
+                                         lambda: api.scalar(2, 0x0102, ord('x'), 1))
+            progress = json.loads(json.dumps(stage))['last_progress']
+            ci.validate_markdown_progress(progress)
+            self.assertEqual(progress['status'], 'folding')
+            self.assertEqual(progress['diagnostic']['feed'], 47018)
+            self.assertEqual(progress['diagnostic']['published'], 47104)
+            self.assertEqual(progress['length'], len(expected))
+            self.assertFalse(stage['last_probe'])
+            self.assertFalse(any(item['final'] for item in stage['observer']['snapshots']))
+            self.assertFalse(any(msg[1] in (2010, 2007, 2028, 4002) for msg in api.messages))
+            self.assertLessEqual(stage['observer']['max_snapshot_messages'], 32)
+            with self.assertRaisesRegex(RuntimeError, 'completion lacks'):
+                ci.validate_markdown_progress(progress, complete=True, expected_length=len(expected), expected_dirty=True)
+            return
+        if missing_diagnostic or stale_pending_diagnostic:
+            with self.assertRaisesRegex(RuntimeError, '30-second deadline'):
+                ci.run_gui_markdown_stage(api, Process(), 1, path, kind, operation, stage,
+                                         lambda: api.scalar(2, 0x0102, ord('x'), 1))
+            if missing_diagnostic:
+                self.assertIsNone(stage['last_progress']['diagnostic'])
+            else:
+                self.assertEqual(stage['last_progress']['diagnostic']['pending'], 1)
+                with self.assertRaisesRegex(RuntimeError, 'completion lacks'):
+                    ci.validate_markdown_progress(stage['last_progress'], complete=True,
+                        expected_length=len(expected), expected_dirty=True)
+            self.assertEqual(stage['last_progress']['status'], 'complete')
+            self.assertTrue(all(stage['last_probe'][key] for key in
+                ('status_done', 'styles_match', 'folds_match', 'context_match', 'children_visible')))
+            self.assertFalse(any(item['final'] for item in stage['observer']['snapshots']))
+            self.assertLessEqual(stage['observer']['max_snapshot_messages'], 32)
+            self.assertEqual(path.read_bytes(), original)
+            return
+        if bad_style:
+            with self.assertRaisesRegex(RuntimeError, '30-second deadline'):
+                ci.run_gui_markdown_stage(api, Process(), 1, path, kind, operation, stage,
+                                         lambda: api.scalar(2, 0x0102, ord('x'), 1))
+            last = json.loads(json.dumps(stage))['last_probe']
+            samples = last['style_samples']
+            self.assertFalse(last['styles_match'])
+            self.assertEqual(samples['positions'], [0, *range(2, 9), *range(len(expected) - 8, len(expected))])
+            self.assertEqual(samples['expected'], [6] + [0] * 15)
+            self.assertEqual(samples['actual'], [6, 17] + [0] * 14)
+            self.assertTrue(all(last[key] for key in ('status_done', 'folds_match', 'context_match', 'children_visible')))
+            self.assertFalse(any(item['final'] for item in stage['observer']['snapshots']))
+            self.assertLessEqual(stage['observer']['max_snapshot_messages'], 32)
+            self.assertGreaterEqual(stage['wall_ms'], 30000)
+            self.assertEqual(sum(msg[1] == 2010 for msg in api.messages) % 16, 0)
+            self.assertFalse(any(msg[1] in (2009, 2153, 2182, 4003) for msg in api.messages))
+            self.assertEqual(path.read_bytes(), original)
+            return
+        if warning:
+            # Exercise the real snapshot path with matching length, dirty flag,
+            # lexer, styles and old headers. Only the production warning blocks
+            # completion. Pending input/paint has already been requested.
+            with self.assertRaisesRegex(RuntimeError, 'production folding failure'):
+                ci.run_gui_markdown_stage(api, Process(), 1, path, kind, operation, stage,
+                                         lambda: api.scalar(2, 0x0102, ord('x'), 1))
+            self.assertEqual(api.scalar(2, 2028), len(expected))
+            self.assertEqual(api.scalar(2, 4002), 98)
+            self.assertTrue(api.scalar(2, 2223, 0) & 0x2000)
+            self.assertTrue(all(api.scalar(2, 2010, position) == probe['style']
+                for probe in probes for position in range(probe['offset'], probe['offset'] + probe['length'])))
+            self.assertTrue(stage['responsiveness']['navigation'][0]['request_pending'])
+            self.assertFalse(any(item['final'] for item in stage['observer']['snapshots']))
+            self.assertLessEqual(stage['observer']['max_snapshot_messages'], 32)
+            self.assertFalse(stage['last_probe'])
+            return
+        ci.run_gui_markdown_stage(api, Process(), 1, path, kind, operation, stage,
+                                 lambda: api.scalar(2, 0x0102, ord('x'), 1))
+        self.assertNotIn('diagnostic_failure', stage)
+        self.assertTrue(any(msg[0] == 3 and msg[1:3] == (0x000D, 4098) for msg in api.messages))
+        ci.validate_gui_ru_observer(stage['observer'], stage['wall_ms'], stage['probes'])
+        ci.validate_gui_markdown_responsiveness(stage['responsiveness'], stage['wall_ms'])
+        ci.validate_markdown_memory(stage['memory'], stage['observer'], stage['wall_ms'])
+        self.assertEqual(stage['memory']['sample_count'], stage['observer']['snapshot_count'])
+        self.assertEqual(stage['memory']['sampledWorkingSetPeak'], 1048576)
+        self.assertEqual(stage['memory']['processPeakWorkingSet'], 2097152)
+        self.assertTrue(stage['collapsed_before_edit'])
+        self.assertTrue(stage['last_probe']['children_visible'])
+        self.assertEqual(api.navigation, ['RIGHT', 'LEFT'])
+        self.assertLessEqual(stage['observer']['max_snapshot_messages'], 32)
+        self.assertEqual(sum(msg[1] == 2010 for msg in api.messages), 16)
+        self.assertEqual(stage['last_probe']['style_samples']['actual'],
+                         stage['last_probe']['style_samples']['expected'])
+        self.assertEqual(sum(msg[1] == 2007 for msg in api.messages), 4)
+        self.assertFalse(any(msg[1] in (2009, 2153, 2182, 4003) for msg in api.messages))
+        self.assertEqual(path.read_bytes(), original)
+
+    def test_windows_job_budget_covers_fresh_build_without_relaxing_acceptance(self):
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        job = re.search(r'(?ms)^  windows-native:\n(.*?)(?=^  [a-z][a-z-]+:\n|\Z)', workflow)
+        self.assertIsNotNone(job)
+        self.assertEqual(re.findall(r'^    timeout-minutes: (\d+)$', job.group(1), re.M), ['90'])
+        self.assertIn('needs: helper-policy', job.group(1))
+        self.assertNotIn('continue-on-error:', job.group(1))
+        self.assertEqual(ci.GUI_MARKDOWN_TIMEOUT_SECONDS, 30)
+        self.assertEqual(ci.GUI_RU_RESPONSE_TIMEOUT_MS, 5000)
+        source = (ci.ROOT / 'tools/windows_ci.py').read_text(encoding='utf-8')
+        self.assertIn("Markdown GUI open/edit exceeded its original 30-second deadline", source)
+        self.assertIn("Markdown GUI final proof exceeded its original 30-second deadline", source)
+
+    def test_markdown_pure_backend_gate_and_fixed_historical_workflow_are_mandatory(self):
+        import test_markdown_portable as portable_policy
+        portable_policy.controls()
+        self.assertEqual(portable_policy.CASES, {'markdown_policy': 221, 'markdown_selection_policy': 31})
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text()
+        self.assertIn('python -I tools/test_markdown_portable.py --ru-root .ci/ru-language', workflow)
+        self.assertIn('needs: helper-policy', workflow)
+        self.assertIn('build/markdown-policy-evidence/report.json', workflow)
+        script = (ci.ROOT / 'tools/windows_ci.ps1').read_text()
+        self.assertIn("'tools/test_markdown_portable.py','--ru-root',$RuRoot", script)
+        historical = (ci.ROOT / '.github/workflows/policy-prefix-benchmark.yml').read_text()
+        fixed = 'f91d9e8d008c48b00f98b5a19000639c18a61518'
+        self.assertIn('  workflow_dispatch:', historical)
+        self.assertNotIn('  push:', historical)
+        self.assertNotIn('  pull_request:', historical)
+        self.assertIn('ref: ' + fixed, historical)
+        self.assertIn('name: historical-policy8-' + fixed + '-run-${{ github.run_id }}', historical)
+        self.assertNotIn('ref: ${{ github.sha }}', historical)
+        self.assertNotIn("if: github.ref ==", historical)
+        self.assertNotIn('prepare_source_archives', historical)
+        self.assertNotIn('validate_source_archive_receipt', historical)
+        self.assertIn('Invoke-WebRequest', historical)
+        self.assertIn('import run_direct_style_benchmark as runner', historical)
+
+
+    def test_compiler_diagnostic_controls_are_mandatory_and_private_logs_are_not_uploaded(self):
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        controls = 'python -I tools/test_ru_cli_diagnostics.py --ru-root .ci/ru-language -v'
+        self.assertEqual(workflow.count(controls), 1)
+        self.assertLess(workflow.index(controls), workflow.index(
+            'python -I tools/test_markdown_portable.py --ru-root .ci/ru-language'))
+        script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        controls = "Invoke-Checked $Python @('-I','tools/test_ru_cli_diagnostics.py','--ru-root',$RuRoot,'-v')"
+        self.assertEqual(script.count(controls), 1)
+        self.assertLess(script.index(controls), script.index(
+            "Invoke-Checked $Python @('tools/test_markdown_portable.py'"))
+        for private in ('build/ru-cli-diagnostics-evidence', 'build/markdown-policy-private'):
+            self.assertNotIn(private, workflow)
+        self.assertFalse(any('compile' in name or 'ru-cli-diagnostics' in name
+                            for name in ci.HELPER_POLICY_EVIDENCE_FILES))
+
+    def test_markdown_portable_timeout_cleans_owned_process_tree_before_returning(self):
+        import test_markdown_portable as gate
+        events = []
+        class Process:
+            pid = 98765
+            returncode = None
+            def poll(self): return self.returncode
+            def wait(self, timeout):
+                if timeout == 5:
+                    events.append('wait-cleanup')
+                    self.returncode = -9
+                    return self.returncode
+                raise subprocess.TimeoutExpired('synthetic', timeout)
+        process = Process()
+        # This exercises the POSIX branch on every host, including Windows where
+        # neither os.killpg nor signal.SIGKILL exists. Keep both mocks local to
+        # this driver rather than changing the process-wide platform modules.
+        posix_os = SimpleNamespace(name='posix',
+            killpg=lambda pid, sig: events.append((pid, sig)))
+        posix_signal = SimpleNamespace(SIGKILL=9)
+        with patch.object(gate.subprocess, 'Popen', return_value=process) as launch, \
+             patch.object(gate.time, 'monotonic', side_effect=[0.0, 2.0]), \
+             patch.object(gate, 'os', posix_os), \
+             patch.object(gate, 'signal', posix_signal):
+            with self.assertRaisesRegex(RuntimeError, 'deadline'):
+                gate.checked_run(['synthetic'], self.root, 'deadline', 1)
+        self.assertTrue(launch.call_args.kwargs['start_new_session'])
+        self.assertEqual(events, [(98765, 9), 'wait-cleanup'])
+
+    def test_markdown_portable_posix_mock_is_independent_of_host_only_attributes(self):
+        import test_markdown_portable as gate
+        original_os, original_signal = gate.os, gate.signal
+        windows_os, windows_signal = SimpleNamespace(name='nt'), SimpleNamespace()
+        with patch.object(gate, 'os', windows_os), patch.object(gate, 'signal', windows_signal):
+            self.assertFalse(hasattr(gate.os, 'killpg'))
+            self.assertFalse(hasattr(gate.signal, 'SIGKILL'))
+            self.test_markdown_portable_timeout_cleans_owned_process_tree_before_returning()
+            self.assertIs(gate.os, windows_os)
+            self.assertIs(gate.signal, windows_signal)
+            self.assertFalse(hasattr(gate.os, 'killpg'))
+            self.assertFalse(hasattr(gate.signal, 'SIGKILL'))
+            # The POSIX mock must not leak into either Windows cleanup outcome.
+            self.test_markdown_portable_windows_cleanup_targets_tree_and_fails_closed()
+        self.assertIs(gate.os, original_os)
+        self.assertIs(gate.signal, original_signal)
+
+    def test_markdown_portable_windows_cleanup_targets_tree_and_fails_closed(self):
+        import test_markdown_portable as gate
+        process = SimpleNamespace(pid=98765, wait=unittest.mock.Mock(return_value=-9))
+        with patch.object(gate.os, 'name', 'nt'), patch.object(gate.subprocess, 'run',
+                return_value=SimpleNamespace(returncode=0)) as kill:
+            gate.stop_process_tree(process)
+        self.assertEqual(kill.call_args.args[0], ['taskkill', '/PID', '98765', '/T', '/F'])
+        process.wait.assert_called_once_with(timeout=5)
+        with patch.object(gate.os, 'name', 'nt'), patch.object(gate.subprocess, 'run',
+                return_value=SimpleNamespace(returncode=1)):
+            with self.assertRaisesRegex(RuntimeError, 'cleanup failed'): gate.stop_process_tree(process)
+
+    def test_localized_gui_status_never_accepts_pending_or_failure(self):
+        # Catalog text is varied in every supported language, with the real
+        # production status predicate, not a mock reimplementation.
+        catalogs = {}
+        for name in ('ui', 'errors'):
+            catalogs.update(json.loads((ci.ROOT / 'locales' / (name + '.json')).read_text(encoding='utf-8')))
+        self.assertEqual(set(catalogs['status.opening']), {'en', 'zh-CN', 'ja', 'ko', 'es', 'ru', 'it'})
+        for language in catalogs['status.opening']:
+            with self.subTest(language=language):
+                opening = '  ' + catalogs['status.opening'][language].format(1, 100)
+                styling = 'UTF-8 Ru    ' + catalogs['status.styling_ru'][language]
+                folding = 'UTF-8 Markdown    ' + catalogs['status.folding_markdown'][language]
+                off = 'UTF-8 Markdown    ' + catalogs['status.heading_folds_off'][language]
+                failure = 'UTF-8 Markdown    ' + catalogs['error.syntax.markdown_disabled'][language].format('API error 5')
+                self.assertTrue(ci.status_startswith(opening, 'status.opening'))
+                self.assertTrue(ci.status_contains(styling, 'status.styling_ru'))
+                self.assertFalse(ci.markdown_status_complete(opening + ' Markdown'))
+                self.assertFalse(ci.markdown_status_complete(folding))
+                self.assertFalse(ci.markdown_status_complete(off))
+                with self.assertRaisesRegex(RuntimeError, 'production folding failure'):
+                    ci.markdown_status_complete(failure)
+                self.assertTrue(ci.markdown_status_complete('UTF-8    Markdown'))
+        self.assertFalse(ci.markdown_status_complete(''))
+        self.assertFalse(ci.markdown_status_complete('UTF-8    Ru'))
+
+
+    def test_i18n_gates_are_built_packaged_and_fail_closed(self):
+        expected = {'i18n_policy': 289, 'i18n_settings_native': 69, 'app_i18n_native': 1606}
+        self.assertEqual({name: ci.expected_assertions(name) for name in expected}, expected)
+        script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
+        runner = (ci.ROOT / 'packaging/run-tests.cmd').read_text(encoding='utf-8')
+        workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
+        self.assertIn('python -I tools/test_i18n.py --ru-root .ci/ru-language', workflow)
+        self.assertIn('python -I tests/syntax_warning_portable.py --ru-root .ci/ru-language', workflow)
+        self.assertIn("'tools/test_i18n.py'", script)
+        self.assertIn("'tools/test_i18n_models.py'", script)
+        self.assertIn('python -I tools/test_i18n_models.py', workflow)
+        for name in expected:
+            self.assertIn(name + '.exe', ci.portable.TEST_NAMES)
+            self.assertIn("'" + name + "'", script)
+            self.assertIn(name + '.exe', runner)
+            summary = self.acceptance()
+            summary['tests'] = [case for case in summary['tests'] if case['name'] != name]
+            with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, 'inventory'):
+                ci.validate_acceptance(summary)
+        self.assertEqual(ci.console_command('app_i18n_native', self.root, self.root),
+                         [str(self.root / 'app_i18n_native.exe'), str(self.root)])
+        self.assertEqual(ci.CONSOLE_TIMEOUT_SECONDS['app_i18n_native'], 240)
+
+
+
 
 
 if __name__ == '__main__':

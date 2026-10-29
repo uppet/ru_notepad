@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Portable packaging regressions use fake PE files; no Windows pass is claimed."""
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -36,7 +37,74 @@ def observer_evidence():
         'captures': [{'phase': phase, 'wall_ms': 0.2, 'log_reads': 1} for phase in ('baseline', 'final')],
         'log_read_wall_ms': 0.2, 'max_log_read_ms': 0.1}
     return {'observer': observer, 'diagnostics': diagnostics,
+            'clock': {'clock_name': 'perf_counter', 'implementation': 'QueryPerformanceCounter()',
+                      'resolution': 1e-7, 'monotonic': True, 'adjustable': False},
+            'clock_measurement': ci.PERFORMANCE_CLOCK_MEASUREMENT,
             'head_style_measurement': ci.GUI_RU_HEAD_MEASUREMENT}
+
+
+def markdown_evidence(*, legacy=False):
+    """Synthetic schema fixture only; never evidence of running the GUI."""
+    record = {'measurement': ci.GUI_MARKDOWN_MEASUREMENT, 'clock': {
+        'clock_name': 'perf_counter', 'implementation': 'QueryPerformanceCounter()',
+        'resolution': 1e-7, 'monotonic': True, 'adjustable': False}, 'cases': []}
+    if not legacy:
+        record.update(schema=ci.GUI_MARKDOWN_SCHEMA, deprecated=ci.gui_markdown_deprecated(), teardown=ci.gui_markdown_teardown())
+    for kind in ('many-lines', 'singleline', 'unclosed-fence'):
+        data, probes, folds = ci.gui_markdown_fixture(kind)
+        case = {'kind': kind, 'size': len(data), 'source_sha256': hashlib.sha256(data).hexdigest(),
+                'style_probes': probes, 'fold_probes': folds, 'stages': []}
+        record['cases'].append(case)
+        for operation in ci.gui_markdown_operations(kind, legacy=legacy):
+            expected, styles, _ = ci.markdown_expected(kind, operation)
+            style_positions = [position for probe in styles
+                               for position in range(probe['offset'], probe['offset'] + probe['length'])]
+            style_values = [probe['style'] for probe in styles for _ in range(probe['length'])]
+            dirty = operation in ('insert', 'backspace')
+            observer = ci.gui_ru_observer_record()
+            observer.update(scalar_calls=30, wm_null_calls=1, sendmessage_calls=31,
+                query_wall_ms=10.0, max_query_ms=1.0, snapshot_count=1, snapshot_wall_ms=20.0,
+                max_snapshot_ms=20.0, max_snapshot_messages=30,
+                snapshots=[{'start_ms': 10.0, 'wall_ms': 20.0, 'messages': 30, 'final': True}],
+                response_starts_ms=[0.0])
+            before = 9 if operation == 'insert' else 8
+            response = {'navigation': [
+                {'key': 'RIGHT', 'before': before, 'after': before + 1, 'wall_ms': 1.0, 'request_pending': True},
+                {'key': 'LEFT', 'before': before + 1, 'after': before, 'wall_ms': 1.0, 'request_pending': False}],
+                'paint': {'invalidations': 1, 'pending_observed': False, 'already_serviced': True,
+                          'cleared': True, 'wall_ms': 1.0, 'request_pending': True}} if dirty else {}
+            case['stages'].append({'operation': operation, 'length': len(expected), 'dirty': dirty,
+                'source_sha256': case['source_sha256'], 'wall_ms': 100.0, 'probes': 1, 'observer': observer,
+                'phase_timing': {'length_savepoint_observed_ms': 20.0,
+                    'status_complete_observed': ([{'undo_commands': 1, 'elapsed_ms': 10.0},
+                        {'undo_commands': 2, 'elapsed_ms': 20.0}] if operation == 'undo' else
+                        [{'undo_commands': 0, 'elapsed_ms': 20.0}]),
+                    'undo_returned_ms': [1.0, 11.0] if operation == 'undo' else [],
+                    'max_wm_null_probe_ms': 1.0},
+                'memory': {'measurement': ci.GUI_MARKDOWN_MEMORY_MEASUREMENT, 'sample_count': 1,
+                    'sampledWorkingSetPeak': 1048576, 'processPeakWorkingSet': 2097152,
+                    'query_wall_ms': 0.1, 'max_query_ms': 0.1, 'samples': [
+                        {'start_ms': 10.0, 'query_wall_ms': 0.1, 'workingSetBytes': 1048576,
+                         'processPeakWorkingSetBytes': 2097152}]},
+                'responsiveness': response, 'undo_commands': 2 if operation == 'undo' else 0,
+                'collapsed_before_edit': kind == 'many-lines' and dirty,
+                'last_progress': {'opened': True, 'length': len(expected), 'dirty': dirty, 'status': 'complete', 'tail_requested': True,
+                    'diagnostic': {'seq': 1, 'via': 0, 'id': 1, 'gen': 1, 'rev': 0, 'phase': 4, 'pending': 0, 'length': len(expected), 'feed': len(expected), 'published': 1, 'tick': 1, 'work_us': 1, 'gap_us': 1, 'bulkCalls': 0, 'bulkLines': 0, 'fallbackBatches': 1, 'directCalls': 0, 'directLines': 0, 'maxPlanBytes': 0, 'bulkUs': 0, 'ownedBufferBytes': 0, 'metric_valid': 1}},
+                'last_probe': {'length': len(expected), 'dirty': dirty, 'end_styled': len(expected),
+                    'status_done': True, 'styles_match': True,
+                    'style_samples': {'positions': style_positions, 'expected': style_values, 'actual': list(style_values)},
+                    'folds_match': True, 'context_match': True,
+                    'lexer': 98, 'tail_requested': True, 'children_visible': True}})
+            if not legacy:
+                case['stages'][-1]['last_progress']['diagnostic'].update(
+                    feedStepCount=1, feedStepUs=1, publishStepCount=1, publishStepUs=0,
+                    lifecycleStepCount=1, lifecycleStepUs=0, visibilityStepCount=0, visibilityStepUs=0,
+                    stepErrors=0, stepMetricValid=1, entry_yields=0, post_yields=0)
+            if kind == 'unclosed-fence' and operation == 'open':
+                case['stages'][-1]['last_progress']['diagnostic'].update(
+                    bulkCalls=1, bulkLines=1, fallbackBatches=0,
+                    maxPlanBytes=48, bulkUs=1, ownedBufferBytes=1088)
+    return record
 
 
 class PackageTests(unittest.TestCase):
@@ -52,7 +120,7 @@ class PackageTests(unittest.TestCase):
                          *ci.SCANNER_PREFLIGHT_SOURCES,
                          *package.RESOURCE_INPUTS, *package.NATIVE_BUILD_DRIVERS,
                          *(source for sources in package.NATIVE_COMPILE_SOURCES.values() for source in sources),
-                         'native/ru_scan.h', 'native/ru_unicode_data.h',
+                         'native/ru_scan.h', 'native/ru_unicode_data.h', 'native/ru_markdown_fold.h',
                          'packaging/diagnostic_launcher.c', 'packaging/samples/example.txt',
                          'packaging/samples/example.ru'}:
             target = self.root / relative
@@ -121,7 +189,7 @@ class PackageTests(unittest.TestCase):
         sources = ci.scanner_preflight_sources(self.root)
         self.summary['scanner_preflight'] = {'name': package.SCANNER_PREFLIGHT_NAME,
             'passed': True, 'executed': True, 'cleanup_killed': False, 'exit_code': 0,
-            'source_sha256': sources, 'report': {'cases': 163, 'chunk_checks': 978,
+            'source_sha256': sources, 'report': {'cases': 169, 'chunk_checks': 1014,
                 'ru_assertions_per_backend': 0, 'sanitizer': None,
                 'library_sha256': self.summary['tested_binary_sha256'][package.NATIVE_HELPER_NAME],
                 'source_sha256': sources['native/ru_scan.c']}}
@@ -133,6 +201,20 @@ class PackageTests(unittest.TestCase):
                 result.update(main_hwnd_seen=True, close_posted=True, detached_from_console=True)
             else:
                 result['assertions_passed'] = ci.expected_assertions(name)
+            if name == 'markdown_direct_native':
+                result['gc_stress'] = {'threshold': 64, 'stats_enabled': True,
+                                       'live': 0, 'freed': 100, 'collections': 4}
+                result['bulk_route_metrics'] = [
+                    {'route': 'fallback', 'bulkCalls': 0, 'bulkLines': 0, 'fallbackBatches': 1,
+                     'directCalls': 0, 'directLines': 0, 'maxPlanBytes': 0,
+                     'ownedBufferBytes': 0, 'bulkUs': 0, 'metric_valid': 1},
+                    {'route': 'bulk', 'bulkCalls': 1, 'bulkLines': 1, 'fallbackBatches': 0,
+                     'directCalls': 0, 'directLines': 0, 'maxPlanBytes': 48,
+                     'ownedBufferBytes': 1088, 'bulkUs': 1, 'metric_valid': 1},
+                    {'route': 'perline', 'bulkCalls': 0, 'bulkLines': 0, 'fallbackBatches': 0,
+                     'directCalls': 1, 'directLines': 1, 'maxPlanBytes': 0,
+                     'ownedBufferBytes': 0, 'bulkUs': 0, 'metric_valid': 1}]
+
             if name == 'ru_syntax_native':
                 result['performance'] = [{'size': size, 'initial_read_bytes': size,
                     'edit_read_bytes': 1024, 'reused_bytes': size - 1024, 'max_read': 1024,
@@ -154,6 +236,15 @@ class PackageTests(unittest.TestCase):
             if name in {case[0] for case in ci.SYNTAX_FALLBACK_TESTS}:
                 result['fixture_binary_sha256'] = {target: self.summary['tested_binary_sha256'][source]
                                                   for target, source in ci.syntax_fallback_layout(name).items()}
+            if name == 'syntax_bad_lexer':
+                result['fixture_preflight'] = dict(loadable=True, createlexer_missing=True, released=True,
+                    library_sha256=self.summary['tested_binary_sha256'][ci.portable.NATIVE_HELPER_NAME])
+                result['native_fixture_preflight'] = True
+            if name == 'main-gui-markdown':
+                result.update({key: True for key in ci.GUI_MARKDOWN_CHECKS})
+                result['markdown_performance'] = markdown_evidence()
+                result['fixture_binary_sha256'] = {binary: self.summary['tested_binary_sha256'][binary]
+                    for binary in ci.portable.RUNTIME_NAMES}
             if name in {'main-gui-file-entry', 'main-gui-ru-syntax'}:
                 checks = ci.GUI_FILE_CHECKS if name == 'main-gui-file-entry' else ci.GUI_RU_CHECKS
                 result.update({key: True for key in checks})
@@ -227,6 +318,8 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(build['native_helpers'][package.NATIVE_HELPER_NAME]['dll_sha256'],
                              package.sha(self.binary / package.NATIVE_HELPER_NAME))
             self.assertEqual(files['LICENSE'], (self.root / 'LICENSE').read_bytes())
+            self.assertEqual(files['licenses/ru-language-MIT.txt'],
+                             (self.root / 'packaging/licenses/ru-language-MIT.txt').read_bytes())
             self.assertIn('licenses/Lexilla.txt', files)
             self.assertIn('licenses/Scintilla.txt', files)
             self.assertEqual(files['licenses/Unicode.txt'], (self.root / 'packaging/licenses/Unicode.txt').read_bytes())
@@ -435,6 +528,8 @@ class PackageTests(unittest.TestCase):
                          'navigation-timeout', 'paint-not-cleared', 'paint-inconsistent-observation',
                          'missing-edit', 'wrong-edit-source', 'missing-edit-operation', 'edit-timeout',
                          'missing-observer', 'fast-observer', 'uncounted-observer', 'oversize-snapshot',
+                         'missing-clock', 'wrong-clock', 'coarse-clock', 'nonfinite-clock', 'adjustable-clock',
+                         'missing-clock-disclosure',
                          'missing-diagnostics', 'wrong-snapshot-generation', 'incomplete-final-snapshot',
                          'missing-snapshot-receipt', 'extended-diagnostic-capture'):
             with self.subTest(mutation=mutation):
@@ -449,6 +544,12 @@ class PackageTests(unittest.TestCase):
                 if mutation == 'wrong-timer-source': gui['timer_performance']['source_sha256'] = 'different'
                 if mutation == 'wrong-timer-probes': gui['timer_performance']['style_probes']['tail_keyword']['style'] = 0
                 if mutation == 'timer-timeout': gui['timer_performance']['wall_ms'] = 30001
+                if mutation == 'missing-clock': gui['timer_performance'].pop('clock')
+                if mutation == 'wrong-clock': gui['timer_performance']['clock']['clock_name'] = 'monotonic'
+                if mutation == 'coarse-clock': gui['timer_performance']['clock']['implementation'] = 'GetTickCount64()'
+                if mutation == 'nonfinite-clock': gui['timer_performance']['clock']['resolution'] = float('inf')
+                if mutation == 'adjustable-clock': gui['timer_performance']['clock']['adjustable'] = True
+                if mutation == 'missing-clock-disclosure': gui['timer_performance'].pop('clock_measurement')
                 if mutation == 'missing-observer': gui['timer_performance'].pop('observer')
                 if mutation == 'fast-observer': gui['timer_performance']['observer']['response_interval_ms'] = 1
                 if mutation == 'uncounted-observer': gui['timer_performance']['observer']['scalar_calls'] = 0
@@ -665,6 +766,69 @@ class PackageTests(unittest.TestCase):
         (self.binary / 'Lexilla.dll').write_bytes(b'MZ')
         with self.assertRaisesRegex(RuntimeError, 'PE header'):
             package.inspect_pe(self.binary / 'Lexilla.dll', 'fake-objdump')
+
+    def test_markdown_runtime_docs_and_test_inventory_remain_separate(self):
+        result = self.create()
+        runtime, tests = (package.verify_archive(path) for path in self.archives(result))
+        for path in ('docs/markdown-editing.md', 'docs/markdown-policy-subset.md'):
+            self.assertIn(path, runtime)
+            self.assertEqual(runtime[path], tests[path])
+        for name in ('markdown_policy', 'markdown_selection_policy', 'markdown_native', 'app_markdown_native', 'markdown_direct_native'):
+            self.assertNotIn(name + '.exe', runtime)
+            self.assertIn(name + '.exe', tests)
+        self.assertIn('native-test-evidence/main-markdown-launcher-0.log', tests)
+        self.assertFalse(any(name.startswith('native-test-evidence/') for name in runtime))
+
+    def test_current_markdown_inventory_is_eleven_with_explicit_unexecuted_deprecation(self):
+        record=markdown_evidence()
+        self.assertEqual([len(case['stages']) for case in record['cases']],[4,4,3])
+        self.assertEqual(record['deprecated'],ci.gui_markdown_deprecated())
+        self.assertIsNone(record['deprecated'][0]['passed'])
+        self.assertIs(record['deprecated'][0]['executed'],False)
+        ci.validate_gui_markdown(record,require_windows_clock=True)
+        for mutation in ('missing-deprecated','executed','passed','wrong-case','teardown','legacy'):
+            bad=copy.deepcopy(record)
+            if mutation=='missing-deprecated':bad.pop('deprecated')
+            elif mutation=='executed':bad['deprecated'][0]['executed']=True
+            elif mutation=='passed':bad['deprecated'][0]['passed']=True
+            elif mutation=='wrong-case':bad['deprecated'][0]['case']='many-lines'
+            elif mutation=='teardown':bad['teardown']={}
+            else:bad=markdown_evidence(legacy=True)
+            with self.subTest(mutation=mutation),self.assertRaises(RuntimeError):ci.validate_gui_markdown(bad,require_windows_clock=True)
+
+    def test_markdown_gui_schema_is_rechecked_at_packaging_boundary(self):
+        for mutation in ('missing', 'late', 'pending', 'source', 'collapse', 'observer', 'clock', 'progress-missing', 'diagnostic-missing', 'diagnostic-malformed', 'phase-missing', 'phase-invalid'):
+            with self.subTest(mutation=mutation):
+                case = next(case for case in self.summary['tests'] if case['name'] == 'main-gui-markdown')
+                case['markdown_performance'] = markdown_evidence()
+                record = case['markdown_performance']
+                stage = record['cases'][0]['stages'][1]
+                if mutation == 'missing': case.pop('markdown_performance')
+                elif mutation == 'late': stage['wall_ms'] = 30001
+                elif mutation == 'pending': stage['responsiveness']['navigation'][0]['request_pending'] = False
+                elif mutation == 'source': record['cases'][0]['source_sha256'] = '0' * 64
+                elif mutation == 'collapse': stage['collapsed_before_edit'] = False
+                elif mutation == 'observer': stage['observer']['snapshots'][0]['messages'] = 33
+                elif mutation == 'clock': record['clock']['implementation'] = 'fake()'
+                elif mutation == 'progress-missing': stage.pop('last_progress')
+                elif mutation == 'phase-missing': stage.pop('phase_timing')
+                elif mutation == 'phase-invalid': stage['phase_timing']['length_savepoint_observed_ms'] = True
+                elif mutation == 'diagnostic-missing': stage['last_progress']['diagnostic'] = None
+                elif mutation == 'diagnostic-malformed': stage['last_progress']['diagnostic']['via'] = 9
+                with self.assertRaises(RuntimeError): self.create('bad-markdown-' + mutation)
+
+    def test_source_zip_cannot_enter_even_a_rehashed_portable_archive(self):
+        result = self.create()
+        for archive in self.archives(result):
+            def inject(entries):
+                prefix = archive.stem + '/'
+                payload = b'synthetic source archive must never ship'
+                relative = 'third_party/source_archives/scintilla567.zip'
+                entries[prefix + relative] = payload
+                entries[prefix + 'SHA256SUMS.txt'] += (hashlib.sha256(payload).hexdigest() + '  ' + relative + '\n').encode()
+            self.rewrite_zip(archive, inject)
+            with self.assertRaisesRegex(RuntimeError, 'source archive'):
+                package.verify_archive(archive)
 
 
 if __name__ == '__main__':

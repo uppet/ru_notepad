@@ -1,4 +1,4 @@
-# Status and keyboard scope in 0.1.4
+# Status and keyboard scope in 0.1.7
 
 ## Status
 
@@ -14,7 +14,7 @@ Existing application keys remain Ctrl+N/O/S, Ctrl+Shift+S, Ctrl+W, Ctrl+F/H, F3 
 
 Added: Ctrl+Shift+Tab for the previous tab; Ctrl+PageUp/PageDown as previous/next alternatives; Ctrl++/Ctrl+- for zoom, including keypad plus/minus; Ctrl+0 for zoom reset. Plain Ctrl+Tab still selects the next tab. Tab navigation wraps. Zoom remains per-document and does not dirty text.
 
-The application never consumes Alt or Ctrl+Alt/AltGr combinations. Unsupported Shift combinations are left to the focused control rather than triggering the unshifted command. Shift+F3 backward search is not implemented or claimed.
+The application never consumes Alt or Ctrl+Alt/AltGr combinations. Unsupported Shift combinations are left to the focused control rather than triggering the unshifted command. Shift+F3 finds the previous literal match; F3 finds the next. Search options apply in both directions; see [literal search](literal-search.md).
 
 For Ru folding, Ctrl+Shift+[ collapses all and Ctrl+Shift+] expands all. The View menu exposes the same commands. Re-selecting the active language preserves fold state; changing to plain reveals hidden text. These commands do not apply to the large-file plain-text mode.
 

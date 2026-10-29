@@ -1,5 +1,6 @@
 # Pure Ru / Win32 file codec. Import this module before entering native callbacks.
 # Public: 读文件 / 写文件 and 文件.读取 / 文件.写入. See docs/file_codec.md.
+本地 取 外言 'i18n.ru'.
 密 取 外言 '如:密'.
 _属性位 取 外言 './file_codec_flags.ru'.
 流块字节 取 65536.
@@ -57,7 +58,7 @@ _文件信息型 取 密 其 结构 [
 _状态 取 {'sequence':0}.
 
 作 _失败 操作 为 句 成果:
-    卒 操作 + '（Windows 错误 ' + (成果 其 错误码 为 句) + '）'.
+    卒 (本地 其 格式 'error.windows_operation' ([操作,(成果 其 错误码 为 句)])).
 为
 
 作 _检查成功 成果 操作 为 句:
@@ -87,14 +88,14 @@ _状态 取 {'sequence':0}.
 作 _检查编码 编码 为 数 自动 为 事实:
     若 自动 且 编码 == 0 则 完. 然
     若 编码 != UTF8 且 编码 != UTF16LE 且 编码 != UTF16BE 且 编码 != CP1252 且 编码 != CP936 则
-        卒 '不支持的编码；请选择 UTF-8、UTF-16LE、UTF-16BE、Windows-1252 或 GBK (CP936)'.
+        卒 (本地 其 文本 'error.codec.unsupported_encoding').
     然
 为
 
 作 _检查路径段 段文 为 句:
     若 段文 == '' 或 段文 == '.' 或 段文 == '..' 则 完. 然
     末字 取 段文[段文 其 量 - 1].
-    若 末字 == ' ' 或 末字 == '.' 则 卒 '本版不支持以空格或句点结尾的路径段'. 然
+    若 末字 == ' ' 或 末字 == '.' 则 卒 (本地 其 文本 'error.path.trailing_character'). 然
     点位 取 0.
     循 段文 其 量 次
         若 段文[点位] == '.' 则 破. 然
@@ -123,11 +124,11 @@ _状态 取 {'sequence':0}.
         位 取 位 + 1.
     环
     若 基础名 == 'CON' 或 基础名 == 'PRN' 或 基础名 == 'AUX' 或 基础名 == 'NUL' 或 基础名 == 'CONIN$' 或 基础名 == 'CONOUT$' 或 基础名 == 'CLOCK$' 则
-        卒 '不能使用 DOS 保留设备名称作为文件路径'.
+        卒 (本地 其 文本 'error.path.reserved_device').
     然
     若 基础名 其 量 == 4 则
         若 (基础名[:3] == 'COM' 或 基础名[:3] == 'LPT') 且 ('0123456789¹²³' 其 含 基础名[3]) 则
-            卒 '不能使用 DOS 保留设备名称作为文件路径'.
+            卒 (本地 其 文本 'error.path.reserved_device').
         然
     然
 为
@@ -154,19 +155,19 @@ _状态 取 {'sequence':0}.
 法
 
 算 _绝对路径 路径 为 句:
-    若 路径 == '' 或 路径 其 量 > 32000 则 卒 '文件路径为空或过长'. 然
+    若 路径 == '' 或 路径 其 量 > 32000 则 卒 (本地 其 文本 'error.path.empty_or_long'). 然
     # Device namespaces and alternate streams are intentionally unsupported.
     若 _命名空间路径 路径 则
-        卒 '本版不支持设备路径或扩展命名空间路径'.
+        卒 (本地 其 文本 'error.path.device_namespace').
     然
     位 取 0.
     循 路径 其 量 次
         字 取 路径[位].
-        若 字 < ' ' 则 卒 '文件路径包含控制字符'. 然
+        若 字 < ' ' 则 卒 (本地 其 文本 'error.path.control_character'). 然
         若 字 == '*' 或 字 == '?' 或 字 == '"' 或 字 == '<' 或 字 == '>' 或 字 == '|' 则
-            卒 '文件路径包含不支持的字符'.
+            卒 (本地 其 文本 'error.path.unsupported_character').
         然
-        若 字 == ':' 且 位 != 1 则 卒 '本版不支持备用数据流路径'. 然
+        若 字 == ':' 且 位 != 1 则 卒 (本地 其 文本 'error.path.alternate_stream'). 然
         位 取 位 + 1.
     环
     _检查所有路径段 路径.
@@ -177,17 +178,17 @@ _状态 取 {'sequence':0}.
     输入 其 关闭.
     若 长 == 0 或 长 >= 32768 则
         输出 其 关闭.
-        _失败 '无法解析文件路径' 成果.
+        _失败 (本地 其 文本 'error.path.resolve') 成果.
     然
     验证 取 _WideCharToMultiByte 其 调用 [UTF8,128,输出,长,空,0,空,空].
     若 (验证 其 值) 其 为空 则
         输出 其 关闭.
-        卒 '规范化文件路径包含无效 UTF-16；请选择有效的 Unicode 路径'.
+        卒 (本地 其 文本 'error.path.invalid_utf16').
     然
     文 取 输出 其 解UTF16.
     输出 其 关闭.
-    若 文 其 量 > 32000 或 文[文 其 量 - 1] == '\\' 或 文[文 其 量 - 1] == '/' 则 卒 '请选择普通文件路径'. 然
-    若 _命名空间路径 文 则 卒 '不支持规范化后形成的设备命名空间'. 然
+    若 文 其 量 > 32000 或 文[文 其 量 - 1] == '\\' 或 文[文 其 量 - 1] == '/' 则 卒 (本地 其 文本 'error.path.regular_file'). 然
+    若 _命名空间路径 文 则 卒 (本地 其 文本 'error.path.normalized_namespace'). 然
     _检查所有路径段 文.
     得 文.
 法
@@ -202,25 +203,25 @@ _状态 取 {'sequence':0}.
     若 属性 其 数 == 4294967295 则
         码 取 成果 其 错误码.
         若 缺失可 且 (码 == 2 或 码 == 3) 则 得 假. 然
-        _失败 '无法访问文件' 成果.
+        _失败 (本地 其 文本 'error.file.access') 成果.
     然
-    若 _属性位 其 已设 属性 4 则 卒 '请选择文件，不能打开文件夹'. 然
-    若 _属性位 其 已设 属性 10 则 卒 '本版不覆盖重解析点或符号链接；请直接选择目标文件'. 然
+    若 _属性位 其 已设 属性 4 则 卒 (本地 其 文本 'error.file.directory'). 然
+    若 _属性位 其 已设 属性 10 则 卒 (本地 其 文本 'error.file.reparse_point'). 然
     得 真.
 法
 
 算 _取信息 句柄:
     类 取 _GetFileType 其 调用 [句柄].
-    若 (类 其 值) 其 数 != 1 则 卒 '仅支持普通磁盘文件'. 然
+    若 (类 其 值) 其 数 != 1 则 卒 (本地 其 文本 'error.file.disk_only'). 然
     信息 取 _文件信息型 其 新建.
     成果 取 _GetFileInformationByHandle 其 调用 [句柄,信息].
     若 (成果 其 值) 其 为空 则
         信息 其 关闭.
-        _失败 '无法读取文件状态' 成果.
+        _失败 (本地 其 文本 'error.file.status') 成果.
     然
     若 _属性位 其 已设 (信息 其 读 'attr') 4 则
         信息 其 关闭.
-        卒 '请选择普通文件'.
+        卒 (本地 其 文本 'error.file.regular_only').
     然
     得 信息.
 法
@@ -244,17 +245,17 @@ _状态 取 {'sequence':0}.
     # FILE_SHARE_READ: no writer or replacer can coexist with this snapshot.
     成果 取 _CreateFileW 其 调用 [路径内存,2147483648,1,空,3,128,空].
     句柄 取 成果 其 值.
-    若 _无效句柄 句柄 则 _失败 '无法打开文件（可能被占用）' 成果. 然
+    若 _无效句柄 句柄 则 _失败 (本地 其 文本 'error.file.open') 成果. 然
     得 句柄.
 法
 
 算 _宽文 内存 字数 为 数:
     # Caller owns a zero-filled buffer with at least one extra UTF-16 NUL.
     长成果 取 _lstrlenW 其 调用 [内存].
-    若 (长成果 其 值) 其 数 != 字数 则 卒 '文件包含 NUL，不能作为文本打开'. 然
+    若 (长成果 其 值) 其 数 != 字数 则 卒 (本地 其 文本 'error.codec.nul'). 然
     若 字数 > 0 则
         验证 取 _WideCharToMultiByte 其 调用 [UTF8,128,内存,字数,空,0,空,空].
-        若 (验证 其 值) 其 为空 则 卒 '文件包含无效 UTF-16 序列'. 然
+        若 (验证 其 值) 其 为空 则 卒 (本地 其 文本 'error.codec.invalid_utf16'). 然
     然
     得 内存 其 解UTF16.
 法
@@ -265,13 +266,13 @@ _状态 取 {'sequence':0}.
     文 取 ''.
     试
         若 编码 == UTF16LE 或 编码 == UTF16BE 则
-            若 字节数 % 2 != 0 则 卒 'UTF-16 文件的字节数必须为偶数'. 然
+            若 字节数 % 2 != 0 则 卒 (本地 其 文本 'error.codec.utf16_length'). 然
             字数 取 字节数 / 2.
             若 编码 == UTF16BE 则
                 宽 取 密 其 缓冲 (字节数 + 2).
                 内存们 其 增 宽.
                 成果 取 _LCMapStringW 其 调用 [127,2048,数据,字数,宽,字数].
-                若 (成果 其 值) 其 数 != 字数 则 _失败 'UTF-16BE 字节交换失败' 成果. 然
+                若 (成果 其 值) 其 数 != 字数 则 _失败 (本地 其 文本 'error.codec.utf16be_swap') 成果. 然
                 文 取 _宽文 宽 字数.
             另
                 文 取 _宽文 数据 字数.
@@ -281,14 +282,14 @@ _状态 取 {'sequence':0}.
             字数 取 (成果 其 值) 其 数.
             若 字数 == 0 则
                 若 编码 == UTF8 则
-                    卒 '不是有效 UTF-8；请明确选择 Windows-1252 或 GBK (CP936) 重新打开'.
+                    卒 (本地 其 文本 'error.codec.invalid_utf8').
                 然
-                _失败 '文件不是所选编码的有效文本' 成果.
+                _失败 (本地 其 文本 'error.codec.invalid_selected') 成果.
             然
             宽 取 密 其 缓冲 ((字数 + 1) * 2).
             内存们 其 增 宽.
             成果 取 _MultiByteToWideChar 其 调用 [编码,8,数据,字节数,宽,字数].
-            若 (成果 其 值) 其 数 != 字数 则 _失败 '文本解码失败' 成果. 然
+            若 (成果 其 值) 其 数 != 字数 则 _失败 (本地 其 文本 'error.codec.decode') 成果. 然
             文 取 _宽文 宽 字数.
         然
     救 原因
@@ -313,14 +314,14 @@ _状态 取 {'sequence':0}.
         状态['memory'] 其 增 信息.
         长存 取 _大小型 其 新建.
         状态['memory'] 其 增 长存.
-        _检查成功 (_GetFileSizeEx 其 调用 [句柄,长存]) '无法读取文件大小'.
+        _检查成功 (_GetFileSizeEx 其 调用 [句柄,长存]) (本地 其 文本 'error.file.size_read').
         # Guard BEFORE native->Ru numeric conversion (which is a fatal type
         # error for out-of-range integers), preserving existing dirty tabs.
         高 取 (信息 其 读 'sizeHi') 其 数.
         低 取 (信息 其 读 'sizeLo') 其 数.
-        若 高 > 2097151 则 卒 '文件大小超出本平台可精确寻址范围；原编辑内容未改变'. 然
+        若 高 > 2097151 则 卒 (本地 其 文本 'error.file.size_range'). 然
         实际 取 长存 其 读 'n'.
-        若 (实际 其 位段 32 32) != 高 或 (实际 其 位段 0 32) != 低 则 卒 '文件大小在预检期间已改变；请重试'. 然
+        若 (实际 其 位段 32 32) != 高 或 (实际 其 位段 0 32) != 低 则 卒 (本地 其 文本 'error.file.size_changed'). 然
         大小 取 高*4294967296+低.
         状态 其 增 'size' 大小.
         状态 其 增 'bytes' 大小.
@@ -345,7 +346,7 @@ _状态 取 {'sequence':0}.
 法
 
 算 确认读取 状态 确认 为 算:
-    若 状态['closed'] 则 卒 '文件读取已关闭'. 然
+    若 状态['closed'] 则 卒 (本地 其 文本 'error.file.read_closed'). 然
     若 状态['approved'] 则 得 真. 然
     试
         若 状态['size'] > 大文件提示字节 则
@@ -365,7 +366,7 @@ _状态 取 {'sequence':0}.
 作 _读入 状态 数据 长 为 数 计数:
     状态 其 增 'readCalls' (状态['readCalls']+1).
     成果 取 _ReadFile 其 调用 [状态['handle'],数据,长,计数,空].
-    _检查成功 成果 '读取文件失败'.
+    _检查成功 成果 (本地 其 文本 'error.file.read').
     状态 其 增 'readBytes' (状态['readBytes']+(计数 其 读 'n') 其 数).
 为
 
@@ -380,13 +381,13 @@ _状态 取 {'sequence':0}.
     若 总长 < 4 则 头长 取 总长. 然
     若 头长 > 0 则
         _读入 状态 头 头长 计数.
-        若 (计数 其 读 'n') 其 数 != 头长 则 卒 '文件头读取不完整'. 然
+        若 (计数 其 读 'n') 其 数 != 头长 则 卒 (本地 其 文本 'error.file.header_incomplete'). 然
     然
     a 取 (头 其 读 'a') 其 数.
     b 取 (头 其 读 'b') 其 数.
     c 取 (头 其 读 'c') 其 数.
     d 取 (头 其 读 'd') 其 数.
-    若 总长 >= 4 且 ((a == 255 且 b == 254 且 c == 0 且 d == 0) 或 (a == 0 且 b == 0 且 c == 254 且 d == 255)) 则 卒 '本版不支持 UTF-32；请先转换为 UTF-8 或 UTF-16'. 然
+    若 总长 >= 4 且 ((a == 255 且 b == 254 且 c == 0 且 d == 0) 或 (a == 0 且 b == 0 且 c == 254 且 d == 255)) 则 卒 (本地 其 文本 'error.codec.utf32'). 然
     编码 取 状态['encoding'].
     若 编码 == 0 则 编码 取 UTF8. 然
     跳过 取 0.
@@ -397,7 +398,7 @@ _状态 取 {'sequence':0}.
     状态 其 增 'bom' (跳过 > 0).
     状态 其 增 'position' 跳过.
     状态 其 增 'started' 真.
-    _检查成功 (_SetFilePointerEx 其 调用 [状态['handle'],跳过,空,0]) '无法定位文件正文'.
+    _检查成功 (_SetFilePointerEx 其 调用 [状态['handle'],跳过,空,0]) (本地 其 文本 'error.file.seek_body').
 为
 
 算 _解码前缀 数据 长 为 数 编码 为 数:
@@ -441,7 +442,7 @@ _状态 取 {'sequence':0}.
 
 算 读取一步 状态:
     若 状态['done'] 则 得 空. 然
-    若 状态['closed'] 或 非 状态['approved'] 则 卒 '文件读取尚未获准或已经关闭'. 然
+    若 状态['closed'] 或 非 状态['approved'] 则 卒 (本地 其 文本 'error.file.read_unavailable'). 然
     数据 取 空.
     试
         若 非 状态['started'] 则 _开始读取正文 状态. 然
@@ -454,8 +455,8 @@ _状态 取 {'sequence':0}.
         若 长 == 0 则
             # A final bounded probe detects unexpected growth as well as truncation.
             _读入 状态 数据 1 计数.
-            若 (计数 其 读 'n') 其 数 != 0 则 卒 '文件在读取期间增长；原编辑内容未改变'. 然
-            若 (_句柄戳 状态['handle']) != 状态['stamp'] 则 卒 '文件在读取期间已改变；请重试'. 然
+            若 (计数 其 读 'n') 其 数 != 0 则 卒 (本地 其 文本 'error.file.grew_during_read'). 然
+            若 (_句柄戳 状态['handle']) != 状态['stamp'] 则 卒 (本地 其 文本 'error.file.changed_during_read'). 然
             数据 其 关闭.
             数据 取 空.
             状态 其 增 'done' 真.
@@ -463,13 +464,13 @@ _状态 取 {'sequence':0}.
             得 空.
         然
         _读入 状态 数据 长 计数.
-        若 (计数 其 读 'n') 其 数 != 长 则 卒 '文件读取不完整；原编辑内容未改变'. 然
+        若 (计数 其 读 'n') 其 数 != 长 则 卒 (本地 其 文本 'error.file.read_incomplete'). 然
         块 取 _解码流块 数据 长 状态['encoding'] (长 == 剩余).
         数据 其 关闭.
         数据 取 空.
         状态 其 增 'position' (状态['position']+块['bytes']).
         若 块['bytes'] != 长 则
-            _检查成功 (_SetFilePointerEx 其 调用 [状态['handle'],状态['position'],空,0]) '无法保留跨块字符'.
+            _检查成功 (_SetFilePointerEx 其 调用 [状态['handle'],状态['position'],空,0]) (本地 其 文本 'error.file.seek_chunk').
         然
         文存 取 密 其 UTF8 块['text'].
         状态 其 增 'textBytes' (状态['textBytes']+(文存 其 大小)-1).
@@ -525,7 +526,7 @@ _状态 取 {'sequence':0}.
 
 算 _编码数据 文本 为 句 编码 为 数 BOM 为 事实:
     _检查编码 编码 假.
-    若 BOM 且 (编码 == CP1252 或 编码 == CP936) 则 卒 'Windows-1252 与 GBK 不使用 BOM'. 然
+    若 BOM 且 (编码 == CP1252 或 编码 == CP936) 则 卒 (本地 其 文本 'error.codec.legacy_bom'). 然
     内存们 取 [].
     数据 取 空.
     长 取 0.
@@ -545,7 +546,7 @@ _状态 取 {'sequence':0}.
             若 长 > 0 则
                 若 编码 == UTF16BE 则
                     成果 取 _LCMapStringW 其 调用 [127,2048,宽,宽长,数据,宽长].
-                    若 (成果 其 值) 其 数 != 宽长 则 _失败 'UTF-16BE 字节交换失败' 成果. 然
+                    若 (成果 其 值) 其 数 != 宽长 则 _失败 (本地 其 文本 'error.codec.utf16be_swap') 成果. 然
                 另
                     # Re-encode through a managed UTF16 owner; no raw pointer math.
                     数据 其 关闭.
@@ -561,19 +562,19 @@ _状态 取 {'sequence':0}.
             若 宽长 > 0 则
                 成果 取 _WideCharToMultiByte 其 调用 [编码,标志,宽,宽长,空,0,空,默认指针].
                 长 取 (成果 其 值) 其 数.
-                若 长 == 0 则 _失败 '文本编码失败' 成果. 然
+                若 长 == 0 则 _失败 (本地 其 文本 'error.codec.encode') 成果. 然
                 若 编码 != UTF8 且 (默认标志 其 读 'n') 其 数 != 0 则
-                    卒 '所选旧编码不能无损保存这些字符；请选择 Unicode 编码'.
+                    卒 (本地 其 文本 'error.codec.lossless_required').
                 然
             然
             数据 取 密 其 缓冲 (长 + 1).
             若 长 > 0 则
                 默认标志 其 写 'n' 0.
                 成果 取 _WideCharToMultiByte 其 调用 [编码,标志,宽,宽长,数据,长,空,默认指针].
-                若 (成果 其 值) 其 数 != 长 则 _失败 '文本编码失败' 成果. 然
+                若 (成果 其 值) 其 数 != 长 则 _失败 (本地 其 文本 'error.codec.encode') 成果. 然
                 若 编码 != UTF8 则
-                    若 (默认标志 其 读 'n') 其 数 != 0 则 卒 '旧编码会丢失字符，已取消保存'. 然
-                    若 (_解码 数据 长 编码) != 文本 则 卒 '旧编码往返校验失败，已取消保存'. 然
+                    若 (默认标志 其 读 'n') 其 数 != 0 则 卒 (本地 其 文本 'error.codec.loss_cancelled'). 然
+                    若 (_解码 数据 长 编码) != 文本 则 卒 (本地 其 文本 'error.codec.roundtrip_cancelled'). 然
                 然
             然
         然
@@ -589,8 +590,8 @@ _状态 取 {'sequence':0}.
 作 _写完整 句柄 数据 字节数 为 数 计数:
     若 字节数 == 0 则 完. 然
     成果 取 _WriteFile 其 调用 [句柄,数据,字节数,计数,空].
-    _检查成功 成果 '写入临时文件失败'.
-    若 (计数 其 读 'n') 其 数 != 字节数 则 卒 '临时文件写入不完整；原文件未替换'. 然
+    _检查成功 成果 (本地 其 文本 'error.file.temp_write').
+    若 (计数 其 读 'n') 其 数 != 字节数 则 卒 (本地 其 文本 'error.file.temp_incomplete'). 然
 为
 
 算 _确认目标 路径内存 预期stamp 为 句:
@@ -603,11 +604,11 @@ _状态 取 {'sequence':0}.
         链接数 取 (信息 其 读 'links') 其 数.
         戳 取 _信息戳 信息.
         信息 其 关闭.
-        若 _属性位 其 已设 属性 14 则 卒 '本版不覆盖 EFS 加密文件，以避免产生未加密的暂存内容'. 然
-        若 _属性位 其 已设 属性 0 则 卒 '文件为只读，未进行替换；请选择另存为'. 然
-        若 链接数 != 1 则 卒 '本版不覆盖具有多个硬链接的文件；请选择另存为'. 然
+        若 _属性位 其 已设 属性 14 则 卒 (本地 其 文本 'error.file.efs'). 然
+        若 _属性位 其 已设 属性 0 则 卒 (本地 其 文本 'error.file.read_only'). 然
+        若 链接数 != 1 则 卒 (本地 其 文本 'error.file.hard_links'). 然
         若 预期stamp != '' 且 戳 != 预期stamp 则
-            卒 '文件已被其他程序修改；请重新打开或另存为，避免覆盖'.
+            卒 (本地 其 文本 'error.file.conflict').
         然
     救 原因
         _关句柄 句柄.
@@ -620,7 +621,7 @@ _状态 取 {'sequence':0}.
 算 _安全分配 长存 内存们 为 阵:
     长 取 (长存 其 读 'n') 其 数.
     若 长 == 0 则 得 空. 然
-    若 长 > 16777216 则 卒 '文件安全描述符超过受管理内存限制；未写入'. 然
+    若 长 > 16777216 则 卒 (本地 其 文本 'error.security.descriptor_limit'). 然
     存 取 密 其 缓冲 长.
     内存们 其 增 存.
     得 存.
@@ -632,15 +633,15 @@ _状态 取 {'sequence':0}.
     内存们 其 增 需要.
     成果 取 _GetFileSecurityW 其 调用 [路径内存,4,空,0,需要].
     若 非 (成果 其 值) 其 为空 或 成果 其 错误码 != 122 则
-        _失败 '无法取得原文件 DACL 大小；已取消安全暂存' 成果.
+        _失败 (本地 其 文本 'error.security.dacl_size') 成果.
     然
     长 取 (需要 其 读 'n') 其 数.
-    若 长 < 20 或 长 > 16777216 则 卒 '原文件安全描述符大小无效；未写入'. 然
+    若 长 < 20 或 长 > 16777216 则 卒 (本地 其 文本 'error.security.descriptor_size'). 然
     相对 取 _安全分配 需要 内存们.
     成果 取 _GetFileSecurityW 其 调用 [路径内存,4,相对,长,需要].
-    _检查成功 成果 '无法读取原文件 DACL；已取消安全暂存'.
+    _检查成功 成果 (本地 其 文本 'error.security.dacl_read').
     成果 取 _IsValidSecurityDescriptor 其 调用 [相对].
-    _检查成功 成果 '原文件安全描述符无效；未写入'.
+    _检查成功 成果 (本地 其 文本 'error.security.original_invalid').
     # MakeAbsoluteSD provides owned destinations for every pointer-bearing part.
     主长 取 _计数型 其 新建.
     自主长 取 _计数型 其 新建.
@@ -651,22 +652,22 @@ _状态 取 {'sequence':0}.
     内存们 其 增 所有长. 内存们 其 增 组长.
     成果 取 _MakeAbsoluteSD 其 调用 [相对,空,主长,空,自主长,空,系统长,空,所有长,空,组长].
     若 非 (成果 其 值) 其 为空 或 成果 其 错误码 != 122 则
-        _失败 '无法计算安全描述符布局；未写入' 成果.
+        _失败 (本地 其 文本 'error.security.layout_compute') 成果.
     然
     绝对 取 _安全分配 主长 内存们.
-    若 绝对 == 空 则 卒 '安全描述符布局为空；未写入'. 然
+    若 绝对 == 空 则 卒 (本地 其 文本 'error.security.layout_empty'). 然
     自主 取 _安全分配 自主长 内存们.
     系统存 取 _安全分配 系统长 内存们.
     所有 取 _安全分配 所有长 内存们.
     组 取 _安全分配 组长 内存们.
     成果 取 _MakeAbsoluteSD 其 调用 [相对,绝对,主长,自主,自主长,系统存,系统长,所有,所有长,组,组长].
-    _检查成功 成果 '转换安全描述符失败；未写入'.
+    _检查成功 成果 (本地 其 文本 'error.security.convert').
     # Only this owned in-memory copy changes; the original file is untouched.
     # SE_DACL_PROTECTED prevents parent ACEs from broadening staging access.
     成果 取 _SetSecurityDescriptorControl 其 调用 [绝对,4096,4096].
-    _检查成功 成果 '无法保护暂存 DACL 的继承边界；未写入'.
+    _检查成功 成果 (本地 其 文本 'error.security.inheritance').
     成果 取 _IsValidSecurityDescriptor 其 调用 [绝对].
-    _检查成功 成果 '暂存安全描述符无效；未写入'.
+    _检查成功 成果 (本地 其 文本 'error.security.temporary_invalid').
     属性 取 _安全属性型 其 新建.
     内存们 其 增 属性.
     属性 其 写 'length' (_安全属性型 其 大小).
@@ -684,13 +685,13 @@ _状态 取 {'sequence':0}.
     状态 其 增 'tempHandle' 空.
     状态 其 增 'targetHandle' 空.
     若 状态['recovery'] 则
-        若 状态['tempExists'] 则 原因 取 原因+'；待保存内容：'+状态['tempPath']. 然
-        若 状态['backupExists'] 则 原因 取 原因+'；备份路径（可能仍为空占位文件，请同时检查原路径）：'+状态['backupPath']. 然
+        若 状态['tempExists'] 则 原因 取 (本地 其 格式 'error.file.pending_path' ([原因,状态['tempPath']])). 然
+        若 状态['backupExists'] 则 原因 取 (本地 其 格式 'error.file.recovery_path' ([原因,状态['backupPath']])). 然
     另
         若 状态['tempExists'] 则
             成果 取 _DeleteFileW 其 调用 [状态['tempMemory']].
             若 (成果 其 值) 其 为空 则
-                原因 取 原因+'；未能清理临时文件：'+状态['tempPath'].
+                原因 取 (本地 其 格式 'error.file.temp_cleanup' ([原因,状态['tempPath']])).
             另
                 状态 其 增 'tempExists' 假.
             然
@@ -698,7 +699,7 @@ _状态 取 {'sequence':0}.
         若 状态['backupExists'] 则
             成果 取 _DeleteFileW 其 调用 [状态['backupMemory']].
             若 (成果 其 值) 其 为空 则
-                原因 取 原因+'；未能清理预留备份：'+状态['backupPath'].
+                原因 取 (本地 其 格式 'error.file.reserved_cleanup' ([原因,状态['backupPath']])).
             另
                 状态 其 增 'backupExists' 假.
             然
@@ -718,7 +719,7 @@ _状态 取 {'sequence':0}.
 
 算 准备写入 路径 为 句 编码 为 数 BOM 为 事实 预期stamp 为 句:
     _检查编码 编码 假.
-    若 BOM 且 (编码 == CP1252 或 编码 == CP936) 则 卒 'Windows-1252 与 GBK 不使用 BOM'. 然
+    若 BOM 且 (编码 == CP1252 或 编码 == CP936) 则 卒 (本地 其 文本 'error.codec.legacy_bom'). 然
     路径文 取 _绝对路径 路径.
     状态 取 {'path':路径文,'encoding':编码,'bom':BOM,'expected':预期stamp,'memory':[],'tempHandle':空,'targetHandle':空,'tempMemory':空,'backupMemory':空,'tempPath':'','backupPath':'','tempExists':假,'backupExists':假,'recovery':假,'closed':假,'committed':假,'bytes':0,'chunks':0,'fileIdentity':''}.
     试
@@ -752,9 +753,9 @@ _状态 取 {'sequence':0}.
                 破.
             然
             候选 其 关闭.
-            若 成果 其 错误码 != 80 且 成果 其 错误码 != 183 则 _失败 '无法在原目录创建临时文件' 成果. 然
+            若 成果 其 错误码 != 80 且 成果 其 错误码 != 183 则 _失败 (本地 其 文本 'error.file.temp_create') 成果. 然
         环
-        若 状态['tempHandle'] == 空 则 卒 '无法创建唯一临时文件；请稍后重试'. 然
+        若 状态['tempHandle'] == 空 则 卒 (本地 其 文本 'error.file.temp_unique'). 然
         计数 取 _计数型 其 新建.
         头 取 _四字节 其 新建.
         状态['memory'] 其 增 计数.
@@ -783,7 +784,7 @@ _状态 取 {'sequence':0}.
 法
 
 算 写入一段 状态 文本 为 句:
-    若 状态['closed'] 则 卒 '保存流已经关闭'. 然
+    若 状态['closed'] 则 卒 (本地 其 文本 'error.file.save_closed'). 然
     数据 取 空.
     试
         编码后 取 _编码数据 文本 状态['encoding'] 假.
@@ -801,13 +802,13 @@ _状态 取 {'sequence':0}.
 法
 
 算 完成写入 状态:
-    若 状态['closed'] 则 卒 '保存流已经关闭'. 然
+    若 状态['closed'] 则 卒 (本地 其 文本 'error.file.save_closed'). 然
     新戳 取 ''.
     试
-        _检查成功 (_FlushFileBuffers 其 调用 [状态['tempHandle']]) '临时文件刷新失败；原文件未替换'.
+        _检查成功 (_FlushFileBuffers 其 调用 [状态['tempHandle']]) (本地 其 文本 'error.file.temp_flush').
         成果 取 _CloseHandle 其 调用 [状态['tempHandle']].
         状态 其 增 'tempHandle' 空.
-        _检查成功 成果 '关闭临时文件失败；原文件未替换'.
+        _检查成功 成果 (本地 其 文本 'error.file.temp_close').
         若 状态['originalExists'] 则
             循 64 次
                 _状态 其 增 'sequence' (_状态['sequence']+1).
@@ -824,9 +825,9 @@ _状态 取 {'sequence':0}.
                     破.
                 然
                 候选 其 关闭.
-                若 成果 其 错误码 != 80 且 成果 其 错误码 != 183 则 _失败 '无法预留恢复备份文件' 成果. 然
+                若 成果 其 错误码 != 80 且 成果 其 错误码 != 183 则 _失败 (本地 其 文本 'error.file.backup_reserve') 成果. 然
             环
-            若 非 状态['backupExists'] 则 卒 '无法预留唯一恢复备份文件'. 然
+            若 非 状态['backupExists'] 则 卒 (本地 其 文本 'error.file.backup_unique'). 然
             句柄 取 _确认目标 状态['pathMemory'] 状态['expected'].
             状态 其 增 'targetHandle' 句柄.
             _关句柄 句柄.
@@ -835,11 +836,11 @@ _状态 取 {'sequence':0}.
             成果 取 _ReplaceFileW 其 调用 [状态['pathMemory'],状态['tempMemory'],状态['backupMemory'],0,空,空].
             若 (成果 其 值) 其 为空 则
                 状态 其 增 'recovery' 真.
-                _失败 '替换失败，原文件位置可能已改变；请检查目标并保留恢复文件' 成果.
+                _失败 (本地 其 文本 'error.file.replace_recovery') 成果.
             然
         另
-            若 _检查属性 状态['pathMemory'] 真 则 卒 '目标文件刚被其他程序创建；未覆盖，请重新选择另存为'. 然
-            _检查成功 (_MoveFileExW 其 调用 [状态['tempMemory'],状态['pathMemory'],8]) '创建目标文件失败；未覆盖后来出现的文件'.
+            若 _检查属性 状态['pathMemory'] 真 则 卒 (本地 其 文本 'error.file.target_created'). 然
+            _检查成功 (_MoveFileExW 其 调用 [状态['tempMemory'],状态['pathMemory'],8]) (本地 其 文本 'error.file.target_create').
         然
         状态 其 增 'tempExists' 假.
         状态 其 增 'recovery' 真.
@@ -852,11 +853,11 @@ _状态 取 {'sequence':0}.
             状态['memory'] 其 增 信息.
             状态 其 增 'fileIdentity' ((信息 其 读 'volume') 其 句+':'+(信息 其 读 'idHi') 其 句+':'+(信息 其 读 'idLo') 其 句).
         救 原因
-            卒 '文件已写入，但无法重新取得状态；请重新打开再继续保存。'+原因.
+            卒 (本地 其 格式 'error.file.saved_status' ([原因])).
         终
         若 状态['backupExists'] 则
             成果 取 _DeleteFileW 其 调用 [状态['backupMemory']].
-            若 (成果 其 值) 其 为空 则 卒 '文件已写入，但无法清理恢复备份；请检查并手动保留或删除备份'. 然
+            若 (成果 其 值) 其 为空 则 卒 (本地 其 文本 'error.file.backup_cleanup'). 然
             状态 其 增 'backupExists' 假.
         然
         状态 其 增 'recovery' 假.
