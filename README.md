@@ -38,7 +38,7 @@ English, Simplified Chinese, Japanese, Korean, Spanish, Russian and Italian are 
 - Save-conflict checks and lossless-encoding checks
 - Literal search/replace with forward/backward, case/whole-word and wrap options; replace-all as one undo operation
 - Ru lexical tables and structural-folding policy, with a bounded application-owned C scanner for the UTF-8 hot path and incremental background styling
-- C/C++, JSON and Markdown syntax highlighting from native Lexilla; automatic extension detection and a Language menu
+- All 93 selectable built-in Notepad++ v8.9.8.1 modes, plus Ru and Markdown (95 modes); native Lexilla highlighting, automatic filename/extension detection and a grouped Language menu. See [coverage and provenance](docs/language-highlighting.md). Windows validation of this candidate is pending.
 - Native C/C++ folds for brace blocks, multiline comments and preprocessor conditionals
 - Conservative Markdown heading folds, with a per-document on/off command
 - Current-line EOL and Enter insertion mode shown separately, including mixed-EOL files
@@ -48,7 +48,7 @@ English, Simplified Chinese, Japanese, Korean, Spanish, Russian and Italian are 
 - Bounded streaming open/save, with a cancellable warning before reading files over 500,000,000 bytes
 - An original AI-generated icon
 
-There is no fixed 4 MiB file limit. At most 64 documents and 64 queued paths are allowed. Scintilla retains the full document in RAM, so available memory still limits usable sizes. Files of at least 32,000,000 bytes open in labelled plain-text large-file mode with highlighting and wrap disabled; this is a performance mode, not an opening limit. Files over exactly 500,000,000 bytes require consent before body reads. Cancel is checked between bounded I/O chunks; one slow disk call or long-line layout can still block. Embedded NUL and invalid Unicode are rejected rather than silently changed. There is no crash recovery yet. Additional syntax languages, regex parity, plugins, macros, split views, accessibility validation, and broader performance validation remain future work. `.ru` files select the Ru-owned container lexer. Folding tolerates incomplete edits conservatively and is not a full parser or syntax validator.
+There is no fixed 4 MiB file limit. At most 64 documents and 64 queued paths are allowed. Scintilla retains the full document in RAM, so available memory still limits usable sizes. Files of at least 32,000,000 bytes open in labelled plain-text large-file mode with highlighting and wrap disabled; this is a performance mode, not an opening limit. Files over exactly 500,000,000 bytes require consent before body reads. Cancel is checked between bounded I/O chunks; one slow disk call or long-line layout can still block. Embedded NUL and invalid Unicode are rejected rather than silently changed. There is no crash recovery yet. Regex parity, plugins, macros, split views, accessibility validation, and broader performance validation remain future work. `.ru` files select the Ru-owned container lexer. Folding tolerates incomplete edits conservatively and is not a full parser or syntax validator.
 
 For Ru files, click the folding margin or use View > Collapse all folds / Expand all folds (Ctrl+Shift+[ / Ctrl+Shift+]). New/opened and successfully saved-as `.ru` paths select Ru automatically; Language > Ru / 如言 enables it manually. Switching tabs retains fold state; switching to plain text restores all hidden lines. The 32 MB plain-text performance mode also disables Ru folding.
 

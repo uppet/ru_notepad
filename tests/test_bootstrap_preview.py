@@ -28,7 +28,7 @@ class PreviewContracts(unittest.TestCase):
         self.root=Path(self.tmp.name).resolve()
 
     def test_preview_package_documents_instance_tabs_acceptance(self):
-        self.assertEqual(package.PREVIEW_DOCS,('bootstrap-llvm-preview.md','recent-files.md','single-instance-and-tabs.md'))
+        self.assertEqual(package.PREVIEW_DOCS,('bootstrap-llvm-preview.md','recent-files.md','single-instance-and-tabs.md','language-highlighting.md'))
         for name in package.PREVIEW_DOCS:
             self.assertTrue((package.ROOT/'docs'/name).is_file())
         source=Path(package.__file__).read_text()
@@ -102,7 +102,7 @@ class PreviewContracts(unittest.TestCase):
         expected=['feature/bootstrap-llvm-preview-20261024','feature/bootstrap-llvm-preview-20261024-r1',
                   'feature/bootstrap-llvm-preview-20261024-r2','feature/bootstrap-llvm-preview-20261024-r3',
                   'feature/notepad-024-responsive-preview-20261026','wip','main',
-                  'feature/notepad-main-bootstrap-20261029']
+                  'feature/notepad-main-bootstrap-20261029','feature/notepad-all-languages-20261029']
         def verify(text):
             match=re.search(r'^  push:\n    branches: \[(.*?)\]$',text,re.M)
             self.assertIsNotNone(match)
@@ -113,7 +113,8 @@ class PreviewContracts(unittest.TestCase):
             self.assertIn('    timeout-minutes: 60\n',text)
         verify(workflow)
         for bad in (workflow.replace(', wip, main,',', main,'),workflow.replace(', main,',','),
-                    workflow.replace(', feature/notepad-main-bootstrap-20261029]',']'),
+                    workflow.replace(', feature/notepad-main-bootstrap-20261029,',','),
+                    workflow.replace(', feature/notepad-all-languages-20261029]',']'),
                     workflow.replace('cancel-in-progress: false','cancel-in-progress: true'),
                     workflow.replace('timeout-minutes: 60','timeout-minutes: 90')):
             with self.assertRaises(AssertionError):verify(bad)
@@ -413,8 +414,8 @@ class PreviewContracts(unittest.TestCase):
             return build.verify_proof(proof,**kwargs)
         with patch.object(recent_fixtures,'validate_toolchain'),patch.object(recent_fixtures,'verify_proof',side_effect=verify_fields) as verifier:
             recent_fixtures.validate_report(report,app,compiler,dependencies)
-            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16, 'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':53, 'single_instance_native':18, 'single_instance_busy_native':23})
-            self.assertEqual(verifier.call_count,11)
+            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16, 'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':53, 'single_instance_native':18, 'single_instance_busy_native':23, 'language_catalog_native':678})
+            self.assertEqual(verifier.call_count,12)
             bad=copy.deepcopy(report);del bad['results']['single_instance_busy_native']
             with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)
             for name,old_count in (('single_instance_policy',39),('single_instance_native',15)):
@@ -471,7 +472,7 @@ class PreviewContracts(unittest.TestCase):
                         'python -I editor/tools/test_markdown_step_metrics.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-step-controls"',
                         'python -I editor/tools/test_markdown_bulk_guards.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-bulk-guard-controls"'):
             self.assertIn(command+'\n          if ($LASTEXITCODE) { exit $LASTEXITCODE }',body)
-        self.assertEqual(body.count('if ($LASTEXITCODE)'),10)
+        self.assertEqual(body.count('if ($LASTEXITCODE)'),15)
 
     def test_recent_fixtures_require_exact_individual_assertions_and_total(self):
         good=b'PASS: a\nPASS: b\nTOTAL PASS: 2\n'

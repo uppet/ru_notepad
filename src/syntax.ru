@@ -1,10 +1,11 @@
-# Ru-owned guarded selection; Lexilla colours C/C++, JSON and Markdown.
+# Ru-owned guarded selection; the pinned catalog selects a fresh native Lexilla lexer.
 # Markdown folds use a separate bounded Ru policy, never lexer style heuristics.
 # Import/initialise this module before registering any native window callback.
 本地 取 外言 'i18n.ru'.
 密 取 外言 '如:密'.
 窗 取 外言 'win32.ru'.
 策 取 外言 'syntax_policy.ru'.
+谱 取 外言 'syntax_catalog.ru'.
 如语 取 外言 'ru_syntax.ru'.
 标语 取 外言 'markdown_syntax.ru'.
 _选择们 取 {}.
@@ -115,14 +116,14 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
     得 空.
 法
 算 _清样式 态 柄:
-    位 取 0.
-    循 32 次
-        _发设 态 柄 2051 位 2039583.
-        _发设 态 柄 2052 位 16777215.
-        _发设 态 柄 2053 位 0.
-        _发设 态 柄 2054 位 0.
-        位 取 位+1.
-    环
+    # Reset ALL native lexer styles, including embedded HTML/JS/PHP styles above
+    # 39. STYLECLEARALL copies the editor's existing default font/size as well;
+    # preserve the line-number palette configured by editor.ru, not old syntax.
+    行前 取 (_发设 态 柄 2481 33 0) 其 数.
+    行后 取 (_发设 态 柄 2482 33 0) 其 数.
+    _发设 态 柄 2050 0 0.
+    _发设 态 柄 2051 33 行前.
+    _发设 态 柄 2052 33 行后.
     _发设 态 柄 2005 0 0.
     得 空.
 法
@@ -151,11 +152,11 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
         _验选择 态 柄.
         得 结果.
     然
-    若 语言 != 'cpp' 且 语言 != 'json' 且 语言 != 'markdown' 则 得 _纯文 态 柄. 然
+    若 语言 == 'plain' 或 非 (谱 其 有语言 语言) 则 得 _纯文 态 柄. 然
     若 非 (词法状态 其 查 'ready') 则 得 _纯文 态 柄. 然
     若 (如语 其 _受限 柄) 则 得 _纯文 态 柄. 然
     _发设 态 柄 2382 0 0.
-    名存 取 密 其 UTF8 语言.
+    名存 取 密 其 UTF8 (谱 其 词法器 语言).
     词法器 取 窗 其 结果 (CreateLexer 其 调用 [名存]).
     若 词法器 其 为空 则
         名存 其 关闭.
@@ -190,10 +191,28 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
         _性质 态 柄 'lexer.json.escape.sequence' '1'.
         色号们 取 [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13].
         色值们 取 [12665455, 1381795, 3023567, 2514553, 12665455, 4473924, 1381795, 1381795, 12934144, 12934144, 3023567].
-    另
+    另 若 语言 == 'markdown' 则
         色号们 取 [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21].
         色值们 取 [12934144, 12934144, 12665455, 12665455, 12934144, 12934144, 12934144, 12934144, 12934144, 12934144, 2514553, 2514553, 3573283, 8421504, 4473924, 12665455, 1381795, 1381795, 1381795].
-    然 然
+    另
+        # New objects start with empty keyword sets and default properties, even
+        # when two language variants share one lexer (C/C++/Java, HTML/XML...).
+        # Never reuse a lexer object or inherit the previous variant's settings.
+        词表们 取 谱 其 关键词 语言.
+        位 取 0.
+        循 词表们 其 量 次
+            _发文设 态 柄 4005 位 词表们[位].
+            位 取 位+1.
+        环
+        属性们 取 谱 其 性质 语言.
+        位 取 0.
+        循 (属性们 其 量)/2 次
+            _性质 态 柄 属性们[位] 属性们[位+1].
+            位 取 位+2.
+        环
+        色号们 取 谱 其 色号 语言.
+        色值们 取 谱 其 色值 语言.
+    然 然 然
     # Parallel primitive palettes preserve the exact style/colour pairs and
     # avoid nested-array dependency growth in the pinned native ABI analyzer.
     位 取 0.
@@ -201,16 +220,14 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
         _配色 态 柄 色号们[位] 色值们[位].
         位 取 位+1.
     环
-    预期 取 3.
-    若 语言 == 'json' 则 预期 取 120. 然
-    若 语言 == 'markdown' 则 预期 取 98. 然
+    预期 取 谱 其 词法号 语言.
     若 ((_发设 态 柄 2383 0 0) 其 数) != 0 或 ((_发设 态 柄 4002 0 0) 其 数) != 预期 则
         词法状态 其 增 'warning' 'error.syntax.language_configuration'.
         词法状态 其 增 'warningArgs' ([语言]).
         # The object was already adopted above; SETILEXER(NULL) releases it.
         得 _纯文 态 柄.
     然
-    若 语言 == 'cpp' 则
+    若 语言 != 'markdown' 且 (谱 其 可折叠 语言) 则
         如语 其 _配折叠 柄.
         _验选择 态 柄.
     然
@@ -223,6 +240,7 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
         _验选择 态 柄.
         若 已选 != 'markdown' 则 得 _纯文 态 柄. 然
     然
+    若 语言 != 'markdown' 则 _发设 态 柄 2032 0 0. 然
     # Invalidate only; Scintilla requests native styling for visible text on paint.
     得 语言.
 法
@@ -274,7 +292,10 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
 # Margin width also rejects a disabled or partially configured lexer.
 算 _原生折叠 柄:
     若 非 (如语 其 _存在 柄) 或 非 (如语 其 _同线程 柄) 则 得 假. 然
-    得 ((窗 其 发送 柄 4002 0 0) 其 数 == 3) 且 ((窗 其 发送 柄 2243 2 0) 其 数 > 0).
+    词法号 取 (窗 其 发送 柄 4002 0 0) 其 数.
+    # Only configured native folders have a visible fold margin. Container Ru,
+    # plain/null and the custom Markdown folder must never take this route.
+    得 词法号 > 1 且 词法号 != 98 且 ((窗 其 发送 柄 2243 2 0) 其 数 > 0).
 法
 算 折叠 柄 位置 为 数:
     若 _原生折叠 柄 则

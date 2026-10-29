@@ -1,0 +1,758 @@
+[
+  {
+    "id": "plain",
+    "text": "hello\n",
+    "position": 0,
+    "length": 0,
+    "style": -1
+  },
+  {
+    "id": "cpp",
+    "text": "class Widget { public: int value; };\n",
+    "position": 0,
+    "length": 5,
+    "style": 5,
+    "marker": "class"
+  },
+  {
+    "id": "json",
+    "text": "{\"value\": true}\n",
+    "position": 10,
+    "length": 4,
+    "style": 11,
+    "marker": "true"
+  },
+  {
+    "id": "ru",
+    "text": "hello\n",
+    "position": 0,
+    "length": 0,
+    "style": -1
+  },
+  {
+    "id": "markdown",
+    "text": "hello\n",
+    "position": 0,
+    "length": 0,
+    "style": -1
+  },
+  {
+    "id": "actionscript",
+    "text": "var value:int = 42;\n",
+    "position": 0,
+    "length": 3,
+    "style": 5,
+    "marker": "var"
+  },
+  {
+    "id": "ada",
+    "text": "procedure Hello is\nbegin\nnull;\nend Hello;\n",
+    "position": 0,
+    "length": 9,
+    "style": 1,
+    "marker": "procedure"
+  },
+  {
+    "id": "asn1",
+    "text": "Name ::= INTEGER\n",
+    "position": 9,
+    "length": 7,
+    "style": 9,
+    "marker": "INTEGER"
+  },
+  {
+    "id": "asp",
+    "text": "<% Dim value %>\n",
+    "position": 3,
+    "length": 3,
+    "style": 84,
+    "marker": "Dim"
+  },
+  {
+    "id": "asm",
+    "text": "mov eax, 42\n",
+    "position": 0,
+    "length": 3,
+    "style": 6,
+    "marker": "mov"
+  },
+  {
+    "id": "autoit",
+    "text": "If 1 Then\nEndIf\n",
+    "position": 0,
+    "length": 2,
+    "style": 5,
+    "marker": "If"
+  },
+  {
+    "id": "avs",
+    "text": "return last\n",
+    "position": 0,
+    "length": 6,
+    "style": 9,
+    "marker": "return"
+  },
+  {
+    "id": "baanc",
+    "text": "function main()\n{\n return\n}\n",
+    "position": 0,
+    "length": 8,
+    "style": 4,
+    "marker": "function"
+  },
+  {
+    "id": "batch",
+    "text": "@echo off\n",
+    "position": 1,
+    "length": 4,
+    "style": 2,
+    "marker": "echo"
+  },
+  {
+    "id": "blitzbasic",
+    "text": "If True Then\nEndIf\n",
+    "position": 0,
+    "length": 2,
+    "style": 3,
+    "marker": "If"
+  },
+  {
+    "id": "c",
+    "text": "int main(void) { return 0; }\n",
+    "position": 0,
+    "length": 3,
+    "style": 5,
+    "marker": "int"
+  },
+  {
+    "id": "cs",
+    "text": "public class Widget {}\n",
+    "position": 0,
+    "length": 6,
+    "style": 5,
+    "marker": "public"
+  },
+  {
+    "id": "caml",
+    "text": "let value = 42\n",
+    "position": 0,
+    "length": 3,
+    "style": 3,
+    "marker": "let"
+  },
+  {
+    "id": "cmake",
+    "text": "project(Hello)\n",
+    "position": 0,
+    "length": 7,
+    "style": 5,
+    "marker": "project"
+  },
+  {
+    "id": "cobol",
+    "text": "       IDENTIFICATION DIVISION.\n       PROGRAM-ID. HELLO.\n",
+    "position": 7,
+    "length": 14,
+    "style": 5,
+    "marker": "IDENTIFICATION"
+  },
+  {
+    "id": "coffeescript",
+    "text": "class Widget\n",
+    "position": 0,
+    "length": 5,
+    "style": 5,
+    "marker": "class"
+  },
+  {
+    "id": "csound",
+    "text": "instr 1\nendin\n",
+    "position": 0,
+    "length": 5,
+    "style": 6,
+    "marker": "instr"
+  },
+  {
+    "id": "css",
+    "text": "body { color: red; }\n",
+    "position": 7,
+    "length": 5,
+    "style": 6,
+    "marker": "color"
+  },
+  {
+    "id": "d",
+    "text": "module hello;\n",
+    "position": 0,
+    "length": 6,
+    "style": 6,
+    "marker": "module"
+  },
+  {
+    "id": "diff",
+    "text": "--- old\n+++ new\n@@ -1 +1 @@\n-old\n+new\n",
+    "position": 0,
+    "length": 3,
+    "style": 3,
+    "marker": "---"
+  },
+  {
+    "id": "erlang",
+    "text": "case X of\n  true -> ok\nend.\n",
+    "position": 0,
+    "length": 4,
+    "style": 4,
+    "marker": "case"
+  },
+  {
+    "id": "errorlist",
+    "text": "main.c:10:2: error: example\n",
+    "position": 0,
+    "length": 6,
+    "style": 2,
+    "marker": "main.c"
+  },
+  {
+    "id": "escseq",
+    "text": "\u001b[31mred\u001b[0m\n",
+    "position": 5,
+    "length": 3,
+    "style": 2,
+    "marker": "red"
+  },
+  {
+    "id": "escript",
+    "text": "if (1)\nendif\n",
+    "position": 0,
+    "length": 2,
+    "style": 11,
+    "marker": "if"
+  },
+  {
+    "id": "forth",
+    "text": ": hello 42 ;\n",
+    "position": 0,
+    "length": 1,
+    "style": 6,
+    "marker": ":"
+  },
+  {
+    "id": "fortran77",
+    "text": "      PROGRAM HELLO\n      END\n",
+    "position": 6,
+    "length": 7,
+    "style": 8,
+    "marker": "PROGRAM"
+  },
+  {
+    "id": "fortran",
+    "text": "program hello\nend program hello\n",
+    "position": 0,
+    "length": 7,
+    "style": 8,
+    "marker": "program"
+  },
+  {
+    "id": "freebasic",
+    "text": "If 1 Then\nEnd If\n",
+    "position": 0,
+    "length": 2,
+    "style": 3,
+    "marker": "If"
+  },
+  {
+    "id": "gdscript",
+    "text": "func hello():\n    return 42\n",
+    "position": 0,
+    "length": 4,
+    "style": 5,
+    "marker": "func"
+  },
+  {
+    "id": "go",
+    "text": "package main\nfunc main() {}\n",
+    "position": 0,
+    "length": 7,
+    "style": 5,
+    "marker": "package"
+  },
+  {
+    "id": "gui4cli",
+    "text": "// hello\n",
+    "position": 3,
+    "length": 5,
+    "style": 1,
+    "marker": "hello"
+  },
+  {
+    "id": "haskell",
+    "text": "module Main where\nvalue = 42\n",
+    "position": 0,
+    "length": 6,
+    "style": 2,
+    "marker": "module"
+  },
+  {
+    "id": "hollywood",
+    "text": "Function hello()\nEndFunction\n",
+    "position": 0,
+    "length": 8,
+    "style": 4,
+    "marker": "Function"
+  },
+  {
+    "id": "html",
+    "text": "<html><body>hello</body></html>\n",
+    "position": 1,
+    "length": 4,
+    "style": 1,
+    "marker": "html"
+  },
+  {
+    "id": "ini",
+    "text": "[section]\nkey=value\n",
+    "position": 1,
+    "length": 7,
+    "style": 2,
+    "marker": "section"
+  },
+  {
+    "id": "inno",
+    "text": "[Setup]\nAppName=Hello\n",
+    "position": 1,
+    "length": 5,
+    "style": 4,
+    "marker": "Setup"
+  },
+  {
+    "id": "ihex",
+    "text": ":10010000214601360121470136007EFE09D2190140\n",
+    "position": 0,
+    "length": 1,
+    "style": 1,
+    "marker": ":"
+  },
+  {
+    "id": "java",
+    "text": "public class Widget {}\n",
+    "position": 0,
+    "length": 6,
+    "style": 5,
+    "marker": "public"
+  },
+  {
+    "id": "javascript.js",
+    "text": "const value = 42;\n",
+    "position": 0,
+    "length": 5,
+    "style": 5,
+    "marker": "const"
+  },
+  {
+    "id": "json5",
+    "text": "{\"value\": true, // hello\n}\n",
+    "position": 19,
+    "length": 5,
+    "style": 6,
+    "marker": "hello"
+  },
+  {
+    "id": "jsp",
+    "text": "<% if (true) { } %>\n",
+    "position": 3,
+    "length": 2,
+    "style": 62,
+    "marker": "if"
+  },
+  {
+    "id": "kix",
+    "text": "if 1\nendif\n",
+    "position": 0,
+    "length": 2,
+    "style": 7,
+    "marker": "if"
+  },
+  {
+    "id": "latex",
+    "text": "\\documentclass{article}\n",
+    "position": 1,
+    "length": 13,
+    "style": 1,
+    "marker": "documentclass"
+  },
+  {
+    "id": "lisp",
+    "text": "(defun hello () 42)\n",
+    "position": 1,
+    "length": 5,
+    "style": 3,
+    "marker": "defun"
+  },
+  {
+    "id": "lua",
+    "text": "local value = 42\n",
+    "position": 0,
+    "length": 5,
+    "style": 5,
+    "marker": "local"
+  },
+  {
+    "id": "makefile",
+    "text": "all: input\n\techo hello\n",
+    "position": 0,
+    "length": 3,
+    "style": 5,
+    "marker": "all"
+  },
+  {
+    "id": "matlab",
+    "text": "function x = hello()\nx=42;\nend\n",
+    "position": 0,
+    "length": 8,
+    "style": 4,
+    "marker": "function"
+  },
+  {
+    "id": "mmixal",
+    "text": "Main ADD $1,$2,$3\n",
+    "position": 5,
+    "length": 3,
+    "style": 5,
+    "marker": "ADD"
+  },
+  {
+    "id": "mssql",
+    "text": "SELECT value FROM items;\n",
+    "position": 0,
+    "length": 6,
+    "style": 9,
+    "marker": "SELECT"
+  },
+  {
+    "id": "nfo",
+    "text": "hello\n",
+    "position": 0,
+    "length": 0,
+    "style": -1
+  },
+  {
+    "id": "nim",
+    "text": "proc hello() = discard\n",
+    "position": 0,
+    "length": 4,
+    "style": 5,
+    "marker": "proc"
+  },
+  {
+    "id": "nncrontab",
+    "text": "Time: * * * * * *\n",
+    "position": 0,
+    "length": 4,
+    "style": 3,
+    "marker": "Time"
+  },
+  {
+    "id": "nsis",
+    "text": "Section \"Main\"\nSectionEnd\n",
+    "position": 0,
+    "length": 7,
+    "style": 9,
+    "marker": "Section"
+  },
+  {
+    "id": "objc",
+    "text": "@interface Widget\n@end\n",
+    "position": 1,
+    "length": 9,
+    "style": 20,
+    "marker": "interface"
+  },
+  {
+    "id": "oscript",
+    "text": "function hello()\nend\n",
+    "position": 0,
+    "length": 8,
+    "style": 11,
+    "marker": "function"
+  },
+  {
+    "id": "pascal",
+    "text": "begin\nend.\n",
+    "position": 0,
+    "length": 5,
+    "style": 9,
+    "marker": "begin"
+  },
+  {
+    "id": "perl",
+    "text": "my $value = \"hello\";\n",
+    "position": 0,
+    "length": 2,
+    "style": 5,
+    "marker": "my"
+  },
+  {
+    "id": "php",
+    "text": "echo \"hello\";\n",
+    "position": 0,
+    "length": 4,
+    "style": 121,
+    "marker": "echo"
+  },
+  {
+    "id": "postscript",
+    "text": "42 dup add\n",
+    "position": 3,
+    "length": 3,
+    "style": 6,
+    "marker": "dup"
+  },
+  {
+    "id": "powershell",
+    "text": "function Hello { return 42 }\n",
+    "position": 0,
+    "length": 8,
+    "style": 8,
+    "marker": "function"
+  },
+  {
+    "id": "props",
+    "text": "[section]\nkey=value\n",
+    "position": 1,
+    "length": 7,
+    "style": 2,
+    "marker": "section"
+  },
+  {
+    "id": "purebasic",
+    "text": "If 1\nEndIf\n",
+    "position": 0,
+    "length": 2,
+    "style": 3,
+    "marker": "If"
+  },
+  {
+    "id": "python",
+    "text": "def hello():\n    return 42\n",
+    "position": 0,
+    "length": 3,
+    "style": 5,
+    "marker": "def"
+  },
+  {
+    "id": "r",
+    "text": "function(x) { return(x) }\n",
+    "position": 0,
+    "length": 8,
+    "style": 2,
+    "marker": "function"
+  },
+  {
+    "id": "raku",
+    "text": "my $value = 42;\n",
+    "position": 0,
+    "length": 2,
+    "style": 20,
+    "marker": "my"
+  },
+  {
+    "id": "rc",
+    "text": "DIALOG 0, 0, 100, 100\nBEGIN\nEND\n",
+    "position": 0,
+    "length": 6,
+    "style": 5,
+    "marker": "DIALOG"
+  },
+  {
+    "id": "rebol",
+    "text": "REBOL []\nprint \"hello\"\n",
+    "position": 9,
+    "length": 5,
+    "style": 21,
+    "marker": "print"
+  },
+  {
+    "id": "registry",
+    "text": "Windows Registry Editor Version 5.00\n[HKEY_CURRENT_USER\\Software\\Example]\n\"value\"=\"hello\"\n",
+    "position": 38,
+    "length": 17,
+    "style": 6,
+    "marker": "HKEY_CURRENT_USER"
+  },
+  {
+    "id": "ruby",
+    "text": "def hello\n 42\nend\n",
+    "position": 0,
+    "length": 3,
+    "style": 5,
+    "marker": "def"
+  },
+  {
+    "id": "rust",
+    "text": "fn main() { let value = 42; }\n",
+    "position": 0,
+    "length": 2,
+    "style": 6,
+    "marker": "fn"
+  },
+  {
+    "id": "srec",
+    "text": "S1137AF00002000800082629001853812341001813\n",
+    "position": 0,
+    "length": 1,
+    "style": 1,
+    "marker": "S"
+  },
+  {
+    "id": "sas",
+    "text": "data work.example;\nrun;\n",
+    "position": 0,
+    "length": 4,
+    "style": 13,
+    "marker": "data"
+  },
+  {
+    "id": "scheme",
+    "text": "(define value 42)\n",
+    "position": 1,
+    "length": 6,
+    "style": 3,
+    "marker": "define"
+  },
+  {
+    "id": "bash",
+    "text": "if true; then echo hello; fi\n",
+    "position": 0,
+    "length": 2,
+    "style": 4,
+    "marker": "if"
+  },
+  {
+    "id": "smalltalk",
+    "text": "true ifTrue: [42].\n",
+    "position": 0,
+    "length": 4,
+    "style": 6,
+    "marker": "true"
+  },
+  {
+    "id": "spice",
+    "text": "* hello\nR1 1 0 100\n",
+    "position": 2,
+    "length": 5,
+    "style": 8,
+    "marker": "hello"
+  },
+  {
+    "id": "sql",
+    "text": "select value from items;\n",
+    "position": 0,
+    "length": 6,
+    "style": 5,
+    "marker": "select"
+  },
+  {
+    "id": "swift",
+    "text": "func hello() { return 42 }\n",
+    "position": 0,
+    "length": 4,
+    "style": 5,
+    "marker": "func"
+  },
+  {
+    "id": "tcl",
+    "text": "if {1} { puts hello }\n",
+    "position": 0,
+    "length": 2,
+    "style": 12,
+    "marker": "if"
+  },
+  {
+    "id": "tehex",
+    "text": "%0781010\n",
+    "position": 0,
+    "length": 1,
+    "style": 1,
+    "marker": "%"
+  },
+  {
+    "id": "tex",
+    "text": "\\starttext\nhello\n\\stoptext\n",
+    "position": 1,
+    "length": 9,
+    "style": 4,
+    "marker": "starttext"
+  },
+  {
+    "id": "toml",
+    "text": "[section]\nvalue = true\n",
+    "position": 18,
+    "length": 4,
+    "style": 3,
+    "marker": "true"
+  },
+  {
+    "id": "txt2tags",
+    "text": "Title\nAuthor\nDate\n\n= Heading =\n",
+    "position": 21,
+    "length": 7,
+    "style": 6,
+    "marker": "Heading"
+  },
+  {
+    "id": "typescript",
+    "text": "interface Widget { value: number; }\n",
+    "position": 0,
+    "length": 9,
+    "style": 5,
+    "marker": "interface"
+  },
+  {
+    "id": "verilog",
+    "text": "module hello;\nendmodule\n",
+    "position": 0,
+    "length": 6,
+    "style": 5,
+    "marker": "module"
+  },
+  {
+    "id": "vhdl",
+    "text": "entity hello is\nend hello;\n",
+    "position": 0,
+    "length": 6,
+    "style": 8,
+    "marker": "entity"
+  },
+  {
+    "id": "vb",
+    "text": "Dim value As Integer\n",
+    "position": 0,
+    "length": 3,
+    "style": 3,
+    "marker": "Dim"
+  },
+  {
+    "id": "visualprolog",
+    "text": "class hello\nend class\n",
+    "position": 0,
+    "length": 5,
+    "style": 1,
+    "marker": "class"
+  },
+  {
+    "id": "xml",
+    "text": "<root value=\"one\" />\n",
+    "position": 1,
+    "length": 4,
+    "style": 1,
+    "marker": "root"
+  },
+  {
+    "id": "yaml",
+    "text": "value: true\n",
+    "position": 7,
+    "length": 4,
+    "style": 3,
+    "marker": "true"
+  }
+]

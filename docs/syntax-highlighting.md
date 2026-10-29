@@ -5,25 +5,26 @@
 The application owns colours and native integration in `src/syntax.ru`; its
 `识别` / `名称` wrappers delegate to the exact pure production policy in
 `src/syntax_policy.ru`. Scintilla
-owns text, rendering, selection and undo. C/C++, JSON and Markdown use native Lexilla lexers; Ru uses its own container policy:
+owns text, rendering, selection and undo. The candidate supports the 93 selectable
+built-in modes in Notepad++ v8.9.8.1, plus Ru and Markdown. See the complete
+[coverage and provenance](language-highlighting.md), reviewed
+`syntax/notepadpp-baseline.json` and `syntax/languages.json`.
 
-| File suffix, case-insensitive | Display | Implementation |
-| --- | --- | --- |
-| `.c`, `.h`, `.cc`, `.hh`, `.cpp`, `.hpp`, `.cxx`, `.hxx`, `.c++`, `.h++`, `.inl` | C / C++ | `cpp` (`SCLEX_CPP=3`) |
-| `.json` | JSON | `json` (`SCLEX_JSON=120`) |
-| `.md`, `.markdown` | Markdown | `markdown` (`SCLEX_MARKDOWN=98`), independent Ru heading folds |
-| `.ru` | Ru / 如言 | Ru-owned Scintilla container policy (`SCLEX_CONTAINER=0`) |
-| Other suffixes, no suffix, new unsaved documents | Plain text | No lexer |
+Filename and final-extension matching is case-insensitive; basename overrides
+cover files such as `Makefile` and `CMakeLists.txt`. A directory named
+`examples.cpp` does not make its extensionless child a C++ document. `.c` uses
+the C profile; C++ retains its earlier configuration. `.json` keeps strict JSON,
+while `.jsonc` and `.json5` select JSON5. `.tex` selects TeX, `.m` MATLAB,
+and `.mm` Objective-C. Unknown extensions and new unsaved documents are plain
+text. The Language menu keeps the original five entries and groups the other
+90 by name. Technical language names are shared across all seven UI locales.
 
-Only the final filename suffix is considered. The shared `含词` helper performs
-explicit whole-string comparisons when checking string arrays; Ru
-`其 含` is string containment and must not be used as array membership. A directory named `examples.cpp`
-does not make its extensionless child a C++ document. `.jsonc` and `.json5` are
-not advertised as JSON support. JSON comments are disabled. Keywords, numbers,
-strings, property names, operators and escape sequences receive distinct styles.
-C/C++ uses a shared C-family keyword list; this is colouring, not a compiler or a
-language-version validator. Preprocessor branch evaluation is disabled rather
-than guessing which branches are active without the project's build settings.
+Each profile selects its actual native Lexilla lexer and its reviewed keyword
+slots, properties and styles. Related languages only share a lexer where the
+upstream implementation does (for example C-family profiles). These are
+highlighting modes, not compilers, API completion databases or full validators.
+Switching modes creates a fresh lexer and resets syntax styles to prevent
+keyword/property/colour leakage. Existing font and line-number styling remain.
 
 Ru keeps keyword tables and structural-folding rules in application Ru modules.
 `RuSyntax.dll` accelerates bounded UTF-8 token scanning and fills style-byte buffers;
@@ -46,7 +47,7 @@ notifications remain independent. Scintilla completes its internal style/fold,
 layout and undo handling before this parent-notification filter. Native controls
 retain the default full subscription to test the unused-notification path.
 
-The fold margin and View menu operate on Ru, Markdown and C/C++ folds.
+The fold margin and View menu operate on Ru, Markdown and configured native folds.
 C/C++ enables Lexilla brace, multiline-comment and preprocessor folding; the
 application routes margin clicks and collapse/expand commands to the owning
 Scintilla document. Native incremental lexing maintains levels after edits.
@@ -71,7 +72,8 @@ and crash recovery are not implemented.
   The unmodified dependency license is shipped in both distribution packages. The application-owned RuSyntax DLL and Unicode data
 notice are also included and hash-checked.
 
-Lexilla is built from its official source. Its `src/makefile` expects the peer
+Lexilla is built from its official source, supplemented with the separately
+permissively licensed Objective-C lexer described in `native/lexilla/README.md`. Its `src/makefile` expects the peer
 `scintilla/include` directory. The Windows target is `../bin/lexilla.dll` with
 `windir` set; the package uses the filename `Lexilla.dll`. Static MinGW runtime
 linking avoids requiring a separate compiler installation or runtime DLL bundle.

@@ -186,7 +186,7 @@ class ManualPreviewTests(unittest.TestCase):
         result = self.build()
         self.assertEqual(result['formal_acceptance'], 'passed')
         self.assertEqual(result['manual_acceptance'], 'not_run')
-        self.assertEqual(result['required_test_groups'], 42)
+        self.assertEqual(result['required_test_groups'], 43)
         self.check_packages(result)
 
     def test_pending_timeout_preserves_failure_and_original_bytes(self):

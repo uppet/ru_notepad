@@ -6,6 +6,7 @@ from package import (DEPENDENCIES, RESOURCE_INPUTS, NATIVE_HELPER_NAME, NATIVE_C
                      NATIVE_BUILD_DRIVERS, NATIVE_CFLAGS, NATIVE_LINK_LIBRARIES,
                      native_source_snapshot, native_build_key)
 from pathlib import Path
+import prepare_lexilla_languages as lexilla_languages
 
 ROOT = Path(__file__).resolve().parents[1]
 SCINTILLA_SHA256 = DEPENDENCIES['Scintilla.dll']['sha256']
@@ -25,7 +26,7 @@ def source_snapshot():
     return {p.relative_to(ROOT).as_posix(): sha(p)
             for folder in ('src', 'tests') for p in sorted((ROOT / folder).glob('*.ru'))} | {
                 p.relative_to(ROOT).as_posix(): sha(p) for p in sorted((ROOT / 'locales').glob('*.json'))
-            } | {'tools/generate_i18n.py': sha(ROOT / 'tools/generate_i18n.py')} | native_source_snapshot(ROOT)
+            } | {p.relative_to(ROOT).as_posix(): sha(p) for p in sorted((ROOT / 'syntax').glob('*.json'))} | {name: sha(ROOT / name) for name in ('tools/generate_i18n.py', 'tools/generate_syntax_catalog.py')} | native_source_snapshot(ROOT) | lexilla_languages.source_inputs(ROOT)
 
 def build_input_paths(console):
     # Native console fixtures must use the same common-controls v6 activation
@@ -139,14 +140,18 @@ def main():
                     if source.is_symlink() or not source.is_file() or source.read_bytes()!=pinned.read(member):
                         raise SystemExit(f'Dependency source differs from pinned archive: {member.filename}')
     build=ROOT/'build'; build.mkdir(exist_ok=True)
+    lexilla_extra = lexilla_languages.prepare(ROOT)
     if not args.skip_scintilla:
         run(['make','-j2','-C',ROOT/'vendor/scintilla/win32','../bin/Scintilla.dll',
              'CXX='+args.cxx,'WINDRES='+args.windres,'AR='+args.ar,'RANLIB='+args.ranlib])
     if not args.skip_lexilla:
         run(['make','-j2','-C',ROOT/'vendor/lexilla/src','../bin/lexilla.dll',
              'windir=C:/Windows','CXX='+args.cxx,'WINDRES='+args.windres,
+             lexilla_languages.MAKE_OBJECT,
              'AR='+args.ar,'RANLIB='+args.ranlib,
              'LDFLAGS=-shared -static -mwindows -Wl,--kill-at -s'])
+    if lexilla_languages.verify(ROOT) != lexilla_extra:
+        raise SystemExit('Supplemental Lexilla inputs changed during build.')
     sys.path.insert(0,str(ru))
     from rulang.frontend import parse
     from rulang.modules import load_module_graph
@@ -190,6 +195,7 @@ def main():
              'app_version':(ROOT/'VERSION').read_text().strip(),
              'scintilla_version':'5.6.7','scintilla_archive_sha256':SCINTILLA_SHA256,
              'lexilla_version':'5.5.4','lexilla_archive_sha256':LEXILLA_SHA256,
+             'lexilla_extra':lexilla_extra,
              'entry_source':source.relative_to(ROOT).as_posix(),'entry_sha256':entry_sha,
              'source_sha256':snapshot,
              'build_input_sha256':build_inputs,

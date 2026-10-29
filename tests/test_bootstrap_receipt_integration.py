@@ -127,7 +127,7 @@ class ReceiptIntegration(unittest.TestCase):
             bad=copy.deepcopy(app);bad[field]='wrong'
             with self.subTest(field=field),self.assertRaises(InvalidProvenance):package.collect_native_evidence(self.config,bad)
 
-    def test_eleven_fixture_report_uses_real_six_tools_and_wrapper_chain(self):
+    def test_twelve_fixture_report_uses_real_six_tools_and_wrapper_chain(self):
         app=self.receipts['app_receipt'];output=self.root/'fixtures';output.mkdir()
         template_dir=Path(self.config['app_receipt']).parent
         template=json.loads((template_dir/'compile-proof.json').read_text())

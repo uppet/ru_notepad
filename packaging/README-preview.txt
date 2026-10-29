@@ -77,8 +77,9 @@ Files >500,000,000 bytes ask before any body read. Cancel/Esc stops between
 bounded chunks; an individual disk call or long-line layout can still block.
 Embedded NUL and invalid Unicode text are rejected; no binary-file editing.
 Legacy text may expand substantially when held as UTF-8; sufficient RAM is needed.
-Not full Notepad++ parity. No regex parity, additional language
-catalogue, plugin ABI, macros, sessions/recovery, split views, project panels,
+Language selection covers all 93 built-in Notepad++ v8.9.8.1 modes plus Ru and Markdown.
+Not full Notepad++ parity. No regex parity, plugin ABI, macros,
+sessions/recovery, split views, project panels,
 printing, installer, updater, or network features yet.
 Accessibility, IME, high-DPI/multi-monitor, broad large-file behavior, and Windows
 version compatibility have not been accepted. Windows 10/11 x64 is the target.

@@ -18,7 +18,8 @@
     子位 取 0.
     循 3 次
         路 取 'C:\\源码😀\\文件.'+后缀[子位].
-        确认 ((策 其 识别 路) == 'cpp') ('C-family suffix '+后缀[子位]).
+        预期 取 'cpp'. 若 位 == 0 则 预期 取 'c'. 然
+        确认 ((策 其 识别 路) == 预期) ('C-family suffix '+后缀[子位]).
         子位 取 子位+1.
     环
     位 取 位+1.
@@ -28,8 +29,8 @@
     ['data.json','json'],['DATA.JSON','json'],['名字.JsOn','json'],
     ['C:/甲/😀.jSoN','json'],['\\\\server\\共享\\data.JSON','json'],
     ['','plain'],['README','plain'],['a.','plain'],['.','plain'],['..','plain'],
-    ['source.ru','ru'],['source.RU','ru'],['data.jsonc','plain'],
-    ['data.json5','plain'],['file.cppx','plain'],['file.xcpp','plain'],
+    ['source.ru','ru'],['source.RU','ru'],['data.jsonc','json5'],
+    ['data.json5','json5'],['file.cppx','plain'],['file.xcpp','plain'],
     ['file.cxx.bak','plain'],['file.json.bak','plain'],['file.c++x','plain'],
     ['file.h++x','plain'],['file.json ','plain'],['file.cpp\n','plain'],
     ['file.ＣＰＰ','plain'],['file.中文','plain'],['名字😀','plain'],
@@ -38,9 +39,9 @@
     ['C:/folder.cpp/','plain'],['C:\\folder.json\\','plain'],
     ['C:/folder.cpp/file.json','json'],['C:\\folder.json\\file.cpp','cpp'],
     ['./relative.H','cpp'],['../relative.CXX','cpp'],
-    ['a.b.c','cpp'],['.cpp','cpp'],['.json','json'],
+    ['a.b.c','c'],['.cpp','cpp'],['.json','json'],
     ['C:/name with spaces/文件名.Hpp','cpp'],
-    ['C:\\emoji😀.cpp\\子目录\\main.c','cpp'],
+    ['C:\\emoji😀.cpp\\子目录\\main.c','c'],
     ['source.rU','ru'],['C:/源码😀/main.Ru','ru'],['.ru','ru'],
     ['source.rux','plain'],['source.ru.bak','plain'],['source.ru ','plain'],
     ['C:/folder.ru/README','plain'],['C:\\folder.ru\\main.ru','ru']
@@ -51,7 +52,7 @@
     确认 ((策 其 识别 例[0]) == 例[1]) ('path policy '+(位 为 句)).
     位 取 位+1.
 环
-确认 ((策 其 名称 'cpp') == 'C / C++') 'C-family display label'.
+确认 ((策 其 名称 'cpp') == 'C++') 'C-family display label'.
 确认 ((策 其 名称 'json') == 'JSON') 'JSON display label'.
 确认 ((策 其 名称 'plain') == 'Plain text') 'plain display label'.
 确认 ((策 其 名称 'ru') == 'Ru / 如言') 'Ru-owned lexer has its own display label'.

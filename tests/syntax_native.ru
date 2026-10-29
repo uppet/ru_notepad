@@ -79,7 +79,7 @@
     然
     确认 (警告 == '') 'pinned Lexilla DLL loads and exports CreateLexer'.
     确认 ((语法 其 识别 'C:\\源码\\a.CpP') == 'cpp') 'mixed-case C++ suffix'.
-    确认 ((语法 其 识别 'a.c') == 'cpp') 'C source uses actual C-family lexer'.
+    确认 ((语法 其 识别 'a.c') == 'c') 'C source uses actual C-family lexer'.
     确认 ((语法 其 识别 'a.HXX') == 'cpp') 'C++ header suffix'.
     确认 ((语法 其 识别 'a.c++') == 'cpp') 'C++ punctuation suffix'.
     确认 ((语法 其 识别 'C:/a.cpp/config.JsOn') == 'json') 'mixed-case JSON suffix'.
@@ -88,7 +88,7 @@
     确认 ((语法 其 识别 'source.ru') == 'ru') 'Ru selects its own container lexer, never borrowed C++'.
     确认 ((语法 其 识别 'data.json.bak') == 'plain') 'unknown final suffix falls back'.
     确认 ((语法 其 识别 '') == 'plain') 'untitled text defaults to plain'.
-    确认 ((语法 其 名称 'cpp') == 'C / C++') 'C-family status label'.
+    确认 ((语法 其 名称 'cpp') == 'C++') 'C-family status label'.
     确认 ((语法 其 名称 'json') == 'JSON') 'JSON status label'.
     确认 ((语法 其 名称 'ru') == 'Ru / 如言') 'Ru-owned status label is explicit'.
 

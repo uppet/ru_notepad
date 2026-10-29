@@ -324,13 +324,13 @@
     "it": "Testo semplice(&P)"
   },
   "command.language_cpp": {
-    "en": "&C / C++",
-    "zh-CN": "C / C++(&C)",
-    "ja": "C / C++(&C)",
-    "ko": "C / C++(&C)",
-    "es": "C / C++(&C)",
-    "ru": "C / C++(&C)",
-    "it": "C / C++(&C)"
+    "en": "&C++",
+    "zh-CN": "C++(&C)",
+    "ja": "C++(&C)",
+    "ko": "C++(&C)",
+    "es": "C++(&C)",
+    "ru": "C++(&C)",
+    "it": "C++(&C)"
   },
   "command.language_json": {
     "en": "&JSON",

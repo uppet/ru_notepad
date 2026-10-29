@@ -24,9 +24,10 @@ import verify_bootstrap_editor_windows as smoke
 import verify_bootstrap_product_windows as product
 from prepare_bootstrap_dependencies import validate_receipt
 import package as legacy_package
+import preview_language_sample as language_sample
 
 ROOT = Path(__file__).resolve().parents[1]
-PREVIEW_DOCS = ('bootstrap-llvm-preview.md', 'recent-files.md', 'single-instance-and-tabs.md')
+PREVIEW_DOCS = ('bootstrap-llvm-preview.md', 'recent-files.md', 'single-instance-and-tabs.md', 'language-highlighting.md')
 
 
 def verify_zip(path, files):
@@ -138,12 +139,18 @@ def package(config, product_receipt, output, mingw_root):
                 target = stage/'samples'/source.relative_to(ROOT/'packaging/samples')
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(legacy_package.checked_file(source), target)
+        sample_path = stage / language_sample.NAME
+        require(not sample_path.exists(), 'original decimal 1 MB sample collision')
+        sample_path.parent.mkdir(parents=True, exist_ok=True)
+        sample_path.write_bytes(language_sample.content())
         ci.copy_runtime_licenses(mingw_root, stage/'licenses')
         for name in PREVIEW_DOCS:
             shutil.copyfile(ROOT/'docs'/name, stage/'docs'/name)
         (stage/'README.txt').write_text(
             'ru_notepad — bootstrap LLVM Windows x64 PREVIEW\n\n'
             'The included editor was compiled by the native bootstrap compiler through LLVM IR.\n'
+            '95 language modes include every bundled Notepad++ mode plus Ru and Markdown.\n'
+            'The real Windows language menu and lexical coverage gates are mandatory.\n'
             'The same EXE and DLL bytes passed B7 functional smoke, the four existing product GUI\n'
             'gates (active-stage budgets unchanged), recent-file checks, and the instance_tabs GUI gate.\n'
             'Markdown checks cover 11 active stages. The 1 MB unclosed-fence serial double-Undo\n'
@@ -154,6 +161,7 @@ def package(config, product_receipt, output, mingw_root):
             'Timeouts never silently retry: pending shell files require your explicit choice.\n'
             'This is NOT the historical full all-native release acceptance. Console fixtures in\n'
             'the separate C-backend CI are independent regression evidence, not bootstrap tests.\n'
+            'samples/fence.md retains the original 1,000,000-byte acceptance input, unchanged for manual checks.\n'
             'Use sample files or copies. Experimental wij folding/kernel switches remain off.\n'
             'See docs/single-instance-and-tabs.md for behavior, limits and acceptance coverage.\n'
             'See docs/bootstrap-llvm-preview.md and preview-provenance.json for scope and pins.\n', encoding='utf-8')
@@ -177,6 +185,7 @@ def package(config, product_receipt, output, mingw_root):
             'stage3_recent_fixtures': dict(CASES),
             'recent_fixtures_receipt_sha256': inputs['recent_fixtures_receipt']['sha256'],
             'experimental_wij_enabled': False,
+            'manual_sample': language_sample.record(),
             'native_evidence_sha256':{name:row['sha256'] for name,row in native_evidence.items()},
             'frontend_ir_sha256':receipts['app_receipt']['frontend_ir_sha256'],
             'frontend_ir_delivery':'retained in CI evidence; SHA-bound here, not duplicated in ZIP'}

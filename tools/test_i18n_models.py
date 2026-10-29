@@ -65,7 +65,7 @@ EXPECTED_MENUS = (
     )),
     ('menu.language', '&Language', (
         (701, 'command.language_plain', '&Plain text'),
-        (702, 'command.language_cpp', '&C / C++'),
+        (702, 'command.language_cpp', '&C++'),
         (703, 'command.language_json', '&JSON'),
         (704, 'command.language_ru', '&Ru / 如言'),
         (705, 'command.language_markdown', '&Markdown'),
@@ -216,6 +216,7 @@ def validate_menu(source):
         位 取 位+1.
         环
         若 组位 == 0 则 近期菜单 子. 然
+        若 组位 == 4 则 扩展语法菜单 子. 然
         窗 其 菜单项 主 16 ((窗 其 UP) 其 重释 子) (本地 其 文本 组键们[组位]).
         子 取 空.
         组位 取 组位+1.
@@ -242,7 +243,7 @@ def palette_sections(source):
     match = re.search(
         r"^[ \t]*若 语言 == 'cpp' 则\n(?P<cpp>.*?)"
         r"^[ \t]*另 若 语言 == 'json' 则\n(?P<json>.*?)"
-        r'^[ \t]*另\n(?P<markdown>.*?)^[ \t]*然 然[ \t]*$',
+        r"^[ \t]*另 若 语言 == 'markdown' 则\n(?P<markdown>.*?)^[ \t]*另\n",
         body, re.MULTILINE | re.DOTALL)
     if match is None:
         raise ValueError('Expected C++, JSON, and Markdown palette branches')

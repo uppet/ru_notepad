@@ -16,6 +16,7 @@ import struct
 import subprocess
 import time
 import zipfile
+import prepare_lexilla_languages as lexilla_languages
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPENDENCIES = {
@@ -41,7 +42,7 @@ NATIVE_LINK_LIBRARIES = ('user32',)
 RUNTIME_NAMES = ('ru_notepad.exe', *DEPENDENCIES, NATIVE_HELPER_NAME)
 TEST_NAMES = ('document_policy.exe', 'ui_arguments.exe', 'file_codec_flags.exe',
               'editor_native.exe', 'app_native.exe', 'app_features_native.exe', 'file_codec_tests.exe',
-              'file_codec_security_probe.exe', 'syntax_native.exe', 'syntax_policy.exe', 'shortcuts.exe', 'status_native.exe',
+              'file_codec_security_probe.exe', 'syntax_native.exe', 'language_catalog_native.exe', 'syntax_policy.exe', 'shortcuts.exe', 'status_native.exe',
               'file_streaming_native.exe', 'editor_streaming_native.exe',
               'associations_policy.exe', 'associations_native.exe', 'file_drop_native.exe', 'app_streaming_native.exe',
               'ru_lexical_policy.exe', 'ru_syntax_native.exe', 'app_ru_native.exe',
@@ -68,12 +69,21 @@ RUNTIME_FILES = {
     'VERSION': 'VERSION', 'packaging/README-preview.txt': 'README.txt',
     'packaging/开始前请读.txt': '开始前请读.txt', 'CHANGELOG.md': 'CHANGELOG.md',
     'THIRD_PARTY_NOTICES.md': 'THIRD_PARTY_NOTICES.md',
+    'packaging/application-native-oracle-development.json': 'docs/native-oracle-development.json',
+    'packaging/application-native-oracle-default-failure.txt': 'docs/native-oracle-default-failure.txt',
+    'docs/language-highlighting.md': 'docs/language-highlighting.md',
     'docs/markdown-editing.md': 'docs/markdown-editing.md',
     'docs/internationalization.md': 'docs/internationalization.md',
     'docs/i18n_candidate_validation.md': 'docs/i18n_candidate_validation.md',
     'docs/markdown-policy-subset.md': 'docs/markdown-policy-subset.md',
     'assets/README.md': 'licenses/Artwork-provenance.md',
     'packaging/licenses/Unicode.txt': 'licenses/Unicode.txt',
+    'packaging/licenses/SciTE.txt': 'licenses/SciTE.txt',
+    'packaging/licenses/Godot.txt': 'licenses/Godot.txt',
+    'packaging/licenses/Pygments.txt': 'licenses/Pygments.txt',
+    'packaging/licenses/Gui4Cli.txt': 'licenses/Gui4Cli.txt',
+    'native/lexilla/License.txt': 'licenses/Lexilla-Objective-C.txt',
+    'native/lexilla/README.md': 'licenses/Lexilla-Objective-C-provenance.md',
 }
 TEST_FILES = {
     'packaging/run-tests.cmd': 'run-tests.cmd',
@@ -173,6 +183,7 @@ def inspect_pe(path, objdump):
 
 def validate_dependency_sources(root):
     """Verify the official pins and exact license bytes, including local packaging."""
+    lexilla_languages.source_inputs(root)
     unicode_license = source_file(root, 'packaging/licenses/Unicode.txt')
     if sha(unicode_license) != UNICODE_LICENSE_SHA256:
         raise RuntimeError('Unicode data license differs from the reviewed official notice')
@@ -201,6 +212,10 @@ def validate_receipts(root, binary_dir, objdump):
         receipt = json.loads(checked_file(binary_dir / Path(name).with_suffix('.build.json')).read_text(encoding='utf-8'))
         if receipt['app_version'] != version or receipt['exe_sha256'] != pe[name]['sha256']:
             raise RuntimeError(f'Build receipt/version does not match {name}')
+        extra = receipt.get('lexilla_extra', {})
+        if (extra.get('make_object') != lexilla_languages.MAKE_OBJECT or
+                extra.get('source_sha256') != lexilla_languages.source_inputs(root)):
+            raise RuntimeError(f'Supplemental Lexilla source receipt differs: {name}')
         if (receipt.get('native_helper_sha256') != helper['dll_sha256'] or
                 receipt.get('native_helper_build_key') != helper['build_key'] or
                 any(receipt.get('source_sha256', {}).get(path) != digest

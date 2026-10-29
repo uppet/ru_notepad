@@ -1,7 +1,7 @@
 name: Bootstrap LLVM editor preview
 on:
   push:
-    branches: [feature/bootstrap-llvm-preview-20261024, feature/bootstrap-llvm-preview-20261024-r1, feature/bootstrap-llvm-preview-20261024-r2, feature/bootstrap-llvm-preview-20261024-r3, feature/notepad-024-responsive-preview-20261026, wip, main, feature/notepad-main-bootstrap-20261029]
+    branches: [feature/bootstrap-llvm-preview-20261024, feature/bootstrap-llvm-preview-20261024-r1, feature/bootstrap-llvm-preview-20261024-r2, feature/bootstrap-llvm-preview-20261024-r3, feature/notepad-024-responsive-preview-20261026, wip, main, feature/notepad-main-bootstrap-20261029, feature/notepad-all-languages-20261029]
   workflow_dispatch:
 permissions:
   contents: read
@@ -90,6 +90,16 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           python -m unittest discover -s editor/tests -p 'test_bootstrap*.py' -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_gui_language_catalog.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tests/test_preview_language_sample.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tests/test_lexilla_languages.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_language_catalog.py --ru-root language
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_syntax_runtime_catalog.py --ru-root language --output "$env:PREVIEW_OUTPUT/syntax-catalog-controls"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python editor/tools/test_windows_ci.py -v
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

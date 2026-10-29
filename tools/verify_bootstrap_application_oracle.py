@@ -13,7 +13,7 @@ from bootstrap_provenance import checked, require, sha
 from compile_bootstrap_native import CORE_COMMIT, CORE_TREE, validate_retained
 
 SCHEMA='ru-notepad-application-native-oracle-v1'
-SCOPE='independent Python development oracle, not stage3/LLVM/Windows evidence'
+SCOPE='independent Python development oracle with isolated 2000000-step analysis budget, not default-limit C/stage3/LLVM/Windows evidence'
 ORACLE_PATH='packaging/application-native-oracle.json'
 C_TYPES={'无值':'void','i8':'int8_t','u8':'uint8_t','i16':'int16_t','u16':'uint16_t',
          'i32':'int32_t','u32':'uint32_t','i64':'int64_t','u64':'uint64_t',

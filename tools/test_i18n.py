@@ -217,7 +217,7 @@ class CatalogTests(unittest.TestCase):
         for language in ('zh-CN', 'ja', 'ko', 'ru'):
             self.assertTrue(any(ord(char) > 127 for char in values[language]))
         for key, required in {
-            'command.language_cpp': ('C / C++',), 'command.language_json': ('JSON',),
+            'command.language_cpp': ('C++',), 'command.language_json': ('JSON',),
             'command.language_ru': ('Ru / 如言',), 'command.language_markdown': ('Markdown',),
             'command.save_utf8': ('UTF-8',), 'command.save_utf8_bom': ('UTF-8', 'BOM'),
             'command.save_utf16le': ('UTF-16 LE',), 'command.save_utf16be': ('UTF-16 BE',),

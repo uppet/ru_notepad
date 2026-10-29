@@ -555,6 +555,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'syntax_policy': r'^TOTAL PASS: 134\s*$',
             'status_native': r'^TOTAL PASS: 21\s*$',
             'syntax_native': r'^TOTAL PASS: 144\s*$',
+            'language_catalog_native': r'^TOTAL PASS: 678\s*$',
             'app_ru_native': r'^TOTAL PASS: 73\s*$',
             'app_ru_timer_native': r'^TOTAL PASS: 8\s*$',
             'ru_lexical_policy': r'^TOTAL PASS: 422\s*$',
@@ -577,9 +578,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             'file_drop_native': r'^TOTAL PASS: 38\s*$',
         }
         self.assertEqual(dict(ci.NATIVE_CONSOLE_TESTS), expected)
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 31)
-        # All 39 current gates remain, plus three independent i18n native consoles.
-        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 42)
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS), 32)
+        # All 39 prior gates remain, plus three i18n consoles and the language catalog console.
+        self.assertEqual(len(ci.NATIVE_CONSOLE_TESTS) + len(ci.SYNTAX_FALLBACK_TESTS) + len(ci.GUI_NAMES) + 1, 43)
 
     def test_console_and_gui_receipts_share_all_manifest_resource_inputs(self):
         common = {'packaging/app.rc', 'packaging/app.manifest', 'assets/app-icon.ico', 'VERSION'}
@@ -1504,7 +1505,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
     def test_acceptance_retains_previous_835_assertions_and_16_policy_additions(self):
         summary = self.acceptance()
         ci.validate_acceptance(summary)
-        new = {'ru_lexical_policy', 'ru_syntax_native', 'app_ru_native', 'app_ru_timer_native',
+        new = {'language_catalog_native', 'ru_lexical_policy', 'ru_syntax_native', 'app_ru_native', 'app_ru_timer_native',
                'ru_direct_styling_native', 'markdown_policy', 'markdown_selection_policy',
                'markdown_native', 'app_markdown_native', 'markdown_direct_native', 'main-gui-markdown',
                'ru_syntax_missing_lexilla', 'main-gui-ru-syntax', *ci.HELPER_FALLBACK_LAYOUTS,
@@ -1516,18 +1517,18 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
     def test_acceptance_preserves_original_33_groups_1487_assertions_and_adds_markdown(self):
         summary = self.acceptance()
         ci.validate_acceptance(summary)
-        self.assertEqual(len(summary['tests']), 42)
-        added = {'markdown_policy', 'markdown_selection_policy', 'markdown_native',
+        self.assertEqual(len(summary['tests']), 43)
+        added = {'language_catalog_native', 'markdown_policy', 'markdown_selection_policy', 'markdown_native',
                  'app_markdown_native', 'markdown_direct_native', 'main-gui-markdown',
                  'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}
         prior = [test for test in summary['tests'] if test['name'] not in added]
         self.assertEqual(len(prior), 33)
         self.assertEqual(sum(test.get('assertions_passed', 0) for test in prior), 1487 + 90 + 6 + 103 + 42 + 42)
         baseline = [test for test in summary['tests'] if test['name'] not in
-                    {'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
+                    {'language_catalog_native', 'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
         self.assertEqual(len(baseline), 39)
         self.assertEqual(sum(test.get('assertions_passed', 0) for test in baseline), 2077 + 103 + 42 + 42 + 3)
-        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 2077 + 103 + 289 + 69 + 1606 + 42 + 42 + 3)
+        self.assertEqual(sum(test.get('assertions_passed', 0) for test in summary['tests']), 2077 + 103 + 289 + 69 + 1606 + 42 + 42 + 3 + 678)
 
     def test_direct_style_fixture_is_built_packaged_and_required(self):
         name = 'ru_direct_styling_native'
@@ -2993,7 +2994,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         build = (ci.ROOT / 'tools/build.py').read_text(encoding='utf-8')
         self.assertNotIn('str(p.relative_to(ROOT))', build)
         self.assertNotIn('str(source.relative_to(ROOT))', build)
-        self.assertEqual(build.count('p.relative_to(ROOT).as_posix()'), 2)
+        self.assertEqual(build.count('p.relative_to(ROOT).as_posix()'), 3)
         self.assertIn('source.relative_to(ROOT).as_posix()', build)
 
     def test_build_snapshot_includes_imported_test_helpers(self):
@@ -3012,12 +3013,17 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             target = self.root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text('native input')
+        for relative in (*builder.lexilla_languages.INPUTS, 'tools/generate_syntax_catalog.py'):
+            target = self.root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((ci.ROOT / relative).read_bytes())
         with patch.object(builder, 'ROOT', self.root):
             before = builder.source_snapshot()
             self.assertEqual(set(before), {'src/main.ru', 'tests/entry.ru', 'tests/imported_helper.ru',
                 'native/ru_scan.c', 'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h',
                 'native/ru_markdown_fold.c', 'native/ru_markdown_fold.h',
-                'locales/ui.json', 'tools/generate_i18n.py'})
+                'locales/ui.json', 'tools/generate_i18n.py', 'tools/generate_syntax_catalog.py',
+                *builder.lexilla_languages.INPUTS})
             helper.write_text('changed helper source')
             catalog.write_text('changed catalog source')
             generator.write_text('changed generator source')
@@ -3338,7 +3344,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         summary = self.acceptance()
         direct = next(t for t in summary['tests'] if t['name'] == 'markdown_direct_native')
         prior = [t for t in summary['tests'] if t['name'] not in
-                 {'markdown_direct_native', 'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
+                 {'language_catalog_native', 'markdown_direct_native', 'i18n_policy', 'i18n_settings_native', 'app_i18n_native'}]
         self.assertEqual(len(prior), 38)
         self.assertEqual(sum(t.get('assertions_passed', 0) for t in prior), 1867 + 90 + 6 + 103 + 42 + 42 + 3)
         self.assertEqual(direct['assertions_passed'], 114)
@@ -3509,7 +3515,8 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         syntax = (ci.ROOT / 'src/syntax.ru').read_text(encoding='utf-8')
         selection = syntax.split('算 _选择 态 柄, 语言 为 句:', 1)[1].split('算 选择 柄 语言 为 句:', 1)[0]
         reset = '_发设 态 柄 2032 0 0.'
-        self.assertEqual(selection.count(reset), 1)
+        self.assertEqual(selection.count(reset), 2)
+        self.assertIn("若 语言 != 'markdown' 则 " + reset + ' 然', selection)
         self.assertLess(selection.index('_清样式 态 柄.'), selection.index(reset))
         self.assertLess(selection.index(reset), selection.index('已选 取 标语 其 选择 柄.'))
         self.assertIn("若 语言 == 'markdown' 则\n        # CLEARDOCUMENTSTYLE", selection)

@@ -13,6 +13,7 @@ import zipfile
 
 from bootstrap_provenance import require, checked, sha
 from build_bootstrap_release import snapshot, verify_app_baseline, identity
+import prepare_lexilla_languages as lexilla_languages
 
 TOOL_NAMES = {'cc', 'cxx', 'make', 'windres', 'ar', 'ranlib', 'objdump'}
 DLL_NAMES = {'Scintilla.dll', 'Lexilla.dll', 'RuSyntax.dll', 'RuSyntaxWrongAbi.dll'}
@@ -121,6 +122,8 @@ def validate_dependencies_receipt(receipt_path, app_root):
     package, _ = load_helpers(app_root)
     require(receipt['dependencies'] == package.DEPENDENCIES, 'dependency pins differ from source')
     verify_dependency_bytes(app_root, package.DEPENDENCIES)
+    require(receipt.get('lexilla_extra') == lexilla_languages.verify(app_root),
+            'supplemental Lexilla compilation inputs differ from receipt')
     require(set(receipt.get('binaries', {})) == DLL_NAMES, 'incomplete dependency binary set')
     directories = set()
     pe = {}
@@ -171,13 +174,14 @@ def prepare(config, output):
     for dependency in package.DEPENDENCIES.values():
         extract_sources(root, dependency)
     verify_dependency_bytes(root, package.DEPENDENCIES)
+    lexilla_extra = lexilla_languages.prepare(root)
     # Official makefiles interpolate command variables into a command line.
     # Use basename under a pinned single-bin PATH, not an unquoted spaced path.
     common = ['CC='+Path(tools['cc']).name, 'CXX='+Path(tools['cxx']).name, 'WINDRES='+Path(tools['windres']).name,
               'AR='+Path(tools['ar']).name, 'RANLIB='+Path(tools['ranlib']).name]
     run([tools['make'], '-j2', '-C', root/'vendor/scintilla/win32', '../bin/Scintilla.dll', *common])
     run([tools['make'], '-j2', '-C', root/'vendor/lexilla/src', '../bin/lexilla.dll', 'windir=C:/Windows',
-         *common, 'LDFLAGS=-shared -static -mwindows -Wl,--kill-at -s'])
+         *common, lexilla_languages.MAKE_OBJECT, 'LDFLAGS=-shared -static -mwindows -Wl,--kill-at -s'])
     # Reuse the original reviewed source/flags/cache receipt contract, not a
     # second implementation of the native-helper build system.
     original_run = build.run
@@ -195,6 +199,7 @@ def prepare(config, output):
     shutil.copyfile(root/'vendor/scintilla/bin/Scintilla.dll', output/'Scintilla.dll')
     shutil.copyfile(root/'vendor/lexilla/bin/lexilla.dll', output/'Lexilla.dll')
     verify_dependency_bytes(root, package.DEPENDENCIES)
+    require(lexilla_languages.verify(root) == lexilla_extra, 'supplemental Lexilla inputs changed during DLL build')
     require(snapshot(root, pin['commit'], pin['tree']) == before, 'app inputs changed during DLL build')
     validate_tools(tools, hashes)
     pe = {name: package.inspect_pe(output/name, tools['objdump']) for name in DLL_NAMES}
@@ -203,6 +208,7 @@ def prepare(config, output):
         'tool_paths': tools, 'tool_sha256': hashes, 'commands': commands,
         'build_environment': recorded_environment(environment),
         'dependencies': package.DEPENDENCIES, 'archive_receipt_sha256': sha(output/'archive-receipt.json'),
+        'lexilla_extra': lexilla_extra,
         'binaries': {name: identity(output/name) for name in sorted(DLL_NAMES)},
         'native_helpers': package.validate_native_helper_receipts(root, output, pe), 'runtime_accepted': False}
     pending = output/'dependencies-receipt.pending.json'

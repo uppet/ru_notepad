@@ -1,0 +1,936 @@
+{
+  "schema": "ru-notepad-independent-npp-baseline-v1",
+  "version": "8.9.8.1",
+  "tag": "v8.9.8.1",
+  "repository": "https://github.com/notepad-plus-plus/notepad-plus-plus",
+  "mode_count": 93,
+  "scope": "Selectable built-in modes: Normal Text plus 92 language/format modes; excludes embedded javascript, internal searchResult, UDL and external plugins. Facts independently extracted from the official sources, not generated from the application catalog.",
+  "sources": [
+    {
+      "path": "PowerEditor/src/langs.model.xml",
+      "url": "https://raw.githubusercontent.com/notepad-plus-plus/notepad-plus-plus/v8.9.8.1/PowerEditor/src/langs.model.xml",
+      "sha256": "6aaa58dfc6836f77587a0d8345d4e924847e734e29df4a271538cced9d6a58aa",
+      "git_blob": "f1012c9123c3df8a70d27b37c0b6af0d840c5169",
+      "hash_scope": "Original upstream blob bytes including CRLF; not a normalized local text copy"
+    },
+    {
+      "path": "PowerEditor/src/ScintillaComponent/ScintillaEditView.cpp",
+      "url": "https://raw.githubusercontent.com/notepad-plus-plus/notepad-plus-plus/v8.9.8.1/PowerEditor/src/ScintillaComponent/ScintillaEditView.cpp",
+      "sha256": "c74671d6bab84c28b360bdd2274cad61fd1cc8920f21ebf971f550e13293f88a",
+      "git_blob": "b1a12bf3c90ae3e402b904d99fcdc1f778f8351b",
+      "hash_scope": "Original upstream blob bytes including CRLF; not a normalized local text copy"
+    },
+    {
+      "path": "PowerEditor/src/Parameters.cpp",
+      "url": "https://raw.githubusercontent.com/notepad-plus-plus/notepad-plus-plus/v8.9.8.1/PowerEditor/src/Parameters.cpp",
+      "sha256": "45c6badf096e42bd7374b372e600df357a6cf96499161734a7cd077a08e68baf",
+      "git_blob": "6a79bdb5c446150ec9ef5c3bef013decdd632140",
+      "hash_scope": "Original upstream blob bytes including CRLF; not a normalized local text copy"
+    },
+    {
+      "path": "PowerEditor/src/ScintillaComponent/Buffer.cpp",
+      "url": "https://raw.githubusercontent.com/notepad-plus-plus/notepad-plus-plus/v8.9.8.1/PowerEditor/src/ScintillaComponent/Buffer.cpp",
+      "sha256": "2ce7574796d8f44d4db394ec1544e313c606e323a7f5369eac0659fa0b3f8a4a",
+      "git_blob": "2bdcdcda8acdc8d778a28485c2ceff338363ad2f",
+      "hash_scope": "Original upstream blob bytes including CRLF; not a normalized local text copy"
+    }
+  ],
+  "languages": [
+    {
+      "id": "normal",
+      "name": "Normal text",
+      "lexer": "null",
+      "extensions": [
+        "txt"
+      ]
+    },
+    {
+      "id": "php",
+      "name": "PHP",
+      "lexer": "phpscript",
+      "extensions": [
+        "php",
+        "php3",
+        "php4",
+        "php5",
+        "phps",
+        "phpt",
+        "phtml"
+      ]
+    },
+    {
+      "id": "c",
+      "name": "C",
+      "lexer": "cpp",
+      "extensions": [
+        "c",
+        "lex"
+      ]
+    },
+    {
+      "id": "cpp",
+      "name": "C++",
+      "lexer": "cpp",
+      "extensions": [
+        "cpp",
+        "cxx",
+        "cc",
+        "h",
+        "hh",
+        "hpp",
+        "hxx",
+        "ino"
+      ]
+    },
+    {
+      "id": "cs",
+      "name": "C#",
+      "lexer": "cpp",
+      "extensions": [
+        "cs"
+      ]
+    },
+    {
+      "id": "objc",
+      "name": "Objective-C",
+      "lexer": "objc",
+      "extensions": [
+        "mm"
+      ]
+    },
+    {
+      "id": "java",
+      "name": "Java",
+      "lexer": "cpp",
+      "extensions": [
+        "java"
+      ]
+    },
+    {
+      "id": "rc",
+      "name": "RC",
+      "lexer": "cpp",
+      "extensions": [
+        "rc"
+      ]
+    },
+    {
+      "id": "html",
+      "name": "HTML",
+      "lexer": "hypertext",
+      "extensions": [
+        "html",
+        "htm",
+        "shtml",
+        "shtm",
+        "xhtml",
+        "xht",
+        "hta"
+      ]
+    },
+    {
+      "id": "xml",
+      "name": "XML",
+      "lexer": "xml",
+      "extensions": [
+        "xml",
+        "xaml",
+        "xsl",
+        "xslt",
+        "xsd",
+        "xul",
+        "kml",
+        "svg",
+        "mxml",
+        "xsml",
+        "wsdl",
+        "xlf",
+        "xliff",
+        "xbl",
+        "sxbl",
+        "sitemap",
+        "gml",
+        "gpx",
+        "plist",
+        "slnx",
+        "targets",
+        "vcproj",
+        "vcxproj",
+        "csproj",
+        "csxproj",
+        "vbproj",
+        "dbproj",
+        "dproj",
+        "wxs",
+        "wixproj",
+        "ilproj"
+      ]
+    },
+    {
+      "id": "makefile",
+      "name": "Makefile",
+      "lexer": "makefile",
+      "extensions": [
+        "mak",
+        "mk"
+      ]
+    },
+    {
+      "id": "pascal",
+      "name": "Pascal",
+      "lexer": "pascal",
+      "extensions": [
+        "pas",
+        "pp",
+        "p",
+        "inc",
+        "lpr",
+        "dpr"
+      ]
+    },
+    {
+      "id": "batch",
+      "name": "Batch",
+      "lexer": "batch",
+      "extensions": [
+        "bat",
+        "cmd",
+        "nt"
+      ]
+    },
+    {
+      "id": "ini",
+      "name": "ini",
+      "lexer": "props",
+      "extensions": [
+        "ini",
+        "inf",
+        "url",
+        "wer"
+      ]
+    },
+    {
+      "id": "nfo",
+      "name": "NFO",
+      "lexer": "null",
+      "extensions": [
+        "nfo"
+      ]
+    },
+    {
+      "id": "asp",
+      "name": "ASP",
+      "lexer": "hypertext",
+      "extensions": [
+        "asp",
+        "aspx"
+      ]
+    },
+    {
+      "id": "sql",
+      "name": "SQL",
+      "lexer": "sql",
+      "extensions": [
+        "sql"
+      ]
+    },
+    {
+      "id": "vb",
+      "name": "Visual Basic",
+      "lexer": "vb",
+      "extensions": [
+        "vb",
+        "vba",
+        "vbs"
+      ]
+    },
+    {
+      "id": "css",
+      "name": "CSS",
+      "lexer": "css",
+      "extensions": [
+        "css"
+      ]
+    },
+    {
+      "id": "perl",
+      "name": "Perl",
+      "lexer": "perl",
+      "extensions": [
+        "pl",
+        "pm",
+        "plx",
+        "t"
+      ]
+    },
+    {
+      "id": "python",
+      "name": "Python",
+      "lexer": "python",
+      "extensions": [
+        "py",
+        "pyw",
+        "pyx",
+        "pxd",
+        "pxi",
+        "pyi"
+      ]
+    },
+    {
+      "id": "lua",
+      "name": "Lua",
+      "lexer": "lua",
+      "extensions": [
+        "lua"
+      ]
+    },
+    {
+      "id": "tex",
+      "name": "TeX",
+      "lexer": "tex",
+      "extensions": [
+        "tex"
+      ]
+    },
+    {
+      "id": "fortran",
+      "name": "Fortran free form",
+      "lexer": "fortran",
+      "extensions": [
+        "f",
+        "for",
+        "f90",
+        "f95",
+        "f2k",
+        "f23"
+      ]
+    },
+    {
+      "id": "bash",
+      "name": "Shell",
+      "lexer": "bash",
+      "extensions": [
+        "bash",
+        "sh",
+        "bsh",
+        "csh",
+        "bash_profile",
+        "bashrc",
+        "profile"
+      ]
+    },
+    {
+      "id": "actionscript",
+      "name": "ActionScript",
+      "lexer": "cpp",
+      "extensions": [
+        "as",
+        "mx"
+      ]
+    },
+    {
+      "id": "nsis",
+      "name": "NSIS",
+      "lexer": "nsis",
+      "extensions": [
+        "nsi",
+        "nsh"
+      ]
+    },
+    {
+      "id": "tcl",
+      "name": "TCL",
+      "lexer": "tcl",
+      "extensions": [
+        "tcl",
+        "itcl"
+      ]
+    },
+    {
+      "id": "lisp",
+      "name": "Lisp",
+      "lexer": "lisp",
+      "extensions": [
+        "lsp",
+        "lisp"
+      ]
+    },
+    {
+      "id": "scheme",
+      "name": "Scheme",
+      "lexer": "lisp",
+      "extensions": [
+        "scm",
+        "smd",
+        "ss"
+      ]
+    },
+    {
+      "id": "asm",
+      "name": "Assembly",
+      "lexer": "asm",
+      "extensions": [
+        "asm"
+      ]
+    },
+    {
+      "id": "diff",
+      "name": "Diff",
+      "lexer": "diff",
+      "extensions": [
+        "diff",
+        "patch"
+      ]
+    },
+    {
+      "id": "props",
+      "name": "Properties file",
+      "lexer": "props",
+      "extensions": [
+        "properties",
+        "conf",
+        "cf",
+        "cfg",
+        "gitattributes",
+        "gitconfig",
+        "gitmodules",
+        "editorconfig"
+      ]
+    },
+    {
+      "id": "postscript",
+      "name": "PostScript",
+      "lexer": "ps",
+      "extensions": [
+        "ps"
+      ]
+    },
+    {
+      "id": "ruby",
+      "name": "Ruby",
+      "lexer": "ruby",
+      "extensions": [
+        "rb",
+        "rbw"
+      ]
+    },
+    {
+      "id": "smalltalk",
+      "name": "Smalltalk",
+      "lexer": "smalltalk",
+      "extensions": [
+        "st"
+      ]
+    },
+    {
+      "id": "vhdl",
+      "name": "VHDL",
+      "lexer": "vhdl",
+      "extensions": [
+        "vhd",
+        "vhdl"
+      ]
+    },
+    {
+      "id": "kix",
+      "name": "KiXtart",
+      "lexer": "kix",
+      "extensions": [
+        "kix"
+      ]
+    },
+    {
+      "id": "autoit",
+      "name": "AutoIt",
+      "lexer": "au3",
+      "extensions": [
+        "au3"
+      ]
+    },
+    {
+      "id": "caml",
+      "name": "CAML",
+      "lexer": "caml",
+      "extensions": [
+        "ml",
+        "mli",
+        "sml",
+        "thy"
+      ]
+    },
+    {
+      "id": "ada",
+      "name": "Ada",
+      "lexer": "ada",
+      "extensions": [
+        "ada",
+        "ads",
+        "adb"
+      ]
+    },
+    {
+      "id": "verilog",
+      "name": "Verilog",
+      "lexer": "verilog",
+      "extensions": [
+        "v",
+        "sv",
+        "vh",
+        "svh"
+      ]
+    },
+    {
+      "id": "matlab",
+      "name": "MATLAB",
+      "lexer": "matlab",
+      "extensions": [
+        "m"
+      ]
+    },
+    {
+      "id": "haskell",
+      "name": "Haskell",
+      "lexer": "haskell",
+      "extensions": [
+        "hs",
+        "lhs",
+        "las"
+      ]
+    },
+    {
+      "id": "inno",
+      "name": "Inno Setup",
+      "lexer": "inno",
+      "extensions": [
+        "iss"
+      ]
+    },
+    {
+      "id": "cmake",
+      "name": "CMake",
+      "lexer": "cmake",
+      "extensions": [
+        "cmake"
+      ]
+    },
+    {
+      "id": "yaml",
+      "name": "YAML",
+      "lexer": "yaml",
+      "extensions": [
+        "yml",
+        "yaml"
+      ]
+    },
+    {
+      "id": "cobol",
+      "name": "COBOL",
+      "lexer": "COBOL",
+      "extensions": [
+        "cbl",
+        "cbd",
+        "cdb",
+        "cdc",
+        "cob",
+        "cpy",
+        "copy",
+        "lst"
+      ]
+    },
+    {
+      "id": "gui4cli",
+      "name": "Gui4Cli",
+      "lexer": "gui4cli",
+      "extensions": [
+        "gui"
+      ]
+    },
+    {
+      "id": "d",
+      "name": "D",
+      "lexer": "d",
+      "extensions": [
+        "d"
+      ]
+    },
+    {
+      "id": "powershell",
+      "name": "PowerShell",
+      "lexer": "powershell",
+      "extensions": [
+        "ps1",
+        "psm1",
+        "psd1"
+      ]
+    },
+    {
+      "id": "r",
+      "name": "R",
+      "lexer": "r",
+      "extensions": [
+        "r",
+        "s",
+        "splus"
+      ]
+    },
+    {
+      "id": "jsp",
+      "name": "JSP",
+      "lexer": "hypertext",
+      "extensions": [
+        "jsp"
+      ]
+    },
+    {
+      "id": "coffeescript",
+      "name": "CoffeeScript",
+      "lexer": "coffeescript",
+      "extensions": [
+        "coffee",
+        "litcoffee"
+      ]
+    },
+    {
+      "id": "json",
+      "name": "json",
+      "lexer": "json",
+      "extensions": [
+        "json"
+      ]
+    },
+    {
+      "id": "javascript.js",
+      "name": "JavaScript",
+      "lexer": "cpp",
+      "extensions": [
+        "js",
+        "jsm",
+        "jsx",
+        "mjs",
+        "vue"
+      ]
+    },
+    {
+      "id": "fortran77",
+      "name": "Fortran fixed form",
+      "lexer": "f77",
+      "extensions": [
+        "f77"
+      ]
+    },
+    {
+      "id": "baanc",
+      "name": "BaanC",
+      "lexer": "baan",
+      "extensions": [
+        "bc",
+        "cln"
+      ]
+    },
+    {
+      "id": "srec",
+      "name": "S-Record",
+      "lexer": "srec",
+      "extensions": [
+        "mot",
+        "srec"
+      ]
+    },
+    {
+      "id": "ihex",
+      "name": "Intel HEX",
+      "lexer": "ihex",
+      "extensions": [
+        "hex"
+      ]
+    },
+    {
+      "id": "tehex",
+      "name": "Tektronix extended HEX",
+      "lexer": "tehex",
+      "extensions": [
+        "tek"
+      ]
+    },
+    {
+      "id": "swift",
+      "name": "Swift",
+      "lexer": "cpp",
+      "extensions": [
+        "swift"
+      ]
+    },
+    {
+      "id": "asn1",
+      "name": "ASN.1",
+      "lexer": "asn1",
+      "extensions": [
+        "mib"
+      ]
+    },
+    {
+      "id": "avs",
+      "name": "AviSynth",
+      "lexer": "avs",
+      "extensions": [
+        "avs",
+        "avsi"
+      ]
+    },
+    {
+      "id": "blitzbasic",
+      "name": "BlitzBasic",
+      "lexer": "blitzbasic",
+      "extensions": [
+        "bb"
+      ]
+    },
+    {
+      "id": "purebasic",
+      "name": "PureBasic",
+      "lexer": "purebasic",
+      "extensions": [
+        "pb"
+      ]
+    },
+    {
+      "id": "freebasic",
+      "name": "FreeBasic",
+      "lexer": "freebasic",
+      "extensions": [
+        "bas",
+        "bi"
+      ]
+    },
+    {
+      "id": "csound",
+      "name": "Csound",
+      "lexer": "csound",
+      "extensions": [
+        "orc",
+        "sco",
+        "csd"
+      ]
+    },
+    {
+      "id": "erlang",
+      "name": "Erlang",
+      "lexer": "erlang",
+      "extensions": [
+        "erl",
+        "hrl"
+      ]
+    },
+    {
+      "id": "escript",
+      "name": "ESCRIPT",
+      "lexer": "escript",
+      "extensions": [
+        "src",
+        "em"
+      ]
+    },
+    {
+      "id": "forth",
+      "name": "Forth",
+      "lexer": "forth",
+      "extensions": [
+        "forth"
+      ]
+    },
+    {
+      "id": "latex",
+      "name": "LaTeX",
+      "lexer": "latex",
+      "extensions": [
+        "tex",
+        "sty"
+      ]
+    },
+    {
+      "id": "mmixal",
+      "name": "MMIXAL",
+      "lexer": "mmixal",
+      "extensions": [
+        "mms"
+      ]
+    },
+    {
+      "id": "nim",
+      "name": "Nim",
+      "lexer": "nimrod",
+      "extensions": [
+        "nim"
+      ]
+    },
+    {
+      "id": "nncrontab",
+      "name": "Nncrontab",
+      "lexer": "nncrontab",
+      "extensions": [
+        "tab",
+        "spf"
+      ]
+    },
+    {
+      "id": "oscript",
+      "name": "OScript",
+      "lexer": "oscript",
+      "extensions": [
+        "osx"
+      ]
+    },
+    {
+      "id": "rebol",
+      "name": "REBOL",
+      "lexer": "rebol",
+      "extensions": [
+        "r2",
+        "r3",
+        "reb"
+      ]
+    },
+    {
+      "id": "registry",
+      "name": "registry",
+      "lexer": "registry",
+      "extensions": [
+        "reg"
+      ]
+    },
+    {
+      "id": "rust",
+      "name": "Rust",
+      "lexer": "rust",
+      "extensions": [
+        "rs"
+      ]
+    },
+    {
+      "id": "spice",
+      "name": "Spice",
+      "lexer": "spice",
+      "extensions": [
+        "scp",
+        "out"
+      ]
+    },
+    {
+      "id": "txt2tags",
+      "name": "txt2tags",
+      "lexer": "txt2tags",
+      "extensions": [
+        "t2t"
+      ]
+    },
+    {
+      "id": "visualprolog",
+      "name": "Visual Prolog",
+      "lexer": "visualprolog",
+      "extensions": [
+        "pro",
+        "cl",
+        "i",
+        "pack",
+        "ph"
+      ]
+    },
+    {
+      "id": "typescript",
+      "name": "TypeScript",
+      "lexer": "cpp",
+      "extensions": [
+        "ts",
+        "tsx"
+      ]
+    },
+    {
+      "id": "json5",
+      "name": "json5",
+      "lexer": "json",
+      "extensions": [
+        "json5",
+        "jsonc"
+      ]
+    },
+    {
+      "id": "mssql",
+      "name": "mssql",
+      "lexer": "mssql",
+      "extensions": [
+        "tsql"
+      ]
+    },
+    {
+      "id": "gdscript",
+      "name": "GDScript",
+      "lexer": "gdscript",
+      "extensions": [
+        "gd"
+      ]
+    },
+    {
+      "id": "hollywood",
+      "name": "Hollywood",
+      "lexer": "hollywood",
+      "extensions": [
+        "hws"
+      ]
+    },
+    {
+      "id": "go",
+      "name": "Go",
+      "lexer": "cpp",
+      "extensions": [
+        "go"
+      ]
+    },
+    {
+      "id": "raku",
+      "name": "Raku",
+      "lexer": "raku",
+      "extensions": [
+        "raku",
+        "rakumod",
+        "rakudoc",
+        "rakutest",
+        "p6",
+        "pm6",
+        "pod6",
+        "t6"
+      ]
+    },
+    {
+      "id": "toml",
+      "name": "TOML",
+      "lexer": "toml",
+      "extensions": [
+        "toml"
+      ]
+    },
+    {
+      "id": "sas",
+      "name": "SAS",
+      "lexer": "sas",
+      "extensions": [
+        "sas"
+      ]
+    },
+    {
+      "id": "errorlist",
+      "name": "ErrorList",
+      "lexer": "errorlist",
+      "extensions": [
+        "err"
+      ]
+    },
+    {
+      "id": "escseq",
+      "name": "EscapeSequence (ANSI)",
+      "lexer": "escseq",
+      "extensions": [
+        "ans"
+      ]
+    }
+  ]
+}

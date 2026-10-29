@@ -1,6 +1,6 @@
 {
   "schema": "ru-notepad-application-native-oracle-v1",
-  "scope": "independent Python development oracle, not stage3/LLVM/Windows evidence",
+  "scope": "independent Python development oracle with isolated 2000000-step analysis budget, not default-limit C/stage3/LLVM/Windows evidence",
   "application_base_commit": "b79baa824b0a48f564ad95447e4ce64cc5b5911b",
   "compiler_commit": "b93b23dd545e5e392544b4c411db30e9c2d7d15a",
   "compiler_tree": "a15bc85adafdb512af53b4ead8e33be3b48ed70a",
@@ -9,8 +9,8 @@
     {
       "scope": "app",
       "path": "src/main.ru",
-      "sha256": "58bdd73699609680fa1eb4c675a715f75d594420aa0f8fbc5c234fcd85174c04",
-      "git_blob": "a679a8c204be313aad6060d1314f76b125e62951"
+      "sha256": "985c8c38de0cc95a5d5e1c14e66da11f31c3464d2bedf900df3503190b6ae7b2",
+      "git_blob": "e1ca9514a61e039c01dd02ee5b8ed6e275c8425d"
     },
     {
       "scope": "compiler",
@@ -27,8 +27,8 @@
     {
       "scope": "app",
       "path": "src/i18n_catalog.ru",
-      "sha256": "d1c085d22b4d35749ed90b5fb01dbd6217c4a2b595db6b6e7f9c626e86e773db",
-      "git_blob": "416f8beb1cbaedf25521313e56c9430142e32d1b"
+      "sha256": "461bdbf1ab009ee7658766a52c4e675041f81cff68a8cced5d3cbddfaa407d61",
+      "git_blob": "3caddc974d4c39a7156aae9af1b22c004333572d"
     },
     {
       "scope": "app",
@@ -135,14 +135,20 @@
     {
       "scope": "app",
       "path": "src/syntax.ru",
-      "sha256": "1fc38616d696ff524398e51570135463918e349e2dd80d046a7bc53c0656391f",
-      "git_blob": "6d8b1e3714511fb2eb53cebf608d064bcccf3a67"
+      "sha256": "3f048a81b486b68286a88701a5885ae4829f96d68f037da21205ada927d540b6",
+      "git_blob": "66f1d287560504c656116014dc32e7424dd5161f"
     },
     {
       "scope": "app",
       "path": "src/syntax_policy.ru",
-      "sha256": "d863ddcc76a0c3eae587378476ad3a4dd460a38dddec358f72987c9e1262fad2",
-      "git_blob": "3d8e563cfe3bf47b4cbfb8b1ecdbd9f6d271ffa9"
+      "sha256": "3b9e9dec9335172cac7ebe9fdc596fda22e0837df404a040fc56e38d319cf61e",
+      "git_blob": "d8d8557e741702b64b0dac9fe9f630b08e1be5ee"
+    },
+    {
+      "scope": "app",
+      "path": "src/syntax_catalog.ru",
+      "sha256": "f58d400b9c63ad8b3ff0b7c7b03f42c045acd0de5fc203de40da17633a3de4fa",
+      "git_blob": "e5ea1e1fc7277f6c1d179b997c5f76a8cbd48b35"
     },
     {
       "scope": "app",

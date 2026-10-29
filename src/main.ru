@@ -17,6 +17,7 @@
 态 取 外言 'status.ru'.
 键规 取 外言 'shortcuts.ru'.
 语 取 外言 'syntax.ru'.
+语策 取 外言 'syntax_policy.ru'.
 关联 取 外言 'associations.ru'.
 拖放 取 外言 'file_drop.ru'.
 修改头 取 密 其 结构 [['header',窗 其 NMHDR],['position',窗 其 IP],['ch',窗 其 I],['modifiers',窗 其 I],['modificationType',窗 其 I],['text',窗 其 PTR],['length',窗 其 IP],['linesAdded',窗 其 IP],['message',窗 其 I],['wParam',窗 其 UP],['lParam',窗 其 IP],['line',窗 其 IP],['foldLevelNow',窗 其 I],['foldLevelPrev',窗 其 I],['margin',窗 其 I]].
@@ -1294,13 +1295,10 @@ A 取 {'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':�
     若 号 == 406 则
         模 其 改编码 当前 936 假.
     然
-    若 (号 == 501 或 (号 >= 702 且 号 <= 705)) 且 (当前 其 查 'large') 则 提示 (本地 其 文本 'notice.large_file_mode'). 得 空. 然
-    若 号 >= 701 且 号 <= 705 则
-        语言 取 'plain'.
-        若 号 == 702 则 语言 取 'cpp'. 然
-        若 号 == 703 则 语言 取 'json'. 然
-        若 号 == 704 则 语言 取 'ru'. 然
-        若 号 == 705 则 语言 取 'markdown'. 然
+    语选 取 语策 其 从命令 号.
+    若 (号 == 501 或 (语选 != '' 且 语选 != 'plain')) 且 (当前 其 查 'large') 则 提示 (本地 其 文本 'notice.large_file_mode'). 得 空. 然
+    若 语选 != '' 则
+        语言 取 语选.
         若 语言 == (当前 其 查 'language') 则
             若 语言 != 'ru' 则 得 空. 然
             语态 取 语 其 状态 编辑柄.
@@ -1362,6 +1360,36 @@ A 取 {'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':�
     窗 其 菜单项 子 清旗 1210 (本地 其 文本 'recent.clear').
     得 空.
 法
+# Group the additional modes so the menu fits short screens. Language names are
+# technical names, stable across the seven UI locales; the parent is localized.
+算 扩展语法菜单 父:
+    列 取 语策 其 语言们.
+    标们 取 ['A–D','E–H','I–L','M–P','Q–T','U–Z'].
+    分组 取 ['abcd','efgh','ijkl','mnop','qrst','uvwxyz'].
+    组 取 0.
+    循 6 次
+        子 取 窗 其 成功 ((窗 其 CreatePopupMenu) 其 调用 []) 'CreatePopupMenu(language)'.
+        试
+            位 取 0.
+            循 列 其 量 次
+                语言 取 列[位].
+                号 取 语策 其 命令 语言.
+                若 号 >= 2000 则
+                    名 取 语策 其 名称 语言.
+                    首 取 语策 其 小写 名[0].
+                    若 分组[组] 其 含 首 则 窗 其 菜单项 子 0 号 名. 然
+                然
+                位 取 位+1.
+            环
+            窗 其 菜单项 父 16 ((窗 其 UP) 其 重释 子) 标们[组].
+        救 原因
+            窗 其 结果 ((窗 其 DestroyMenu) 其 调用 [子]).
+            卒 原因.
+        终
+        组 取 组+1.
+    环
+    得 空.
+法
 算 菜单:
     # Parallel primitive arrays keep the pinned compiler's ABI analysis bounded.
     组键们 取 ['menu.file', 'menu.edit', 'menu.search', 'menu.encoding', 'menu.language', 'menu.view', 'menu.settings', 'menu.ui_language', 'menu.help'].
@@ -1388,6 +1416,7 @@ A 取 {'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':�
                 位 取 位+1.
             环
             若 组位 == 0 则 近期菜单 子. 然
+            若 组位 == 4 则 扩展语法菜单 子. 然
             窗 其 菜单项 主 16 ((窗 其 UP) 其 重释 子) (本地 其 文本 组键们[组位]).
             # The root now owns this submenu; cleanup must not free it twice.
             子 取 空.

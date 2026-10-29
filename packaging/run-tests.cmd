@@ -27,6 +27,9 @@ if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo syntax_native.exe: real C/C++ and JSON token styling, Unicode offsets and editor-state preservation.
 syntax_native.exe >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"
+>>test-results.txt echo language_catalog_native.exe: every bundled language, lexer identity, lexical samples and switch isolation.
+language_catalog_native.exe >>test-results.txt 2>&1
+if not "%ERRORLEVEL%"=="0" set "FAILED=1"
 >>test-results.txt echo syntax_policy.exe: exact suffix and argument-array matching through the production policy.
 syntax_policy.exe >>test-results.txt 2>&1
 if not "%ERRORLEVEL%"=="0" set "FAILED=1"

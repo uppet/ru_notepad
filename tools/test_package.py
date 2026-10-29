@@ -126,6 +126,10 @@ class PackageTests(unittest.TestCase):
             target = self.root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text('synthetic source\n', encoding='utf-8')
+        for relative in package.lexilla_languages.INPUTS:
+            target = self.root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(package.ROOT / relative, target)
         (self.root / 'VERSION').write_text('0.1.4', encoding='utf-8')
         self.dependencies = {name: dict(value) for name, value in package.DEPENDENCIES.items()}
         for dependency in self.dependencies.values():
@@ -169,6 +173,8 @@ class PackageTests(unittest.TestCase):
             receipt = {'app_version': '0.1.4', 'exe_sha256': package.sha(self.binary / name),
                 'dll_sha256': package.sha(self.binary / 'Scintilla.dll'),
                 'lexilla_dll_sha256': package.sha(self.binary / 'Lexilla.dll'),
+                'lexilla_extra': {'make_object': package.lexilla_languages.MAKE_OBJECT,
+                    'source_sha256': package.lexilla_languages.source_inputs(self.root)},
                 'source_sha256': {'src/main.ru': package.sha(self.root / 'src/main.ru')} | package.native_source_snapshot(self.root),
                 'native_helper_sha256': package.sha(self.binary / package.NATIVE_HELPER_NAME),
                 'native_helper_build_key': self.native_receipts[package.NATIVE_HELPER_NAME]['build_key'],
