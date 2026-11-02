@@ -258,6 +258,17 @@ class PreviewContracts(unittest.TestCase):
             with self.assertRaises(InvalidProvenance):product.collect_diagnostic_runtime(config,receipt,root/'bad-inventory')
             self.assertFalse((root/'bad-inventory').exists())
 
+    def test_actual_checkout_matches_frozen_reviewed_feature_manifest(self):
+        # Exercise the real inventory before any expensive self-compilation;
+        # generic temp-repository negative controls cannot detect a stale list.
+        root = Path(__file__).resolve().parents[1]
+        names = subprocess.check_output(['git', '-C', str(root), 'ls-files', '-z'], text=True).split('\0')
+        current = {name: hashlib.sha256((root/name).read_bytes()).hexdigest() for name in names if name}
+        frozen = prepare.manifest()
+        result = build.verify_app_baseline(root, {**frozen['baseline'],
+            'reviewed_changes': frozen['reviewed_changes']}, current)
+        self.assertEqual(result['reviewed_changes'], frozen['reviewed_changes'])
+
     def test_reviewed_delta_requires_exact_before_after_and_every_change(self):
         def git(*args):
             return subprocess.check_output(['git','-C',str(self.root),*args],text=True,stderr=subprocess.DEVNULL).strip()
