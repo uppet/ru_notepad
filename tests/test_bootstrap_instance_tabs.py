@@ -10,6 +10,7 @@ import verify_bootstrap_product_windows as product
 import verify_recent_files_windows as recent
 import test_gui_instance_tabs as samples
 import test_gui_language_catalog as languages
+import test_gui_fold_commands as folds
 from bootstrap_provenance import InvalidProvenance
 
 class InstanceProductContract(unittest.TestCase):
@@ -17,7 +18,7 @@ class InstanceProductContract(unittest.TestCase):
         return dict(schema=product.SCHEMA,status='passed',
             all_native_console_tests_bootstrap_compiled=False,full_release_acceptance=False,
             runtime_sha256=dict(samples.HASHES),gui_results=[],scanner_preflight={},
-            recent_files={},instance_tabs=samples.receipt(),language_catalog=languages.receipt(samples.HASHES))
+            recent_files={},instance_tabs=samples.receipt(),language_catalog=languages.receipt(samples.HASHES),fold_commands=folds.receipt(samples.HASHES))
 
     def validate(self,record):
         ci=SimpleNamespace(portable=SimpleNamespace(RUNTIME_NAMES=tuple(samples.HASHES)),
@@ -38,6 +39,12 @@ class InstanceProductContract(unittest.TestCase):
         r=self.record();del r['language_catalog']
         with self.assertRaises(ValueError):self.validate(r)
         r=self.record();r['language_catalog']['modes'].pop()
+        with self.assertRaises(ValueError):self.validate(r)
+
+    def test_fold_command_gate_is_mandatory(self):
+        r=self.record();del r['fold_commands']
+        with self.assertRaises(ValueError):self.validate(r)
+        r=self.record();r['fold_commands']['passed']=False
         with self.assertRaises(ValueError):self.validate(r)
 
     def test_new_feature_verdict_and_identity_remain_required(self):

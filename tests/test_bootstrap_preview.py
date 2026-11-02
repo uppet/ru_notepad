@@ -462,6 +462,7 @@ class PreviewContracts(unittest.TestCase):
         end=workflow.index('      - name: Fresh three-stage',start)
         body=workflow[start:end]
         for command in ("python -m unittest discover -s editor/tests -p 'test_bootstrap*.py' -v",
+                        'python editor/tools/test_gui_fold_commands.py -v',
                         'python editor/tools/test_windows_ci.py -v',
                         'python editor/tools/test_package.py -v',
                         'python editor/tools/test_gui_instance_tabs.py -v',
@@ -472,7 +473,7 @@ class PreviewContracts(unittest.TestCase):
                         'python -I editor/tools/test_markdown_step_metrics.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-step-controls"',
                         'python -I editor/tools/test_markdown_bulk_guards.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-bulk-guard-controls"'):
             self.assertIn(command+'\n          if ($LASTEXITCODE) { exit $LASTEXITCODE }',body)
-        self.assertEqual(body.count('if ($LASTEXITCODE)'),15)
+        self.assertEqual(body.count('if ($LASTEXITCODE)'),16)
 
     def test_recent_fixtures_require_exact_individual_assertions_and_total(self):
         good=b'PASS: a\nPASS: b\nTOTAL PASS: 2\n'

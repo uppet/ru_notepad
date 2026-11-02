@@ -9,8 +9,8 @@
     {
       "scope": "app",
       "path": "src/main.ru",
-      "sha256": "985c8c38de0cc95a5d5e1c14e66da11f31c3464d2bedf900df3503190b6ae7b2",
-      "git_blob": "e1ca9514a61e039c01dd02ee5b8ed6e275c8425d"
+      "sha256": "f80058ff7356f76c2997b8ecaa5edf134ae2b9d57d5f4fb6501fb1f859d7db94",
+      "git_blob": "c8ce32ec0f1aacbb8063372cfd61bc788b36fb07"
     },
     {
       "scope": "compiler",
@@ -135,8 +135,8 @@
     {
       "scope": "app",
       "path": "src/syntax.ru",
-      "sha256": "3f048a81b486b68286a88701a5885ae4829f96d68f037da21205ada927d540b6",
-      "git_blob": "66f1d287560504c656116014dc32e7424dd5161f"
+      "sha256": "4fe8de6121c3ac565fbc242cab65bf8a6dce10a70581054e95234ee9a10cee5b",
+      "git_blob": "443527be1319be9ac7ec45f8e35dadf7287e79b9"
     },
     {
       "scope": "app",

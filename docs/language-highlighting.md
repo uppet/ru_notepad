@@ -46,3 +46,60 @@ The following hashes identify the exact bytes used (a moving source URL alone is
 - SciTE archive member `lexilla/License.txt`: `185c5a37521316e940ead89cbf0b1ba5862d810c7c966e6c6a14a4a515b23625` (same archive URL above).
 
 Gui4Cli extraction reads the first full CVS `text` block, unescaping `@@`, rather than concatenating historic reverse deltas. Godot data is a hash-pinned development snapshot, not a claim of a specific stable Godot release. Source hashes make the consumed bytes auditable; mutable URLs may subsequently serve different bytes.
+
+
+## WIP: capability-based Fold All / Unfold All commands
+
+Commands 505/506 and Ctrl+Shift+[ / Ctrl+Shift+] now use the installed folding
+capability instead of restricting the menu route to Ru, Markdown and C++.
+Native lexer identity plus its configured fold margin decides eligibility;
+Ru must be enabled, and Markdown must be enabled with per-document folding on.
+This does **not** turn every highlighted mode into a folding mode. JSON currently
+has no configured fold capability and remains a safe no-op, as does plain text.
+The open-time large-file guard and pending custom-fold warning are unchanged.
+An already-native document that grows beyond the limit still refuses collapse
+but can expand, through the existing syntax-layer safety policy.
+
+New Windows evidence is fail-closed: seven folding modes (C, Java, Python, XML,
+C++, Ru, Markdown) through actual WM_COMMAND and foreground-verified keyboard
+input; JSON, plain, disabled Markdown and a real 32,000,000-byte opened document
+are safe no-ops. Small-document bytes, selection, undo/redo and savepoint are
+checked. Large-document observations are bounded byte probes and state checks,
+not a claimed full-buffer hash. The product receipt requires this new gate.
+The separate old ZIP negative control reproduces the command failure while
+proving its native C folder works. Its exact archive and inner ZIP hashes are
+pinned in `tools/verify_fold_baseline.py`; an unavailable/changed artifact fails
+rather than rebuilding or substituting another baseline. This negative-control
+step runs only on the first wip transition from 87189; it is not a permanent
+product gate dependent on an expiring artifact. Delivery of this increment
+requires a successful saved `baseline-reproduction.json` independently of the
+candidate green check. A failed/missing negative control cannot be excused by a
+later push skipping that one-transition step.
+
+Portable extraction tests cover 43 assertions in both interpreter and C,
+including native growth collapse refusal and expansion availability. These are
+modeled-boundary tests, not Windows results. The historical actual native growth
+fixture in `tests/syntax_native.ru` is not claimed as executed by the new GUI
+suite. CI receipts, not this source document, establish Windows completion.
+All original gates remain, including Markdown OPEN <=30 seconds; the previously
+deferred double-Undo performance case remains the only retired performance gate.
+The compiler pin and seven UI catalogs are unchanged. No EOL-conversion feature
+is included in this increment.
+
+### Ru language observations from this increment
+
+- **Confirmed editor integration defect:** main command routing used three
+  language names instead of actual fold capability. Minimal case: a C file with
+  a brace-delimited body, native fold header installed, command 505 leaves the
+  child visible. This is an editor bug, not a Ru language/compiler defect.
+- **Known compiler-analysis limitation, not a new semantic bug:** b93's default
+  200,000-step whole-application Python native analysis has the previously
+  preserved complexity failure. The refreshed independent development-only
+  oracle analyzes every current module/dormant function in 233,714 steps,
+  32 modules, 73 ABI shapes and 2 callbacks under the disclosed isolated 2m
+  budget. No compiler file/default changed. The older default-limit diagnostic
+  is labelled historical, not falsely represented as a rerun of this source.
+- **Improvement proposal, not an implemented compiler fix:** report analysis
+  work by module/expression and distinguish limit exhaustion from invalid native
+  signatures. A minimized independent reproducer is still needed before any
+  compiler optimization claim. This increment changes no compiler semantics.

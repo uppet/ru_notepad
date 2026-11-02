@@ -297,6 +297,15 @@ GetProcAddress 取 (窗 其 内核) 其 绑定 'GetProcAddress' (密 其 签名 
     # plain/null and the custom Markdown folder must never take this route.
     得 词法号 > 1 且 词法号 != 98 且 ((窗 其 发送 柄 2243 2 0) 其 数 > 0).
 法
+# Main commands share the installed folding capability, not a language whitelist.
+# Failed/disabled lexers and Markdown's per-document opt-out remain inert.
+算 可折叠 柄:
+    若 _原生折叠 柄 则 得 真. 然
+    态 取 标语 其 状态 柄.
+    若 态 != 空 则 得 态['enabled'] 且 态['foldEnabled']. 然
+    态 取 如语 其 状态 柄.
+    得 态 != 空 且 态['enabled'].
+法
 算 折叠 柄 位置 为 数:
     若 _原生折叠 柄 则
         态 取 _新选择 柄.

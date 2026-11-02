@@ -26,7 +26,7 @@ def function(text, name):
 def prepare(directory):
     source = (ROOT / 'src/syntax.ru').read_text(encoding='utf-8')
     modules = {
-        'state': """值 取 {'lexer':0,'creates':0,'missing':假,'large':假,'live':真,'thread':真,'status':0,'margin':0,'folds':0,'clear':0,'paint':0,'closed':0,'styles':{},'properties':{},'keywords':{}}.
+        'state': """值 取 {'lexer':0,'creates':0,'missing':假,'large':假,'live':真,'thread':真,'status':0,'margin':0,'folds':0,'clear':0,'paint':0,'closed':0,'styles':{},'properties':{},'keywords':{},'ruState':空,'markdownState':空,'lastFold':-1}.
 """,
         'number': """形 数形:
     n 为 数.
@@ -71,6 +71,7 @@ IP 取 外言 './pointer.ru'.
         态 其 增 'keywords' {}.
         态 其 增 'properties' {}.
     然
+    若 号 == 2662 则 态 其 增 'lastFold' 宽. 然
     若 号 == 4002 则 得 数 其 包 态['lexer']. 然
     若 号 == 2383 则 得 数 其 包 态['status']. 然
     若 号 == 2243 则 得 数 其 包 态['margin']. 然
@@ -93,8 +94,13 @@ IP 取 外言 './pointer.ru'.
 算 _受限 柄: 得 (控 其 值)['large']. 法
 算 _配折叠 柄: (控 其 值) 其 增 'margin' 16. (控 其 值) 其 增 'folds' ((控 其 值)['folds']+1). 得 空. 法
 算 选择 柄: 得 'ru'. 法
+算 状态 柄: 得 (控 其 值)['ruState']. 法
+算 全折 柄 动作: 得 假. 法
 """,
-        'markdown': """算 选择 柄: 得 'markdown'. 法
+        'markdown': """控 取 外言 './state.ru'.
+算 选择 柄: 得 'markdown'. 法
+算 状态 柄: 得 (控 其 值)['markdownState']. 法
+算 全折 柄 动作: 得 假. 法
 """,
         'catalog': """算 有语言 语: 得 语 == 'cpp' 或 语 == 'json' 或 语 == 'markdown' 或 语 == 'python' 或 语 == 'java' 或 语 == 'nfo' 或 语 == 'wrong'. 法
 算 词法器 语:
@@ -142,12 +148,13 @@ CreateLexer 取 外言 './create.ru'.
     显 'PASS: '+文.
     得 空.
 法
+算 _新选择 柄: 得 空. 法
 算 _验选择 态 柄: 得 空. 法
 算 _停止折叠 态 柄: (控 其 值) 其 增 'margin' 0. 得 空. 法
 算 _性质 态 柄 键 为 句 值 为 句: ((控 其 值)['properties']) 其 增 键 值. 得 空. 法
 """
     bodies = ''.join(function(source, name) for name in
-                     ('_发设', '_发文设', '_配色', '_清样式', '_纯文', '_选择', '_原生折叠'))
+                     ('_发设', '_发文设', '_配色', '_清样式', '_纯文', '_选择', '_原生折叠', '可折叠', '全折'))
     probe = """态 取 控 其 值.
 确认 ((_选择 空 1 'python') == 'python') 'catalog native language selected'.
 确认 (态['lexer'] == 2 且 态['creates'] == 1) 'fresh exact lexer created'.
@@ -193,6 +200,32 @@ _选择 空 1 'python'.
 态 其 增 'live' 假.
 确认 (非 (_原生折叠 1)) 'destroyed editor never enters native folding'.
 确认 (态['closed'] == 态['creates']) 'every creation buffer closed'.
+态 其 增 'live' 真.
+态 其 增 'lexer' 2.
+态 其 增 'margin' 16.
+确认 (可折叠 1) 'installed native capability admits fold commands'.
+态 其 增 'margin' 0.
+确认 (非 (可折叠 1)) 'disabled native margin rejects fold commands'.
+态 其 增 'lexer' 0.
+确认 (非 (可折叠 1)) 'plain without custom state rejects fold commands'.
+态 其 增 'ruState' {'enabled':真}.
+确认 (可折叠 1) 'enabled Ru capability admits fold commands'.
+态 其 增 'ruState' {'enabled':假}.
+确认 (非 (可折叠 1)) 'disabled Ru rejects fold commands'.
+态 其 增 'markdownState' {'enabled':真,'foldEnabled':真}.
+确认 (可折叠 1) 'enabled Markdown capability admits fold commands'.
+态 其 增 'markdownState' {'enabled':真,'foldEnabled':假}.
+确认 (非 (可折叠 1)) 'Markdown folding opt out rejects fold commands'.
+态 其 增 'markdownState' {'enabled':假,'foldEnabled':真}.
+确认 (非 (可折叠 1)) 'disabled Markdown rejects fold commands'.
+态 其 增 'lexer' 2.
+态 其 增 'margin' 16.
+态 其 增 'large' 真.
+确认 (可折叠 1) 'grown native document keeps installed expansion capability'.
+确认 (非 (全折 1 0) 且 态['lastFold'] == -1) 'grown native document rejects collapse without native call'.
+确认 ((全折 1 1) 且 态['lastFold'] == 1) 'grown native document still dispatches expansion'.
+态 其 增 'large' 假.
+确认 ((全折 1 0) 且 态['lastFold'] == 0) 'native collapse resumes below growth limit'.
 显 'TOTAL PASS: '+(次数[0] 为 句).
 """
     path = directory / 'probe.ru'
@@ -220,10 +253,10 @@ def main():
             (directory / f'phase-{i}.log').write_text(result.stdout, encoding='utf-8')
             if result.returncode:
                 raise SystemExit(result.stdout)
-            if i != 1 and (result.stdout.count('PASS: ') != 32 or
-                           re.findall(r'^TOTAL PASS: (\d+)$', result.stdout, re.M) != ['31']):
+            if i != 1 and (result.stdout.count('PASS: ') != 44 or
+                           re.findall(r'^TOTAL PASS: (\d+)$', result.stdout, re.M) != ['43']):
                 raise SystemExit('incorrect assertion count:\n' + result.stdout)
-        print('PASS: 31 extracted production configuration assertions in interpreter and C')
+        print('PASS: 43 extracted production configuration assertions in interpreter and C')
 
 
 if __name__ == '__main__':

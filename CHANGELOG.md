@@ -1,3 +1,9 @@
+## Unreleased — capability-based folding commands
+
+- Route Fold All / Unfold All and their shortcuts through actual native/custom folding capability instead of a three-language whitelist.
+- Keep unsupported modes, disabled Markdown folds and opened large files safe; preserve the existing native growth expansion policy.
+- Add real Windows command/keyboard regressions and an immutable old-preview negative control. Windows completion is established by CI receipts, not this source entry.
+
 ## Unreleased — Ru 0.23.0 conditional-chain editing
 
 - Recognize `另若` in both pure-Ru and table-driven native highlighting, sharing one conditional fold frame. Preserve nested `另 若`, whole-name boundaries, and strings/comments.

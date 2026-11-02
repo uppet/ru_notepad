@@ -1310,7 +1310,7 @@ A 取 {'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':�
         报语法警告.
     然
     若 号 == 505 或 号 == 506 则
-        若 ((当前 其 查 'language') == 'ru' 或 (当前 其 查 'language') == 'markdown' 或 (当前 其 查 'language') == 'cpp') 且 非 (当前 其 查 'large') 则
+        若 非 (当前 其 查 'large') 且 (语 其 可折叠 编辑柄) 则
             若 语 其 待办 编辑柄 则 提示 (本地 其 文本 'notice.folds_pending'). 得 空. 然
             动作 取 0.
             若 号 == 506 则 动作 取 1. 然

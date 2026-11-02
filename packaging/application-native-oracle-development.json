@@ -44,16 +44,22 @@
   },
   "production_default_step_limit": 200000,
   "default_limit_result": "Earlier development candidate failed at 200000 steps; retained diagnostic is not represented as a rerun of the final source.",
+  "default_limit_failure": {
+    "path": "packaging/application-native-oracle-default-failure.txt",
+    "sha256": "03e78f1dbe5fd17ecbb25a6c6dc583738687f7da7d63a75a5a68be3a9bd95743",
+    "command": "python3 <b93>/ru check --allow-native src/main.ru",
+    "path_redaction": "Machine-specific prefix removed; source-relative path, line, column and diagnostic retained."
+  },
   "isolated_development_step_limit": 2000000,
-  "actual_steps": 233788,
-  "elapsed_seconds": 126.575159,
+  "actual_steps": 233714,
+  "elapsed_seconds": 120.580905,
   "other_analysis_limits": "unchanged",
   "compiler_files_modified": false,
   "modules": 32,
   "shapes": 73,
   "callbacks": 2,
   "module_sha256": {
-    "app:src/main.ru": "985c8c38de0cc95a5d5e1c14e66da11f31c3464d2bedf900df3503190b6ae7b2",
+    "app:src/main.ru": "f80058ff7356f76c2997b8ecaa5edf134ae2b9d57d5f4fb6501fb1f859d7db94",
     "compiler:rulang/stdlib/密.ru": "174a64c1c03499469ad825429db98577a314958cfb070d8c87bd03c4ca23700d",
     "app:src/i18n.ru": "e5ed0325977748d3567d60e61f13f17e3db31c8b5afa7c34eec5703d649cbe85",
     "app:src/i18n_catalog.ru": "461bdbf1ab009ee7658766a52c4e675041f81cff68a8cced5d3cbddfaa407d61",
@@ -74,7 +80,7 @@
     "app:src/ui_arguments.ru": "d27989270478cf0772ed8aab567ee45116be30d9800ba58de6bdc1a8062a9307",
     "app:src/status.ru": "73bbfe0910226d6bfb2e9a78ffe1d2ea5f8a2c1605f67b3b1fe9eb26366fe767",
     "app:src/shortcuts.ru": "a7b4971aa790c4c84dab64131679fea35ac6bd0ac2698e4854af98d72c0920b8",
-    "app:src/syntax.ru": "3f048a81b486b68286a88701a5885ae4829f96d68f037da21205ada927d540b6",
+    "app:src/syntax.ru": "4fe8de6121c3ac565fbc242cab65bf8a6dce10a70581054e95234ee9a10cee5b",
     "app:src/syntax_policy.ru": "3b9e9dec9335172cac7ebe9fdc596fda22e0837df404a040fc56e38d319cf61e",
     "app:src/syntax_catalog.ru": "f58d400b9c63ad8b3ff0b7c7b03f42c045acd0de5fc203de40da17633a3de4fa",
     "app:src/ru_syntax.ru": "484061b2994db7e20c914bc61654eee726b632c620c8babce51bf73e20985442",
@@ -86,11 +92,5 @@
     "app:src/associations_policy.ru": "02c96b9d8c38953d460ddac56fab08ac7b59a78bc840668152b3b14ce3a3382f",
     "app:src/file_drop.ru": "c61a8679075a971d5fdc9e0aac01d4adb6f9e143fb5c05abbb381b7124b5c9ec"
   },
-  "oracle_sha256": "08caff405c466b1a150ffa37b6518936168c84a79ea7b49d47c3e8ea711bca87",
-  "default_limit_failure": {
-    "path": "packaging/application-native-oracle-default-failure.txt",
-    "sha256": "03e78f1dbe5fd17ecbb25a6c6dc583738687f7da7d63a75a5a68be3a9bd95743",
-    "command": "python3 <b93>/ru check --allow-native src/main.ru",
-    "path_redaction": "Machine-specific prefix removed; source-relative path, line, column and diagnostic retained."
-  }
+  "oracle_sha256": "b37b3ebe95c49a2af3139f11acc501e3944e0c1965061bbbd7be4cc685828bb4"
 }

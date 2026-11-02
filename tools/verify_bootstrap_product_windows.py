@@ -63,6 +63,8 @@ def validate_product(report, ci):
     validate_result(report.get('instance_tabs'), hashes)
     from gui_language_catalog import validate_result as validate_languages
     validate_languages(report.get('language_catalog'), hashes)
+    from gui_fold_commands import validate_result as validate_folds
+    validate_folds(report.get('fold_commands'), hashes)
 
 
 def collect_product_gui(ci, api, runtime, fixtures, evidence, report, save):
@@ -121,7 +123,7 @@ def verify(config, output):
                   ('app_receipt', 'argv_probe_receipt', 'dll_probe_receipt', 'dependencies_receipt')},
               'smoke_receipt': identity(smoke_path), 'recent_fixtures_receipt': identity(recent_fixture_path), 'gui_results': [],
               'all_native_console_tests_bootstrap_compiled': False, 'full_release_acceptance': False,
-              'coverage': 'Original four GUI product gates, recent-file GUI, single-instance/tab-close GUI, and all 95 language-menu routes; independent C-native baseline is separate'}
+              'coverage': 'Original four GUI product gates, recent-file GUI, single-instance/tab-close GUI, and all 95 language-menu routes, and capability-based fold commands/shortcuts; independent C-native baseline is separate'}
     def save():
         (output/'product-preview.json').write_text(json.dumps(report, indent=2, ensure_ascii=True)+'\n', encoding='utf-8')
     save()
@@ -136,6 +138,9 @@ def verify(config, output):
             save()
             from gui_language_catalog import run as run_languages
             report['language_catalog'] = run_languages(api, runtime, fixtures, evidence)
+            save()
+            from gui_fold_commands import run as run_folds
+            report['fold_commands'] = run_folds(api, runtime, fixtures, evidence)
             save()
         smoke.validate_receipts(config)
         validate_receipt(Path(config['dependencies_receipt']))

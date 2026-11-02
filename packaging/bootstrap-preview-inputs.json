@@ -13,6 +13,10 @@
       "before": "f82e3e45e0cf4f0522fdd6d2a516e6ec91cc0a000fbff503ca954f0e37dfaf57",
       "after": "cbd906487c63b3952f7218b335db46caf96bd0594df7a2c15fd10918bcc1acbd"
     },
+    "CHANGELOG.md": {
+      "before": "6dba0bf5f16f3d11c94063caabbab4e43d808713f155eaba5b9db9a29fcab1c3",
+      "after": "b7f716b038736057aff5d167fcc12258d7d473ea3fc3f3346f7020254bc7f72f"
+    },
     "README.md": {
       "before": "4fec039d9e1f3129d90c9662c2202fca8809d9c1e340dae429130cfe41cf9c7c",
       "after": "a4097dab1fd30bc2bbf3807524a7c86879be9517b6927b29d71965dc785947de"
@@ -27,7 +31,7 @@
     },
     "docs/language-highlighting.md": {
       "before": null,
-      "after": "09451921b7dd30ec1e6f563eb1e7144efd2dc3925f9230cbe7aefae187f5506a"
+      "after": "a16766593ac34ea7104d55602efb285660dbad000c45d8ffd4d80d8201e7d99e"
     },
     "docs/markdown-direct-folds.md": {
       "before": "b281e6c7fd7fc949db129e8ab5e3998b5b87329d1687b11fa50f17a5d0abcfd5",
@@ -87,11 +91,11 @@
     },
     "packaging/application-native-oracle-development.json": {
       "before": null,
-      "after": "dda851a4346d61276fc1dc66707ba21ca9f038c69f5d489589c053e1c9842cab"
+      "after": "e2116a0fac8f7e179b08c7692a9ba24d721bf8da211a59f1b3313ce528fc139e"
     },
     "packaging/application-native-oracle.json": {
       "before": null,
-      "after": "08caff405c466b1a150ffa37b6518936168c84a79ea7b49d47c3e8ea711bca87"
+      "after": "b37b3ebe95c49a2af3139f11acc501e3944e0c1965061bbbd7be4cc685828bb4"
     },
     "packaging/licenses/Godot.txt": {
       "before": null,
@@ -119,7 +123,7 @@
     },
     "src/main.ru": {
       "before": "3dcb97ca641f2fb8068785517aedcbbda6d3c65ca179683601f76508d71dd734",
-      "after": "985c8c38de0cc95a5d5e1c14e66da11f31c3464d2bedf900df3503190b6ae7b2"
+      "after": "f80058ff7356f76c2997b8ecaa5edf134ae2b9d57d5f4fb6501fb1f859d7db94"
     },
     "src/markdown_policy.ru": {
       "before": "e9658000e1c5fbe5fb49403af2a27eb11a0efb9d4bf5261617b760688ea2d720",
@@ -155,7 +159,7 @@
     },
     "src/syntax.ru": {
       "before": "1fc38616d696ff524398e51570135463918e349e2dd80d046a7bc53c0656391f",
-      "after": "3f048a81b486b68286a88701a5885ae4829f96d68f037da21205ada927d540b6"
+      "after": "4fe8de6121c3ac565fbc242cab65bf8a6dce10a70581054e95234ee9a10cee5b"
     },
     "src/syntax_catalog.ru": {
       "before": null,
@@ -253,9 +257,13 @@
       "before": null,
       "after": "62c8d213f897403f5a7f7e8b44844ea60040e5149d8612b48e12059009b4a49e"
     },
+    "tests/test_bootstrap_fold_baseline.py": {
+      "before": null,
+      "after": "893826337b63d225e80c54b29d51f545746ee0e71a301ea9dce01831310aca20"
+    },
     "tests/test_bootstrap_instance_tabs.py": {
       "before": null,
-      "after": "f9043492bb6273c843076fc53fbedccfacce0aa93bda4aac6bc704e6b799e0e5"
+      "after": "dd4717ed6009289decd260800dc1808048b50efc15e82b6fc75215b76c590a20"
     },
     "tests/test_bootstrap_native_wrapper.py": {
       "before": null,
@@ -297,6 +305,10 @@
       "before": null,
       "after": "e438628e8fbf5a87d51f3afec3fa93c9e1461f15435e96aee4c3afa08bb109fe"
     },
+    "tools/gui_fold_commands.py": {
+      "before": null,
+      "after": "f62675e53a451d7f1de41bf22bd12c37a02973517507cff3f68d602ebc7f3391"
+    },
     "tools/gui_instance_tabs.py": {
       "before": null,
       "after": "886e4490b5d50f650681a238c5e83d2b7c6d0558009c575beeae6410dceccf14"
@@ -332,6 +344,10 @@
     "tools/test_cleanup_paths.py": {
       "before": "43ba2326b43981154c61aab60b8458a48847866c6163455daa5d9ce8c16007aa",
       "after": "505f4c0faad97fb29e96d8d5169874e61c4581bcb1c9c88d8b2d0d4312376397"
+    },
+    "tools/test_gui_fold_commands.py": {
+      "before": null,
+      "after": "1a7812f0fd05ce706b2ba5e51a1ac23b698181f403fe7bf088baad0b828e70ed"
     },
     "tools/test_gui_instance_tabs.py": {
       "before": null,
@@ -403,7 +419,7 @@
     },
     "tools/test_syntax_runtime_catalog.py": {
       "before": null,
-      "after": "d340416720c2a1ebff8cce1c4693ecbed07a847f4c68ba599831edb4f847de79"
+      "after": "5eb62088256e7082509fb528c7de5bc0ac2564bc216bb0ce801fb9c38840d97a"
     },
     "tools/test_windows_ci.py": {
       "before": "b28733251662cd749c961fda95d912a1638794857fbb07015b5fb6363c28ec3b",
@@ -412,6 +428,10 @@
     "tools/verify_bootstrap_application_oracle.py": {
       "before": null,
       "after": "07cdfe8415eb61329ca851641efed68d6f6b5080cd8abe8cb0e8f8f0be7ea06b"
+    },
+    "tools/verify_fold_baseline.py": {
+      "before": null,
+      "after": "0552fad151c68fbb9fc1865596c2f2e802181e98918fd23d9e6bdc28c96c5083"
     },
     "tools/verify_recent_files_windows.py": {
       "before": null,

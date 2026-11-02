@@ -10,6 +10,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   windows-preview:
+    permissions:
+      contents: read
+      actions: read # Download only the pinned prior preview for the fold negative control.
     # Independent layered preview. The old complete C-native workflow still runs;
     # its results must be reviewed separately before delivering this ZIP.
     runs-on: windows-latest
@@ -91,6 +94,8 @@ jobs:
           $ErrorActionPreference = 'Stop'
           python -m unittest discover -s editor/tests -p 'test_bootstrap*.py' -v
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_gui_fold_commands.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python editor/tools/test_gui_language_catalog.py -v
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python editor/tests/test_preview_language_sample.py -v
@@ -119,6 +124,12 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -I editor/tools/test_markdown_bulk_guards.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-bulk-guard-controls"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Reproduce fold-command defect in pinned previously accepted preview
+        # One transition's evidence; the 14-day artifact is not a permanent CI dependency.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/wip' && github.event.before == '87189d2e36b282bf08bcf781be6a73570c2a22b0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python editor/tools/verify_fold_baseline.py --output "$env:PREVIEW_OUTPUT/fold-baseline"
       - name: Fresh three-stage self-compilation and fixed point
         working-directory: language
         run: python tools/bootstrap.py verify --directory bin/bootstrap/preview-ci
@@ -141,7 +152,7 @@ jobs:
       - name: Same-binary active GUI budgets, recent files and instance/tab acceptance
         run: python editor/tools/verify_bootstrap_product_windows.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --output "$env:PREVIEW_OUTPUT/product"
       - name: Package only the exact GUI-tested bootstrap preview and verify ZIP bytes
-        run: python editor/tools/package_bootstrap_preview.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --product-receipt "$env:PREVIEW_OUTPUT/product/product-preview.json" --mingw-root "${{ steps.msys2.outputs.msys2-location }}/mingw64" --output "$env:PREVIEW_OUTPUT/dist/ru_notepad-bootstrap-llvm-preview-windows-x64.zip"
+        run: python editor/tools/package_bootstrap_preview.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --product-receipt "$env:PREVIEW_OUTPUT/product/product-preview.json" --mingw-root "${{ steps.msys2.outputs.msys2-location }}/mingw64" --output "$env:PREVIEW_OUTPUT/dist/ru_notepad-language-fold-commands-preview-windows-x64.zip"
       - name: Preserve exact tested runtime as NOT ACCEPTED diagnostic evidence
         if: always()
         id: diagnostic_runtime
