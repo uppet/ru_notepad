@@ -1177,5 +1177,68 @@
     "es": "Se unirían saltos de línea mixtos. Unifique primero el formato.",
     "ru": "Операция объединит разные переводы строк. Сначала приведите их к одному формату.",
     "it": "L’operazione unirebbe terminatori misti. Uniforma prima i fine riga."
+  },
+  "command.sort_selected_ascending": {
+    "en": "Sort selected lines ascending (&B)",
+    "zh-CN": "选中行升序排序 (&B)",
+    "ja": "選択行を昇順に並べ替え (&B)",
+    "ko": "선택한 줄 오름차순 정렬 (&B)",
+    "es": "Ordenar líneas seleccionadas de forma ascendente (&B)",
+    "ru": "Строки выделения по возрастанию (&B)",
+    "it": "Ordina le righe selezionate in ordine crescente (&B)"
+  },
+  "command.sort_selected_descending": {
+    "en": "Sort selected lines descending (&E)",
+    "zh-CN": "选中行降序排序 (&E)",
+    "ja": "選択行を降順に並べ替え (&E)",
+    "ko": "선택한 줄 내림차순 정렬 (&E)",
+    "es": "Ordenar líneas seleccionadas de forma descendente (&E)",
+    "ru": "Строки выделения по убыванию (&E)",
+    "it": "Ordina le righe selezionate in ordine decrescente (&E)"
+  },
+  "command.deduplicate_selected_lines": {
+    "en": "Remove duplicate selected lines (&F)",
+    "zh-CN": "选中行去重（保留首次） (&F)",
+    "ja": "選択行の重複を削除（最初を保持） (&F)",
+    "ko": "선택한 줄 중복 제거 (첫 줄 유지) (&F)",
+    "es": "Quitar líneas seleccionadas duplicadas (conservar primera) (&F)",
+    "ru": "Удалить повторы строк выделения (оставить первые) (&F)",
+    "it": "Elimina righe selezionate duplicate (conserva la prima) (&F)"
+  },
+  "command.sort_all_ascending": {
+    "en": "Sort all lines ascending (&G)",
+    "zh-CN": "全文行升序排序 (&G)",
+    "ja": "全文の行を昇順に並べ替え (&G)",
+    "ko": "전체 줄 오름차순 정렬 (&G)",
+    "es": "Ordenar todas las líneas de forma ascendente (&G)",
+    "ru": "Все строки по возрастанию (&G)",
+    "it": "Ordina tutte le righe in ordine crescente (&G)"
+  },
+  "command.sort_all_descending": {
+    "en": "Sort all lines descending (&H)",
+    "zh-CN": "全文行降序排序 (&H)",
+    "ja": "全文の行を降順に並べ替え (&H)",
+    "ko": "전체 줄 내림차순 정렬 (&H)",
+    "es": "Ordenar todas las líneas de forma descendente (&H)",
+    "ru": "Все строки по убыванию (&H)",
+    "it": "Ordina tutte le righe in ordine decrescente (&H)"
+  },
+  "command.deduplicate_all_lines": {
+    "en": "Remove duplicate lines in whole document (&J)",
+    "zh-CN": "全文行去重（保留首次） (&J)",
+    "ja": "全文の重複行を削除（最初を保持） (&J)",
+    "ko": "전체 중복 줄 제거 (첫 줄 유지) (&J)",
+    "es": "Quitar líneas duplicadas del documento (conservar primera) (&J)",
+    "ru": "Удалить повторы строк документа (оставить первые) (&J)",
+    "it": "Elimina righe duplicate nel documento (conserva la prima) (&J)"
+  },
+  "lines.ordering_limit": {
+    "en": "Sorting/removing duplicates is limited to 10,000 lines and 4 MiB. Select a smaller range.",
+    "zh-CN": "排序／去重限 10,000 行且不超过 4 MiB。请选择较小范围。",
+    "ja": "並べ替え・重複削除は10,000行かつ4 MiBまでです。選択範囲を小さくしてください。",
+    "ko": "정렬/중복 제거는 10,000줄 및 4 MiB로 제한됩니다. 더 작은 범위를 선택하세요.",
+    "es": "Ordenar/quitar duplicados se limita a 10.000 líneas y 4 MiB. Seleccione un rango menor.",
+    "ru": "Сортировка/удаление повторов ограничены 10 000 строк и 4 МиБ. Уменьшите выделение.",
+    "it": "Ordinamento/rimozione duplicati limitati a 10.000 righe e 4 MiB. Seleziona meno righe."
   }
 }

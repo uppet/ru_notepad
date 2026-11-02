@@ -2,8 +2,7 @@
 
 Edit offers **Duplicate current/selected lines**, **Move current/selected lines
 up/down**, and **Trim trailing spaces/tabs in current/selected lines**, in all
-seven interface languages. Only menu access keys are added; no new editor shortcut bindings are assigned. Sorting and
-removing duplicate lines are not part of this increment.
+seven interface languages. Only menu access keys are added; no new editor shortcut bindings are assigned. Sorting and duplicate removal are a separate [explicitly scoped increment](line-ordering.md).
 
 Without a selection these commands affect the caret's current line. With a
 stream selection they affect all touched whole lines; a high endpoint exactly

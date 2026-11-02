@@ -1,9 +1,16 @@
+## Unreleased — explicitly scoped line ordering
+
+- Add selected-line and whole-document stable case-sensitive Unicode sort (ascending/descending), plus nonadjacent duplicate removal retaining the first occurrence.
+- Preserve mixed separator slots while sorting; duplicate removal preserves survivor separators and the original final boundary. Reject CR/LF fusion before editing.
+- Bound synchronous work to 10,000 lines and 4 MiB per range, with seven-language status guidance; no new shortcuts or implicit save.
+- Require source-bound native, actual-menu/save/Undo/Redo/reopen, resource-boundary timing and strict-package gates. Source changes alone are not a Windows pass.
+
 ## Unreleased — current/selected whole-line operations
 
 - Add duplicate, move up/down, and ASCII trailing-space/Tab trim through seven-language Edit menus, without new editor shortcuts.
 - Preserve mixed line-ending bytes and final-terminator state; reject ambiguous CR/LF joins before editing with a non-modal localized explanation.
 - Use native byte ranges and grouped Undo, preserving existing readonly/busy/modal/large-file protections and the text-extraction fence.
-- Require native command tests and actual executable save/Undo/Redo/reopen evidence; portable contracts alone do not certify a Windows candidate. Sorting/deduplication remain a separate stage.
+- Require native command tests and actual executable save/Undo/Redo/reopen evidence; portable contracts alone do not certify a Windows candidate. Sorting/deduplication are documented in the following increment.
 
 ## Unreleased — capability-based folding commands
 

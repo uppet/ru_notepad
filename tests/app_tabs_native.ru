@@ -25,6 +25,20 @@
         若 (((窗 其 GetTickCount64) 其 调用 []) 其 值) 其 数-(起 其 数) > 30000 则 卒 'close fixture save deadline'. 然
     环
 为
+# Ordering fixtures use actual app WM_COMMAND, never call the core directly.
+作 验行序 主 柄 原 为 句 新文 为 句 号 为 数 锚 为 数 点 为 数 式 为 数 新锚 为 数 新点 为 数 拒 为 事实:
+    编 其 设文本 柄 原. 窗 其 发送 柄 2031 式 0.
+    窗 其 发送 柄 2175 0 0. 编 其 记保存 柄.
+    窗 其 发送 柄 2160 锚 点.
+    窗 其 发送 主 273 号 0.
+    确认 ((编 其 文本 柄) == 新文 且 (窗 其 发送 柄 2030 0 0) 其 数 == 式 且 (应用 其 脏 (应用 其 当前)) == (新文 != 原)) 'ordering exact bytes Enter mode and savepoint'.
+    确认 ((窗 其 发送 柄 2009 0 0) 其 数 == 新锚 且 (窗 其 发送 柄 2008 0 0) 其 数 == 新点) 'ordering whole-line selection and direction'.
+    确认 (((应用 其 A) 其 查 'lineNotice') == 拒) 'ordering ambiguous CR LF status'.
+    窗 其 发送 主 273 201 0.
+    确认 ((编 其 文本 柄) == 原 且 非 (应用 其 脏 (应用 其 当前)) 且 (窗 其 发送 柄 2174 0 0) 其 数 == 0) 'ordering one undo restores clean source with no remaining undo'.
+    窗 其 发送 主 273 202 0.
+    确认 ((编 其 文本 柄) == 新文 且 (应用 其 脏 (应用 其 当前)) == (新文 != 原)) 'ordering one redo or no-op retains exact bytes'.
+为
 算 元初 参数 为 句 阵:
     主 取 应用 其 初始化 ([]) 假.
     状态 取 应用 其 A.
@@ -328,6 +342,94 @@
     窗 其 发送 尾柄 2160 0 0.
     窗 其 发送 主 273 213 0.
     确认 ((窗 其 发送 尾柄 2183 0 0) 其 数 == 65537 且 (窗 其 发送 尾柄 2007 0 0) 其 数 == 32 且 (窗 其 发送 尾柄 2007 65536 0) 其 数 == 120 且 非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'long leading whitespace nontrim stays exact clean and undo-free within fixture budget'.
+    验行序 主 尾柄 '外\r\nz😀\r\nA\r\né\r\né\r\nz😀\r\n汉\r\n尾' '外\r\nA\r\né\r\nz😀\r\nz😀\r\né\r\n汉\r\n尾' 214 6 36 0 5 34 假. # 214-crlf-forward
+    验行序 主 尾柄 '外\r\nz😀\r\nA\r\né\r\né\r\nz😀\r\n汉\r\n尾' '外\r\nA\r\né\r\nz😀\r\nz😀\r\né\r\n汉\r\n尾' 214 36 6 0 34 5 假. # 214-crlf-reverse
+    验行序 主 尾柄 '外\nz😀\nA\né\né\nz😀\n汉\n尾' '外\nA\né\nz😀\nz😀\né\n汉\n尾' 214 5 29 2 4 28 假. # 214-lf-forward
+    验行序 主 尾柄 '外\nz😀\nA\né\né\nz😀\n汉\n尾' '外\nA\né\nz😀\nz😀\né\n汉\n尾' 214 29 5 2 28 4 假. # 214-lf-reverse
+    验行序 主 尾柄 '外\rz😀\rA\ré\ré\rz😀\r汉\r尾' '外\rA\ré\rz😀\rz😀\ré\r汉\r尾' 214 5 29 1 4 28 假. # 214-cr-forward
+    验行序 主 尾柄 '外\rz😀\rA\ré\ré\rz😀\r汉\r尾' '外\rA\ré\rz😀\rz😀\ré\r汉\r尾' 214 29 5 1 28 4 假. # 214-cr-reverse
+    验行序 主 尾柄 '外\r\nz😀\r\nA\r\né\r\né\r\nz😀\r\n汉\r\n尾' '外\r\n汉\r\né\r\nz😀\r\nz😀\r\né\r\nA\r\n尾' 215 6 36 0 5 34 假. # 215-crlf-forward
+    验行序 主 尾柄 '外\r\nz😀\r\nA\r\né\r\né\r\nz😀\r\n汉\r\n尾' '外\r\n汉\r\né\r\nz😀\r\nz😀\r\né\r\nA\r\n尾' 215 36 6 0 34 5 假. # 215-crlf-reverse
+    验行序 主 尾柄 '外\nz😀\nA\né\né\nz😀\n汉\n尾' '外\n汉\né\nz😀\nz😀\né\nA\n尾' 215 5 29 2 4 28 假. # 215-lf-forward
+    验行序 主 尾柄 '外\nz😀\nA\né\né\nz😀\n汉\n尾' '外\n汉\né\nz😀\nz😀\né\nA\n尾' 215 29 5 2 28 4 假. # 215-lf-reverse
+    验行序 主 尾柄 '外\rz😀\rA\ré\ré\rz😀\r汉\r尾' '外\r汉\ré\rz😀\rz😀\ré\rA\r尾' 215 5 29 1 4 28 假. # 215-cr-forward
+    验行序 主 尾柄 '外\rz😀\rA\ré\ré\rz😀\r汉\r尾' '外\r汉\ré\rz😀\rz😀\ré\rA\r尾' 215 29 5 1 28 4 假. # 215-cr-reverse
+    验行序 主 尾柄 '外\r\nz😀\r\nA\r\né\r\né\r\nz😀\r\n汉\r\n尾' '外\r\nz😀\r\nA\r\né\r\né\r\n汉\r\n尾' 216 6 36 0 5 27 假. # 216-crlf-forward
+    验行序 主 尾柄 '外\r\nz😀\r\nA\r\né\r\né\r\nz😀\r\n汉\r\n尾' '外\r\nz😀\r\nA\r\né\r\né\r\n汉\r\n尾' 216 36 6 0 27 5 假. # 216-crlf-reverse
+    验行序 主 尾柄 '外\nz😀\nA\né\né\nz😀\n汉\n尾' '外\nz😀\nA\né\né\n汉\n尾' 216 5 29 2 4 22 假. # 216-lf-forward
+    验行序 主 尾柄 '外\nz😀\nA\né\né\nz😀\n汉\n尾' '外\nz😀\nA\né\né\n汉\n尾' 216 29 5 2 22 4 假. # 216-lf-reverse
+    验行序 主 尾柄 '外\rz😀\rA\ré\ré\rz😀\r汉\r尾' '外\rz😀\rA\ré\ré\r汉\r尾' 216 5 29 1 4 22 假. # 216-cr-forward
+    验行序 主 尾柄 '外\rz😀\rA\ré\ré\rz😀\r汉\r尾' '外\rz😀\rA\ré\ré\r汉\r尾' 216 29 5 1 22 4 假. # 216-cr-reverse
+    验行序 主 尾柄 'z😀\r\nA\r\né\r\né\r\nz😀\r\n汉\r\n' 'A\r\né\r\nz😀\r\nz😀\r\né\r\n汉\r\n' 217 0 0 0 0 29 假. # 217-crlf-forward
+    验行序 主 尾柄 'z😀\r\nA\r\né\r\né\r\nz😀\r\n汉\r\n' 'A\r\né\r\nz😀\r\nz😀\r\né\r\n汉\r\n' 217 31 0 0 29 0 假. # 217-crlf-reverse
+    验行序 主 尾柄 'z😀\nA\né\né\nz😀\n汉\n' 'A\né\nz😀\nz😀\né\n汉\n' 217 0 0 2 0 24 假. # 217-lf-forward
+    验行序 主 尾柄 'z😀\nA\né\né\nz😀\n汉\n' 'A\né\nz😀\nz😀\né\n汉\n' 217 25 0 2 24 0 假. # 217-lf-reverse
+    验行序 主 尾柄 'z😀\rA\ré\ré\rz😀\r汉\r' 'A\ré\rz😀\rz😀\ré\r汉\r' 217 0 0 1 0 24 假. # 217-cr-forward
+    验行序 主 尾柄 'z😀\rA\ré\ré\rz😀\r汉\r' 'A\ré\rz😀\rz😀\ré\r汉\r' 217 25 0 1 24 0 假. # 217-cr-reverse
+    验行序 主 尾柄 'z😀\r\nA\r\né\r\né\r\nz😀\r\n汉\r\n' '汉\r\né\r\nz😀\r\nz😀\r\né\r\nA\r\n' 218 0 0 0 0 29 假. # 218-crlf-forward
+    验行序 主 尾柄 'z😀\r\nA\r\né\r\né\r\nz😀\r\n汉\r\n' '汉\r\né\r\nz😀\r\nz😀\r\né\r\nA\r\n' 218 31 0 0 29 0 假. # 218-crlf-reverse
+    验行序 主 尾柄 'z😀\nA\né\né\nz😀\n汉\n' '汉\né\nz😀\nz😀\né\nA\n' 218 0 0 2 0 24 假. # 218-lf-forward
+    验行序 主 尾柄 'z😀\nA\né\né\nz😀\n汉\n' '汉\né\nz😀\nz😀\né\nA\n' 218 25 0 2 24 0 假. # 218-lf-reverse
+    验行序 主 尾柄 'z😀\rA\ré\ré\rz😀\r汉\r' '汉\ré\rz😀\rz😀\ré\rA\r' 218 0 0 1 0 24 假. # 218-cr-forward
+    验行序 主 尾柄 'z😀\rA\ré\ré\rz😀\r汉\r' '汉\ré\rz😀\rz😀\ré\rA\r' 218 25 0 1 24 0 假. # 218-cr-reverse
+    验行序 主 尾柄 'z😀\r\nA\r\né\r\né\r\nz😀\r\n汉\r\n' 'z😀\r\nA\r\né\r\né\r\n汉\r\n' 219 0 0 0 0 22 假. # 219-crlf-forward
+    验行序 主 尾柄 'z😀\r\nA\r\né\r\né\r\nz😀\r\n汉\r\n' 'z😀\r\nA\r\né\r\né\r\n汉\r\n' 219 31 0 0 22 0 假. # 219-crlf-reverse
+    验行序 主 尾柄 'z😀\nA\né\né\nz😀\n汉\n' 'z😀\nA\né\né\n汉\n' 219 0 0 2 0 18 假. # 219-lf-forward
+    验行序 主 尾柄 'z😀\nA\né\né\nz😀\n汉\n' 'z😀\nA\né\né\n汉\n' 219 25 0 2 18 0 假. # 219-lf-reverse
+    验行序 主 尾柄 'z😀\rA\ré\ré\rz😀\r汉\r' 'z😀\rA\ré\ré\r汉\r' 219 0 0 1 0 18 假. # 219-cr-forward
+    验行序 主 尾柄 'z😀\rA\ré\ré\rz😀\r汉\r' 'z😀\rA\ré\ré\r汉\r' 219 25 0 1 18 0 假. # 219-cr-reverse
+    验行序 主 尾柄 'b\na' 'b\na' 214 0 0 2 0 0 假. # no-selection-214
+    验行序 主 尾柄 'b\na' 'b\na' 215 0 0 2 0 0 假. # no-selection-215
+    验行序 主 尾柄 'b\na' 'b\na' 216 0 0 2 0 0 假. # no-selection-216
+    验行序 主 尾柄 '' '' 217 0 0 0 0 0 假. # empty-217
+    验行序 主 尾柄 '' '' 218 0 0 0 0 0 假. # empty-218
+    验行序 主 尾柄 '' '' 219 0 0 0 0 0 假. # empty-219
+    验行序 主 尾柄 'A\na\nz\n' 'A\na\nz\n' 217 0 0 2 0 0 假. # already-ascending
+    验行序 主 尾柄 'z\na\nA' 'z\na\nA' 218 0 0 2 0 0 假. # already-descending
+    验行序 主 尾柄 'z\na\nA' 'z\na\nA' 219 0 0 2 0 0 假. # already-unique
+    验行序 主 尾柄 '汉😀' '汉😀' 217 0 0 0 0 0 假. # single-217
+    验行序 主 尾柄 '汉😀' '汉😀' 218 0 0 0 0 0 假. # single-218
+    验行序 主 尾柄 '汉😀' '汉😀' 219 0 0 0 0 0 假. # single-219
+    验行序 主 尾柄 'c\ra\nb\r\n' 'a\rb\nc\r\n' 217 0 0 0 0 5 假. # mixed-sort-up
+    验行序 主 尾柄 'a\rc\nb' 'c\rb\na' 218 0 0 2 0 5 假. # mixed-sort-down
+    验行序 主 尾柄 'b\ra\nb\r\nc\ra\n' 'b\ra\nc\n' 219 0 0 0 0 5 假. # mixed-dedup-terminated
+    验行序 主 尾柄 'b\ra\nb\r\na' 'b\ra' 219 0 0 0 0 3 假. # mixed-dedup-unterminated
+    验行序 主 尾柄 'z\n\n\n' '\n\nz\n' 217 0 0 2 0 3 假. # empty-entities-sort
+    验行序 主 尾柄 '\n\n' '\n' 219 0 0 2 0 0 假. # empty-entities-dedup
+    验行序 主 尾柄 '\n' '\n' 219 0 0 2 0 0 假. # terminal-virtual-only
+    验行序 主 尾柄 'a2\na10\nA\na' 'A\na\na10\na2' 217 0 0 2 0 10 假. # codepoint-not-natural
+    验行序 主 尾柄 'P\ra\nb\ra\r\nQ' 'P\ra\nb\r\nQ' 216 2 9 0 2 5 假. # selected-mixed-dedup-boundary
+    验行序 主 尾柄 'b\na\n' 'a\nb\n' 214 0 4 2 0 3 假. # selected-excludes-virtual
+    验行序 主 尾柄 'é\né\né' 'é\né' 219 0 0 2 0 6 假. # combining-not-normalized
+    验行序 主 尾柄 'z\rx\n\n\n' 'z\rx\n\n\n' 217 0 0 2 0 0 真. # reject-ascending-crlf-fusion
+    验行序 主 尾柄 '\nx\rz\n' '\nx\rz\n' 218 0 0 2 0 0 真. # reject-descending-crlf-fusion
+    验行序 主 尾柄 'a\r\ra\n' 'a\r\ra\n' 219 0 0 2 0 0 真. # reject-dedup-crlf-fusion
+    # All six commands must obey each application/core mutation barrier.
+    序护们 取 ['busy','modalDepth','tabMenuOpen','closeRun','large','readonly','rectangle','multiple'].
+    序护位 取 0.
+    循 8 次
+        序号 取 214.
+        循 6 次
+            编 其 设文本 尾柄 'b\na\nb'. 窗 其 发送 尾柄 2175 0 0. 编 其 记保存 尾柄.
+            窗 其 发送 尾柄 2160 0 5.
+            序护 取 序护们[序护位].
+            若 序护 == 'busy' 则 状态 其 增 'busy' 真. 然
+            若 序护 == 'modalDepth' 则 状态 其 增 'modalDepth' 1. 然
+            若 序护 == 'tabMenuOpen' 则 状态 其 增 'tabMenuOpen' 真. 然
+            若 序护 == 'closeRun' 则 状态 其 增 'closeRun' ({}). 然
+            若 序护 == 'large' 则 尾文 其 增 'large' 真. 然
+            若 序护 == 'readonly' 则 窗 其 发送 尾柄 2171 1 0. 然
+            若 序护 == 'rectangle' 则 窗 其 发送 尾柄 2422 1 0. 然
+            若 序护 == 'multiple' 则 窗 其 发送 尾柄 2563 1 0. 窗 其 发送 尾柄 2573 2 2. 然
+            窗 其 发送 主 273 序号 0.
+            确认 ((编 其 文本 尾柄) == 'b\na\nb' 且 非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'ordering barrier preserves bytes savepoint and undo'.
+            状态 其 增 'busy' 假. 状态 其 增 'modalDepth' 0. 状态 其 增 'tabMenuOpen' 假. 状态 其 增 'closeRun' 空.
+            尾文 其 增 'large' 假. 窗 其 发送 尾柄 2171 0 0. 窗 其 发送 尾柄 2422 0 0.
+            窗 其 发送 尾柄 2571 0 0. 窗 其 发送 尾柄 2563 0 0.
+            序号 取 序号+1.
+        环
+        序护位 取 序护位+1.
+    环
     # A normally-created document can grow beyond the initial-open threshold.
     # Verify the current-byte guard independently of the per-document large flag.
     # Test setup only: never construct/slice a 32 MB Ru string or route that
@@ -366,6 +468,12 @@
         窗 其 发送 主 273 (210+行号位) 0.
         确认 ((窗 其 发送 尾柄 2183 0 0) 其 数 == 32000000 且 非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'grown current-byte threshold rejects each line command without large flag'.
         行号位 取 行号位+1.
+    环
+    序号 取 214.
+    循 6 次
+        窗 其 发送 主 273 序号 0.
+        确认 ((窗 其 发送 尾柄 2183 0 0) 其 数 == 32000000 且 非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'ordering current-byte threshold without initial large flag'.
+        序号 取 序号+1.
     环
     # Copying this selected 15,999,999-byte unterminated document would add
     # its own bytes plus CRLF, reaching exactly the 32 MB mutation fence.

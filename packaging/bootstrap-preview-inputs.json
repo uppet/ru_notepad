@@ -15,11 +15,11 @@
     },
     "CHANGELOG.md": {
       "before": "6dba0bf5f16f3d11c94063caabbab4e43d808713f155eaba5b9db9a29fcab1c3",
-      "after": "be2cff0c9b2e7711c3a4d7028a92c905e1ecf7c7baf738f69d452c35ccb2d565"
+      "after": "f84c6537640ceeae9e1da3163987196aed9e3f3dacba417c2298c7e4ae256461"
     },
     "README.md": {
       "before": "4fec039d9e1f3129d90c9662c2202fca8809d9c1e340dae429130cfe41cf9c7c",
-      "after": "bc9c617e11a0ee9f5fbe2fd13ccc192f58f52b5cdc1a4736d8324405cb630cf6"
+      "after": "49d36865ebf95568c1b643895d5ef7a87378383a0bb963dfeaa75b258ddc13e3"
     },
     "THIRD_PARTY_NOTICES.md": {
       "before": "e7afbfb064500e19f9863579f1185e37b8a9e1002ef2050d0bd201564d015ece",
@@ -39,7 +39,11 @@
     },
     "docs/line-operations.md": {
       "before": null,
-      "after": "13259c421be2430991e2bd13aa6208945b16e7d09d4f7e5c3e104e90f824ba42"
+      "after": "0b9617bc3c175f2824a46b012b53c6287fff454b52a95434e7cfb0a3dfacc1e2"
+    },
+    "docs/line-ordering.md": {
+      "before": null,
+      "after": "2c3b775733ca9cde39092fc568e489c56164db5b952dababf2712f36828d5d22"
     },
     "docs/markdown-direct-folds.md": {
       "before": "b281e6c7fd7fc949db129e8ab5e3998b5b87329d1687b11fa50f17a5d0abcfd5",
@@ -75,7 +79,7 @@
     },
     "locales/ui.json": {
       "before": "954dcda145db13b05b3f753c43eba56223f09479cf93955edb5944d571b2fb35",
-      "after": "4dab137169679712064e09c4c8a280ae0ebc3b71e063591237aaff696d90d161"
+      "after": "5013816763b1c036f204132eea378e5eec28492f81c821674fc9d0edd0597308"
     },
     "native/lexilla/LexObjC.cxx": {
       "before": null,
@@ -99,11 +103,11 @@
     },
     "packaging/application-native-oracle-development.json": {
       "before": null,
-      "after": "09e852f324414d962e48e132277e4b1ece26ab81c09be97eaf02320f2c1284c9"
+      "after": "c9c9f065fdd957f78f8dc19a104973402077b6ac1d7f0e2c36ebecfe33ee749d"
     },
     "packaging/application-native-oracle.json": {
       "before": null,
-      "after": "40d00144b95d4dcdc0ad30d30ff1662fc68f3f98f9ed05d263d9c26a1ad5c74a"
+      "after": "c7d4c367261fe945d3b09b1f8cc9b72e900757a32b23dc05237639c431e5495a"
     },
     "packaging/licenses/Godot.txt": {
       "before": null,
@@ -131,15 +135,19 @@
     },
     "src/i18n_catalog.ru": {
       "before": "e2b6d48d25529c7d631652980ec45d6a5dc837467e505e58fbe581a352fe84db",
-      "after": "8e6593bc3139c4b65e3250881ab1bf9f01bce766a60c36bf79a191e72bc5fcd7"
+      "after": "568857fbe50428b0d820534be4c16408011043342a496fc04fed9fc03e059dc5"
     },
     "src/line_operations.ru": {
       "before": null,
       "after": "81df5afbe000e476b92754fcbff58820f90e3707e83476bf312967e2158a8208"
     },
+    "src/line_ordering.ru": {
+      "before": null,
+      "after": "e6018d0a992646a36bb33cbc828e881bf1a4c5d5ce2adf0f515288c79c9e5061"
+    },
     "src/main.ru": {
       "before": "3dcb97ca641f2fb8068785517aedcbbda6d3c65ca179683601f76508d71dd734",
-      "after": "dbcf0476a1e2aeec5de5b4c246fec6612da23bdd884f178940c79f7e145886fb"
+      "after": "8bf766fee025d8a2d785ee2c643cd2fa7b4a484950724832bc4a77a0590124fc"
     },
     "src/markdown_policy.ru": {
       "before": "e9658000e1c5fbe5fb49403af2a27eb11a0efb9d4bf5261617b760688ea2d720",
@@ -193,6 +201,10 @@
       "before": null,
       "after": "ca5e2ac0e1ca270215605dddb37c4cffec8b024ea40800d0caeaf22ed02276d2"
     },
+    "src/win32.ru": {
+      "before": "addd9b27f75864b15346664574b07fd536240019a9b3f5a33a02d73ab72a05b2",
+      "after": "04c796b02f4366e5bbce1c3cfa413624ef35b09a0940c78adabcbacc3b9a910c"
+    },
     "syntax/languages.json": {
       "before": null,
       "after": "b6b78148e7e135aa0e8b088dbb2bffddd3474bd1fa89941ab5abb6246b47105a"
@@ -211,7 +223,7 @@
     },
     "tests/app_tabs_native.ru": {
       "before": null,
-      "after": "3d74055be68f392622cfac24e1b793fd943bf6b6e791b47e8770e4fcd9e1252b"
+      "after": "a33f00a370e638980e09135d7438450fc674fcb34dbfc9a87d8a495a4748aa5d"
     },
     "tests/language_catalog_native.ru": {
       "before": null,
@@ -279,11 +291,15 @@
     },
     "tests/test_bootstrap_instance_tabs.py": {
       "before": null,
-      "after": "9942bf359f45d77b3afc0aa8ba4556997f9d758e59d0b236a7ec1307565ba0d8"
+      "after": "a483113452c6535e3f8ea9d21564148c79eae770df43ea8b78fddb1c264e7e2a"
     },
     "tests/test_bootstrap_line_operations.py": {
       "before": null,
       "after": "4b0fced5c7cc29413b885eef8db4ba154e6143e4008494c46879b7740ed51f56"
+    },
+    "tests/test_bootstrap_line_ordering.py": {
+      "before": null,
+      "after": "df8e385223e004bc9dfda34d5c3050f7b38be6add3f07b76c5e05ab4d7881a20"
     },
     "tests/test_bootstrap_native_wrapper.py": {
       "before": null,
@@ -353,6 +369,10 @@
       "before": null,
       "after": "8bff7d0297ebd05a0a8954ec39b7ab79469bf08e7aea6dc8aeb0035c94046907"
     },
+    "tools/gui_line_ordering.py": {
+      "before": null,
+      "after": "6c3898b36304e4e89f220b9fc94b83dd9e34528eb5d72f18e779d0eca5396fd0"
+    },
     "tools/package.py": {
       "before": "bbf2819d10a67fa888905c25687c8ca7b773ed1db32be4b311c587513aa6251d",
       "after": "464c5e6b71e939a207e72156dd833d4e01f19c68aecb96ee781532bbe35ae1a7"
@@ -401,13 +421,17 @@
       "before": null,
       "after": "b6a4e69cb1523817e69b3a339d72ad7c21c1f6397062c37a035762ba92f429e3"
     },
+    "tools/test_gui_line_ordering.py": {
+      "before": null,
+      "after": "21e28328831668e5a1f6ac5a3a3ff138fe2315f095385190cb8de6efe6064bc9"
+    },
     "tools/test_i18n.py": {
       "before": "efe744d29412beab1f4d44b8e116267706bca32d0d435f95bb07512a28705d5f",
-      "after": "c3597f3e36defd156402f21c8f2865941b15f180eefc2ba35a3fe0e963684bba"
+      "after": "8437da91ce4ae8636884f3c5e5a9f895b8250b30908516fdf9de9e3e9aeaab6a"
     },
     "tools/test_i18n_models.py": {
       "before": "507b687a6d1c6e98f9287beb168eb10b2eb7648457ca9e60f1aae51d089531cc",
-      "after": "70f1cee30366f0c0f3a684d3ebc2c9c7b3a09b86c60f3bc7094be836608bb2ea"
+      "after": "174ff5b3fd8056811072703fb3e98c97af3f36cc7bd7a6b6d1c1098eb3ffcd09"
     },
     "tools/test_i18n_runner.py": {
       "before": "594f3e83c1acd5ff78e27c4c3da40ffb322dbc25c220a17adca7a567884f03d3",

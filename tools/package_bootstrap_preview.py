@@ -27,7 +27,7 @@ import package as legacy_package
 import preview_language_sample as language_sample
 
 ROOT = Path(__file__).resolve().parents[1]
-PREVIEW_DOCS = ('bootstrap-llvm-preview.md', 'recent-files.md', 'single-instance-and-tabs.md', 'language-highlighting.md', 'eol-conversion.md', 'line-operations.md')
+PREVIEW_DOCS = ('bootstrap-llvm-preview.md', 'recent-files.md', 'single-instance-and-tabs.md', 'language-highlighting.md', 'eol-conversion.md', 'line-operations.md', 'line-ordering.md')
 
 
 def verify_zip(path, files):
@@ -163,6 +163,8 @@ def package(config, product_receipt, output, mingw_root):
             'See docs/eol-conversion.md before trying mixed-EOL or encoding changes.\n'
             'Edit also duplicates/moves whole lines and trims ASCII trailing spaces/tabs.\n'
             'See docs/line-operations.md for selection, EOF, and mixed-EOL behavior.\n'
+            'Line sorting and deduplication have explicit selected-lines and whole-document menus.\n'
+            'See docs/line-ordering.md for Unicode ordering and exact mixed-EOL rules.\n'
             'The real Windows language menu and lexical coverage gates are mandatory.\n'
             'The same EXE and DLL bytes passed B7 functional smoke, the four existing product GUI\n'
             'gates (active-stage budgets unchanged), recent-file checks, and the instance_tabs GUI gate.\n'
@@ -198,7 +200,7 @@ def package(config, product_receipt, output, mingw_root):
             'product_receipt_sha256': inputs['product_receipt']['sha256'],
             'smoke_receipt_sha256': inputs['smoke_receipt']['sha256'],
             'markdown_acceptance': markdown_scope,
-            'gui_gates': sorted(product.GUI_NAMES), 'recent_files_gui': True, 'instance_tabs_gui': True, 'eol_conversion_gui': True, 'line_operations_gui': True,
+            'gui_gates': sorted(product.GUI_NAMES), 'recent_files_gui': True, 'instance_tabs_gui': True, 'eol_conversion_gui': True, 'line_operations_gui': True, 'line_ordering_gui': True,
             'stage3_recent_fixtures': dict(CASES),
             'recent_fixtures_receipt_sha256': inputs['recent_fixtures_receipt']['sha256'],
             'experimental_wij_enabled': False,

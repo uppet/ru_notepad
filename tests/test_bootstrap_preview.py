@@ -36,7 +36,7 @@ class PreviewContracts(unittest.TestCase):
                              build.sha(output)+'  '+output.name+'\n')
 
     def test_preview_package_documents_instance_tabs_acceptance(self):
-        self.assertEqual(package.PREVIEW_DOCS,('bootstrap-llvm-preview.md','recent-files.md','single-instance-and-tabs.md','language-highlighting.md','eol-conversion.md','line-operations.md'))
+        self.assertEqual(package.PREVIEW_DOCS,('bootstrap-llvm-preview.md','recent-files.md','single-instance-and-tabs.md','language-highlighting.md','eol-conversion.md','line-operations.md','line-ordering.md'))
         for name in package.PREVIEW_DOCS:
             self.assertTrue((package.ROOT/'docs'/name).is_file())
         source=Path(package.__file__).read_text()
@@ -434,7 +434,7 @@ class PreviewContracts(unittest.TestCase):
             return build.verify_proof(proof,**kwargs)
         with patch.object(recent_fixtures,'validate_toolchain'),patch.object(recent_fixtures,'verify_proof',side_effect=verify_fields) as verifier:
             recent_fixtures.validate_report(report,app,compiler,dependencies)
-            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16, 'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':296, 'single_instance_native':18, 'single_instance_busy_native':23, 'language_catalog_native':678})
+            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16, 'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':660, 'single_instance_native':18, 'single_instance_busy_native':23, 'language_catalog_native':678})
             self.assertEqual(verifier.call_count,12)
             bad=copy.deepcopy(report);del bad['results']['single_instance_busy_native']
             with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)

@@ -52,6 +52,7 @@ CreateMenu 取 用户 其 绑定 'CreateMenu' (密 其 签名 PTR ([]) 'win64').
 CreatePopupMenu 取 用户 其 绑定 'CreatePopupMenu' (密 其 签名 PTR ([]) 'win64').
 AppendMenuW 取 用户 其 绑定 'AppendMenuW' (密 其 签名 I ([PTR,U,UP,PTR]) 'win64').
 SetMenu 取 用户 其 绑定 'SetMenu' (密 其 签名 I ([PTR,PTR]) 'win64').
+EnableMenuItem 取 用户 其 绑定 'EnableMenuItem' (密 其 签名 U ([PTR,U,U]) 'win64').
 DrawMenuBar 取 用户 其 绑定 'DrawMenuBar' (密 其 签名 I ([PTR]) 'win64').
 GetMenu 取 用户 其 绑定 'GetMenu' (密 其 签名 PTR ([PTR]) 'win64').
 DestroyMenu 取 用户 其 绑定 'DestroyMenu' (密 其 签名 I ([PTR]) 'win64').

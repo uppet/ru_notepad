@@ -69,6 +69,8 @@ def validate_product(report, ci):
     validate_eols(report.get('eol_conversion'), hashes)
     from gui_line_operations import validate_result as validate_lines
     validate_lines(report.get('line_operations'), hashes)
+    from gui_line_ordering import validate_result as validate_ordering
+    validate_ordering(report.get('line_ordering'), hashes)
 
 
 def collect_product_gui(ci, api, runtime, fixtures, evidence, report, save):
@@ -151,6 +153,9 @@ def verify(config, output):
             save()
             from gui_line_operations import run as run_lines
             report['line_operations'] = run_lines(api, runtime, fixtures, evidence)
+            save()
+            from gui_line_ordering import run as run_ordering
+            report['line_ordering'] = run_ordering(api, runtime, fixtures, evidence)
             save()
         smoke.validate_receipts(config)
         validate_receipt(Path(config['dependencies_receipt']))

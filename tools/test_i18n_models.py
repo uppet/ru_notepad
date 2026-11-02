@@ -55,6 +55,12 @@ EXPECTED_MENUS = (
         (211, 'command.move_lines_up', 'Move current/selected lines up (&I)'),
         (212, 'command.move_lines_down', 'Move current/selected lines down (&O)'),
         (213, 'command.trim_line_ends', 'Trim trailing spaces/tabs in current/selected lines (&S)'),
+        (214, 'command.sort_selected_ascending', 'Sort selected lines ascending (&B)'),
+        (215, 'command.sort_selected_descending', 'Sort selected lines descending (&E)'),
+        (216, 'command.deduplicate_selected_lines', 'Remove duplicate selected lines (&F)'),
+        (217, 'command.sort_all_ascending', 'Sort all lines ascending (&G)'),
+        (218, 'command.sort_all_descending', 'Sort all lines descending (&H)'),
+        (219, 'command.deduplicate_all_lines', 'Remove duplicate lines in whole document (&J)'),
     )),
     ('menu.search', '&Search', (
         (301, 'command.find', '&Find...\tCtrl+F'),
@@ -319,12 +325,12 @@ class FlatModelTests(unittest.TestCase):
         model = validate_menu(self.main)
         self.assertEqual(len(model), 9)
         commands = [command for _, group in model for command in group]
-        self.assertEqual(len(commands), 60)
-        self.assertEqual(len({number for number, _ in commands}), 60)
-        self.assertEqual(len({key for _, key in commands}), 60)
+        self.assertEqual(len(commands), 66)
+        self.assertEqual(len({number for number, _ in commands}), 66)
+        self.assertEqual(len({key for _, key in commands}), 66)
 
     def test_all_original_command_ids_keep_their_group_and_order(self):
-        original = tuple((group, tuple(number for number, _ in commands if number not in (308, 113, 805, 207, 208, 209, 210, 211, 212, 213)))
+        original = tuple((group, tuple(number for number, _ in commands if number not in (308, 113, 805, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219)))
                          for group, commands in validate_menu(self.main)
                          if group != 'menu.ui_language')
         self.assertEqual(original, LEGACY_COMMAND_GROUPS)
@@ -350,19 +356,19 @@ class FlatModelTests(unittest.TestCase):
         validate_menu_catalog(self.catalog)
 
     def test_menu_arrays_are_primitive_with_exact_group_boundaries(self):
-        self.assertEqual(self.menu_arrays['组量们'], [11, 13, 4, 6, 5, 7, 5, 8, 1])
+        self.assertEqual(self.menu_arrays['组量们'], [11, 19, 4, 6, 5, 7, 5, 8, 1])
         for name, kind in MENU_ARRAY_TYPES.items():
             self.assertTrue(all(type(value) is kind for value in self.menu_arrays[name]))
 
     def test_every_changed_command_id_is_rejected(self):
-        for index in range(60):
+        for index in range(66):
             ids = self.menu_arrays['号们'].copy()
             ids[index] += 1000
             with self.subTest(index=index), self.assertRaises(ValueError):
                 validate_menu(self.mutated_menu(号们=ids))
 
     def test_every_command_key_misassignment_is_rejected(self):
-        for index in range(60):
+        for index in range(66):
             keys = self.menu_arrays['键们'].copy()
             following = (index + 1) % len(keys)
             keys[index], keys[following] = keys[following], keys[index]
@@ -370,7 +376,7 @@ class FlatModelTests(unittest.TestCase):
                 validate_menu(self.mutated_menu(键们=keys))
 
     def test_every_removed_command_is_rejected_even_with_consistent_lengths(self):
-        for index in range(60):
+        for index in range(66):
             arrays = deepcopy(self.menu_arrays)
             del arrays['号们'][index]
             del arrays['键们'][index]

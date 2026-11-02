@@ -9,8 +9,8 @@
     {
       "scope": "app",
       "path": "src/main.ru",
-      "sha256": "dbcf0476a1e2aeec5de5b4c246fec6612da23bdd884f178940c79f7e145886fb",
-      "git_blob": "e1080a8138c7dd04df35409f43453ceb2d726103"
+      "sha256": "8bf766fee025d8a2d785ee2c643cd2fa7b4a484950724832bc4a77a0590124fc",
+      "git_blob": "17717829a692226be37cac14bcc644d06cb9b319"
     },
     {
       "scope": "compiler",
@@ -27,8 +27,8 @@
     {
       "scope": "app",
       "path": "src/i18n_catalog.ru",
-      "sha256": "8e6593bc3139c4b65e3250881ab1bf9f01bce766a60c36bf79a191e72bc5fcd7",
-      "git_blob": "0db1d4338a2831d8deb233b5d56917d8629d54a7"
+      "sha256": "568857fbe50428b0d820534be4c16408011043342a496fc04fed9fc03e059dc5",
+      "git_blob": "9912689e1f039c09826b9c8fbf16ce98128ab938"
     },
     {
       "scope": "app",
@@ -75,8 +75,8 @@
     {
       "scope": "app",
       "path": "src/win32.ru",
-      "sha256": "addd9b27f75864b15346664574b07fd536240019a9b3f5a33a02d73ab72a05b2",
-      "git_blob": "59ca84802b93bd1961cf71a0a9d70b159bf690ad"
+      "sha256": "04c796b02f4366e5bbce1c3cfa413624ef35b09a0940c78adabcbacc3b9a910c",
+      "git_blob": "7c360796d28e59c0791acfea6ce81e7bfe412de3"
     },
     {
       "scope": "app",
@@ -113,6 +113,12 @@
       "path": "src/line_operations.ru",
       "sha256": "81df5afbe000e476b92754fcbff58820f90e3707e83476bf312967e2158a8208",
       "git_blob": "6743d91b6fca4ec61f18604be79200774ebe9597"
+    },
+    {
+      "scope": "app",
+      "path": "src/line_ordering.ru",
+      "sha256": "e6018d0a992646a36bb33cbc828e881bf1a4c5d5ce2adf0f515288c79c9e5061",
+      "git_blob": "9d44105436d7890abc7f3d701100daef1ecadf70"
     },
     {
       "scope": "app",
@@ -624,6 +630,14 @@
       "result": "u32",
       "parameters": [
         "指针",
+        "u32"
+      ]
+    },
+    {
+      "result": "u32",
+      "parameters": [
+        "指针",
+        "u32",
         "u32"
       ]
     },
