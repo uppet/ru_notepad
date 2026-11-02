@@ -160,6 +160,63 @@
     确认 ((窗 其 发送 甲 2228 1 0) 其 数 == 1) 'backward match expands its hidden fold child'.
     确认 ((编 其 文本 甲) == 'head\nneedle\nend') 'search visibility changes preserve text bytes'.
     确认 (非 (编 其 已变 甲)) 'search visibility changes preserve clean savepoint'.
+    # Captured scope is passed explicitly and never replaced by match selection.
+    范文 取 '外 alpha\n甲😀 alpha\r\nALPHA alpha_beta alpha\n尾 alpha'.
+    编 其 设文本 甲 范文.
+    窗 其 发送 甲 2160 0 0.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 假 假 10 48) == 18) 'scope forward clamps caret below lower bound'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 假 假 10 48) == 31) 'scope remains stable after selected match'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 假 假 10 48) == 42) 'scope forward reaches final inside occurrence'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 假 假 10 48) == -1) 'scope does not search outside upper bound'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 假 10 48) == 18) 'scope forward wrap stays inside captured boundaries'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 真 10 48) == 42) 'scope backward wrap stays inside captured boundaries'.
+    窗 其 发送 甲 2160 47 42.
+    确认 ((编 其 寻找范围 甲 'alpha' 假 真 假 真 10 48) == 25) 'scope reverse selection backward honors whole word and case insensitive'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 真 假 真 10 48) == 18) 'scope backward honors case sensitivity'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 假 真 10 48) == -1) 'scope does not search outside lower bound'.
+    窗 其 发送 甲 2160 57 57.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 真 假 真 10 48) == 42) 'scope backward clamps caret above upper bound'.
+    窗 其 发送 甲 2160 0 0.
+    确认 ((编 其 寻找范围 甲 '😀' 真 假 假 假 10 48) == 13) 'scope matches complete emoji after Han'.
+    确认 ((窗 其 发送 甲 2145 0 0) 其 数 == 17) 'scope emoji match ends at scalar boundary'.
+    确认 ((编 其 寻找范围 甲 'alpha\r\nALPHA' 真 假 假 假 10 48) == 18) 'scope supports literal multiline patterns'.
+    窗 其 发送 甲 2160 48 10.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 假 10 48) == 18) 'reverse full-range selection wraps without recapture'.
+    窗 其 发送 甲 2160 18 18.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 假 假 18 22) == -1) 'scope rejects match extending past upper bound'.
+    窗 其 发送 甲 2160 23 23.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 假 真 19 23) == -1) 'scope rejects backward match extending past lower bound'.
+    窗 其 发送 甲 2160 0 0.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 真 假 假 31 36) == -1) 'scope whole word uses real document neighbor outside bound'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 假 假 31 36) == 31) 'scope literal match accepts exact whole range'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 假 31 36) == 31) 'scope single match wraps forward'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 真 31 36) == 31) 'scope single match wraps backward'.
+    窗 其 发送 甲 2160 23 18.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 假 (-1) 48) == -1) 'scope rejects negative lower boundary'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 假 10 58) == -1) 'scope rejects past EOF upper boundary'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 假 48 10) == -1) 'scope rejects reversed boundary'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 假 10 10) == -1) 'scope rejects empty boundary'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 假 11 48) == -1) 'scope rejects split Han lower boundary'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 假 10 14) == -1) 'scope rejects split emoji upper boundary'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 假 14 48) == -1) 'scope rejects split emoji lower boundary'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 假 10 49) == -1) 'scope rejects split Han upper boundary'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 假 10.5 48) == -1) 'scope rejects fractional lower boundary'.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 假 10 47.5) == -1) 'scope rejects fractional upper boundary'.
+    确认 ((窗 其 发送 甲 2008 0 0) 其 数 == 18) 'invalid scopes preserve reverse caret'.
+    确认 ((窗 其 发送 甲 2009 0 0) 其 数 == 23) 'invalid scopes preserve reverse anchor'.
+    空拒[0] 取 假.
+    试 编 其 寻找范围 甲 '' 真 假 真 假 10 48. 救 原因 空拒[0] 取 真. 终
+    确认 空拒[0] 'scope rejects empty pattern using existing diagnostic'.
+    确认 ((编 其 文本 甲) == 范文) 'scoped searches preserve all inside and outside bytes'.
+    确认 (非 (编 其 已变 甲)) 'scoped searches preserve clean savepoint'.
+    确认 ((窗 其 发送 甲 2174 0 0) 其 数 == 0) 'scoped searches do not create undo records'.
+    窗 其 发送 甲 2171 1 0.
+    窗 其 发送 甲 2160 0 0.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 假 假 10 48) == 18) 'scoped search is available in readonly editor'.
+    确认 ((编 其 文本 甲) == 范文) 'readonly scoped search preserves exact document'.
+    窗 其 发送 甲 2171 0 0.
+    编 其 设文本 甲 ''.
+    确认 ((编 其 寻找范围 甲 'alpha' 真 假 真 假 0 0) == -1) 'empty document scoped search terminates'.
     编 其 设文本 甲 'x\ny'.
     确认 ((窗 其 发送 甲 2030 0 0) 其 数 == 2) 'LF insertion mode retained'.
     编 其 设文本 甲 'x\ry'.

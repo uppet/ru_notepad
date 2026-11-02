@@ -5,6 +5,7 @@
 本地 取 外言 '../src/i18n.ru'.
 密 取 外言 '如:密'.
 件库 取 外言 '../src/file_codec.ru'.
+寻史 取 外言 '../src/search_history.ru'.
 次数 取 [0]. 选择们 取 [7,2]. 选择位 取 [0]. 存路 取 [''].
 作 确认 条件 为 事实 名 为 句:
     若 非 条件 则 卒 'FAIL: '+名. 然
@@ -39,7 +40,128 @@
     窗 其 发送 主 273 202 0.
     确认 ((编 其 文本 柄) == 新文 且 (应用 其 脏 (应用 其 当前)) == (新文 != 原)) 'ordering one redo or no-op retains exact bytes'.
 为
+# Pure session MRU assertions also execute in the real native app fixture.
+作 验历史:
+    原 取 ['a','b'].
+    新项 取 寻史 其 记录 原 '汉😀'.
+    确认 ((新项 其 量) == 3 且 新项[0] == '汉😀' 且 新项[1] == 'a' 且 新项[2] == 'b') 'history inserts exact Unicode at front'.
+    确认 ((原 其 量) == 2 且 原[0] == 'a' 且 原[1] == 'b') 'history leaves input array unchanged'.
+    新项 取 寻史 其 记录 新项 'a'.
+    确认 ((新项 其 量) == 3 且 新项[0] == 'a' 且 新项[1] == '汉😀' 且 新项[2] == 'b') 'history promotes exact duplicate without growth'.
+    新项 取 寻史 其 记录 新项 'A'.
+    确认 ((新项 其 量) == 4 且 新项[0] == 'A' 且 新项[1] == 'a') 'history case-sensitive identity'.
+    新项 取 寻史 其 记录 新项 ''.
+    确认 ((新项 其 量) == 5 且 新项[0] == '') 'history accepts empty deletion replacement'.
+    新项 取 寻史 其 记录 新项 ''.
+    确认 ((新项 其 量) == 5 且 新项[0] == '') 'history deduplicates empty replacement'.
+    界 取 []. 位 取 0.
+    循 13 次 界 取 寻史 其 记录 界 (位 为 句). 位 取 位+1. 环
+    确认 ((界 其 量) == 12 且 界[0] == '12' 且 界[11] == '1') 'history thirteen insertions evict oldest of twelve'.
+    界 取 寻史 其 记录 界 '1'.
+    确认 ((界 其 量) == 12 且 界[0] == '1' 且 界[1] == '12' 且 界[11] == '2') 'history promotes last retained item at bound'.
+    长文 取 '😀'. 循 10 次 长文 取 长文+长文. 环
+    确认 ((长文 其 量) == 1024) 'history length bound counts Unicode scalars not bytes'.
+    界 取 寻史 其 记录 界 长文.
+    确认 ((界 其 量) == 12 且 界[0] == 长文) 'history accepts exactly 1024 Unicode scalars'.
+    副 取 寻史 其 记录 界 (长文+'x').
+    确认 ((副 其 量) == 12 且 副[0] == 长文 且 副[11] == 界[11]) 'history rejects 1025 scalars without eviction'.
+    副[0] 取 'changed'.
+    确认 (界[0] == 长文) 'history overlong rejection returns independent array'.
+    确认 ((寻史 其 标签 '') == '') 'history empty label remains available for localization'.
+    确认 ((寻史 其 标签 '汉😀 é') == '汉😀 é') 'history label preserves Unicode and combining sequences'.
+    确认 ((寻史 其 标签 'a&b&&c') == 'a&&b&&&&c') 'history labels escape all menu ampersands'.
+    确认 ((寻史 其 标签 'a\tb\rc\nd') == 'a␉b␍c␊d') 'history labels render tab CR LF visibly'.
+    确认 ((寻史 其 标签 'ab') == 'a�b') 'history labels sanitize C0 controls'.
+    确认 ((寻史 其 标签 '') == '��') 'history labels sanitize DEL and C1 controls'.
+    确认 ((寻史 其 标签 '‪‮⁦⁩؜‎‏') == '�������') 'history labels sanitize bidi menu controls'.
+    六十 取 长文[:60].
+    确认 ((寻史 其 标签 六十) == 六十) 'history label accepts exactly sixty scalars'.
+    确认 ((寻史 其 标签 (六十+'x')) == 长文[:59]+'…') 'history label truncates to sixty visible scalars'.
+    确认 ((寻史 其 标签 (长文[:59]+'&x')) == 长文[:59]+'…') 'history ellipsis cannot split an escaped ampersand'.
+    替们 取 寻史 其 记录 [] 'replacement'.
+    确认 ((替们 其 量) == 1 且 (界 其 量) == 12 且 界[0] == 长文) 'history arrays keep find and replacement independent'.
+    清 取 [].
+    确认 ((清 其 量) == 0 且 (寻史 其 记录 清 'restart')[0] == 'restart') 'history starts again from empty session state'.
+为
+# Actual application WM_COMMAND search paths. Modal rejection/no-match paths
+# are exercised by the visible GUI gate, not bypassed by this native fixture.
+作 验应用搜索 主 状态 尾文 尾柄:
+    窗 其 发送 主 273 314 0.
+    窗 其 发送 主 273 315 0.
+    编 其 设文本 尾柄 'x 外 x 汉😀 x 尾 x'.
+    窗 其 发送 尾柄 2175 0 0. 编 其 记保存 尾柄.
+    窗 其 标题 (状态 其 查 'find') 'x'.
+    窗 其 标题 (状态 其 查 'replace') 'replacement'.
+    窗 其 发送 尾柄 2160 17 6.
+    窗 其 发送 主 273 313 0.
+    确认 ((状态 其 查 'searchScope') == 'selection' 且 (状态 其 查 'scopeStart') == 6 且 (状态 其 查 'scopeEnd') == 17) 'search capture normalizes reverse selection byte bounds'.
+    窗 其 发送 主 273 303 0.
+    确认 ((窗 其 发送 尾柄 2143 0 0) 其 数 == 6 且 (窗 其 发送 尾柄 2145 0 0) 其 数 == 7) 'search scope wraps to first inner match'.
+    窗 其 发送 主 273 303 0.
+    确认 ((窗 其 发送 尾柄 2143 0 0) 其 数 == 16 且 (状态 其 查 'scopeStart') == 6 且 (状态 其 查 'scopeEnd') == 17) 'search selected match never shrinks captured range'.
+    窗 其 发送 主 273 308 0.
+    确认 ((窗 其 发送 尾柄 2143 0 0) 其 数 == 6) 'search scope previous stays inside range'.
+    窗 其 发送 尾柄 2160 0 0.
+    窗 其 发送 主 273 303 0.
+    确认 ((窗 其 发送 尾柄 2143 0 0) 其 数 == 6) 'search scope clamps manually moved caret outside range'.
+    确认 ((编 其 文本 尾柄) == 'x 外 x 汉😀 x 尾 x' 且 非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'scope searching preserves outer text savepoint and undo'.
+    确认 (((状态 其 查 'findHistory') 其 量) == 1 且 (状态 其 查 'findHistory')[0] == 'x' 且 ((状态 其 查 'replaceHistory') 其 量) == 0) 'scope search records only deduplicated find history'.
+    窗 其 发送 主 273 307 0.
+    确认 ((状态 其 查 'searchScope') == 'invalid' 且 非 (状态 其 查 'search')) 'closing search bar invalidates captured range'.
+    窗 其 发送 主 273 301 0.
+    确认 ((状态 其 查 'searchScope') == 'invalid' 且 (状态 其 查 'search')) 'opening search bar cannot restore or downgrade invalid scope'.
+    窗 其 标题 (状态 其 查 'find') 'different'.
+    窗 其 发送 主 273 1700 0.
+    确认 ((窗 其 取文 (状态 其 查 'find')) == 'x' 且 (状态 其 查 'searchScope') == 'invalid' 且 (窗 其 发送 尾柄 2143 0 0) 其 数 == 6) 'history reselect fills only and preserves invalid scope and caret'.
+    窗 其 发送 主 273 314 0.
+    确认 ((状态 其 查 'searchScope') == 'document') 'explicit document command exits invalid state'.
+    窗 其 发送 尾柄 2160 6 17. 窗 其 发送 主 273 313 0.
+    窗 其 发送 尾柄 2160 0 0. 窗 其 发文 尾柄 2170 0 'Z'.
+    确认 ((状态 其 查 'searchScope') == 'invalid') 'real editor insertion invalidates captured scope'.
+    窗 其 发送 主 273 201 0.
+    确认 ((状态 其 查 'searchScope') == 'invalid' 且 (编 其 文本 尾柄) == 'x 外 x 汉😀 x 尾 x') 'undo restores bytes but never revives invalid range'.
+    窗 其 发送 尾柄 2160 6 17. 窗 其 发送 主 273 313 0.
+    同页位 取 应用 其 文档位置 尾文. 应用 其 切页 同页位.
+    确认 ((状态 其 查 'searchScope') == 'selection') 'same-tab activation retains captured range'.
+    同伴 取 应用 其 新页 '' 'peer x' 65001 假 ''.
+    确认 ((状态 其 查 'searchScope') == 'invalid') 'new active tab invalidates old document scope'.
+    应用 其 切页 同页位.
+    确认 ((状态 其 查 'searchScope') == 'invalid') 'returning to source tab cannot revive capture'.
+    应用 其 批关 (应用 其 文档位置 同伴) 'current'.
+    应用 其 切页 (应用 其 文档位置 尾文).
+    窗 其 发送 主 273 314 0.
+    窗 其 发送 尾柄 2171 1 0.
+    窗 其 发送 尾柄 2160 0 0. 窗 其 发送 主 273 303 0.
+    确认 ((窗 其 发送 尾柄 2143 0 0) 其 数 == 0 且 (窗 其 发送 尾柄 2140 0 0) 其 数 == 1) 'read-only document still supports searching'.
+    窗 其 发送 尾柄 2171 0 0.
+    编 其 设文本 尾柄 'x x x'.
+    窗 其 发送 尾柄 2175 0 0. 编 其 记保存 尾柄.
+    窗 其 发送 尾柄 2160 0 1.
+    窗 其 标题 (状态 其 查 'replace') 'y'.
+    窗 其 发送 主 273 304 0.
+    确认 ((编 其 文本 尾柄) == 'y x x' 且 (状态 其 查 'replaceHistory')[0] == 'y') 'successful replace records separate replacement history'.
+    窗 其 标题 (状态 其 查 'replace') ''.
+    窗 其 发送 主 273 304 0.
+    确认 ((编 其 文本 尾柄) == 'y  x' 且 ((状态 其 查 'replaceHistory') 其 量) == 2 且 (状态 其 查 'replaceHistory')[0] == '') 'empty replacement deletes eligible match and enters history'.
+    窗 其 发送 主 273 1721 0.
+    确认 ((窗 其 取文 (状态 其 查 'replace')) == 'y' 且 (编 其 文本 尾柄) == 'y  x') 'replacement history selection does not execute replacement'.
+    窗 其 发送 主 273 1720 0.
+    确认 ((窗 其 取文 (状态 其 查 'replace')) == '' 且 (编 其 文本 尾柄) == 'y  x') 'empty replacement history can be reselected without mutation'.
+    状态 其 增 'busy' 真.
+    窗 其 发送 主 273 315 0. 窗 其 发送 主 273 304 0.
+    确认 (((状态 其 查 'replaceHistory') 其 量) == 2 且 (编 其 文本 尾柄) == 'y  x') 'busy guard blocks history clear and replacement'.
+    状态 其 增 'busy' 假. 状态 其 增 'modalDepth' 1.
+    窗 其 发送 主 273 315 0. 窗 其 发送 主 273 303 0.
+    确认 (((状态 其 查 'findHistory') 其 量) == 1 且 (窗 其 发送 尾柄 2143 0 0) 其 数 == 3) 'modal guard blocks history clear and search movement'.
+    状态 其 增 'modalDepth' 0.
+    窗 其 发送 主 273 315 0.
+    确认 (((状态 其 查 'findHistory') 其 量) == 0 且 ((状态 其 查 'replaceHistory') 其 量) == 0 且 (窗 其 取文 (状态 其 查 'find')) == '' 且 (窗 其 取文 (状态 其 查 'replace')) == '') 'clear history erases both lists and both inputs'.
+    窗 其 发送 主 273 1711 0. 窗 其 发送 主 273 1731 0.
+    确认 ((窗 其 取文 (状态 其 查 'find')) == '' 且 (窗 其 取文 (状态 其 查 'replace')) == '' 且 (编 其 文本 尾柄) == 'y  x') 'stale history IDs cannot restore erased values or edit text'.
+    窗 其 发送 主 273 307 0.
+为
 算 元初 参数 为 句 阵:
+    验历史.
     主 取 应用 其 初始化 ([]) 假.
     状态 取 应用 其 A.
     应用 其 切界面 'en' 假.
@@ -485,6 +607,7 @@
     窗 其 发送 尾柄 2160 0 15999999.
     窗 其 发送 主 273 210 0.
     确认 ((窗 其 发送 尾柄 2183 0 0) 其 数 == 15999999 且 非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'duplicate rejects projected size exactly at 32 MB without partial edit'.
+    验应用搜索 主 状态 尾文 尾柄.
     编 其 设文本 尾柄 ''.
     确认 (应用 其 关程序) 'native fixture closes normally'.
     显 'TOTAL PASS: '+(次数[0] 为 句).

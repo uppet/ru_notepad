@@ -15,11 +15,11 @@
     },
     "CHANGELOG.md": {
       "before": "6dba0bf5f16f3d11c94063caabbab4e43d808713f155eaba5b9db9a29fcab1c3",
-      "after": "f84c6537640ceeae9e1da3163987196aed9e3f3dacba417c2298c7e4ae256461"
+      "after": "419e96259a214083549265de5b15bfc5b3f224d0ee1a9da72221eee618dc4f54"
     },
     "README.md": {
       "before": "4fec039d9e1f3129d90c9662c2202fca8809d9c1e340dae429130cfe41cf9c7c",
-      "after": "49d36865ebf95568c1b643895d5ef7a87378383a0bb963dfeaa75b258ddc13e3"
+      "after": "32c2ffb73f43f5863a5f8fa1416bdf5388871ea442d58c03604c2eb4b6fe81eb"
     },
     "THIRD_PARTY_NOTICES.md": {
       "before": "e7afbfb064500e19f9863579f1185e37b8a9e1002ef2050d0bd201564d015ece",
@@ -44,6 +44,10 @@
     "docs/line-ordering.md": {
       "before": null,
       "after": "2c3b775733ca9cde39092fc568e489c56164db5b952dababf2712f36828d5d22"
+    },
+    "docs/literal-search.md": {
+      "before": "46a3d4595ae446db9dce64d581ba96b8e34f41b3520f053ea3b93f4402596da9",
+      "after": "009d5d3065d09635165e66415d72f56a61fe06fd8c9bb0a49cbbd8dc18fd2ab9"
     },
     "docs/markdown-direct-folds.md": {
       "before": "b281e6c7fd7fc949db129e8ab5e3998b5b87329d1687b11fa50f17a5d0abcfd5",
@@ -79,7 +83,7 @@
     },
     "locales/ui.json": {
       "before": "954dcda145db13b05b3f753c43eba56223f09479cf93955edb5944d571b2fb35",
-      "after": "5013816763b1c036f204132eea378e5eec28492f81c821674fc9d0edd0597308"
+      "after": "f6158502b8606a3624adba79178ab3e6da7f6273e1101bfcc839a9e268e67c68"
     },
     "native/lexilla/LexObjC.cxx": {
       "before": null,
@@ -103,11 +107,11 @@
     },
     "packaging/application-native-oracle-development.json": {
       "before": null,
-      "after": "c9c9f065fdd957f78f8dc19a104973402077b6ac1d7f0e2c36ebecfe33ee749d"
+      "after": "4637a75676aab059354864cce9a0babfed9722505e3e0bbb3a224d8315b884d3"
     },
     "packaging/application-native-oracle.json": {
       "before": null,
-      "after": "c7d4c367261fe945d3b09b1f8cc9b72e900757a32b23dc05237639c431e5495a"
+      "after": "01a9f764c74639941fd1b089def459068c668b131ab6933c3ead285dbab51bd4"
     },
     "packaging/licenses/Godot.txt": {
       "before": null,
@@ -129,13 +133,17 @@
       "before": "58b0e02b8b4602ebb90ce7847b3a1c2aaed5dcf3424231bde2e3e27f42d77cce",
       "after": "9206518f358a4474199b0727671a422f8f669a1dda2effea7a10c1c25c3a7318"
     },
+    "packaging/开始前请读.txt": {
+      "before": "d38fd7262018170b7fb931bde35e11205d437dbad6c161491233858bc3ae379e",
+      "after": "38f6b6227141c0df9891da7b25b07e6d0af22f60bbebfc0dbb60a078b8eaa5e0"
+    },
     "src/editor.ru": {
       "before": "8970ba9ed54095cb2df707e606f15140d76c639b705cbee5949c23e36e752c3e",
-      "after": "00250b92f3cf407f74a9c0dd3d1f1d1d6b0477cd877113959123915c4e6fcab3"
+      "after": "79a82083cd21012e92ae7aa0e33f77d13a0ab4698e6f67f3c5a2d83e1b7dc889"
     },
     "src/i18n_catalog.ru": {
       "before": "e2b6d48d25529c7d631652980ec45d6a5dc837467e505e58fbe581a352fe84db",
-      "after": "568857fbe50428b0d820534be4c16408011043342a496fc04fed9fc03e059dc5"
+      "after": "2a2069d12d975ecd198e649ddd64e3156affe8e3ba3914d6f30aa6816afe5027"
     },
     "src/line_operations.ru": {
       "before": null,
@@ -147,7 +155,7 @@
     },
     "src/main.ru": {
       "before": "3dcb97ca641f2fb8068785517aedcbbda6d3c65ca179683601f76508d71dd734",
-      "after": "8bf766fee025d8a2d785ee2c643cd2fa7b4a484950724832bc4a77a0590124fc"
+      "after": "ece7c152575859bd69d59f85d337fdbfc3cea1c5a67356de4c379c8f37142f64"
     },
     "src/markdown_policy.ru": {
       "before": "e9658000e1c5fbe5fb49403af2a27eb11a0efb9d4bf5261617b760688ea2d720",
@@ -168,6 +176,10 @@
     "src/ru_lexical.ru": {
       "before": "188b92786bb5d8a5f45d26d60cef87fbb059edf41ecef4976da8f9b8c82162e7",
       "after": "c6ae96fafdf565ab482112589245d54dc114a1941f67eff3f0f9da632d4e5067"
+    },
+    "src/search_history.ru": {
+      "before": null,
+      "after": "78a90838988f5738602408f68919cbc3a7165bcb647389b52699992a0aa1e116"
     },
     "src/single_instance.ru": {
       "before": null,
@@ -223,7 +235,11 @@
     },
     "tests/app_tabs_native.ru": {
       "before": null,
-      "after": "a33f00a370e638980e09135d7438450fc674fcb34dbfc9a87d8a495a4748aa5d"
+      "after": "710e28c7ea84b392fb0798c350b53b6c11816182ff72422c3423859dde30165d"
+    },
+    "tests/editor_native.ru": {
+      "before": "9b00df895196e081ead36041e4d336d17f8ee3a60c1422ea1cdfe0a8d9f138f2",
+      "after": "3617702b24ddfb6e97bd9cc89f8375bc190372342773e359830db8fc6774c177"
     },
     "tests/language_catalog_native.ru": {
       "before": null,
@@ -291,7 +307,7 @@
     },
     "tests/test_bootstrap_instance_tabs.py": {
       "before": null,
-      "after": "a483113452c6535e3f8ea9d21564148c79eae770df43ea8b78fddb1c264e7e2a"
+      "after": "13d1f280081095becd6fb783bb398a78e13c6ec49af9bb906d1000df2aac8eda"
     },
     "tests/test_bootstrap_line_operations.py": {
       "before": null,
@@ -316,6 +332,10 @@
     "tests/test_bootstrap_receipt_integration.py": {
       "before": null,
       "after": "21f3cf0bce16186a79bc2e6c3c6f552eeb9f8df69d388ed38560ac120e0a0237"
+    },
+    "tests/test_bootstrap_search_scope.py": {
+      "before": null,
+      "after": "e9e59e6e49b9392c7ad47596d796b7afcdae36fd6b4f13a1149160c253d1283c"
     },
     "tests/test_lexilla_languages.py": {
       "before": null,
@@ -373,6 +393,10 @@
       "before": null,
       "after": "6c3898b36304e4e89f220b9fc94b83dd9e34528eb5d72f18e779d0eca5396fd0"
     },
+    "tools/gui_search_scope.py": {
+      "before": null,
+      "after": "bf810b175b85646c1a0663e7434aab07a67a0bd6b8721c1e569f7f1db7170d67"
+    },
     "tools/package.py": {
       "before": "bbf2819d10a67fa888905c25687c8ca7b773ed1db32be4b311c587513aa6251d",
       "after": "464c5e6b71e939a207e72156dd833d4e01f19c68aecb96ee781532bbe35ae1a7"
@@ -425,13 +449,17 @@
       "before": null,
       "after": "21e28328831668e5a1f6ac5a3a3ff138fe2315f095385190cb8de6efe6064bc9"
     },
+    "tools/test_gui_search_scope.py": {
+      "before": null,
+      "after": "dac1c86f456da187d75693d0eff5baa187e3a5eced61283a93d36afce0f61d61"
+    },
     "tools/test_i18n.py": {
       "before": "efe744d29412beab1f4d44b8e116267706bca32d0d435f95bb07512a28705d5f",
       "after": "8437da91ce4ae8636884f3c5e5a9f895b8250b30908516fdf9de9e3e9aeaab6a"
     },
     "tools/test_i18n_models.py": {
       "before": "507b687a6d1c6e98f9287beb168eb10b2eb7648457ca9e60f1aae51d089531cc",
-      "after": "174ff5b3fd8056811072703fb3e98c97af3f36cc7bd7a6b6d1c1098eb3ffcd09"
+      "after": "6bdc064feb76dcd8f23cb73e3ca27d81c1de2ac56876d87b785061dabc9b9104"
     },
     "tools/test_i18n_runner.py": {
       "before": "594f3e83c1acd5ff78e27c4c3da40ffb322dbc25c220a17adca7a567884f03d3",
@@ -491,7 +519,7 @@
     },
     "tools/test_windows_ci.py": {
       "before": "b28733251662cd749c961fda95d912a1638794857fbb07015b5fb6363c28ec3b",
-      "after": "9a26b5e1798b02e1ddda2bbd358d7a286363117c71013e9c64da880dbe621d5d"
+      "after": "6c12e7e4233081847bf312a31c1b2859f5bc86406dd91dccee7821e0f844b0f8"
     },
     "tools/verify_bootstrap_application_oracle.py": {
       "before": null,
@@ -515,7 +543,7 @@
     },
     "tools/windows_ci.py": {
       "before": "c1a793bf7d96267adc47d70bd459b3c050cb54f67c9768a57041cad5a732142a",
-      "after": "94e14b5cbc4404dc5897997b0234ceb49f30bf7ba5c5f0cc1719e162ff651834"
+      "after": "f8171134a287315da57c61ed7c0c0673277f67d985b951082cce6fe884a470b2"
     }
   }
 }

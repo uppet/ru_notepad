@@ -57,7 +57,7 @@ NATIVE_CONSOLE_TESTS = (
     ('document_policy', r'^TOTAL PASS: 23\s*$'),
     ('ui_arguments', r'^TOTAL PASS: 19\s*$'),
     ('file_codec_flags', r'^TOTAL PASS: 80\s*$'),
-    ('editor_native', r'^TOTAL PASS: 102\s*$'),
+    ('editor_native', r'^TOTAL PASS: 141\s*$'),
     ('app_native', r'^TOTAL PASS: 23\s*$'),
     ('app_features_native', r'^TOTAL PASS: 59\s*$'),
     ('app_streaming_native', r'^APP_STREAMING_TESTS_PASS=63\s*$'),

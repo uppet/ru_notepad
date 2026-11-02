@@ -1,5 +1,11 @@
 ## Unreleased — explicitly scoped line ordering
 
+## WIP — captured selection search and private session history
+
+- Add explicit find-only captured selection scope with sticky invalidation after edits/tab changes/bar closure; never fall back silently to whole-document search.
+- Add separate bounded in-memory find/replacement MRU menus and explicit clearing; no persistence or new shortcuts.
+- Require native and real-menu Windows regression gates; selection replacement/regex/cross-file search remain deferred.
+
 - Add selected-line and whole-document stable case-sensitive Unicode sort (ascending/descending), plus nonadjacent duplicate removal retaining the first occurrence.
 - Preserve mixed separator slots while sorting; duplicate removal preserves survivor separators and the original final boundary. Reject CR/LF fusion before editing.
 - Bound synchronous work to 10,000 lines and 4 MiB per range, with seven-language status guidance; no new shortcuts or implicit save.

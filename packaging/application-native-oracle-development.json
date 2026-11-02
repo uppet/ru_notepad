@@ -51,18 +51,18 @@
     "path_redaction": "Machine-specific prefix removed; source-relative path, line, column and diagnostic retained."
   },
   "isolated_development_step_limit": 2000000,
-  "actual_steps": 243479,
-  "elapsed_seconds": 152.562205,
+  "actual_steps": 251497,
+  "elapsed_seconds": 153.851149,
   "other_analysis_limits": "unchanged",
   "compiler_files_modified": false,
-  "modules": 34,
+  "modules": 35,
   "shapes": 74,
   "callbacks": 2,
   "module_sha256": {
-    "app:src/main.ru": "8bf766fee025d8a2d785ee2c643cd2fa7b4a484950724832bc4a77a0590124fc",
+    "app:src/main.ru": "ece7c152575859bd69d59f85d337fdbfc3cea1c5a67356de4c379c8f37142f64",
     "compiler:rulang/stdlib/密.ru": "174a64c1c03499469ad825429db98577a314958cfb070d8c87bd03c4ca23700d",
     "app:src/i18n.ru": "e5ed0325977748d3567d60e61f13f17e3db31c8b5afa7c34eec5703d649cbe85",
-    "app:src/i18n_catalog.ru": "568857fbe50428b0d820534be4c16408011043342a496fc04fed9fc03e059dc5",
+    "app:src/i18n_catalog.ru": "2a2069d12d975ecd198e649ddd64e3156affe8e3ba3914d6f30aa6816afe5027",
     "app:src/i18n_settings.ru": "ac750ca70c937f482b762f165197db38e9c21406b61b7c3ac3f282e632532daa",
     "app:src/recent_files.ru": "d0f454ecfc8b02cb75fa5150ffd2b0b6df986dac13bf4a48c84037209e55d95a",
     "app:src/recent_files_policy.ru": "326374b9b89ac63dc107330907c79ed213b37903e46ca913874956a0c7bb8e2c",
@@ -75,9 +75,10 @@
     "app:src/single_instance_policy.ru": "02dede33d2cc559faf72e184d0a1a3cbe29dce5c63e05b8b78f313d93da2a028",
     "app:src/single_instance_settings.ru": "f00d8415d83345eadf3ffd8fe08ce8fe57ae35c61aa6f6a454b535821e20657e",
     "app:src/i18n_layout.ru": "abdb065ec9a6d2e9b352853285bba6fbc761ba6a4f42cadc82c854c023aa05a7",
-    "app:src/editor.ru": "00250b92f3cf407f74a9c0dd3d1f1d1d6b0477cd877113959123915c4e6fcab3",
+    "app:src/editor.ru": "79a82083cd21012e92ae7aa0e33f77d13a0ab4698e6f67f3c5a2d83e1b7dc889",
     "app:src/line_operations.ru": "81df5afbe000e476b92754fcbff58820f90e3707e83476bf312967e2158a8208",
     "app:src/line_ordering.ru": "e6018d0a992646a36bb33cbc828e881bf1a4c5d5ce2adf0f515288c79c9e5061",
+    "app:src/search_history.ru": "78a90838988f5738602408f68919cbc3a7165bcb647389b52699992a0aa1e116",
     "app:src/document.ru": "708f48fe5ee9c86e140e9aff4b5b4dac0cb1b7e2127527a6ea6ec479142dc273",
     "app:src/ui_arguments.ru": "d27989270478cf0772ed8aab567ee45116be30d9800ba58de6bdc1a8062a9307",
     "app:src/status.ru": "73bbfe0910226d6bfb2e9a78ffe1d2ea5f8a2c1605f67b3b1fe9eb26366fe767",
@@ -94,5 +95,5 @@
     "app:src/associations_policy.ru": "02c96b9d8c38953d460ddac56fab08ac7b59a78bc840668152b3b14ce3a3382f",
     "app:src/file_drop.ru": "c61a8679075a971d5fdc9e0aac01d4adb6f9e143fb5c05abbb381b7124b5c9ec"
   },
-  "oracle_sha256": "c7d4c367261fe945d3b09b1f8cc9b72e900757a32b23dc05237639c431e5495a"
+  "oracle_sha256": "01a9f764c74639941fd1b089def459068c668b131ab6933c3ead285dbab51bd4"
 }

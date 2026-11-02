@@ -9,8 +9,8 @@
     {
       "scope": "app",
       "path": "src/main.ru",
-      "sha256": "8bf766fee025d8a2d785ee2c643cd2fa7b4a484950724832bc4a77a0590124fc",
-      "git_blob": "17717829a692226be37cac14bcc644d06cb9b319"
+      "sha256": "ece7c152575859bd69d59f85d337fdbfc3cea1c5a67356de4c379c8f37142f64",
+      "git_blob": "a9b1ecc096282e3f71837479c68a039d9cb4ef9c"
     },
     {
       "scope": "compiler",
@@ -27,8 +27,8 @@
     {
       "scope": "app",
       "path": "src/i18n_catalog.ru",
-      "sha256": "568857fbe50428b0d820534be4c16408011043342a496fc04fed9fc03e059dc5",
-      "git_blob": "9912689e1f039c09826b9c8fbf16ce98128ab938"
+      "sha256": "2a2069d12d975ecd198e649ddd64e3156affe8e3ba3914d6f30aa6816afe5027",
+      "git_blob": "492042a4d0da7b6a4714fbd5b35242e6a657acdb"
     },
     {
       "scope": "app",
@@ -105,8 +105,8 @@
     {
       "scope": "app",
       "path": "src/editor.ru",
-      "sha256": "00250b92f3cf407f74a9c0dd3d1f1d1d6b0477cd877113959123915c4e6fcab3",
-      "git_blob": "0d052b23a3161a45aec1e99982c0b2a50a079f21"
+      "sha256": "79a82083cd21012e92ae7aa0e33f77d13a0ab4698e6f67f3c5a2d83e1b7dc889",
+      "git_blob": "fe4f11ca563e3c5657aa6ab88bcda026733dba57"
     },
     {
       "scope": "app",
@@ -119,6 +119,12 @@
       "path": "src/line_ordering.ru",
       "sha256": "e6018d0a992646a36bb33cbc828e881bf1a4c5d5ce2adf0f515288c79c9e5061",
       "git_blob": "9d44105436d7890abc7f3d701100daef1ecadf70"
+    },
+    {
+      "scope": "app",
+      "path": "src/search_history.ru",
+      "sha256": "78a90838988f5738602408f68919cbc3a7165bcb647389b52699992a0aa1e116",
+      "git_blob": "bc1ee13512fc9f67c0c6a6be35ded2d965693e0e"
     },
     {
       "scope": "app",

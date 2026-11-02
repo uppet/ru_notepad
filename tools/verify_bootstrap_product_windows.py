@@ -71,6 +71,8 @@ def validate_product(report, ci):
     validate_lines(report.get('line_operations'), hashes)
     from gui_line_ordering import validate_result as validate_ordering
     validate_ordering(report.get('line_ordering'), hashes)
+    from gui_search_scope import validate_result as validate_search_scope
+    validate_search_scope(report.get('search_scope'), hashes)
 
 
 def collect_product_gui(ci, api, runtime, fixtures, evidence, report, save):
@@ -129,7 +131,7 @@ def verify(config, output):
                   ('app_receipt', 'argv_probe_receipt', 'dll_probe_receipt', 'dependencies_receipt')},
               'smoke_receipt': identity(smoke_path), 'recent_fixtures_receipt': identity(recent_fixture_path), 'gui_results': [],
               'all_native_console_tests_bootstrap_compiled': False, 'full_release_acceptance': False,
-              'coverage': 'Original four GUI product gates, recent-file GUI, single-instance/tab-close GUI, and all 95 language-menu routes, capability-based fold commands/shortcuts, EOL conversion, and line operations; independent C-native baseline is separate'}
+              'coverage': 'Original four GUI product gates, recent-file GUI, single-instance/tab-close GUI, and all 95 language-menu routes, capability-based fold commands/shortcuts, EOL conversion, line operations, line ordering, and selection-only literal search/session history; independent C-native baseline is separate'}
     def save():
         (output/'product-preview.json').write_text(json.dumps(report, indent=2, ensure_ascii=True)+'\n', encoding='utf-8')
     save()
@@ -156,6 +158,9 @@ def verify(config, output):
             save()
             from gui_line_ordering import run as run_ordering
             report['line_ordering'] = run_ordering(api, runtime, fixtures, evidence)
+            save()
+            from gui_search_scope import run as run_search_scope
+            report['search_scope'] = run_search_scope(api, runtime, fixtures, evidence)
             save()
         smoke.validate_receipts(config)
         validate_receipt(Path(config['dependencies_receipt']))

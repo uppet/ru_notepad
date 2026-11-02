@@ -88,3 +88,7 @@ Python is used only to run the Ru compiler and build/test tools. Ru application 
 ## License
 
 The project-owned application code and documentation are licensed under the [MIT License](LICENSE). Third-party source, data and components are excluded from this grant and retain their existing licenses and notices; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Both portable packages include the application license and required third-party notices.
+
+### Captured selection search and session history
+
+The Search menu can capture a fixed selection for **find only**, or explicitly return to current-document scope. Editing, switching tabs or closing the bar invalidates that capture without falling back to the whole document. Separate 12-entry find/replacement histories stay in memory only and can be cleared with their inputs. Selection replacement, regex and cross-file search are not included. See [literal-search semantics](docs/literal-search.md); only exact-build Windows receipts establish preview acceptance.

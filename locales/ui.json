@@ -1240,5 +1240,122 @@
     "es": "Ordenar/quitar duplicados se limita a 10.000 líneas y 4 MiB. Seleccione un rango menor.",
     "ru": "Сортировка/удаление повторов ограничены 10 000 строк и 4 МиБ. Уменьшите выделение.",
     "it": "Ordinamento/rimozione duplicati limitati a 10.000 righe e 4 MiB. Seleziona meno righe."
+  },
+  "search.capture_selection": {
+    "en": "Find in captured selection (no replace)",
+    "zh-CN": "在捕获选区中查找（不支持替换）",
+    "ja": "選択範囲を固定して検索（置換不可）",
+    "ko": "선택 영역 고정 검색 (바꾸기 불가)",
+    "es": "Buscar en selección fija (sin reemplazar)",
+    "ru": "Поиск в выделении (без замены)",
+    "it": "Cerca nella selezione fissata (senza sostituire)"
+  },
+  "search.current_document": {
+    "en": "Search current document",
+    "zh-CN": "搜索当前文档",
+    "ja": "現在の文書を検索",
+    "ko": "현재 문서 검색",
+    "es": "Buscar en el documento actual",
+    "ru": "Поиск в текущем документе",
+    "it": "Cerca nel documento corrente"
+  },
+  "search.clear_history": {
+    "en": "Clear search history and inputs",
+    "zh-CN": "清除搜索历史与输入",
+    "ja": "検索履歴と入力を消去",
+    "ko": "검색 기록 및 입력 지우기",
+    "es": "Borrar historial e inputs",
+    "ru": "Очистить историю и поля поиска",
+    "it": "Cancella cronologia e campi"
+  },
+  "search.history_find": {
+    "en": "Find history (this session)",
+    "zh-CN": "查找历史（本次会话）",
+    "ja": "検索履歴（今回のみ）",
+    "ko": "찾기 기록 (현재 세션)",
+    "es": "Historial de búsqueda (sesión)",
+    "ru": "История поиска (сеанс)",
+    "it": "Cronologia ricerche (sessione)"
+  },
+  "search.history_replace": {
+    "en": "Replacement history (this session)",
+    "zh-CN": "替换文本历史（本次会话）",
+    "ja": "置換文字列の履歴（今回のみ）",
+    "ko": "바꿀 텍스트 기록 (현재 세션)",
+    "es": "Historial de reemplazo (sesión)",
+    "ru": "История замены (сеанс)",
+    "it": "Cronologia sostituzioni (sessione)"
+  },
+  "search.history_empty": {
+    "en": "(Empty history)",
+    "zh-CN": "（无历史）",
+    "ja": "（履歴なし）",
+    "ko": "(기록 없음)",
+    "es": "(Sin historial)",
+    "ru": "(История пуста)",
+    "it": "(Cronologia vuota)"
+  },
+  "search.history_empty_value": {
+    "en": "(Empty replacement: delete)",
+    "zh-CN": "（空替换文本：删除）",
+    "ja": "（空の置換文字列：削除）",
+    "ko": "(빈 바꿀 텍스트: 삭제)",
+    "es": "(Reemplazo vacío: eliminar)",
+    "ru": "(Пустая замена: удалить)",
+    "it": "(Sostituzione vuota: elimina)"
+  },
+  "search.scope_document": {
+    "en": "Scope: document",
+    "zh-CN": "范围：当前文档",
+    "ja": "範囲：文書全体",
+    "ko": "범위: 문서",
+    "es": "Ámbito: documento",
+    "ru": "Область: документ",
+    "it": "Ambito: documento"
+  },
+  "search.scope_selection": {
+    "en": "Scope: selection — find only",
+    "zh-CN": "范围：捕获选区 · 仅查找",
+    "ja": "範囲：固定選択（検索のみ）",
+    "ko": "범위: 고정 선택 (찾기만)",
+    "es": "Ámbito: selección — solo buscar",
+    "ru": "Область: выделение — только поиск",
+    "it": "Ambito: selezione — solo ricerca"
+  },
+  "search.scope_invalid": {
+    "en": "Scope lost — choose again",
+    "zh-CN": "选区范围已失效 · 请重新选择",
+    "ja": "範囲無効：再選択が必要",
+    "ko": "범위 만료: 다시 선택",
+    "es": "Ámbito perdido — vuelva a elegir",
+    "ru": "Область сброшена — выберите снова",
+    "it": "Ambito perso — scegli di nuovo"
+  },
+  "search.scope_required": {
+    "en": "The captured range is no longer valid. Use Search > Find in captured selection, or explicitly choose Search current document.",
+    "zh-CN": "捕获的选区已失效。请用“搜索 > 在捕获选区中查找”重新捕获，或明确选择“搜索当前文档”。",
+    "ja": "固定範囲は無効です。「検索」から範囲を再選択するか、「現在の文書を検索」を選んでください。",
+    "ko": "고정 범위가 만료되었습니다. 검색 메뉴에서 선택 영역을 다시 고정하거나 현재 문서 검색을 선택하세요.",
+    "es": "La selección fija ya no es válida. Capture otra desde Buscar o elija Buscar en el documento actual.",
+    "ru": "Зафиксированная область недействительна. Задайте её заново в меню поиска или выберите поиск в текущем документе.",
+    "it": "La selezione fissata non è più valida. Fissala di nuovo dal menu Cerca o scegli il documento corrente."
+  },
+  "search.selection_required": {
+    "en": "Select one nonempty continuous text range, then capture it from Search. Selection scope supports find only, not replacement.",
+    "zh-CN": "请先选择一段非空连续文本，再从搜索菜单捕获。选区范围仅支持查找，不支持替换。",
+    "ja": "空でない連続した範囲を選び、検索メニューで固定してください。範囲内は検索のみで、置換はできません。",
+    "ko": "비어 있지 않은 연속 텍스트 영역을 선택한 다음 검색 메뉴에서 고정하세요. 영역 내 찾기만 가능하며 바꾸기는 불가합니다.",
+    "es": "Seleccione un rango continuo no vacío y fíjelo desde Buscar. Solo permite buscar, no reemplazar.",
+    "ru": "Выделите один непустой непрерывный фрагмент и зафиксируйте его в меню поиска. Доступен только поиск, без замены.",
+    "it": "Seleziona un intervallo continuo non vuoto e fissalo dal menu Cerca. È disponibile solo la ricerca, non la sostituzione."
+  },
+  "search.replace_unavailable": {
+    "en": "Replacement requires a writable document and explicit current-document scope. Selection scope is find-only; no text was replaced.",
+    "zh-CN": "替换要求文档可写，且已明确选择当前文档范围。选区模式仅查找；未替换任何文本。",
+    "ja": "置換には書き込み可能な文書と文書全体の範囲が必要です。選択範囲は検索のみです。変更していません。",
+    "ko": "바꾸기에는 쓰기 가능한 문서와 명시적인 현재 문서 범위가 필요합니다. 선택 영역은 찾기 전용이며 텍스트를 변경하지 않았습니다.",
+    "es": "Reemplazar requiere un documento editable y ámbito de documento explícito. La selección solo permite buscar; no se reemplazó texto.",
+    "ru": "Для замены нужен доступный для записи документ и явно выбранная область всего документа. В выделении доступен только поиск; текст не изменён.",
+    "it": "La sostituzione richiede un documento scrivibile e l’ambito documento esplicito. La selezione consente solo la ricerca; nessun testo sostituito."
   }
 }

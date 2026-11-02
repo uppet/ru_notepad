@@ -270,19 +270,37 @@ _块长 取 65536.
     得 寻找 柄 词 区分 假 真 假.
 法
 算 寻找 柄, 词 为 句, 区分 为 事实, 整词 为 事实, 循环 为 事实, 向后 为 事实:
-    始 取 (窗 其 发送 柄 2145 0 0) 其 数. # GETSELECTIONEND
     长 取 (窗 其 发送 柄 2183 0 0) 其 数.
-    末界 取 长.
+    得 寻找范围 柄 词 区分 整词 循环 向后 0 长.
+法
+# All bounds are UTF-8 byte offsets, not Ru character indexes. Fail closed:
+# no search/selection/undo mutation for stale, reversed or split-scalar bounds.
+算 寻找范围 柄, 词 为 句, 区分 为 事实, 整词 为 事实, 循环 为 事实, 向后 为 事实, 下界 为 数, 上界 为 数:
+    若 词 == '' 则 卒 (本地 其 文本 'error.editor.find_empty'). 然
+    长 取 (窗 其 发送 柄 2183 0 0) 其 数.
+    若 下界 < 0 或 上界 > 长 或 下界 >= 上界 或 下界%1 != 0 或 上界%1 != 0 则 得 -1. 然
+    # SCI_GETCHARAT is signed char in the pinned native source; normalize it.
+    # Continuation bytes are not scalar edges; CR and LF remain separate bytes.
+    左字 取 (窗 其 发送 柄 2007 下界 0) 其 数.
+    右字 取 (窗 其 发送 柄 2007 上界 0) 其 数.
+    若 左字 < 0 则 左字 取 左字+256. 然
+    若 右字 < 0 则 右字 取 右字+256. 然
+    若 左字 >= 128 且 左字 < 192 则 得 -1. 然
+    若 右字 >= 128 且 右字 < 192 则 得 -1. 然
+    始 取 (窗 其 发送 柄 2145 0 0) 其 数. # GETSELECTIONEND
+    末界 取 上界.
     若 向后 则
-        始 取 (窗 其 发送 柄 2143 0 0) 其 数. # GETSELECTIONSTART, independent of selection direction.
-        末界 取 0.
+        始 取 (窗 其 发送 柄 2143 0 0) 其 数. # GETSELECTIONSTART, independent of anchor direction.
+        末界 取 下界.
     然
+    若 始 < 下界 则 始 取 下界. 然
+    若 始 > 上界 则 始 取 上界. 然
     位 取 搜区选项 柄 词 始 末界 区分 整词.
     若 位 == -1 且 循环 则
         若 向后 则
-            若 始 < 长 则 位 取 搜区选项 柄 词 长 始 区分 整词. 然
+            若 始 < 上界 则 位 取 搜区选项 柄 词 上界 始 区分 整词. 然
         另
-            若 始 > 0 则 位 取 搜区选项 柄 词 0 始 区分 整词. 然
+            若 始 > 下界 则 位 取 搜区选项 柄 词 下界 始 区分 整词. 然
         然
     然
     若 位 != -1 则
