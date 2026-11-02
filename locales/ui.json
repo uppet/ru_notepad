@@ -1132,5 +1132,50 @@
     "es": "Convertir todo a CR (también Intro) (&M)",
     "ru": "Весь текст в CR (и Enter) (&M)",
     "it": "Converti tutto in CR (anche Invio) (&M)"
+  },
+  "command.duplicate_lines": {
+    "en": "Duplicate current/selected lines (&D)",
+    "zh-CN": "复制当前行／选中行 (&D)",
+    "ja": "現在行／選択行を複製 (&D)",
+    "ko": "현재/선택한 줄 복제 (&D)",
+    "es": "Duplicar líneas actuales/seleccionadas (&D)",
+    "ru": "Дублировать текущую/выбранные строки (&D)",
+    "it": "Duplica righe correnti/selezionate (&D)"
+  },
+  "command.move_lines_up": {
+    "en": "Move current/selected lines up (&I)",
+    "zh-CN": "当前行／选中行上移 (&I)",
+    "ja": "現在行／選択行を上へ移動 (&I)",
+    "ko": "현재/선택한 줄 위로 이동 (&I)",
+    "es": "Subir líneas actuales/seleccionadas (&I)",
+    "ru": "Переместить текущую/выбранные строки вверх (&I)",
+    "it": "Sposta in alto righe correnti/selezionate (&I)"
+  },
+  "command.move_lines_down": {
+    "en": "Move current/selected lines down (&O)",
+    "zh-CN": "当前行／选中行下移 (&O)",
+    "ja": "現在行／選択行を下へ移動 (&O)",
+    "ko": "현재/선택한 줄 아래로 이동 (&O)",
+    "es": "Bajar líneas actuales/seleccionadas (&O)",
+    "ru": "Переместить текущую/выбранные строки вниз (&O)",
+    "it": "Sposta in basso righe correnti/selezionate (&O)"
+  },
+  "command.trim_line_ends": {
+    "en": "Trim trailing spaces/tabs in current/selected lines (&S)",
+    "zh-CN": "去除当前行／选中行尾空格与制表符 (&S)",
+    "ja": "現在行／選択行の末尾の空白・タブを削除 (&S)",
+    "ko": "현재/선택한 줄 끝 공백 및 탭 제거 (&S)",
+    "es": "Quitar espacios/tabulaciones finales de líneas actuales/seleccionadas (&S)",
+    "ru": "Убрать пробелы и табуляции в конце текущей/выбранных строк (&S)",
+    "it": "Rimuovi spazi/tab finali nelle righe correnti/selezionate (&S)"
+  },
+  "lines.mixed_eol_rejected": {
+    "en": "This would merge mixed line endings. Convert line endings first.",
+    "zh-CN": "此操作会合并混合换行，请先统一换行格式。",
+    "ja": "混在する改行が結合されるため、先に改行形式を統一してください。",
+    "ko": "혼합 줄바꿈이 합쳐집니다. 먼저 줄바꿈 형식을 통일하세요.",
+    "es": "Se unirían saltos de línea mixtos. Unifique primero el formato.",
+    "ru": "Операция объединит разные переводы строк. Сначала приведите их к одному формату.",
+    "it": "L’operazione unirebbe terminatori misti. Uniforma prima i fine riga."
   }
 }

@@ -1,3 +1,10 @@
+## Unreleased — current/selected whole-line operations
+
+- Add duplicate, move up/down, and ASCII trailing-space/Tab trim through seven-language Edit menus, without new editor shortcuts.
+- Preserve mixed line-ending bytes and final-terminator state; reject ambiguous CR/LF joins before editing with a non-modal localized explanation.
+- Use native byte ranges and grouped Undo, preserving existing readonly/busy/modal/large-file protections and the text-extraction fence.
+- Require native command tests and actual executable save/Undo/Redo/reopen evidence; portable contracts alone do not certify a Windows candidate. Sorting/deduplication remain a separate stage.
+
 ## Unreleased — capability-based folding commands
 
 - Route Fold All / Unfold All and their shortcuts through actual native/custom folding capability instead of a three-language whitelist.

@@ -41,6 +41,7 @@ English, Simplified Chinese, Japanese, Korean, Spanish, Russian and Italian are 
 - All 93 selectable built-in Notepad++ v8.9.8.1 modes, plus Ru and Markdown (95 modes); native Lexilla highlighting, automatic filename/extension detection and a grouped Language menu. See [coverage and provenance](docs/language-highlighting.md). Windows validation of this candidate is pending.
 - Native C/C++ folds for brace blocks, multiline comments and preprocessor conditionals
 - Conservative Markdown heading folds, with a per-document on/off command
+- [Whole-line duplicate, move up/down, and ASCII trailing-whitespace trim](docs/line-operations.md), scoped to current/selected lines with one-step Undo
 - [Undoable whole-document CRLF/LF/CR conversion](docs/eol-conversion.md), with Enter insertion mode kept separate from actual line endings
 - Current-line EOL and Enter insertion mode shown separately, including mixed-EOL files
 - Tab-expanded Unicode columns, reverse tab switching, and zoom reset

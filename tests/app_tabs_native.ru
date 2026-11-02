@@ -2,6 +2,7 @@
 应用 取 外言 '../src/main.ru'.
 窗 取 外言 '../src/win32.ru'.
 编 取 外言 '../src/editor.ru'.
+本地 取 外言 '../src/i18n.ru'.
 密 取 外言 '如:密'.
 件库 取 外言 '../src/file_codec.ru'.
 次数 取 [0]. 选择们 取 [7,2]. 选择位 取 [0]. 存路 取 [''].
@@ -178,6 +179,155 @@
     确认 (应用 其 脏 尾文) 'text Undo does not clear encoding-only dirty state'.
     窗 其 发送 主 273 401 0.
     尾文 其 增 'encodingDirty' 假. # fixture-only cleanup of intentionally unsaved encoding choice
+    # All line edits enter through actual WM_COMMAND; native direct messages
+    # below only seed text/selection and observe results, never perform the edit.
+    行尾们 取 ['\r\n','\n','\r'].
+    行尾位 取 0.
+    循 3 次
+        行尾 取 行尾们[行尾位].
+        行原 取 '前'+行尾+'汉😀  '+行尾+'二\t'+行尾+'尾'.
+        行目标们 取 ['前'+行尾+'汉😀  '+行尾+'二\t'+行尾+'汉😀  '+行尾+'二\t'+行尾+'尾','汉😀  '+行尾+'二\t'+行尾+'前'+行尾+'尾','前'+行尾+'尾'+行尾+'汉😀  '+行尾+'二\t','前'+行尾+'汉😀'+行尾+'二'+行尾+'尾'].
+        行新首们 取 [3,0,2,1].
+        行新末们 取 [4,1,3,3].
+        行逆位 取 0.
+        循 2 次
+            行号位 取 0.
+            循 4 次
+                编 其 设文本 尾柄 行原.
+                行始 取 (窗 其 发送 尾柄 2167 1 0) 其 数.
+                行末 取 (窗 其 发送 尾柄 2167 3 0) 其 数.
+                若 行逆位 == 0 则 窗 其 发送 尾柄 2160 行始 行末.
+                另 窗 其 发送 尾柄 2160 行末 行始. 然
+                行入尾 取 (窗 其 发送 尾柄 2030 0 0) 其 数.
+                窗 其 发送 主 273 (210+行号位) 0.
+                确认 ((编 其 文本 尾柄) == 行目标们[行号位] 且 (窗 其 发送 尾柄 2030 0 0) 其 数 == 行入尾) 'line command exact Unicode CRLF/LF/CR bytes and unchanged Enter'.
+                行新始 取 (窗 其 发送 尾柄 2167 行新首们[行号位] 0) 其 数.
+                行新末 取 (窗 其 发送 尾柄 2136 行新末们[行号位] 0) 其 数.
+                # Trim adjusts original endpoint (next-line start), while the
+                # reordering commands select only the moved/copied content.
+                若 行号位 == 3 则 行新末 取 (窗 其 发送 尾柄 2167 3 0) 其 数. 然
+                行锚 取 (窗 其 发送 尾柄 2009 0 0) 其 数.
+                行光 取 (窗 其 发送 尾柄 2008 0 0) 其 数.
+                行选好 取 行锚 == 行新始 且 行光 == 行新末.
+                若 行逆位 == 1 则 行选好 取 行锚 == 行新末 且 行光 == 行新始. 然
+                确认 行选好 'line command preserves selection direction and excludes next-line-start endpoint'.
+                窗 其 发送 主 273 201 0.
+                确认 ((编 其 文本 尾柄) == 行原 且 非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'one line-command Undo restores exact original clean text without another action'.
+                窗 其 发送 主 273 202 0.
+                确认 ((编 其 文本 尾柄) == 行目标们[行号位]) 'one line-command Redo restores exact output'.
+                行号位 取 行号位+1.
+            环
+            行逆位 取 行逆位+1.
+        环
+        行尾位 取 行尾位+1.
+    环
+    # Explicit boundary cases use byte offsets (CJK 3, emoji 4), not Ru
+    # codepoint indices. Mixed EOL separators must not be rewritten to Enter.
+    界原们 取 ['a\r\n汉😀\nb\r尾','a\r\n汉😀\nb\r尾','a\r\n汉😀\nb\r尾','a\r\n汉😀\nb\r尾','汉😀','a\n','a\n尾','a\n尾',' a \t\n尾 \t','汉😀 \t \r\n尾  ','','a\nb','a\nb','a\nb','a\nb','a\nb','a\nb','','','','a\n','a\n'].
+    界目们 取 ['汉😀\nb\r\na\r尾','a\r\nb\n汉😀\r尾','a\r\n汉😀\nb\r尾\r尾','a\r\n汉😀\n汉😀\nb\r尾','汉😀\r\n汉😀','a\n\n','尾\na','尾\na',' a\n尾 \t','汉😀 \r\n尾  ','','a\nb','a\nb','a\nb','a\nb','a\nb','a\nb','','','','a\n','a\n'].
+    界号们 取 [211,212,210,210,210,210,211,212,213,213,210,211,212,213,211,212,213,211,212,213,211,212].
+    界始们 取 [3,3,13,3,0,2,2,0,1,0,0,0,2,0,0,0,0,0,0,0,2,0].
+    界末们 取 [13,11,13,10,0,2,2,0,1,0,0,0,2,0,3,3,3,0,0,0,2,0].
+    界位 取 0.
+    循 22 次
+        编 其 设文本 尾柄 界原们[界位].
+        # Single unterminated line has no source separator: use current Enter.
+        若 界位 == 4 则 窗 其 发送 尾柄 2031 0 0. 然
+        窗 其 发送 尾柄 2160 界始们[界位] 界末们[界位].
+        窗 其 发送 主 273 界号们[界位] 0.
+        确认 ((编 其 文本 尾柄) == 界目们[界位]) ('line boundary exact bytes case '+(界位 为 句)).
+        若 界原们[界位] == 界目们[界位] 则
+            确认 (非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'boundary no-op preserves clean savepoint and empty Undo'.
+        另
+            窗 其 发送 主 273 201 0.
+            确认 ((编 其 文本 尾柄) == 界原们[界位] 且 非 (应用 其 脏 尾文)) 'boundary Undo preserves original mixed EOL and EOF termination'.
+        然
+        窗 其 发送 主 273 202 0.
+        确认 ((编 其 文本 尾柄) == 界目们[界位]) 'boundary Redo or no-op preserves exact bytes'.
+        界位 取 界位+1.
+    环
+    同原们 取 ['a\na','\n\nx'].
+    同位 取 0.
+    循 2 次
+        编 其 设文本 尾柄 同原们[同位].
+        窗 其 发送 尾柄 2160 0 0.
+        窗 其 发送 主 273 212 0.
+        确认 ((编 其 文本 尾柄) == 同原们[同位] 且 非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'moving equal adjacent lines is a clean undo-free no-op including empty lines'.
+        同位 取 同位+1.
+    环
+    # Empty line content may expose a lone CR directly before a lone LF.
+    # Reject the whole command before editing rather than merge two EOLs.
+    拒原们 取 ['\ra\nb','\na\rz','\r \nb'].
+    拒号们 取 [211,210,213].
+    拒始们 取 [1,0,1].
+    拒末们 取 [2,3,2].
+    拒位 取 0.
+    循 3 次
+        拒反 取 0.
+        循 2 次
+            编 其 设文本 尾柄 拒原们[拒位].
+            若 拒反 == 0 则 窗 其 发送 尾柄 2160 拒始们[拒位] 拒末们[拒位].
+            另 窗 其 发送 尾柄 2160 拒末们[拒位] 拒始们[拒位]. 然
+            拒前锚 取 (窗 其 发送 尾柄 2009 0 0) 其 数.
+            拒前光 取 (窗 其 发送 尾柄 2008 0 0) 其 数.
+            窗 其 发送 主 273 拒号们[拒位] 0.
+            确认 ((编 其 文本 尾柄) == 拒原们[拒位] 且 非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'mixed EOL collision rejects complete command without dirty text or Undo'.
+            拒示 取 窗 其 取文 (状态 其 查 'status').
+            确认 ((状态 其 查 'lineNotice') 且 (状态 其 查 'modalDepth') == 0 且 (拒示 其 含 (本地 其 文本 'lines.mixed_eol_rejected')) 且 (窗 其 发送 尾柄 2009 0 0) 其 数 == 拒前锚 且 (窗 其 发送 尾柄 2008 0 0) 其 数 == 拒前光) 'mixed EOL rejection is visible nonmodal and preserves forward or reverse selection'.
+            拒反 取 拒反+1.
+        环
+        拒位 取 拒位+1.
+    环
+    编 其 设文本 尾柄 'a\r\nb'.
+    窗 其 发送 尾柄 2160 3 3.
+    窗 其 发送 主 273 211 0.
+    拒示 取 窗 其 取文 (状态 其 查 'status').
+    确认 ((编 其 文本 尾柄) == 'b\r\na' 且 非 (状态 其 查 'lineNotice') 且 非 (拒示 其 含 (本地 其 文本 'lines.mixed_eol_rejected'))) 'normal CRLF boundary moves successfully and clears earlier rejection notice'.
+    行号位 取 0.
+    循 4 次
+        编 其 设文本 尾柄 '前\r\n汉😀 \t\n尾'.
+        窗 其 发送 尾柄 2160 5 5.
+        行护位 取 0.
+        循 4 次
+            状态 其 增 护键们[行护位] 护值们[行护位].
+            窗 其 发送 主 273 (210+行号位) 0.
+            状态 其 增 护键们[行护位] 还值们[行护位].
+            确认 ((编 其 文本 尾柄) == '前\r\n汉😀 \t\n尾' 且 非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'line commands honor busy modal tab-menu and close guards'.
+            行护位 取 行护位+1.
+        环
+        尾文 其 增 'large' 真.
+        窗 其 发送 主 273 (210+行号位) 0.
+        尾文 其 增 'large' 假.
+        确认 ((编 其 文本 尾柄) == '前\r\n汉😀 \t\n尾' 且 非 (应用 其 脏 尾文)) 'line commands reject initial large-file mode'.
+        窗 其 发送 尾柄 2171 1 0.
+        窗 其 发送 主 273 (210+行号位) 0.
+        窗 其 发送 尾柄 2171 0 0.
+        确认 ((编 其 文本 尾柄) == '前\r\n汉😀 \t\n尾' 且 非 (应用 其 脏 尾文)) 'line commands reject readonly editor'.
+        行号位 取 行号位+1.
+    环
+    # A long leading whitespace run ending in a nonspace must stay unchanged.
+    # This catches an unanchored [ \t]+$ retrying at every space (quadratic).
+    编 其 设文本 尾柄 ''.
+    前空 取 ' '.
+    循 16 次 前空 取 前空+前空. 环
+    前存 取 密 其 UTF8 前空.
+    窗 其 发送 尾柄 2012 0 0.
+    试
+        窗 其 发指 尾柄 2282 65536 前存.
+        窗 其 发文 尾柄 2282 1 'x'.
+        编 其 检查状态 尾柄.
+    救 原因
+        前存 其 关闭.
+        窗 其 发送 尾柄 2012 1 0.
+        卒 原因.
+    终
+    前存 其 关闭.
+    窗 其 发送 尾柄 2175 0 0.
+    窗 其 发送 尾柄 2012 1 0.
+    编 其 记保存 尾柄.
+    窗 其 发送 尾柄 2160 0 0.
+    窗 其 发送 主 273 213 0.
+    确认 ((窗 其 发送 尾柄 2183 0 0) 其 数 == 65537 且 (窗 其 发送 尾柄 2007 0 0) 其 数 == 32 且 (窗 其 发送 尾柄 2007 65536 0) 其 数 == 120 且 非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'long leading whitespace nontrim stays exact clean and undo-free within fixture budget'.
     # A normally-created document can grow beyond the initial-open threshold.
     # Verify the current-byte guard independently of the per-document large flag.
     # Test setup only: never construct/slice a 32 MB Ru string or route that
@@ -211,6 +361,22 @@
         确认 ((窗 其 发送 尾柄 2183 0 0) 其 数 == 32000000 且 (窗 其 发送 尾柄 2030 0 0) 其 数 == 0 且 非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'current-byte threshold rejects conversion even without large flag'.
         位尾 取 位尾+1.
     环
+    行号位 取 0.
+    循 4 次
+        窗 其 发送 主 273 (210+行号位) 0.
+        确认 ((窗 其 发送 尾柄 2183 0 0) 其 数 == 32000000 且 非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'grown current-byte threshold rejects each line command without large flag'.
+        行号位 取 行号位+1.
+    环
+    # Copying this selected 15,999,999-byte unterminated document would add
+    # its own bytes plus CRLF, reaching exactly the 32 MB mutation fence.
+    窗 其 发送 尾柄 2012 0 0.
+    窗 其 发送 尾柄 2645 15999999 16000001.
+    窗 其 发送 尾柄 2175 0 0.
+    窗 其 发送 尾柄 2012 1 0.
+    编 其 记保存 尾柄.
+    窗 其 发送 尾柄 2160 0 15999999.
+    窗 其 发送 主 273 210 0.
+    确认 ((窗 其 发送 尾柄 2183 0 0) 其 数 == 15999999 且 非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'duplicate rejects projected size exactly at 32 MB without partial edit'.
     编 其 设文本 尾柄 ''.
     确认 (应用 其 关程序) 'native fixture closes normally'.
     显 'TOTAL PASS: '+(次数[0] 为 句).

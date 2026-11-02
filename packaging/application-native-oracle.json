@@ -9,8 +9,8 @@
     {
       "scope": "app",
       "path": "src/main.ru",
-      "sha256": "63771768e6601b8ccb74ec5850b4b23f1716de5bb2852773b0a4602e8e8c1558",
-      "git_blob": "d2ebe02b6517002414c2732fd6a344b5ac3f45e1"
+      "sha256": "dbcf0476a1e2aeec5de5b4c246fec6612da23bdd884f178940c79f7e145886fb",
+      "git_blob": "e1080a8138c7dd04df35409f43453ceb2d726103"
     },
     {
       "scope": "compiler",
@@ -27,8 +27,8 @@
     {
       "scope": "app",
       "path": "src/i18n_catalog.ru",
-      "sha256": "36e83d87055b109be8eba07f4ef872d4bebde465e829fa567e522c33216b9349",
-      "git_blob": "ec085b6391ecba5ccb57ce52f3005c8734d5a481"
+      "sha256": "8e6593bc3139c4b65e3250881ab1bf9f01bce766a60c36bf79a191e72bc5fcd7",
+      "git_blob": "0db1d4338a2831d8deb233b5d56917d8629d54a7"
     },
     {
       "scope": "app",
@@ -107,6 +107,12 @@
       "path": "src/editor.ru",
       "sha256": "00250b92f3cf407f74a9c0dd3d1f1d1d6b0477cd877113959123915c4e6fcab3",
       "git_blob": "0d052b23a3161a45aec1e99982c0b2a50a079f21"
+    },
+    {
+      "scope": "app",
+      "path": "src/line_operations.ru",
+      "sha256": "81df5afbe000e476b92754fcbff58820f90e3707e83476bf312967e2158a8208",
+      "git_blob": "6743d91b6fca4ec61f18604be79200774ebe9597"
     },
     {
       "scope": "app",
