@@ -2,6 +2,7 @@
 应用 取 外言 '../src/main.ru'.
 窗 取 外言 '../src/win32.ru'.
 编 取 外言 '../src/editor.ru'.
+密 取 外言 '如:密'.
 件库 取 外言 '../src/file_codec.ru'.
 次数 取 [0]. 选择们 取 [7,2]. 选择位 取 [0]. 存路 取 [''].
 作 确认 条件 为 事实 名 为 句:
@@ -179,10 +180,30 @@
     尾文 其 增 'encodingDirty' 假. # fixture-only cleanup of intentionally unsaved encoding choice
     # A normally-created document can grow beyond the initial-open threshold.
     # Verify the current-byte guard independently of the per-document large flag.
-    大文 取 'x'.
-    循 25 次 大文 取 大文+大文. 环
-    大文 取 'a\r\n'+大文[0:31999997].
-    编 其 设文本 尾柄 大文.
+    # Test setup only: never construct/slice a 32 MB Ru string or route that
+    # artificial whole string through the compatibility setter. The command
+    # still runs against a real 32,000,000-byte Scintilla document, not a mock.
+    显 'SETUP: EOL current-byte guard bounded native append begins'.
+    编 其 设文本 尾柄 'a\r\n'.
+    块文 取 'x'.
+    循 16 次 块文 取 块文+块文. 环
+    块存 取 密 其 UTF8 块文.
+    窗 其 发送 尾柄 2012 0 0.
+    试
+        若 (块存 其 大小)-1 != 65536 则 卒 'EOL guard setup requires one exact 65536-byte UTF8 chunk.'. 然
+        循 488 次 窗 其 发指 尾柄 2282 65536 块存. 环 # SCI_APPENDTEXT, not caret-based ADDTEXT.
+        窗 其 发指 尾柄 2282 18429 块存.
+        编 其 检查状态 尾柄.
+    救 原因
+        块存 其 关闭.
+        窗 其 发送 尾柄 2012 1 0.
+        卒 原因.
+    终
+    块存 其 关闭.
+    窗 其 发送 尾柄 2175 0 0.
+    窗 其 发送 尾柄 2012 1 0.
+    编 其 记保存 尾柄.
+    显 'SETUP: EOL current-byte guard bounded native append complete'.
     确认 (非 (尾文 其 查 'large')) 'grown document retains false initial large-mode flag'.
     位尾 取 0.
     循 3 次

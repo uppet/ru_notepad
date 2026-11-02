@@ -203,7 +203,7 @@
     },
     "tests/app_tabs_native.ru": {
       "before": null,
-      "after": "2a67f01af8b56ea6c3d4abc961e4af5c9e653b31d7510d7e88db604899329083"
+      "after": "bce2d5f7328eb772bb2d5d557ec72da312d1e2cef600361b21e4cc91a958e8e0"
     },
     "tests/language_catalog_native.ru": {
       "before": null,
