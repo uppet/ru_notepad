@@ -48,9 +48,13 @@ The new native WM_COMMAND checks reuse the main-linked tab fixture (89 total,
 36 new EOL checks): all three conversions, single Undo/Redo, mixed Unicode text,
 empty/newline-free/uniform no-ops, readonly and busy/modal/close/tab-menu guards,
 and current-byte threshold independent of initial large mode.
-The mandatory actual-EXE GUI gate covers all three modes, both selection
-directions, UTF-8 with/without BOM and UTF-16 LE/BE with BOM, save after conversion,
-save after Undo, Redo/save, and a fresh-process reopen. It checks exact disk bytes,
+The mandatory actual-EXE GUI gate uses 24 independent files: all three modes ×
+both selection directions × UTF-8 with/without BOM and UTF-16 LE/BE with BOM.
+Every file is saved after conversion, after Undo and after Redo, with exact disk
+bytes verified each time. A second fresh process reopens every final Redo/saved
+state. The intermediate Undo/saved state has exact disk-byte validation, not a
+separate fresh-process reopen. The observer waits for UI save completion before
+a single disk read; it never swallows permission errors. It checks exact disk bytes,
 status, menus in seven languages, large-file no-op and no implicit save.
 Portable receipt tests are not Windows execution evidence. A candidate is not
 validated until these gates pass on its exact published commit/runtime.
@@ -69,3 +73,16 @@ binding, so swapped integer constants and parameter units can be diagnosed
 without handwritten API-number reviews. This is a proposal, not a reproduced
 compiler bug. The UTF-8 checksum-manifest fix for descriptive Chinese ZIP names
 is a Python packaging defect, not a Ru defect.
+
+### Required preflight job
+
+The unchanged 17 cheap contract commands now run in a required Windows
+`cheap-preflight` job, before the 60-minute `windows-preview` job. Both check
+out the exact event SHA and reviewed compiler pin. Native compilation, all
+1576 fixture assertions, all GUI gates and strict packaging remain together
+on the main runner, with their original individual limits. The successful
+preflight receipt binds both source commits/trees and the GitHub run ID/attempt;
+it is revalidated before packaging and included as `evidence/cheap-preflight.json`.
+A failed-jobs-only rerun cannot reuse a receipt from an earlier run attempt:
+rerun all jobs so the required preflight is executed again. This split adds
+headroom without accepting skipped tests or increasing the main 60-minute limit.

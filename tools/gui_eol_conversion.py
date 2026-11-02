@@ -25,6 +25,38 @@ CHECKS = ('all_modes_exact', 'single_undo_redo', 'clean_savepoint', 'enter_indep
           'line_eol_status', 'no_final_newline', 'tab_isolation', 'noops',
           'large_mode_guard', 'seven_localized_menus', 'reopen_bytes_encoding_mode')
 LANGUAGES = ('en', 'zh-CN', 'ja', 'ko', 'es', 'ru', 'it')
+CASES = tuple((name, codec, bom, label, command, mode, eol, reverse)
+              for name, codec, bom, label in ENCODINGS
+              for command, mode, eol in MODES for reverse in (False, True))
+CASE_CHECKS = ('conversion_selection', 'undo_clean', 'redo', 'converted_save',
+               'undo_save', 'redo_save', 'fresh_reopen')
+
+
+def case_identity(case):
+    name, _, _, _, command, mode, _, reverse = case
+    return {'encoding': name, 'command': command, 'mode': mode, 'reverse': reverse}
+
+
+def expected_cases():
+    return [dict(case_identity(case), checks=dict.fromkeys(CASE_CHECKS, True)) for case in CASES]
+
+
+def save_ready(api, hwnd):
+    # Never inspect a file while the asynchronous writer may own its handle.
+    editor = api.editor(hwnd)
+    return (api.scalar(editor, 2140) == 0 and
+            bool(api.user.IsWindowEnabled(api.control(hwnd, 10))) and
+            not api.user.IsWindowVisible(api.control(hwnd, 901)) and
+            api.scalar(editor, 2159) == 0)
+
+
+def save_and_verify(api, process, hwnd, path, expected):
+    api.command(hwnd, 103)
+    ci.wait_gui(api, process, lambda: save_ready(api, hwnd), 'EOL save did not finish and unlock')
+    # A single final read; permission errors and wrong bytes remain fatal.
+    if path.read_bytes() != expected:
+        raise RuntimeError('EOL completed save has incorrect disk bytes')
+    api.responsive(hwnd)
 
 
 def converted(data, eol):
@@ -50,6 +82,11 @@ def validate_result(record, hashes):
         raise ValueError('EOL check inventory differs')
     if record.get('encodings') != [r[0] for r in ENCODINGS] or record.get('languages') != list(LANGUAGES):
         raise ValueError('EOL encoding/language inventory differs')
+    if record.get('cases') != expected_cases(): raise ValueError('EOL exact 24-case matrix incomplete')
+    for row in record['cases']:
+        if type(row.get('command')) is not int or type(row.get('mode')) is not int or type(row.get('reverse')) is not bool:
+            raise ValueError('EOL case identity types differ')
+        if any(v is not True for v in row['checks'].values()): raise ValueError('EOL case check not boolean')
     return True
 
 
@@ -57,8 +94,11 @@ def run(api, binary_dir, fixtures, evidence):
     binary_dir, fixtures, evidence = map(Path, (binary_dir, fixtures, evidence))
     hashes = {n: ci.sha(binary_dir/n) for n in ci.portable.RUNTIME_NAMES}
     paths = []
-    for name, codec, bom, _ in ENCODINGS:
-        path = fixtures/('eol-'+name+'.txt'); path.write_bytes(encoded(MIXED, codec, bom)); paths.append(path)
+    progress = [dict(case_identity(case), checks={}) for case in CASES]
+    for case in CASES:
+        name, codec, bom, _, command, _, _, reverse = case
+        path = fixtures/('eol-'+name+'-'+str(command)+('-reverse' if reverse else '-forward')+'.txt')
+        path.write_bytes(encoded(MIXED, codec, bom)); paths.append(path)
     noop_data = (b'', '汉😀'.encode(), b'a\nb\n')
     noops = []
     for i, data in enumerate(noop_data):
@@ -85,13 +125,6 @@ def run(api, binary_dir, fixtures, evidence):
             expected[:position].decode('utf-8')  # caret must not split a Unicode codepoint
         return editor
 
-    def save(process, hwnd, path, expected):
-        api.command(hwnd, 103)
-        ci.wait_gui(api, process, lambda: path.read_bytes() == expected and
-                    api.scalar(api.editor(hwnd), 2159) == 0 and
-                    not api.user.IsWindowVisible(api.control(hwnd, 901)), 'EOL save did not commit exact bytes')
-        api.responsive(hwnd)
-
     def exercise(process, hwnd):
         wait_loaded(process, hwnd, large)
         api.command(hwnd, 851)  # English status assertions; isolated settings restored afterwards.
@@ -109,41 +142,39 @@ def run(api, binary_dir, fixtures, evidence):
                 if buffer.value != catalog['command.eol_'+key][language]: raise RuntimeError('EOL menu translation differs')
                 if u.GetMenuState(u.GetMenu(hwnd), command, 0) & 8: raise RuntimeError('EOL command falsely asserts uniform document state')
         api.command(hwnd, 851)
-        for path, (_, codec, bom, status_encoding) in zip(paths, ENCODINGS):
+        for index, (path, case) in enumerate(zip(paths, CASES)):
+            name, codec, bom, status_encoding, command, mode, eol, reverse = case
+            checks = progress[index]['checks']
             activate_source(api, hwnd, path, len(opened)); editor = state(hwnd, MIXED, 0, 0)
-            original = path.read_bytes()
-            for command, mode, eol in MODES:
-                target = converted(MIXED, eol)
-                for reverse in (False, True):
-                    start, end = 3, len(MIXED)-3  # emoji and last Han character boundaries
-                    anchor, caret = (end, start) if reverse else (start, end)
-                    api.scalar(editor, 2160, anchor, caret)
-                    api.command(hwnd, command)
-                    state(hwnd, target, mode, 1)
-                    actual = (api.scalar(editor, 2009), api.scalar(editor, 2008))
-                    expected = tuple(len(converted(MIXED[:p], eol)) for p in (anchor, caret))
-                    if actual != expected: raise RuntimeError('EOL selection lost text positions/direction')
-                    if path.read_bytes() != original: raise RuntimeError('EOL command implicitly saved')
-                    api.command(hwnd, 201); state(hwnd, MIXED, mode, 0)
-                    if api.scalar(editor, 2174) != 0: raise RuntimeError('EOL conversion not one Undo group')
-                    api.command(hwnd, 202); state(hwnd, target, mode, 1)
-                    api.command(hwnd, 201); state(hwnd, MIXED, mode, 0)
-            # Actual saves preserve selected encoding/BOM, including save after Undo.
-            api.command(hwnd, 208); target = converted(MIXED, b'\n')
-            api.scalar(editor, 2160, 0, 0); api.responsive(hwnd)
-            ci.wait_gui(api, process, lambda: 'Line EOL: LF' in api.text(api.control(hwnd, 11)) and 'Enter: LF' in api.text(api.control(hwnd, 11)), 'Converted status did not settle')
-            status = api.text(api.control(hwnd, 11))
-            if 'Line EOL: LF' not in status or 'Enter: LF' not in status or status_encoding not in status:
-                raise RuntimeError('Converted EOL/encoding status differs: '+status)
-            save(process, hwnd, path, encoded(target, codec, bom))
-            api.command(hwnd, 201); state(hwnd, MIXED, 2, 1)
-            api.scalar(editor, 2160, 0, 0); api.responsive(hwnd)
-            ci.wait_gui(api, process, lambda: 'Line EOL: CRLF' in api.text(api.control(hwnd, 11)) and 'Enter: LF' in api.text(api.control(hwnd, 11)), 'Undo status did not settle')
-            status = api.text(api.control(hwnd, 11))
-            if 'Line EOL: CRLF' not in status or 'Enter: LF' not in status: raise RuntimeError('Undo status conflates content with Enter')
-            save(process, hwnd, path, original)
-            api.command(hwnd, 202); state(hwnd, target, 2, 1)
-            save(process, hwnd, path, encoded(target, codec, bom))
+            original = path.read_bytes(); target = converted(MIXED, eol)
+            start, end = 3, len(MIXED)-3  # emoji and last Han character boundaries
+            anchor, caret = (end, start) if reverse else (start, end)
+            api.scalar(editor, 2160, anchor, caret)
+            api.command(hwnd, command); state(hwnd, target, mode, 1)
+            actual = (api.scalar(editor, 2009), api.scalar(editor, 2008))
+            expected = tuple(len(converted(MIXED[:p], eol)) for p in (anchor, caret))
+            if actual != expected: raise RuntimeError('EOL selection lost text positions/direction')
+            if path.read_bytes() != original: raise RuntimeError('EOL command implicitly saved')
+            checks['conversion_selection'] = True
+            api.command(hwnd, 201); state(hwnd, MIXED, mode, 0)
+            if api.scalar(editor, 2174) != 0: raise RuntimeError('EOL conversion not one Undo group')
+            checks['undo_clean'] = True
+            api.command(hwnd, 202); state(hwnd, target, mode, 1); checks['redo'] = True
+            eol_label = {0:'CRLF', 1:'CR', 2:'LF'}[mode]
+            api.scalar(editor, 2160, 0, 0)
+            ci.wait_gui(api, process, lambda: ('Line EOL: '+eol_label) in api.text(api.control(hwnd, 11)) and
+                        ('Enter: '+eol_label) in api.text(api.control(hwnd, 11)), 'Converted status did not settle')
+            if status_encoding not in api.text(api.control(hwnd, 11)): raise RuntimeError('Converted encoding status differs')
+            save_and_verify(api, process, hwnd, path, encoded(target, codec, bom))
+            checks['converted_save'] = True
+            api.command(hwnd, 201); state(hwnd, MIXED, mode, 1)
+            api.scalar(editor, 2160, 0, 0)
+            ci.wait_gui(api, process, lambda: 'Line EOL: CRLF' in api.text(api.control(hwnd, 11)) and
+                        ('Enter: '+eol_label) in api.text(api.control(hwnd, 11)), 'Undo status did not settle')
+            save_and_verify(api, process, hwnd, path, original); checks['undo_save'] = True
+            api.command(hwnd, 202); state(hwnd, target, mode, 1)
+            save_and_verify(api, process, hwnd, path, encoded(target, codec, bom)); checks['redo_save'] = True
+            print('EOL conversion and three exact saves passed: '+path.stem, flush=True)
         for path, data in zip(noops, noop_data):
             activate_source(api, hwnd, path, len(opened)); editor = api.editor(hwnd)
             api.command(hwnd, 208); state(hwnd, data, 2, 0)
@@ -157,21 +188,28 @@ def run(api, binary_dir, fixtures, evidence):
 
     def reopen(process, hwnd):
         wait_loaded(process, hwnd, paths[-1]); api.command(hwnd, 851)
-        for path, (_, codec, bom, status_encoding) in zip(paths, ENCODINGS):
-            activate_source(api, hwnd, path, len(paths)); expected = converted(MIXED, b'\n')
-            state(hwnd, expected, 2, 0)
+        for index, (path, case) in enumerate(zip(paths, CASES)):
+            _, codec, bom, status_encoding, _, mode, eol, _ = case
+            activate_source(api, hwnd, path, len(paths)); expected = converted(MIXED, eol)
+            state(hwnd, expected, mode, 0)
             if path.read_bytes() != encoded(expected, codec, bom): raise RuntimeError('Reopen disk bytes differ')
             if status_encoding not in api.text(api.control(hwnd, 11)): raise RuntimeError('Reopen encoding/BOM differs')
+            progress[index]['checks']['fresh_reopen'] = True
+            print('EOL fresh-process reopen passed: '+path.stem, flush=True)
         return {}
 
     target = fixtures/'eol-runtime'; _copy_runtime(binary_dir, target, hashes)
     with isolated_settings():
         result = ci.run_gui(api, target, evidence, name='main-gui-eol-conversion', arguments=opened, exercise=exercise, log_prefix='eol-conversion')
-        result.update(schema='ru-notepad-eol-gui-v1', fixture_binary_sha256=hashes)
+        result.update(schema='ru-notepad-eol-gui-v1', fixture_binary_sha256=hashes, cases=progress)
         if result['passed']:
             target = fixtures/'eol-reopen-runtime'; _copy_runtime(binary_dir, target, hashes)
             result['reopen'] = ci.run_gui(api, target, evidence, name='main-gui-eol-reopen', arguments=paths, exercise=reopen, log_prefix='eol-reopen')
             result['reopen']['fixture_binary_sha256'] = hashes
-            if result['reopen']['passed']: result['checks'][CHECKS[-1]] = True
-            validate_result(result, hashes)
+            if result['reopen']['passed']:
+                result['checks'][CHECKS[-1]] = True
+                validate_result(result, hashes)
+            else:
+                result['passed'] = False
+                result['error'] = 'EOL fresh-process reopen phase failed; see nested receipt'
     return result

@@ -118,10 +118,15 @@ def package(config, product_receipt, output, mingw_root):
     require({name: sha(smoke.verify_identity(identity(runtime/name))) for name in expected} == expected, 'tested runtime changed')
     require(sha(Path(receipts['app_receipt']['final_binary']['path'])) == expected['ru_notepad.exe'], 'packaged EXE is not final bootstrap EXE')
     require(all(dependencies['binaries'][name]['sha256'] == expected[name] for name in smoke.DLLS), 'packaged DLL differs from build')
+    from bootstrap_preflight import validate as validate_preflight
+    import os
+    preflight_path = Path(config['preflight_receipt'])
+    preflight = validate_preflight(smoke.read_json(preflight_path), report['source_pins'],
+                                  os.environ['GITHUB_RUN_ID'], os.environ['GITHUB_RUN_ATTEMPT'])
     legacy_package.validate_dependency_sources(ROOT)
     pe = {name: legacy_package.inspect_pe(runtime/name, dependencies['tool_paths']['objdump'])
           for name in expected}
-    inputs = {'product_receipt': identity(product_receipt), 'smoke_receipt': identity(Path(config['smoke_receipt'])),
+    inputs = {'preflight_receipt': identity(preflight_path), 'product_receipt': identity(product_receipt), 'smoke_receipt': identity(Path(config['smoke_receipt'])),
               'recent_fixtures_receipt': identity(Path(config['recent_fixtures_receipt']))}
     native_evidence=collect_native_evidence(config,receipts['app_receipt'])
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -172,12 +177,16 @@ def package(config, product_receipt, output, mingw_root):
             'See docs/single-instance-and-tabs.md for behavior, limits and acceptance coverage.\n'
             'See docs/bootstrap-llvm-preview.md and preview-provenance.json for scope and pins.\n', encoding='utf-8')
         (stage/'evidence').mkdir()
+        shutil.copyfile(smoke.verify_identity(inputs['preflight_receipt']), stage/'evidence/cheap-preflight.json')
+        require(sha(stage/'evidence/cheap-preflight.json') == inputs['preflight_receipt']['sha256'], 'preflight copy changed')
         for name,record in native_evidence.items():
             shutil.copyfile(smoke.verify_identity(record),stage/'evidence'/name)
             require(sha(stage/'evidence'/name)==record['sha256'],'native evidence copy changed')
         provenance = {'schema': 'ru-notepad-bootstrap-preview-package-v1', 'preview': True,
             'full_release_acceptance': False, 'all_native_console_tests_bootstrap_compiled': False,
             'delivery_requires_independent_C_baseline_CI_review': True,
+            'cheap_preflight': preflight,
+            'cheap_preflight_receipt_sha256': inputs['preflight_receipt']['sha256'],
             'app_commit': report['source_pins']['app_source']['commit'],
             'app_tree': report['source_pins']['app_source']['tree'],
             'compiler_commit': report['source_pins']['ru_source']['commit'],

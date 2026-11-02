@@ -31,7 +31,7 @@
     },
     "docs/eol-conversion.md": {
       "before": null,
-      "after": "a40cd62e6b5b5db20af54166872ccea12c2a3e4c79e8dfab40fed93be8720f6c"
+      "after": "ad55ee32ab083181d57c1408ea718b0ec8a9a7459d171f91e5db73893f1d32e4"
     },
     "docs/language-highlighting.md": {
       "before": null,
@@ -281,6 +281,10 @@
       "before": null,
       "after": "0ebaed261b6b6095a783637d535955e4bf2c170bcf71d42bcb5fbc2b1c041c13"
     },
+    "tests/test_bootstrap_preflight.py": {
+      "before": null,
+      "after": "7f49546f70b0c94b34a119089e8fd7e4d755d52c3dab2eca6294eece0b01bbfc"
+    },
     "tests/test_bootstrap_receipt_integration.py": {
       "before": null,
       "after": "21f3cf0bce16186a79bc2e6c3c6f552eeb9f8df69d388ed38560ac120e0a0237"
@@ -296,6 +300,10 @@
     "tests/test_recent_files.py": {
       "before": null,
       "after": "e078a8b4dac97c63423910f925583f1ebb8a9138a682c6a14e44cffa84652b5f"
+    },
+    "tools/bootstrap_preflight.py": {
+      "before": null,
+      "after": "a8291f1b9b5e19d4e9786753187804f2b39c44bbd306a71fa1b98c7b13aada72"
     },
     "tools/build.py": {
       "before": "b22059c62a80a2e8861e0538a69cef2cddf4ea14d894cb9331f1e5c213955dae",
@@ -315,7 +323,7 @@
     },
     "tools/gui_eol_conversion.py": {
       "before": null,
-      "after": "caa9ab2fad4cb6a327e2be10e0b5d3dca8555627e8c9506abf75a08a896c494a"
+      "after": "38943806bb47647fa586cc8e6483c247e52b789deb5c8a16820b5f5ac2bfa8a8"
     },
     "tools/gui_fold_commands.py": {
       "before": null,
@@ -359,7 +367,7 @@
     },
     "tools/test_gui_eol_conversion.py": {
       "before": null,
-      "after": "e5f8d79a4088967d3cb769eaad00dbc423c1c04751797329917c68821ffc5a8a"
+      "after": "cd013485ba54df7ba6aa0ddc383999ba096bb9fd28e58075b689a6e4717e3672"
     },
     "tools/test_gui_fold_commands.py": {
       "before": null,

@@ -133,11 +133,12 @@ class PreviewContracts(unittest.TestCase):
             # This workflow uses a block mapping at fixed job indentation; fail
             # closed if its structure changes instead of silently skipping it.
             blocks=re.findall(r'^    env:\n((?:^      .*\n)+)',text,re.M)
-            self.assertEqual(len(blocks),1)
+            self.assertEqual(len(blocks),2)
             allowed={'github','needs','strategy','matrix','vars','secrets','inputs'}
-            for expression in re.findall(r'\$\{\{(.*?)\}\}',blocks[0]):
-                roots=re.findall(r'\b([A-Za-z_][A-Za-z_0-9]*)\s*(?:\.|\[)',expression)
-                self.assertTrue(set(roots)<=allowed,expression)
+            for expression in re.findall(r'\$\{\{(.*?)\}\}', ''.join(blocks)):
+                match=re.fullmatch(r'\s*([A-Za-z_][A-Za-z_0-9]*)(?:\.[A-Za-z_][A-Za-z_0-9-]*)+\s*',expression)
+                self.assertIsNotNone(match,expression)
+                self.assertIn(match.group(1),allowed,expression)
             self.assertNotIn('PREVIEW_OUTPUT:',blocks[0])
         check_job_env(workflow)
         for context in ('runner.temp','steps.pins.outputs.compiler_commit','env.TEMP','job.status'):
@@ -467,7 +468,7 @@ class PreviewContracts(unittest.TestCase):
     def test_cheap_contract_checks_precede_self_compilation_and_check_each_exit(self):
         workflow=(Path(__file__).resolve().parents[1]/'.github/workflows/bootstrap-preview.yml').read_text()
         start=workflow.index('      - name: Fail-closed cheap contract preflight')
-        end=workflow.index('      - name: Fresh three-stage',start)
+        end=workflow.index('      - name: Record successful source-bound preflight',start)
         body=workflow[start:end]
         for command in ("python -m unittest discover -s editor/tests -p 'test_bootstrap*.py' -v",
                         'python editor/tools/test_gui_fold_commands.py -v',

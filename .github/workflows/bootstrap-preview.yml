@@ -9,12 +9,9 @@ concurrency:
   group: bootstrap-preview-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  windows-preview:
-    permissions:
-      contents: read
-      actions: read # Download only the pinned prior preview for the fold negative control.
-    # Independent layered preview. The old complete C-native workflow still runs;
-    # its results must be reviewed separately before delivering this ZIP.
+  cheap-preflight:
+    outputs:
+      receipt: ${{ steps.receipt.outputs.receipt }}
     runs-on: windows-latest
     timeout-minutes: 60
     env:
@@ -38,6 +35,124 @@ jobs:
       - name: Check out exact preview source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ github.sha }}
+          path: editor
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - name: Read reviewed immutable compiler pin
+        id: pins
+        run: python editor/tools/prepare_bootstrap_preview.py pins
+      - name: Check out exact validated native bootstrap compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: uppet/ru-language
+          ref: ${{ steps.pins.outputs.compiler_commit }}
+          path: language
+          persist-credentials: false
+      - name: Install native DLL-only MinGW tools
+        id: msys2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+      - name: Enable the same native fixture compiler
+        run: |
+          $ErrorActionPreference = 'Stop'
+          "PATH=${{ steps.msys2.outputs.msys2-location }}/mingw64/bin;$env:PATH" >> $env:GITHUB_ENV
+          New-Item -ItemType Directory -Path "$env:PREVIEW_OUTPUT" -ErrorAction Stop | Out-Null
+      - name: Confirm preflight native compiler discovery
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expected = "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin/gcc.exe"
+          $actual = (Get-Command gcc -ErrorAction Stop).Source
+          if ([System.IO.Path]::GetFullPath($actual) -ine [System.IO.Path]::GetFullPath($expected)) { throw 'Preflight compiler differs from selected MinGW tool' }
+          gcc --version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Fail-closed cheap contract preflight before self-compilation
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m unittest discover -s editor/tests -p 'test_bootstrap*.py' -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_gui_eol_conversion.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_gui_fold_commands.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_gui_language_catalog.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tests/test_preview_language_sample.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tests/test_lexilla_languages.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_language_catalog.py --ru-root language
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_syntax_runtime_catalog.py --ru-root language --output "$env:PREVIEW_OUTPUT/syntax-catalog-controls"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_windows_ci.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_package.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_gui_instance_tabs.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_i18n.py --catalog-only
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_i18n_models.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_single_instance_state.py --ru-root language --output "$env:PREVIEW_OUTPUT/instance-state-controls"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_single_instance_admission.py --ru-root language --output "$env:PREVIEW_OUTPUT/instance-admission-controls"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -I editor/tools/test_markdown_step_metrics.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-step-controls"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -I editor/tools/test_markdown_bulk_guards.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-bulk-guard-controls"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Record successful source-bound preflight
+        id: receipt
+        run: python editor/tools/bootstrap_preflight.py --ru-root language --output "$env:PREVIEW_OUTPUT/cheap-preflight.json"
+      - name: Preserve preflight evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bootstrap-cheap-preflight
+          path: ${{ runner.temp }}/ru-bootstrap-preview/
+          if-no-files-found: error
+          retention-days: 14
+  windows-preview:
+    needs: cheap-preflight
+    permissions:
+      contents: read
+      actions: read # Download only the pinned prior preview for the fold negative control.
+    # Independent layered preview. The old complete C-native workflow still runs;
+    # its results must be reviewed separately before delivering this ZIP.
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      PREFLIGHT_RECEIPT: ${{ needs.cheap-preflight.outputs.receipt }}
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONOPTIMIZE: '0'
+      CC: gcc
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: core.autocrlf
+      GIT_CONFIG_VALUE_0: 'false'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Initialize preview output from runner environment
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (!$env:RUNNER_TEMP) { throw 'RUNNER_TEMP unavailable' }
+          $previewOutput = Join-Path $env:RUNNER_TEMP 'ru-bootstrap-preview'
+          "PREVIEW_OUTPUT=$previewOutput" >> $env:GITHUB_ENV
+      - name: Check out exact preview source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
           path: editor
           fetch-depth: 0
           persist-credentials: false
@@ -88,43 +203,6 @@ jobs:
           $actual = (Get-Command gcc -ErrorAction Stop).Source
           if ([System.IO.Path]::GetFullPath($actual) -ine [System.IO.Path]::GetFullPath($config.mingw_tool_paths.cc)) { throw 'Native fixture compiler differs from pinned MinGW tool' }
           gcc --version
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      - name: Fail-closed cheap contract preflight before self-compilation
-        run: |
-          $ErrorActionPreference = 'Stop'
-          python -m unittest discover -s editor/tests -p 'test_bootstrap*.py' -v
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python editor/tools/test_gui_eol_conversion.py -v
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python editor/tools/test_gui_fold_commands.py -v
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python editor/tools/test_gui_language_catalog.py -v
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python editor/tests/test_preview_language_sample.py -v
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python editor/tests/test_lexilla_languages.py -v
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python editor/tools/test_language_catalog.py --ru-root language
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python editor/tools/test_syntax_runtime_catalog.py --ru-root language --output "$env:PREVIEW_OUTPUT/syntax-catalog-controls"
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python editor/tools/test_windows_ci.py -v
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python editor/tools/test_package.py -v
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python editor/tools/test_gui_instance_tabs.py -v
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python editor/tools/test_i18n.py --catalog-only
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python editor/tools/test_i18n_models.py
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python editor/tools/test_single_instance_state.py --ru-root language --output "$env:PREVIEW_OUTPUT/instance-state-controls"
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python editor/tools/test_single_instance_admission.py --ru-root language --output "$env:PREVIEW_OUTPUT/instance-admission-controls"
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python -I editor/tools/test_markdown_step_metrics.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-step-controls"
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python -I editor/tools/test_markdown_bulk_guards.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-bulk-guard-controls"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Reproduce fold-command defect in pinned previously accepted preview
         # One transition's evidence; the 14-day artifact is not a permanent CI dependency.

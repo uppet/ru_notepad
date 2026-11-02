@@ -105,7 +105,12 @@ def prepare(ru, output, mingw):
               'app_baseline':baseline, 'bootstrap_directory':str(directory),
               'verification':str(directory/'verification.json'), 'tool_paths':tools, 'tool_sha256':hashes(tools),
               'mingw_tool_paths':native, 'mingw_tool_sha256':hashes(native)}
+    from bootstrap_preflight import validate as validate_preflight
+    preflight = validate_preflight(json.loads(os.environ['PREFLIGHT_RECEIPT']),
+                                  {'app_source': app_pin, 'ru_source': ru_pin},
+                                  os.environ['GITHUB_RUN_ID'], os.environ['GITHUB_RUN_ATTEMPT'])
     output.mkdir(parents=True)
+    (output/'cheap-preflight.json').write_text(json.dumps(preflight, indent=2)+'\n', encoding='utf-8')
     (output/'base-config.json').write_text(json.dumps(config,indent=2)+'\n',encoding='utf-8')
     with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
         env.write('RU_LLVM_CLANG='+tools['clang']+'\n')
@@ -130,7 +135,7 @@ def builds(output):
             raise
     gate = {key:str(output/name/'build-receipt.json') for key,name in
             [('app_receipt','app'),('argv_probe_receipt','argv'),('dll_probe_receipt','dll')]}
-    gate.update(dependencies_receipt=str(output/'dependencies/dependencies-receipt.json'),
+    gate.update(preflight_receipt=str(output/'cheap-preflight.json'), dependencies_receipt=str(output/'dependencies/dependencies-receipt.json'),
                 owned_root=str(output/'smoke-runtime'), smoke_receipt=str(output/'smoke-acceptance.json'),
                 recent_fixtures_receipt=str(output/'recent-fixtures/recent-fixtures.json'))
     (output/'gate-config.json').write_text(json.dumps(gate,indent=2)+'\n',encoding='utf-8')
