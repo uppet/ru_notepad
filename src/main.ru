@@ -1263,6 +1263,10 @@ A 取 {'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':�
     若 号 == 204 则 窗 其 发送 编辑柄 2178 0 0. 然
     若 号 == 205 则 窗 其 发送 编辑柄 2179 0 0. 然
     若 号 == 206 则 窗 其 发送 编辑柄 2013 0 0. 然
+    若 号 >= 207 且 号 <= 209 则
+        若 (当前 其 查 'large') 或 (A 其 查 'modalDepth') != 0 则 得 空. 然
+        编 其 转换行尾 编辑柄 ([0,2,1][号-207]).
+    然
     若 号 == 301 或 号 == 302 则 寻栏 真. 得 空. 然
     若 号 == 307 则 寻栏 假. 得 空. 然
     若 号 == 303 或 号 == 304 或 号 == 305 或 号 == 308 则
@@ -1393,9 +1397,9 @@ A 取 {'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':�
 算 菜单:
     # Parallel primitive arrays keep the pinned compiler's ABI analysis bounded.
     组键们 取 ['menu.file', 'menu.edit', 'menu.search', 'menu.encoding', 'menu.language', 'menu.view', 'menu.settings', 'menu.ui_language', 'menu.help'].
-    组量们 取 [11, 6, 4, 6, 5, 7, 5, 8, 1].
-    号们 取 [101, 102, 108, 109, 103, 104, 105, 111, 112, 113, 106, 201, 202, 203, 204, 205, 206, 301, 302, 303, 308, 401, 402, 403, 404, 405, 406, 701, 702, 703, 704, 705, 501, 502, 503, 504, 505, 506, 507, 801, 802, 803, 804, 805, 850, 851, 852, 853, 854, 855, 856, 857, 601].
-    键们 取 ['command.new', 'command.open', 'command.open_windows1252', 'command.open_gbk', 'command.save', 'command.save_as', 'command.close_tab', 'command.previous_tab', 'command.next_tab', 'command.open_pending_shell', 'command.exit', 'command.undo', 'command.redo', 'command.cut', 'command.copy', 'command.paste', 'command.select_all', 'command.find', 'command.replace', 'command.find_next', 'command.find_previous', 'command.save_utf8', 'command.save_utf8_bom', 'command.save_utf16le', 'command.save_utf16be', 'command.save_windows1252', 'command.save_gbk', 'command.language_plain', 'command.language_cpp', 'command.language_json', 'command.language_ru', 'command.language_markdown', 'command.toggle_wrap', 'command.zoom_in', 'command.zoom_out', 'command.zoom_reset', 'command.fold_all', 'command.unfold_all', 'command.toggle_markdown_folds', 'command.register_association', 'command.default_apps', 'command.unregister_association', 'command.registration_status', 'command.single_instance', 'language.system', 'language.en', 'language.zh_cn', 'language.ja', 'language.ko', 'language.es', 'language.ru', 'language.it', 'command.about'].
+    组量们 取 [11, 9, 4, 6, 5, 7, 5, 8, 1].
+    号们 取 [101, 102, 108, 109, 103, 104, 105, 111, 112, 113, 106, 201, 202, 203, 204, 205, 206, 207, 208, 209, 301, 302, 303, 308, 401, 402, 403, 404, 405, 406, 701, 702, 703, 704, 705, 501, 502, 503, 504, 505, 506, 507, 801, 802, 803, 804, 805, 850, 851, 852, 853, 854, 855, 856, 857, 601].
+    键们 取 ['command.new', 'command.open', 'command.open_windows1252', 'command.open_gbk', 'command.save', 'command.save_as', 'command.close_tab', 'command.previous_tab', 'command.next_tab', 'command.open_pending_shell', 'command.exit', 'command.undo', 'command.redo', 'command.cut', 'command.copy', 'command.paste', 'command.select_all', 'command.eol_crlf', 'command.eol_lf', 'command.eol_cr', 'command.find', 'command.replace', 'command.find_next', 'command.find_previous', 'command.save_utf8', 'command.save_utf8_bom', 'command.save_utf16le', 'command.save_utf16be', 'command.save_windows1252', 'command.save_gbk', 'command.language_plain', 'command.language_cpp', 'command.language_json', 'command.language_ru', 'command.language_markdown', 'command.toggle_wrap', 'command.zoom_in', 'command.zoom_out', 'command.zoom_reset', 'command.fold_all', 'command.unfold_all', 'command.toggle_markdown_folds', 'command.register_association', 'command.default_apps', 'command.unregister_association', 'command.registration_status', 'command.single_instance', 'language.system', 'language.en', 'language.zh_cn', 'language.ja', 'language.ko', 'language.es', 'language.ru', 'language.it', 'command.about'].
     主 取 窗 其 成功 ((窗 其 CreateMenu) 其 调用 []) 'CreateMenu'.
     子 取 空.
     试

@@ -19,7 +19,7 @@
     },
     "README.md": {
       "before": "4fec039d9e1f3129d90c9662c2202fca8809d9c1e340dae429130cfe41cf9c7c",
-      "after": "a4097dab1fd30bc2bbf3807524a7c86879be9517b6927b29d71965dc785947de"
+      "after": "cae30d1dbc1d6b39213addc0736cde2aaae37544afeb5f9c21875fccd54ad02f"
     },
     "THIRD_PARTY_NOTICES.md": {
       "before": "e7afbfb064500e19f9863579f1185e37b8a9e1002ef2050d0bd201564d015ece",
@@ -28,6 +28,10 @@
     "docs/bootstrap-llvm-preview.md": {
       "before": null,
       "after": "f517b5cca909dd3c1538b08b7ebf3cc0d98d3988a6129a7fe28107f71e3bd834"
+    },
+    "docs/eol-conversion.md": {
+      "before": null,
+      "after": "a40cd62e6b5b5db20af54166872ccea12c2a3e4c79e8dfab40fed93be8720f6c"
     },
     "docs/language-highlighting.md": {
       "before": null,
@@ -67,7 +71,7 @@
     },
     "locales/ui.json": {
       "before": "954dcda145db13b05b3f753c43eba56223f09479cf93955edb5944d571b2fb35",
-      "after": "ee0177686cc77a1f2ac6821085972fb386e6b859162f34a3c96e6dd1f0af0bae"
+      "after": "f0c4aa24d8254c0fd624797b17a37302480e7e2f1485b650fa813f93fb30c3a3"
     },
     "native/lexilla/LexObjC.cxx": {
       "before": null,
@@ -91,11 +95,11 @@
     },
     "packaging/application-native-oracle-development.json": {
       "before": null,
-      "after": "e2116a0fac8f7e179b08c7692a9ba24d721bf8da211a59f1b3313ce528fc139e"
+      "after": "12c7105210daaf65e30198735316e2cd9f8f09a6ec837d86aec958ace9b161cb"
     },
     "packaging/application-native-oracle.json": {
       "before": null,
-      "after": "b37b3ebe95c49a2af3139f11acc501e3944e0c1965061bbbd7be4cc685828bb4"
+      "after": "509aad3763eedec8d016d4eb6d95978416d9f5fd7afd54e76a503d260f2a1bac"
     },
     "packaging/licenses/Godot.txt": {
       "before": null,
@@ -117,13 +121,17 @@
       "before": "58b0e02b8b4602ebb90ce7847b3a1c2aaed5dcf3424231bde2e3e27f42d77cce",
       "after": "9206518f358a4474199b0727671a422f8f669a1dda2effea7a10c1c25c3a7318"
     },
+    "src/editor.ru": {
+      "before": "8970ba9ed54095cb2df707e606f15140d76c639b705cbee5949c23e36e752c3e",
+      "after": "00250b92f3cf407f74a9c0dd3d1f1d1d6b0477cd877113959123915c4e6fcab3"
+    },
     "src/i18n_catalog.ru": {
       "before": "e2b6d48d25529c7d631652980ec45d6a5dc837467e505e58fbe581a352fe84db",
-      "after": "461bdbf1ab009ee7658766a52c4e675041f81cff68a8cced5d3cbddfaa407d61"
+      "after": "36e83d87055b109be8eba07f4ef872d4bebde465e829fa567e522c33216b9349"
     },
     "src/main.ru": {
       "before": "3dcb97ca641f2fb8068785517aedcbbda6d3c65ca179683601f76508d71dd734",
-      "after": "f80058ff7356f76c2997b8ecaa5edf134ae2b9d57d5f4fb6501fb1f859d7db94"
+      "after": "63771768e6601b8ccb74ec5850b4b23f1716de5bb2852773b0a4602e8e8c1558"
     },
     "src/markdown_policy.ru": {
       "before": "e9658000e1c5fbe5fb49403af2a27eb11a0efb9d4bf5261617b760688ea2d720",
@@ -195,7 +203,7 @@
     },
     "tests/app_tabs_native.ru": {
       "before": null,
-      "after": "f12781a5521441017cfd19488da4f060c2fbe45be4706a05f240ece308d1a7d9"
+      "after": "2a67f01af8b56ea6c3d4abc961e4af5c9e653b31d7510d7e88db604899329083"
     },
     "tests/language_catalog_native.ru": {
       "before": null,
@@ -263,7 +271,7 @@
     },
     "tests/test_bootstrap_instance_tabs.py": {
       "before": null,
-      "after": "dd4717ed6009289decd260800dc1808048b50efc15e82b6fc75215b76c590a20"
+      "after": "686f4d128d342f26827c5e7998a4a1604080952e530e41bef54183dc10b5bde3"
     },
     "tests/test_bootstrap_native_wrapper.py": {
       "before": null,
@@ -305,6 +313,10 @@
       "before": null,
       "after": "e438628e8fbf5a87d51f3afec3fa93c9e1461f15435e96aee4c3afa08bb109fe"
     },
+    "tools/gui_eol_conversion.py": {
+      "before": null,
+      "after": "caa9ab2fad4cb6a327e2be10e0b5d3dca8555627e8c9506abf75a08a896c494a"
+    },
     "tools/gui_fold_commands.py": {
       "before": null,
       "after": "35005eba9aea6e4b06dca9633a681b5c28324b2b1fae36c48f1b008658a0c411"
@@ -345,6 +357,10 @@
       "before": "43ba2326b43981154c61aab60b8458a48847866c6163455daa5d9ce8c16007aa",
       "after": "505f4c0faad97fb29e96d8d5169874e61c4581bcb1c9c88d8b2d0d4312376397"
     },
+    "tools/test_gui_eol_conversion.py": {
+      "before": null,
+      "after": "e5f8d79a4088967d3cb769eaad00dbc423c1c04751797329917c68821ffc5a8a"
+    },
     "tools/test_gui_fold_commands.py": {
       "before": null,
       "after": "edd33a8be0b7f4e88b9e96ba5c436a2be3db6a0cfcd28c7d595aaca25deb243f"
@@ -359,11 +375,11 @@
     },
     "tools/test_i18n.py": {
       "before": "efe744d29412beab1f4d44b8e116267706bca32d0d435f95bb07512a28705d5f",
-      "after": "31c5de626a2b0f0049d89a6d122a22530be9cf5a1e92225d393cbe6c074fefc8"
+      "after": "3e824702eef9c77686135cf980833ed2c582efb9d6c1d4eec86ac1d299be82b1"
     },
     "tools/test_i18n_models.py": {
       "before": "507b687a6d1c6e98f9287beb168eb10b2eb7648457ca9e60f1aae51d089531cc",
-      "after": "fe18fe8f8ea5bf4c29d6e17f04adc1d332826b1c9bd7bcce0c11b790621aa7dc"
+      "after": "ec110276b4ce834508728d1ff3664cd8f2d5047093c3cfa05cfa1ab50faa3a66"
     },
     "tools/test_i18n_runner.py": {
       "before": "594f3e83c1acd5ff78e27c4c3da40ffb322dbc25c220a17adca7a567884f03d3",

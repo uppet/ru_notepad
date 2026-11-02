@@ -51,18 +51,18 @@
     "path_redaction": "Machine-specific prefix removed; source-relative path, line, column and diagnostic retained."
   },
   "isolated_development_step_limit": 2000000,
-  "actual_steps": 233714,
-  "elapsed_seconds": 120.580905,
+  "actual_steps": 234134,
+  "elapsed_seconds": 113.360784,
   "other_analysis_limits": "unchanged",
   "compiler_files_modified": false,
   "modules": 32,
   "shapes": 73,
   "callbacks": 2,
   "module_sha256": {
-    "app:src/main.ru": "f80058ff7356f76c2997b8ecaa5edf134ae2b9d57d5f4fb6501fb1f859d7db94",
+    "app:src/main.ru": "63771768e6601b8ccb74ec5850b4b23f1716de5bb2852773b0a4602e8e8c1558",
     "compiler:rulang/stdlib/密.ru": "174a64c1c03499469ad825429db98577a314958cfb070d8c87bd03c4ca23700d",
     "app:src/i18n.ru": "e5ed0325977748d3567d60e61f13f17e3db31c8b5afa7c34eec5703d649cbe85",
-    "app:src/i18n_catalog.ru": "461bdbf1ab009ee7658766a52c4e675041f81cff68a8cced5d3cbddfaa407d61",
+    "app:src/i18n_catalog.ru": "36e83d87055b109be8eba07f4ef872d4bebde465e829fa567e522c33216b9349",
     "app:src/i18n_settings.ru": "ac750ca70c937f482b762f165197db38e9c21406b61b7c3ac3f282e632532daa",
     "app:src/recent_files.ru": "d0f454ecfc8b02cb75fa5150ffd2b0b6df986dac13bf4a48c84037209e55d95a",
     "app:src/recent_files_policy.ru": "326374b9b89ac63dc107330907c79ed213b37903e46ca913874956a0c7bb8e2c",
@@ -75,7 +75,7 @@
     "app:src/single_instance_policy.ru": "02dede33d2cc559faf72e184d0a1a3cbe29dce5c63e05b8b78f313d93da2a028",
     "app:src/single_instance_settings.ru": "f00d8415d83345eadf3ffd8fe08ce8fe57ae35c61aa6f6a454b535821e20657e",
     "app:src/i18n_layout.ru": "abdb065ec9a6d2e9b352853285bba6fbc761ba6a4f42cadc82c854c023aa05a7",
-    "app:src/editor.ru": "8970ba9ed54095cb2df707e606f15140d76c639b705cbee5949c23e36e752c3e",
+    "app:src/editor.ru": "00250b92f3cf407f74a9c0dd3d1f1d1d6b0477cd877113959123915c4e6fcab3",
     "app:src/document.ru": "708f48fe5ee9c86e140e9aff4b5b4dac0cb1b7e2127527a6ea6ec479142dc273",
     "app:src/ui_arguments.ru": "d27989270478cf0772ed8aab567ee45116be30d9800ba58de6bdc1a8062a9307",
     "app:src/status.ru": "73bbfe0910226d6bfb2e9a78ffe1d2ea5f8a2c1605f67b3b1fe9eb26366fe767",
@@ -92,5 +92,5 @@
     "app:src/associations_policy.ru": "02c96b9d8c38953d460ddac56fab08ac7b59a78bc840668152b3b14ce3a3382f",
     "app:src/file_drop.ru": "c61a8679075a971d5fdc9e0aac01d4adb6f9e143fb5c05abbb381b7124b5c9ec"
   },
-  "oracle_sha256": "b37b3ebe95c49a2af3139f11acc501e3944e0c1965061bbbd7be4cc685828bb4"
+  "oracle_sha256": "509aad3763eedec8d016d4eb6d95978416d9f5fd7afd54e76a503d260f2a1bac"
 }

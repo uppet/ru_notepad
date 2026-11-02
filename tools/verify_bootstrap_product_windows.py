@@ -65,6 +65,8 @@ def validate_product(report, ci):
     validate_languages(report.get('language_catalog'), hashes)
     from gui_fold_commands import validate_result as validate_folds
     validate_folds(report.get('fold_commands'), hashes)
+    from gui_eol_conversion import validate_result as validate_eols
+    validate_eols(report.get('eol_conversion'), hashes)
 
 
 def collect_product_gui(ci, api, runtime, fixtures, evidence, report, save):
@@ -141,6 +143,9 @@ def verify(config, output):
             save()
             from gui_fold_commands import run as run_folds
             report['fold_commands'] = run_folds(api, runtime, fixtures, evidence)
+            save()
+            from gui_eol_conversion import run as run_eols
+            report['eol_conversion'] = run_eols(api, runtime, fixtures, evidence)
             save()
         smoke.validate_receipts(config)
         validate_receipt(Path(config['dependencies_receipt']))

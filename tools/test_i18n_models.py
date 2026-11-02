@@ -7,8 +7,8 @@ The old menu IDs/order and every old Lexilla style/colour pair were reviewed
 against src/main.ru and src/syntax.ru at 5a619410ea93ec0b8fb5197a4780b615a308e4f9.
 The constants below deliberately do not read git, import the catalog generator,
 or derive expected values from the production arrays. The eight UI-language
-commands, Find Previous, Open Pending Shell Files and Single Instance are the
-explicit additions to the original 42 commands (53 total). English labels anchor the catalog keys' meanings as well as their ID/group associations.
+commands, Find Previous, Open Pending Shell Files, Single Instance and three EOL
+conversion actions are the explicit additions to the original 42 commands (56 total). English labels anchor the catalog keys' meanings as well as their ID/group associations.
 
 This is source-model and consumer-wiring verification, not a Ru interpreter,
 compiler-budget check, native Windows execution, or GUI acceptance test.
@@ -48,6 +48,9 @@ EXPECTED_MENUS = (
         (204, 'command.copy', '&Copy\tCtrl+C'),
         (205, 'command.paste', '&Paste\tCtrl+V'),
         (206, 'command.select_all', 'Select &All\tCtrl+A'),
+        (207, 'command.eol_crlf', 'Convert entire text to CRLF (and Enter) (&W)'),
+        (208, 'command.eol_lf', 'Convert entire text to LF (and Enter) (&L)'),
+        (209, 'command.eol_cr', 'Convert entire text to CR (and Enter) (&M)'),
     )),
     ('menu.search', '&Search', (
         (301, 'command.find', '&Find...\tCtrl+F'),
@@ -308,16 +311,16 @@ class FlatModelTests(unittest.TestCase):
             changed = replace_array(changed, name, value)
         return self.syntax.replace(section, changed, 1)
 
-    def test_exact_nine_groups_and_fifty_three_command_mappings(self):
+    def test_exact_nine_groups_and_fifty_six_command_mappings(self):
         model = validate_menu(self.main)
         self.assertEqual(len(model), 9)
         commands = [command for _, group in model for command in group]
-        self.assertEqual(len(commands), 53)
-        self.assertEqual(len({number for number, _ in commands}), 53)
-        self.assertEqual(len({key for _, key in commands}), 53)
+        self.assertEqual(len(commands), 56)
+        self.assertEqual(len({number for number, _ in commands}), 56)
+        self.assertEqual(len({key for _, key in commands}), 56)
 
     def test_all_original_command_ids_keep_their_group_and_order(self):
-        original = tuple((group, tuple(number for number, _ in commands if number not in (308, 113, 805)))
+        original = tuple((group, tuple(number for number, _ in commands if number not in (308, 113, 805, 207, 208, 209)))
                          for group, commands in validate_menu(self.main)
                          if group != 'menu.ui_language')
         self.assertEqual(original, LEGACY_COMMAND_GROUPS)
@@ -343,19 +346,19 @@ class FlatModelTests(unittest.TestCase):
         validate_menu_catalog(self.catalog)
 
     def test_menu_arrays_are_primitive_with_exact_group_boundaries(self):
-        self.assertEqual(self.menu_arrays['组量们'], [11, 6, 4, 6, 5, 7, 5, 8, 1])
+        self.assertEqual(self.menu_arrays['组量们'], [11, 9, 4, 6, 5, 7, 5, 8, 1])
         for name, kind in MENU_ARRAY_TYPES.items():
             self.assertTrue(all(type(value) is kind for value in self.menu_arrays[name]))
 
     def test_every_changed_command_id_is_rejected(self):
-        for index in range(53):
+        for index in range(56):
             ids = self.menu_arrays['号们'].copy()
             ids[index] += 1000
             with self.subTest(index=index), self.assertRaises(ValueError):
                 validate_menu(self.mutated_menu(号们=ids))
 
     def test_every_command_key_misassignment_is_rejected(self):
-        for index in range(53):
+        for index in range(56):
             keys = self.menu_arrays['键们'].copy()
             following = (index + 1) % len(keys)
             keys[index], keys[following] = keys[following], keys[index]
@@ -363,7 +366,7 @@ class FlatModelTests(unittest.TestCase):
                 validate_menu(self.mutated_menu(键们=keys))
 
     def test_every_removed_command_is_rejected_even_with_consistent_lengths(self):
-        for index in range(53):
+        for index in range(56):
             arrays = deepcopy(self.menu_arrays)
             del arrays['号们'][index]
             del arrays['键们'][index]

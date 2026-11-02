@@ -117,6 +117,80 @@
     确认 ((编 其 文本 (应用 其 编辑柄)) == '') 'replacement blank is empty'.
     确认 (非 (应用 其 脏 (应用 其 当前))) 'replacement blank remains clean'.
     确认 ((状态 其 查 'closeRun') == 空) 'successful batch releases transaction'.
+    # EOL conversion is dispatched through the real window procedure, never a
+    # direct SCI_CONVERTEOLS test substitution. Reuse this main-linked fixture.
+    尾柄 取 应用 其 编辑柄.
+    尾文 取 应用 其 当前.
+    原尾 取 '汉😀\r\nb\rc\n尾'.
+    目标们 取 ['汉😀\r\nb\r\nc\r\n尾','汉😀\nb\nc\n尾','汉😀\rb\rc\r尾'].
+    模式们 取 [0,2,1].
+    位尾 取 0.
+    循 3 次
+        编 其 设文本 尾柄 原尾.
+        窗 其 发送 主 273 (207+位尾) 0.
+        确认 ((编 其 文本 尾柄) == 目标们[位尾]) 'EOL command converts exact mixed Unicode bytes without final newline'.
+        确认 ((窗 其 发送 尾柄 2030 0 0) 其 数 == 模式们[位尾]) 'EOL command sets independent Enter mode'.
+        确认 (应用 其 脏 尾文) 'actual EOL text conversion dirties savepoint'.
+        窗 其 发送 主 273 201 0.
+        确认 ((编 其 文本 尾柄) == 原尾 且 非 (应用 其 脏 尾文)) 'one Undo restores original mixed bytes and clean savepoint'.
+        确认 ((窗 其 发送 尾柄 2030 0 0) 其 数 == 模式们[位尾]) 'Undo preserves independently chosen Enter mode'.
+        窗 其 发送 主 273 202 0.
+        确认 ((编 其 文本 尾柄) == 目标们[位尾]) 'one Redo restores converted exact bytes'.
+        位尾 取 位尾+1.
+    环
+    编 其 设文本 尾柄 '汉😀'.
+    窗 其 发送 主 273 208 0.
+    确认 ((编 其 文本 尾柄) == '汉😀' 且 非 (应用 其 脏 尾文)) 'newline-free conversion preserves text and clean state'.
+    确认 ((窗 其 发送 尾柄 2174 0 0) 其 数 == 0 且 (窗 其 发送 尾柄 2030 0 0) 其 数 == 2) 'newline-free conversion sets Enter without empty Undo'.
+    编 其 设文本 尾柄 ''.
+    窗 其 发送 主 273 209 0.
+    确认 ((编 其 文本 尾柄) == '' 且 非 (应用 其 脏 尾文)) 'empty conversion does not add a line or dirty state'.
+    确认 ((窗 其 发送 尾柄 2174 0 0) 其 数 == 0 且 (窗 其 发送 尾柄 2030 0 0) 其 数 == 1) 'empty conversion sets Enter without empty Undo'.
+    编 其 设文本 尾柄 'a\nb\n'.
+    窗 其 发送 主 273 208 0.
+    确认 (非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'already normalized conversion is clean and undo-free'.
+    # Guarded commands do not even change the insertion preference.
+    护键们 取 ['busy','tabMenuOpen','modalDepth','closeRun'].
+    护值们 取 [真,真,1,{}].
+    还值们 取 [假,假,0,空].
+    位尾 取 0.
+    循 4 次
+        状态 其 增 护键们[位尾] 护值们[位尾].
+        窗 其 发送 主 273 207 0.
+        状态 其 增 护键们[位尾] 还值们[位尾].
+        确认 ((编 其 文本 尾柄) == 'a\nb\n' 且 (窗 其 发送 尾柄 2030 0 0) 其 数 == 2) 'busy/modal/tab-menu/close guard preserves bytes and Enter'.
+        位尾 取 位尾+1.
+    环
+    尾文 其 增 'large' 真.
+    窗 其 发送 主 273 207 0.
+    尾文 其 增 'large' 假.
+    确认 ((编 其 文本 尾柄) == 'a\nb\n' 且 (窗 其 发送 尾柄 2030 0 0) 其 数 == 2) 'large document guard preserves bytes and Enter'.
+    窗 其 发送 尾柄 2171 1 0.
+    窗 其 发送 主 273 207 0.
+    窗 其 发送 尾柄 2171 0 0.
+    确认 ((编 其 文本 尾柄) == 'a\nb\n' 且 (窗 其 发送 尾柄 2030 0 0) 其 数 == 2) 'readonly conversion preserves bytes and Enter'.
+    窗 其 发送 主 273 403 0.
+    确认 ((尾文 其 查 'encoding') == 1200 且 (尾文 其 查 'bom') 且 (应用 其 脏 尾文)) 'selected UTF16 BOM encoding is independently dirty'.
+    窗 其 发送 主 273 207 0.
+    窗 其 发送 主 273 201 0.
+    确认 ((编 其 文本 尾柄) == 'a\nb\n' 且 (尾文 其 查 'encoding') == 1200 且 (尾文 其 查 'bom')) 'conversion Undo preserves selected encoding and BOM'.
+    确认 (应用 其 脏 尾文) 'text Undo does not clear encoding-only dirty state'.
+    窗 其 发送 主 273 401 0.
+    尾文 其 增 'encodingDirty' 假. # fixture-only cleanup of intentionally unsaved encoding choice
+    # A normally-created document can grow beyond the initial-open threshold.
+    # Verify the current-byte guard independently of the per-document large flag.
+    大文 取 'x'.
+    循 25 次 大文 取 大文+大文. 环
+    大文 取 'a\r\n'+大文[0:31999997].
+    编 其 设文本 尾柄 大文.
+    确认 (非 (尾文 其 查 'large')) 'grown document retains false initial large-mode flag'.
+    位尾 取 0.
+    循 3 次
+        窗 其 发送 主 273 (207+位尾) 0.
+        确认 ((窗 其 发送 尾柄 2183 0 0) 其 数 == 32000000 且 (窗 其 发送 尾柄 2030 0 0) 其 数 == 0 且 非 (应用 其 脏 尾文) 且 (窗 其 发送 尾柄 2174 0 0) 其 数 == 0) 'current-byte threshold rejects conversion even without large flag'.
+        位尾 取 位尾+1.
+    环
+    编 其 设文本 尾柄 ''.
     确认 (应用 其 关程序) 'native fixture closes normally'.
     显 'TOTAL PASS: '+(次数[0] 为 句).
     得 0.

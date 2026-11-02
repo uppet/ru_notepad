@@ -94,6 +94,8 @@ jobs:
           $ErrorActionPreference = 'Stop'
           python -m unittest discover -s editor/tests -p 'test_bootstrap*.py' -v
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_gui_eol_conversion.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python editor/tools/test_gui_fold_commands.py -v
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python editor/tools/test_gui_language_catalog.py -v
@@ -152,7 +154,7 @@ jobs:
       - name: Same-binary active GUI budgets, recent files and instance/tab acceptance
         run: python editor/tools/verify_bootstrap_product_windows.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --output "$env:PREVIEW_OUTPUT/product"
       - name: Package only the exact GUI-tested bootstrap preview and verify ZIP bytes
-        run: python editor/tools/package_bootstrap_preview.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --product-receipt "$env:PREVIEW_OUTPUT/product/product-preview.json" --mingw-root "${{ steps.msys2.outputs.msys2-location }}/mingw64" --output "$env:PREVIEW_OUTPUT/dist/ru_notepad-language-fold-commands-preview-windows-x64.zip"
+        run: python editor/tools/package_bootstrap_preview.py --config "$env:PREVIEW_OUTPUT/gate-config.json" --product-receipt "$env:PREVIEW_OUTPUT/product/product-preview.json" --mingw-root "${{ steps.msys2.outputs.msys2-location }}/mingw64" --output "$env:PREVIEW_OUTPUT/dist/ru_notepad-换行格式转换预览版-Windows-x64.zip"
       - name: Preserve exact tested runtime as NOT ACCEPTED diagnostic evidence
         if: always()
         id: diagnostic_runtime

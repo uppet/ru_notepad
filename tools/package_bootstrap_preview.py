@@ -27,7 +27,7 @@ import package as legacy_package
 import preview_language_sample as language_sample
 
 ROOT = Path(__file__).resolve().parents[1]
-PREVIEW_DOCS = ('bootstrap-llvm-preview.md', 'recent-files.md', 'single-instance-and-tabs.md', 'language-highlighting.md')
+PREVIEW_DOCS = ('bootstrap-llvm-preview.md', 'recent-files.md', 'single-instance-and-tabs.md', 'language-highlighting.md', 'eol-conversion.md')
 
 
 def verify_zip(path, files):
@@ -92,6 +92,10 @@ def validate_markdown_provenance(provenance, report, ci):
             'packaged Markdown scope differs from product receipt')
 
 
+def write_checksum(output):
+    output.with_suffix(output.suffix+'.sha256').write_text(sha(output)+'  '+output.name+'\n', encoding='utf-8')
+
+
 def package(config, product_receipt, output, mingw_root):
     pending = output.with_name(output.name + '.pending')
     require(not output.exists() and not pending.exists(), 'refuse overwrite preview ZIP or pending output')
@@ -150,6 +154,8 @@ def package(config, product_receipt, output, mingw_root):
             'ru_notepad — bootstrap LLVM Windows x64 PREVIEW\n\n'
             'The included editor was compiled by the native bootstrap compiler through LLVM IR.\n'
             '95 language modes include every bundled Notepad++ mode plus Ru and Markdown.\n'
+            'Edit converts all existing EOLs to CRLF/LF/CR; Undo restores text, while Enter keeps the selected mode.\n'
+            'See docs/eol-conversion.md before trying mixed-EOL or encoding changes.\n'
             'The real Windows language menu and lexical coverage gates are mandatory.\n'
             'The same EXE and DLL bytes passed B7 functional smoke, the four existing product GUI\n'
             'gates (active-stage budgets unchanged), recent-file checks, and the instance_tabs GUI gate.\n'
@@ -181,7 +187,7 @@ def package(config, product_receipt, output, mingw_root):
             'product_receipt_sha256': inputs['product_receipt']['sha256'],
             'smoke_receipt_sha256': inputs['smoke_receipt']['sha256'],
             'markdown_acceptance': markdown_scope,
-            'gui_gates': sorted(product.GUI_NAMES), 'recent_files_gui': True, 'instance_tabs_gui': True,
+            'gui_gates': sorted(product.GUI_NAMES), 'recent_files_gui': True, 'instance_tabs_gui': True, 'eol_conversion_gui': True,
             'stage3_recent_fixtures': dict(CASES),
             'recent_fixtures_receipt_sha256': inputs['recent_fixtures_receipt']['sha256'],
             'experimental_wij_enabled': False,
@@ -210,7 +216,7 @@ def package(config, product_receipt, output, mingw_root):
               'zip': identity(output), 'files': files, 'runtime_sha256': expected, 'evidence': inputs, 'native_evidence':native_evidence,
               'frontend_ir_sha256':receipts['app_receipt']['frontend_ir_sha256']}
     output.with_suffix('.receipt.json').write_text(json.dumps(result, indent=2)+'\n', encoding='utf-8')
-    output.with_suffix(output.suffix+'.sha256').write_text(sha(output)+'  '+output.name+'\n', encoding='ascii')
+    write_checksum(output)
     return result
 
 

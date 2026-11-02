@@ -27,8 +27,16 @@ class PreviewContracts(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name).resolve()
 
+    def test_descriptive_unicode_zip_checksum(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output=Path(directory)/'ru_notepad-换行格式转换预览版-Windows-x64.zip'
+            output.write_bytes(b'synthetic checksum fixture, not a package')
+            package.write_checksum(output)
+            self.assertEqual(output.with_suffix('.zip.sha256').read_text(encoding='utf-8'),
+                             build.sha(output)+'  '+output.name+'\n')
+
     def test_preview_package_documents_instance_tabs_acceptance(self):
-        self.assertEqual(package.PREVIEW_DOCS,('bootstrap-llvm-preview.md','recent-files.md','single-instance-and-tabs.md','language-highlighting.md'))
+        self.assertEqual(package.PREVIEW_DOCS,('bootstrap-llvm-preview.md','recent-files.md','single-instance-and-tabs.md','language-highlighting.md','eol-conversion.md'))
         for name in package.PREVIEW_DOCS:
             self.assertTrue((package.ROOT/'docs'/name).is_file())
         source=Path(package.__file__).read_text()
@@ -414,7 +422,7 @@ class PreviewContracts(unittest.TestCase):
             return build.verify_proof(proof,**kwargs)
         with patch.object(recent_fixtures,'validate_toolchain'),patch.object(recent_fixtures,'verify_proof',side_effect=verify_fields) as verifier:
             recent_fixtures.validate_report(report,app,compiler,dependencies)
-            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16, 'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':53, 'single_instance_native':18, 'single_instance_busy_native':23, 'language_catalog_native':678})
+            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16, 'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':89, 'single_instance_native':18, 'single_instance_busy_native':23, 'language_catalog_native':678})
             self.assertEqual(verifier.call_count,12)
             bad=copy.deepcopy(report);del bad['results']['single_instance_busy_native']
             with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)
@@ -463,6 +471,7 @@ class PreviewContracts(unittest.TestCase):
         body=workflow[start:end]
         for command in ("python -m unittest discover -s editor/tests -p 'test_bootstrap*.py' -v",
                         'python editor/tools/test_gui_fold_commands.py -v',
+                        'python editor/tools/test_gui_eol_conversion.py -v',
                         'python editor/tools/test_windows_ci.py -v',
                         'python editor/tools/test_package.py -v',
                         'python editor/tools/test_gui_instance_tabs.py -v',
@@ -473,7 +482,7 @@ class PreviewContracts(unittest.TestCase):
                         'python -I editor/tools/test_markdown_step_metrics.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-step-controls"',
                         'python -I editor/tools/test_markdown_bulk_guards.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-bulk-guard-controls"'):
             self.assertIn(command+'\n          if ($LASTEXITCODE) { exit $LASTEXITCODE }',body)
-        self.assertEqual(body.count('if ($LASTEXITCODE)'),16)
+        self.assertEqual(body.count('if ($LASTEXITCODE)'),17)
 
     def test_recent_fixtures_require_exact_individual_assertions_and_total(self):
         good=b'PASS: a\nPASS: b\nTOTAL PASS: 2\n'

@@ -1105,5 +1105,32 @@
     "es": "No se pudo guardar la lista de archivos recientes. Los documentos abiertos no han cambiado.",
     "ru": "Не удалось сохранить список недавних файлов. Открытые документы не изменены.",
     "it": "Impossibile salvare l’elenco dei file recenti. I documenti aperti non sono stati modificati."
+  },
+  "command.eol_crlf": {
+    "en": "Convert entire text to CRLF (and Enter) (&W)",
+    "zh-CN": "全文转为 CRLF（Enter 同步） (&W)",
+    "ja": "文書全体を CRLF に変換（Enter も変更） (&W)",
+    "ko": "전체 텍스트를 CRLF(으)로 변환 (Enter 포함) (&W)",
+    "es": "Convertir todo a CRLF (también Intro) (&W)",
+    "ru": "Весь текст в CRLF (и Enter) (&W)",
+    "it": "Converti tutto in CRLF (anche Invio) (&W)"
+  },
+  "command.eol_lf": {
+    "en": "Convert entire text to LF (and Enter) (&L)",
+    "zh-CN": "全文转为 LF（Enter 同步） (&L)",
+    "ja": "文書全体を LF に変換（Enter も変更） (&L)",
+    "ko": "전체 텍스트를 LF(으)로 변환 (Enter 포함) (&L)",
+    "es": "Convertir todo a LF (también Intro) (&L)",
+    "ru": "Весь текст в LF (и Enter) (&L)",
+    "it": "Converti tutto in LF (anche Invio) (&L)"
+  },
+  "command.eol_cr": {
+    "en": "Convert entire text to CR (and Enter) (&M)",
+    "zh-CN": "全文转为 CR（Enter 同步） (&M)",
+    "ja": "文書全体を CR に変換（Enter も変更） (&M)",
+    "ko": "전체 텍스트를 CR(으)로 변환 (Enter 포함) (&M)",
+    "es": "Convertir todo a CR (también Intro) (&M)",
+    "ru": "Весь текст в CR (и Enter) (&M)",
+    "it": "Converti tutto in CR (anche Invio) (&M)"
   }
 }

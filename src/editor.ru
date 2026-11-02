@@ -227,6 +227,19 @@ _块长 取 65536.
     终
     得 空.
 法
+# Conversion is one native UndoGroup; Enter mode is a separate per-document
+# insertion preference and intentionally survives Undo/Redo. No text extraction.
+算 转换行尾 柄 模式 为 数:
+    若 模式 < 0 或 模式 > 2 则 得 假. 然
+    若 (窗 其 发送 柄 2140 0 0) 其 数 != 0 则 得 假. 然
+    若 (窗 其 发送 柄 2183 0 0) 其 数 >= 大文件模式字节 则 得 假. 然
+    窗 其 发送 柄 2382 0 0.
+    窗 其 发送 柄 2029 模式 0. # SCI_CONVERTEOLS owns undo and selection adjustment.
+    检查状态 柄.
+    窗 其 发送 柄 2031 模式 0. # SCI_SETEOLMODE does not rewrite existing text.
+    得 真.
+法
+
 算 已变 柄:
     得 非 ((窗 其 发送 柄 2159 0 0) 其 为空).
 法
