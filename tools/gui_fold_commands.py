@@ -101,6 +101,20 @@ def validate_result(record, hashes):
     return True
 
 
+def activate_source(api, hwnd, source, opened_count):
+    """Select an already CLI-opened synthetic file through actual Next Tab.
+
+    No repeated DROPFILES allocations or test-harness budget overrides.
+    Include the possible initial untitled tab in the bounded traversal.
+    """
+    wanted = source.name+' · ru_notepad'
+    for _ in range(opened_count + 1):
+        if api.text(hwnd) == wanted: return
+        api.command(hwnd, 112)
+        api.responsive(hwnd)
+    raise RuntimeError('CLI-opened fold source is not reachable: '+source.name)
+
+
 def run(api, binary_dir, fixtures, evidence):
     binary_dir, fixtures, evidence = map(Path, (binary_dir, fixtures, evidence))
     hashes = {name: ci.sha(binary_dir/name) for name in ci.portable.RUNTIME_NAMES}
@@ -115,12 +129,21 @@ def run(api, binary_dir, fixtures, evidence):
     large.write_bytes(b'int main() {\n' + b' '*(LARGE_BYTES-16) + b'\n}\n')
     assert large.stat().st_size == LARGE_BYTES
     original_hashes = {path: ci.sha(path) for path in [*sources.values(), json_source, large]}
+    opened = [*sources.values(), json_source, large]
     def exercise(process, hwnd):
+        # Last title can appear one timer before busy finalization. Next Tab is
+        # still ignored then; also require the final unlocked controls state.
+        api.user.IsWindowEnabled.argtypes = [wintypes.HWND]
+        api.user.IsWindowEnabled.restype = wintypes.BOOL
+        ci.wait_gui(api, process, lambda: api.text(hwnd) == large.name+' · ru_notepad' and
+                    api.scalar(api.editor(hwnd), 2140) == 0 and
+                    bool(api.user.IsWindowEnabled(api.control(hwnd, 10))) and
+                    not api.user.IsWindowVisible(api.control(hwnd, 901)),
+                    'CLI fold fixture batch did not finish opening')
         results = []; safety = {}
         for name, _, data, header, child in CASES:
             source = sources[name]
-            api.drop(api.editor(hwnd), [source.resolve()])
-            ci.wait_gui(api, process, lambda: api.text(hwnd) == source.name+' · ru_notepad', 'Fold source did not open: '+name)
+            activate_source(api, hwnd, source, len(opened))
             editor = api.editor(hwnd); api.verify_owned_handles(process.pid, hwnd, editor)
             api.command(hwnd, COMMANDS[name])
             def ready():
@@ -166,8 +189,7 @@ def run(api, binary_dir, fixtures, evidence):
             results.append({'language': name, 'command': COMMANDS[name], 'header': header, 'child': child, 'bytes': len(data), 'checks': checks})
         # The shipped JSON configuration has no folding capability. Selecting a
         # native lexer is not enough to authorize collapse: this is a negative case.
-        api.drop(api.editor(hwnd), [json_source.resolve()])
-        ci.wait_gui(api, process, lambda: api.text(hwnd) == json_source.name+' · ru_notepad', 'JSON safety source did not open')
+        activate_source(api, hwnd, json_source, len(opened))
         editor = api.editor(hwnd); api.command(hwnd, COMMANDS['json'])
         if api.scalar(editor, 4002) != 120 or api.scalar(editor, 2243, 2) != 0:
             raise RuntimeError('JSON did not select configured non-folding capability')
@@ -182,8 +204,7 @@ def run(api, binary_dir, fixtures, evidence):
                     raise RuntimeError('JSON non-folding route changed state')
         if ci.sha(json_source) != original_hashes[json_source]: raise RuntimeError('JSON source file modified')
         safety['json_capability_noop'] = True
-        api.drop(api.editor(hwnd), [large.resolve()])
-        ci.wait_gui(api, process, lambda: api.text(hwnd) == large.name+' · ru_notepad', 'Large fold source did not open')
+        activate_source(api, hwnd, large, len(opened))
         editor = api.editor(hwnd)
         if api.scalar(editor, 4002) != 0 or not any(label in api.text(api.control(hwnd, 11)) for label in LARGE_STATUS):
             raise RuntimeError('Large source did not enter actual plain large-file mode')
@@ -205,7 +226,7 @@ def run(api, binary_dir, fixtures, evidence):
         safety['large_mode_noop'] = True
         return {'cases': results, 'safety': safety, 'large_bytes': LARGE_BYTES}
     with isolated_settings():
-        result = ci.run_gui(api, target, evidence, name='main-gui-fold-commands', exercise=exercise, log_prefix='fold-commands')
+        result = ci.run_gui(api, target, evidence, name='main-gui-fold-commands', arguments=[path.resolve() for path in opened], exercise=exercise, log_prefix='fold-commands')
     result.update(schema='ru-notepad-fold-commands-gui-v1', fixture_binary_sha256=hashes)
     if result['passed']: validate_result(result, hashes)
     return result

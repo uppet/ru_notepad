@@ -15,6 +15,35 @@ def receipt(hashes=HASHES):
                             bytes=len(data), checks={key: True for key in gui.CHECKS})
                        for name, _, data, header, child in gui.CASES])
 
+class TabSelection(unittest.TestCase):
+    class API:
+        def __init__(self, titles): self.titles=titles; self.index=0; self.commands=[]
+        def text(self, hwnd): return self.titles[self.index]
+        def command(self, hwnd, command):
+            self.commands.append(command); self.index=(self.index+1)%len(self.titles)
+        def responsive(self, hwnd): pass
+    def test_cli_batch_tabs_reachable_without_drop_allocations(self):
+        from pathlib import Path
+        titles=['Untitled · ru_notepad']+[str(i)+'.c · ru_notepad' for i in range(9)]
+        api=self.API(titles)
+        for i in reversed(range(9)):
+            gui.activate_source(api,1,Path(str(i)+'.c'),9)
+            self.assertEqual(api.text(1),str(i)+'.c · ru_notepad')
+        self.assertTrue(all(c==112 for c in api.commands))
+    def test_cli_open_waits_for_busy_readonly_to_clear(self):
+        import inspect
+        source=inspect.getsource(gui.run)
+        self.assertIn('api.scalar(api.editor(hwnd), 2140) == 0',source)
+        self.assertIn('api.user.IsWindowEnabled(api.control(hwnd, 10))',source)
+        self.assertIn('not api.user.IsWindowVisible(api.control(hwnd, 901))',source)
+        self.assertNotIn('api.drop(',source)
+    def test_missing_cli_tab_fails_boundedly(self):
+        from pathlib import Path
+        api=self.API(['Untitled · ru_notepad'])
+        with self.assertRaises(RuntimeError):gui.activate_source(api,1,Path('missing.c'),9)
+        self.assertEqual(len(api.commands),10)
+
+
 class Contract(unittest.TestCase):
     def reject(self, record):
         with self.assertRaises(ValueError): gui.validate_result(record, HASHES)

@@ -307,7 +307,7 @@
     },
     "tools/gui_fold_commands.py": {
       "before": null,
-      "after": "f62675e53a451d7f1de41bf22bd12c37a02973517507cff3f68d602ebc7f3391"
+      "after": "35005eba9aea6e4b06dca9633a681b5c28324b2b1fae36c48f1b008658a0c411"
     },
     "tools/gui_instance_tabs.py": {
       "before": null,
@@ -347,7 +347,7 @@
     },
     "tools/test_gui_fold_commands.py": {
       "before": null,
-      "after": "1a7812f0fd05ce706b2ba5e51a1ac23b698181f403fe7bf088baad0b828e70ed"
+      "after": "edd33a8be0b7f4e88b9e96ba5c436a2be3db6a0cfcd28c7d595aaca25deb243f"
     },
     "tools/test_gui_instance_tabs.py": {
       "before": null,
