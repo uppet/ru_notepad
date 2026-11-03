@@ -416,6 +416,7 @@ class PreviewContracts(unittest.TestCase):
              'source_sha256':{'app_source':{},'ru_source':{'host.py':build.sha(host)}},
              'tool_paths':{},'tool_sha256':{},'target_triple':'triple','data_layout':'layout'}
         report={'schema':recent_fixtures.SCHEMA,'status':'passed','source_pins':app['source_pins'],
+                'compile_policy':dict(recent_fixtures.COMPILE_POLICY),
                 'stage3_sha256':build.sha(compiler),'results':{}}
         originals={}
         for name,count in recent_fixtures.CASES.items():
@@ -434,6 +435,7 @@ class PreviewContracts(unittest.TestCase):
             out=root/(name+'.stdout');out.write_text('PASS: item\n'*count+'TOTAL PASS: '+str(count)+'\n')
             err=root/(name+'.stderr');err.write_bytes(b'')
             report['results'][name]={'executed':True,'timeout':False,'returncode':0,'assertions':count,
+                'compile_returncode':0,'compile_timeout':False,'compile_timing':{'started':1.0,'finished':2.0,'elapsed_seconds':1.0},
                 **{key:build.identity(path) for key,path in [('binary',binary),('ir',ir),('proof',proof_path),('stdout',out),('stderr',err)]}}
         dependency_directory=root/'dependency-source';dependency_directory.mkdir()
         binaries={}

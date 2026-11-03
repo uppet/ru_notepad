@@ -137,6 +137,7 @@ class ReceiptIntegration(unittest.TestCase):
         for name in smoke.DLLS:
             p=originals/name;p.write_text('synthetic '+name);deps['binaries'][name]=build.identity(p)
         report={'schema':recent.SCHEMA,'status':'passed','source_pins':app['source_pins'],
+                'compile_policy':dict(recent.COMPILE_POLICY),
                 'stage3_sha256':app['bootstrap']['stage3_sha256'],'results':{},
                 'runtime_dependencies':recent.install_runtime_dependencies(output,app,deps)}
         wrappers={}
@@ -156,6 +157,7 @@ class ReceiptIntegration(unittest.TestCase):
             stdout=output/(name+'.stdout');stdout.write_text('PASS: fixture\n'*count+'TOTAL PASS: '+str(count)+'\n')
             stderr=output/(name+'.stderr');stderr.write_text('')
             report['results'][name]={'executed':True,'timeout':False,'returncode':0,'assertions':count,
+                'compile_returncode':0,'compile_timeout':False,'compile_timing':{'started':1.0,'finished':2.0,'elapsed_seconds':1.0},
                 **{key:build.identity(path) for key,path in (('binary',binary),('ir',ir),('proof',proof_path),('stdout',stdout),('stderr',stderr))}}
         with patch.object(recent,'validate_toolchain'): # external executable discovery only
             recent.validate_report(report,app,self.compiler,deps)

@@ -6,14 +6,17 @@ acceptance. All input, emitted IR, linked binary and executed binary identities
 remain pinned to the same application/compiler/tool snapshot as B11.
 """
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
+import time
 
 # Resolve only this reviewed tools directory, including under Python -I.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -90,6 +93,7 @@ def validate_report(report, app, compiler, dependencies):
     require(report.get('stage3_sha256') == app['bootstrap']['stage3_sha256']
             and sha(compiler) == app['bootstrap']['stage3_sha256'], 'recent fixture used another stage3')
     require(set(report.get('results',{})) == set(CASES), 'recent native fixture missing')
+    validate_compile_policy(report.get('compile_policy'))
     validate_runtime_dependencies(report, app, dependencies)
     frozen = {str((Path(pin['path'])/name).resolve()):digest for key,pin in app['source_pins'].items()
               for name,digest in app['source_sha256'][key].items()}
@@ -99,6 +103,7 @@ def validate_report(report, app, compiler, dependencies):
     root = Path(app['source_pins']['app_source']['path'])
     for name,count in CASES.items():
         row=report['results'][name]
+        validate_compile_result(row)
         require(row.get('returncode') == 0 and row.get('assertions') == count
                 and row.get('executed') is True and row.get('timeout') is False, 'recent native fixture not normally passed')
         for key in ('binary','ir','proof','stdout','stderr'):
@@ -110,6 +115,133 @@ def validate_report(report, app, compiler, dependencies):
                      triple=app['target_triple'], layout=app['data_layout'], frozen=frozen, tools=app['tool_paths'], proof_path=Path(row['proof']['path']))
 
 
+
+# Only independent compile processes overlap. No application/native fixture runs
+# until every compilation and proof has passed. Two-item waves avoid a backlog
+# of already-submitted jobs after failure; all report writes stay on this thread.
+COMPILE_WORKERS = 2
+COMPILE_TIMEOUT = 600
+EXECUTE_TIMEOUT = 60
+CLEANUP_TIMEOUT = 30
+COMPILE_POLICY = {'max_workers':COMPILE_WORKERS,'compile_timeout_seconds':COMPILE_TIMEOUT,
+                  'execute_timeout_seconds':EXECUTE_TIMEOUT,'cleanup_timeout_seconds':CLEANUP_TIMEOUT}
+
+
+def validate_compile_policy(policy):
+    require(policy == COMPILE_POLICY and all(type(value) is int for value in policy.values()),
+            'fixture compile policy changed')
+
+
+
+def validate_compile_result(row):
+    require(type(row.get('compile_returncode')) is int and row['compile_returncode'] == 0
+            and row.get('compile_timeout') is False
+            and 'compile_error' not in row and 'compile_cleanup' not in row,
+            'fixture compilation did not normally pass')
+    timing = row.get('compile_timing')
+    require(isinstance(timing,dict) and set(timing) == {'started','finished','elapsed_seconds'},
+            'fixture compile timing missing or changed')
+    require(all(type(value) in (int,float) and math.isfinite(value) and value >= 0
+                for value in timing.values()), 'fixture compile timing is not finite nonnegative numeric')
+    require(timing['finished'] >= timing['started']
+            and timing['elapsed_seconds'] == timing['finished']-timing['started'],
+            'fixture compile timing is inconsistent')
+
+
+def timed_compile(compile_one, job):
+    started = time.monotonic()
+    try:
+        result = compile_one(job)
+    except BaseException as exc:
+        finished = time.monotonic()
+        exc.compile_timing = {'started':started,'finished':finished,'elapsed_seconds':finished-started}
+        raise
+    finished = time.monotonic()
+    result.compile_timing = {'started':started,'finished':finished,'elapsed_seconds':finished-started}
+    return result
+
+
+
+def run_compile_process(command, *, cwd, env):
+    process = subprocess.Popen(command, cwd=cwd, env=env,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        stdout, stderr = process.communicate(timeout=COMPILE_TIMEOUT)
+    except BaseException as cause:
+        # The wrapper launches stage3/clang/linker children. Killing just the
+        # Python wrapper (subprocess.run's default) could orphan those children.
+        cleanup_error = None
+        cleanup_record = {'pid':process.pid,'attempted':False,'returncode':None}
+        try:
+            if process.poll() is None:
+                cleanup_record['attempted'] = True
+                cleanup = subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
+                                         capture_output=True, timeout=CLEANUP_TIMEOUT)
+                cleanup_record['returncode'] = cleanup.returncode
+                if cleanup.returncode != 0:
+                    cleanup_error = RuntimeError('compile process-tree cleanup failed')
+        except Exception as exc:
+            cleanup_error = exc
+            cleanup_record['error'] = str(exc)
+        finally:
+            if process.poll() is None:
+                process.kill()
+            try:
+                stdout, stderr = process.communicate(timeout=CLEANUP_TIMEOUT)
+            except subprocess.TimeoutExpired as exc:
+                error=RuntimeError('compile process-tree cleanup did not finish')
+                cleanup_record['error']=str(exc)
+                error.stdout=getattr(exc,'output',None) or getattr(cause,'output',None) or b''
+                error.stderr=getattr(exc,'stderr',None) or getattr(cause,'stderr',None) or b''
+                error.cleanup=cleanup_record
+                raise error from exc
+        stdout = stdout or getattr(cause,'output',None) or b''
+        stderr = stderr or getattr(cause,'stderr',None) or b''
+        if cleanup_error is not None:
+            error = RuntimeError('compile process-tree cleanup unconfirmed: '+str(cleanup_error))
+            error.stdout, error.stderr, error.cleanup = stdout, stderr, cleanup_record
+            raise error from cause
+        cause.cleanup = cleanup_record
+        cause.stdout, cause.stderr = stdout, stderr
+        if isinstance(cause, subprocess.TimeoutExpired):
+            cause.output, cause.stderr = stdout, stderr
+        raise
+    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+
+
+def compile_fixture_jobs(jobs, compile_one, record_one):
+    """Bounded waves; callbacks consuming results run only on the caller thread.
+
+    In-flight jobs retain their original 600-second per-process deadline. On any
+    failure cancel unstarted work, join running work, record the entire wave in
+    CASES order, and reject before submitting another wave or executing natives.
+    """
+    with ThreadPoolExecutor(max_workers=COMPILE_WORKERS) as pool:
+        for start in range(0, len(jobs), COMPILE_WORKERS):
+            wave = jobs[start:start+COMPILE_WORKERS]
+            futures = [pool.submit(timed_compile, compile_one, job) for job in wave]
+            results = []
+            failed = False
+            fatal = None
+            for future in futures:
+                try:
+                    result = future.result()
+                    if result.returncode != 0:
+                        failed = True
+                except BaseException as exc:
+                    result = exc
+                    failed = True
+                    if not isinstance(exc,Exception):fatal = exc
+                results.append(result)
+                if failed:
+                    for pending in futures:
+                        pending.cancel()
+            for job, result in zip(wave, results):
+                record_one(job, result)
+            if fatal is not None:raise fatal
+            require(not failed, 'recent fixture compile wave failed; native execution not started')
+
+
 def verify(config, output):
     require(sys.platform == 'win32', 'real Windows required for recent native fixtures')
     receipts=smoke.validate_receipts(config);app=receipts['app_receipt']
@@ -119,7 +251,7 @@ def verify(config, output):
         require(not output.resolve().is_relative_to(Path(pin['path']).resolve()), 'fixture output cannot dirty source')
     output.mkdir(parents=True)
     report={'schema':SCHEMA,'status':'failed','source_pins':app['source_pins'],
-            'stage3_sha256':app['bootstrap']['stage3_sha256'],'results':{}}
+            'stage3_sha256':app['bootstrap']['stage3_sha256'],'compile_policy':dict(COMPILE_POLICY),'results':{}}
     save=lambda:(output/'recent-fixtures.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
     save()
     ru=Path(app['source_pins']['ru_source']['path']);root=Path(app['source_pins']['app_source']['path'])
@@ -136,20 +268,41 @@ def verify(config, output):
     env=module.llvm_environment()
     try:
         report['runtime_dependencies']=install_runtime_dependencies(output, app, dependencies);save()
+        jobs=[]
         for name,count in CASES.items():
             source=root/'tests'/(name+'.ru');binary=output/(name+'.exe');ir=output/(name+'.ll');proof_path=output/(name+'.proof.json')
             command=list(map(str,native_compile_command(ru,source,compiler,root,tools,proof_path,ir,binary)))
-            row={'executed':False,'timeout':False,'command':command};report['results'][name]=row;save()
-            built=subprocess.run(command,cwd=ru,env=env,capture_output=True,timeout=600)
-            (output/(name+'.build.stdout.log')).write_bytes(built.stdout)
-            (output/(name+'.build.stderr.log')).write_bytes(built.stderr)
-            require(built.returncode == 0,'recent fixture compile failed')
+            report['results'][name]={'executed':False,'timeout':False,'command':command}
+            jobs.append(dict(name=name,count=count,source=source,binary=binary,ir=ir,proof=proof_path,command=command))
+        save()
+        def compile_one(job):
+            return run_compile_process(job['command'],cwd=ru,env=env)
+        def record_one(job,result):
+            row=report['results'][job['name']]
+            stdout=getattr(result,'stdout',None) or b''
+            stderr=getattr(result,'stderr',None) or b''
+            (output/(job['name']+'.build.stdout.log')).write_bytes(stdout)
+            (output/(job['name']+'.build.stderr.log')).write_bytes(stderr)
+            row['compile_timeout']=isinstance(result,subprocess.TimeoutExpired)
+            row['compile_returncode']=getattr(result,'returncode',None)
+            if isinstance(result,BaseException):row['compile_error']=type(result).__name__+': '+str(result)
+            if hasattr(result,'cleanup'):row['compile_cleanup']=result.cleanup
+            if hasattr(result,'compile_timing'):row['compile_timing']=result.compile_timing
+            save()
+        compile_fixture_jobs(jobs,compile_one,record_one)
+        # Validate every output before allowing the first native executable.
+        for job in jobs:
+            name=job['name'];source=job['source'];binary=job['binary'];ir=job['ir'];proof_path=job['proof']
+            row=report['results'][name]
             proof_data=smoke.read_json(proof_path)
             verify_proof(proof_data,source=source,compiler=compiler,ir=ir,binary=binary,
                          triple=app['target_triple'],layout=app['data_layout'],frozen=frozen,tools=tools,proof_path=proof_path)
             row.update(binary=identity(binary),ir=identity(ir),proof=identity(proof_path));save()
+        for job in jobs:
+            name=job['name'];count=job['count'];binary=job['binary'];row=report['results'][name]
             validate_runtime_dependencies(report, app, dependencies, output)
-            ran=subprocess.run([str(binary)],cwd=output,env=env,capture_output=True,timeout=60)
+            for key in ('binary','ir','proof'):smoke.verify_identity(row[key])
+            ran=subprocess.run([str(binary)],cwd=output,env=env,capture_output=True,timeout=EXECUTE_TIMEOUT)
             out=output/(name+'.stdout.log');err=output/(name+'.stderr.log')
             out.write_bytes(ran.stdout);err.write_bytes(ran.stderr)
             row.update(executed=True,returncode=ran.returncode,stdout=identity(out),stderr=identity(err));save()

@@ -301,6 +301,10 @@
       "before": null,
       "after": "62c8d213f897403f5a7f7e8b44844ea60040e5149d8612b48e12059009b4a49e"
     },
+    "tests/test_bootstrap_fixture_compilation.py": {
+      "before": null,
+      "after": "3848aaf5f2ff8b30155e95fac0850d2b592f9bc76deecbc4a916de0af1029324"
+    },
     "tests/test_bootstrap_fold_baseline.py": {
       "before": null,
       "after": "893826337b63d225e80c54b29d51f545746ee0e71a301ea9dce01831310aca20"
@@ -331,11 +335,15 @@
     },
     "tests/test_bootstrap_receipt_integration.py": {
       "before": null,
-      "after": "21f3cf0bce16186a79bc2e6c3c6f552eeb9f8df69d388ed38560ac120e0a0237"
+      "after": "b395913e5455fbcb447e17c7dbe42424c353033c1d4b89ae835669aaa2a1eacd"
     },
     "tests/test_bootstrap_search_scope.py": {
       "before": null,
       "after": "e9e59e6e49b9392c7ad47596d796b7afcdae36fd6b4f13a1149160c253d1283c"
+    },
+    "tests/test_bootstrap_upload_order.py": {
+      "before": null,
+      "after": "4a4d3bf108397b1af06863032117408417b7adf2b4a17b2f5012585f03819bdc"
     },
     "tests/test_lexilla_languages.py": {
       "before": null,
