@@ -20,18 +20,17 @@ exact source and executable. This document is a plan, not a passing test receipt
   two-process single-instance / tab-menu GUI tests. Active deadlines and
   correctness assertions remain required. The one explicitly deprecated
   Markdown case below is not executed by default and is not recorded as passed.
-- Five real-stage3 fixtures cover recent-file policy (25 assertions), native
-  registry/encoding boundaries (22), actual main-module callback control flow
-  (10), Ru lexical policy including 续 (422), and Markdown policy (221). These
-  original 700 assertions remain required. Six additional fixtures cover tab
-  close policy (16), single-instance protocol/settings policy (41), isolated
-  native registry roundtrip (11), native tab callbacks (53), and actual enabled
-  single-instance lifecycle (18), and real open-finalization BUSY/ACK behavior (23):
-  eleven fixtures, 862 assertions. Receipt schema v4 rejects the former v1/v2/v3 receipts.
-  The exact three dependency DLLs are copied beside the fixture executables;
-  original and copied identities are checked before/after execution and again
-  at product/package consumption. No PATH-only DLL substitution is accepted.
-  These fixtures do not substitute for starting and testing the editor.
+- Sixteen real-stage3 fixtures retain all fourteen existing fixtures and their
+  2,366 assertions, including actual native callbacks, dependency/lifecycle,
+  language catalog, editor search and all-open-document search coverage. Regex
+  policy (365) and native bridge (41) bring the exact total to 2,772 assertions.
+  Fixture receipt schema v7 rejects older inventories. The exact three dependency
+  DLLs are copied beside the fixture executables and checked before/after execution
+  and again at product/package consumption. No PATH-only DLL substitution is
+  accepted. These fixtures do not substitute for starting and testing the editor.
+- The regex increment also requires the actual product regex GUI gate described
+  in [regex-search.md](regex-search.md), alongside every existing product gate.
+  Portable positive/negative receipt checks are not runtime evidence.
 - Before expensive compilation, five complete production single-instance state
   functions run in the interpreter and generated C with explicit controlled OS
   boundaries. Dictionary-write, ACK/NACK, timeout and discovery mutations must
@@ -76,7 +75,7 @@ reported as a successful complete release suite.
 
 The editor-owned `compile_bootstrap_native.py` calls the exact reviewed c3bb177c
 `compile_native` API with native support and retained frontend evidence. During
-main, probe and all fourteen fixture compilations it poisons seven Python application
+main, probe and all sixteen fixture compilations it poisons seven Python application
 frontend entry points (including the native emitter's source alias). Attempts,
 even caught ones, fail the build. This does not replace stage3, the six frozen
 LLVM executable identities, linker/source checks, native fixtures or GUI gates.

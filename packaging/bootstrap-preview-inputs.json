@@ -15,11 +15,11 @@
     },
     "CHANGELOG.md": {
       "before": "6dba0bf5f16f3d11c94063caabbab4e43d808713f155eaba5b9db9a29fcab1c3",
-      "after": "eca0a6c5e3d8764e8337e74a0434de5ccd81b1c02977c5cdab574bdf78d0564f"
+      "after": "78eaae9d2a74221d7b8dd1ee2b985c84891b90cc130f3f143b9d5119fbbcffb7"
     },
     "README.md": {
       "before": "4fec039d9e1f3129d90c9662c2202fca8809d9c1e340dae429130cfe41cf9c7c",
-      "after": "7b41f99701899c80453d511d2d7c1828013d7812672427b380d2937f955271ff"
+      "after": "0c87fae778fb6ad790500b4107b69f2e4af2cbac494f752f83576670b7e41528"
     },
     "THIRD_PARTY_NOTICES.md": {
       "before": "e7afbfb064500e19f9863579f1185e37b8a9e1002ef2050d0bd201564d015ece",
@@ -27,7 +27,7 @@
     },
     "docs/bootstrap-llvm-preview.md": {
       "before": null,
-      "after": "baf1e5e8742c4ad0c99d3458981077aa2c81fdd2d0c14525f0b2984330d91e4f"
+      "after": "6560e8fec0dd7940c0ca4882af45cdc81ba7c88b7a588524bf809a4d116e3bb6"
     },
     "docs/eol-conversion.md": {
       "before": null,
@@ -47,7 +47,7 @@
     },
     "docs/literal-search.md": {
       "before": "46a3d4595ae446db9dce64d581ba96b8e34f41b3520f053ea3b93f4402596da9",
-      "after": "61cbd43f2de416b4e9759c31e226d740a1508804dc7f8e4097f15f2722c2450f"
+      "after": "7452770afaf4e7862ec8477a9fe4cde2e712b258759d03a0a25a1212749438ed"
     },
     "docs/markdown-direct-folds.md": {
       "before": "b281e6c7fd7fc949db129e8ab5e3998b5b87329d1687b11fa50f17a5d0abcfd5",
@@ -69,6 +69,10 @@
       "before": null,
       "after": "619fc606be39a908db9761110c41bfa8f66b6d8bbbc80a6e30481839e2329395"
     },
+    "docs/regex-search.md": {
+      "before": null,
+      "after": "b09ed2f959bd9b57467e75b6578ff4f78340e84faf9f809b43138d0e90c275fb"
+    },
     "docs/ru-language-syntax.md": {
       "before": "6363942a3ae11e45c2d2c21722fbd699f00e84a93aa7c16782f3c0589f16e1d9",
       "after": "a224e19b931e53b270a829ef3b3e3f243fd4b31d001d7c5fa9a555ffd5958daf"
@@ -88,6 +92,10 @@
     "locales/open_search.json": {
       "before": null,
       "after": "76a2e5c72433c8462fe623cdd5efa8ae41a8393c8288ec8ba1dd7c4640d941cf"
+    },
+    "locales/regex_search.json": {
+      "before": null,
+      "after": "34c5a26e5813449f8bf91320ae06f7099a65584ed1056f9efce45c34778e2857"
     },
     "locales/ui.json": {
       "before": "954dcda145db13b05b3f753c43eba56223f09479cf93955edb5944d571b2fb35",
@@ -115,11 +123,11 @@
     },
     "packaging/application-native-oracle-development.json": {
       "before": null,
-      "after": "1653f429b863b9426e2669ef3a14358529afbec8945706dd6fa06496a805200c"
+      "after": "a2f5ddea4e18c45d68a0cd69e6407636c64f0e81d522234630bba5b286244922"
     },
     "packaging/application-native-oracle.json": {
       "before": null,
-      "after": "c8e94ba447a2c6f2310e0b09490b89a9521c6f99a036eddd1cbc6bd52d43d867"
+      "after": "ce7b953c0d1259e62a5bb371e6de9a30fc3a3edf9c886c7a1acb72df9732dab1"
     },
     "packaging/licenses/Godot.txt": {
       "before": null,
@@ -151,7 +159,7 @@
     },
     "src/i18n_catalog.ru": {
       "before": "e2b6d48d25529c7d631652980ec45d6a5dc837467e505e58fbe581a352fe84db",
-      "after": "84127e50828fff7687f25f32187862313c6259f1aaa831960816e5a94854bded"
+      "after": "3d35c6d0c668f5b96d5eea2581f4bc898375de204760d7c6b860c60439f2d7b3"
     },
     "src/line_operations.ru": {
       "before": null,
@@ -163,7 +171,7 @@
     },
     "src/main.ru": {
       "before": "3dcb97ca641f2fb8068785517aedcbbda6d3c65ca179683601f76508d71dd734",
-      "after": "d5b94bfd20d5e9b3a26b14e0d39f3fc0ba9bfc5a588b599419e51db33bc3be93"
+      "after": "2a4e3bc6c95606668a441340e7e0a9b623ff813fbdb50661d835c895b816ef5e"
     },
     "src/markdown_policy.ru": {
       "before": "e9658000e1c5fbe5fb49403af2a27eb11a0efb9d4bf5261617b760688ea2d720",
@@ -184,6 +192,18 @@
     "src/recent_files_policy.ru": {
       "before": null,
       "after": "326374b9b89ac63dc107330907c79ed213b37903e46ca913874956a0c7bb8e2c"
+    },
+    "src/regex_compile.ru": {
+      "before": null,
+      "after": "f0fec9da156ac743fb001eff400bdb338c6de79b6668f24cfc0297797af0439c"
+    },
+    "src/regex_search.ru": {
+      "before": null,
+      "after": "68e9bf3daf58cf7ca5b024ce63e865e9b9353004d1980dd91f8650cd8f52fea2"
+    },
+    "src/regex_vm.ru": {
+      "before": null,
+      "after": "e6df6422da0f5023dcc4342fb85b74a624b7a9e61d3ee056019248be4366258d"
     },
     "src/ru_lexical.ru": {
       "before": "188b92786bb5d8a5f45d26d60cef87fbb059edf41ecef4976da8f9b8c82162e7",
@@ -281,6 +301,14 @@
       "before": null,
       "after": "94b14fb1192666000407cc222c7e53249216dd959613c13bdbf71b0cf3ab8b7c"
     },
+    "tests/regex_native.ru": {
+      "before": null,
+      "after": "04f9c2c6cfa7c5dbc09822612bb79ef2292e5504ec51c813828185ab8cf49ebe"
+    },
+    "tests/regex_policy.ru": {
+      "before": null,
+      "after": "9975740071fb1c8a5155c1fd66ddcd675b5718c6b0eb47c5c8804568d0e34d34"
+    },
     "tests/ru_lexical_policy.ru": {
       "before": "89876cf7fc0e7e7376adfcebc9bc8806739a66e80d13017c59f6826aa313abb6",
       "after": "31f33cdc12ebd175fd35848e46c4374178919123a8a3e8ccd0bd05e1f13cf0e6"
@@ -319,7 +347,7 @@
     },
     "tests/test_bootstrap_fixture_compilation.py": {
       "before": null,
-      "after": "4ef91314fcb65aad794391a6b79abf4d4ca47effdd8aee667c5aa57f950c433d"
+      "after": "3b65c781ef631f59f7d1fcf1fc0bb4e7bf364bee39f5ef7c9bbfeab42c2dd01d"
     },
     "tests/test_bootstrap_fold_baseline.py": {
       "before": null,
@@ -327,7 +355,7 @@
     },
     "tests/test_bootstrap_instance_tabs.py": {
       "before": null,
-      "after": "a32deb45dcc32bda9347c38adf3e67b5805cc95859498aa6ab63dcdb15486014"
+      "after": "f80bdfb7bf714f9403353f7d3ea2ad8c079b3fe16fbd24ff9803f7cb0ac46b04"
     },
     "tests/test_bootstrap_line_operations.py": {
       "before": null,
@@ -361,13 +389,21 @@
       "before": null,
       "after": "b395913e5455fbcb447e17c7dbe42424c353033c1d4b89ae835669aaa2a1eacd"
     },
+    "tests/test_bootstrap_regex_contracts.py": {
+      "before": null,
+      "after": "fb3fb618c129bf13a2dc646aebfe3c5ab63ecb95b638eacfaec2d36112955fe1"
+    },
+    "tests/test_bootstrap_regex_search.py": {
+      "before": null,
+      "after": "277201e168a729c5ac8748dbb9260ceed3c4bffb2d4cf39e81e994d4b201ec6c"
+    },
     "tests/test_bootstrap_search_scope.py": {
       "before": null,
       "after": "e9e59e6e49b9392c7ad47596d796b7afcdae36fd6b4f13a1149160c253d1283c"
     },
     "tests/test_bootstrap_upload_order.py": {
       "before": null,
-      "after": "4a4d3bf108397b1af06863032117408417b7adf2b4a17b2f5012585f03819bdc"
+      "after": "81de1beeb79c10fdb00477ad1b17b556dcc4e2d252f079b225aeae5ff12c11e8"
     },
     "tests/test_lexilla_languages.py": {
       "before": null,
@@ -385,9 +421,21 @@
       "before": null,
       "after": "e078a8b4dac97c63423910f925583f1ebb8a9138a682c6a14e44cffa84652b5f"
     },
+    "tests/test_regex_policy_runner.py": {
+      "before": null,
+      "after": "a45184ae10671cbeb95efc12d861f39c1ddc5a8633b51802cacd8ee4323694e6"
+    },
+    "tests/test_regex_search_bridge.py": {
+      "before": null,
+      "after": "aeea9cddd680b539fbafb7a2f5c0a124735d942ab384f94ec16a95033452040e"
+    },
+    "tests/test_regex_ui_contract.py": {
+      "before": null,
+      "after": "c8cf5297bf04521b5022f54c1d4df9c69a1058e1a48980eb390c304c08876c8b"
+    },
     "tools/bootstrap_preflight.py": {
       "before": null,
-      "after": "a8291f1b9b5e19d4e9786753187804f2b39c44bbd306a71fa1b98c7b13aada72"
+      "after": "1a43616739dce5cca940c6a013231ba76f6947132680a4eee364376a5da87c2d"
     },
     "tools/build.py": {
       "before": "b22059c62a80a2e8861e0538a69cef2cddf4ea14d894cb9331f1e5c213955dae",
@@ -432,6 +480,10 @@
     "tools/gui_open_search.py": {
       "before": null,
       "after": "b5b2d45dd4f1c12230288f35a625a5900cf1a846bddf98ea9de695f384f9969b"
+    },
+    "tools/gui_regex_search.py": {
+      "before": null,
+      "after": "3dc0d942b4b0e16fb64df11481d1b03a04d21dc256424859ee22d653d1676408"
     },
     "tools/gui_search_scope.py": {
       "before": null,
@@ -493,6 +545,10 @@
       "before": null,
       "after": "77abd4b613e1b9bdc4aa77c12ee214c5ab566084c1ecfdb6bd5344d1ebf4cc55"
     },
+    "tools/test_gui_regex_search.py": {
+      "before": null,
+      "after": "b04f3cf947670cf26aef8e87de6ae6ca419bcf1c42fdbd75dcf0e50b3952fa08"
+    },
     "tools/test_gui_search_scope.py": {
       "before": null,
       "after": "dac1c86f456da187d75693d0eff5baa187e3a5eced61283a93d36afce0f61d61"
@@ -503,7 +559,7 @@
     },
     "tools/test_i18n_models.py": {
       "before": "507b687a6d1c6e98f9287beb168eb10b2eb7648457ca9e60f1aae51d089531cc",
-      "after": "ff458b973f4eb0c5b8eea0911c87b1544224074dd478d68e7320a33b6c59d276"
+      "after": "28c8c60b569440542f11b77990733c096be56bd341279d5e972b1cf7100f3802"
     },
     "tools/test_i18n_runner.py": {
       "before": "594f3e83c1acd5ff78e27c4c3da40ffb322dbc25c220a17adca7a567884f03d3",
@@ -536,6 +592,10 @@
     "tools/test_portable.py": {
       "before": "d56550e6de8a1eb03d103736820a585665e4c5ffcafba2717d5568f838d84359",
       "after": "17437abe161b456260f979aab47dc1f02453254185a838afbbe312f52191c985"
+    },
+    "tools/test_regex_policy.py": {
+      "before": null,
+      "after": "92d1789e7344a5a474e0749e318bfc896f418dc016c2d7300115d22c047766d5"
     },
     "tools/test_ru_policy_fast.py": {
       "before": "e770b7b9fe54c971ec4f6aac3d2498aef6a7593ac35390d370a021f4d0bba000",

@@ -2,7 +2,7 @@
 
 F3 / Next searches forward from the end of the selection. Shift+F3 / Previous searches backward from its start, irrespective of anchor direction. The Search menu exposes both commands. A match selects complete UTF-8 text and reveals folded endpoints; an unsuccessful search leaves selection, text, undo and savepoint unchanged. Empty patterns focus the search bar rather than searching. No shortcuts were reassigned.
 
-Match case, Whole word and Wrap around retain their defaults: case-sensitive, not whole-word, wrapping enabled. Options remain application-wide for this run, including across tabs and search-bar closure; none are persisted. Whole word uses pinned Scintilla 5.6.7 native word-character rules, not dictionary-based Chinese/Japanese segmentation. Literal Unicode is not normalized. No regex or escape syntax is enabled.
+Match case, Whole word and Wrap around retain their defaults: case-sensitive, not whole-word, wrapping enabled. Options remain application-wide for this run, including across tabs and search-bar closure; none are persisted. Whole word uses pinned Scintilla 5.6.7 native word-character rules, not dictionary-based Chinese/Japanese segmentation. Literal Unicode is not normalized. No regex or escape syntax is enabled in literal mode. The separate [regex find mode](regex-search.md) has its own restricted syntax and does not enable replacement.
 
 ## Explicit scope
 
@@ -26,7 +26,7 @@ Choosing a history item only fills its corresponding input. It does not execute 
 
 The bootstrap preview requires all previous native/GUI gates plus native bounded-search/MRU/lifecycle assertions and a real-menu Windows search-scope gate: exact Unicode selections and saved bytes, fresh-process reopen, scope invalidation, replacement isolation, history limits/privacy and seven-language labels. Portable checks are contracts, not Windows execution. The editor-native fixture is now included in bootstrap execution, rather than relying on the separately blocked default-C application route. Source-bound receipts establish actual results and counts.
 
-Regex, extended escapes, cross-file search, selection replacement, disk batch replacement and durable history remain out of scope.
+Extended literal escapes, selection replacement, disk batch replacement and durable history remain out of scope. Separate regex find and all-open-document literal search do not change literal replacement semantics.
 
 ## All-open-document results
 

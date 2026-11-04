@@ -29,24 +29,26 @@ class PreviewContracts(unittest.TestCase):
 
     def test_descriptive_unicode_zip_checksum(self):
         with tempfile.TemporaryDirectory() as directory:
-            output=Path(directory)/'ru_notepad-打开文档查找预览版-Windows-x64.zip'
+            output=Path(directory)/'ru_notepad-正则查找预览版-Windows-x64.zip'
             output.write_bytes(b'synthetic checksum fixture, not a package')
             package.write_checksum(output)
             self.assertEqual(output.with_suffix('.zip.sha256').read_text(encoding='utf-8'),
                              build.sha(output)+'  '+output.name+'\n')
 
     def test_preview_package_documents_instance_tabs_acceptance(self):
-        self.assertEqual(package.PREVIEW_DOCS,('bootstrap-llvm-preview.md','recent-files.md','single-instance-and-tabs.md','language-highlighting.md','eol-conversion.md','line-operations.md','line-ordering.md','literal-search.md','open-document-search.md'))
+        self.assertEqual(package.PREVIEW_DOCS,('bootstrap-llvm-preview.md','recent-files.md','single-instance-and-tabs.md','language-highlighting.md','eol-conversion.md','line-operations.md','line-ordering.md','literal-search.md','open-document-search.md','regex-search.md'))
         for name in package.PREVIEW_DOCS:
             self.assertTrue((package.ROOT/'docs'/name).is_file())
         source=Path(package.__file__).read_text()
-        for text in ('instance_tabs GUI gate','--multi-instance','pending shell files',"'instance_tabs_gui': True", "'search_scope_gui': True", "'open_search_gui': True"):
+        for text in ('instance_tabs GUI gate','--multi-instance','pending shell files',"'instance_tabs_gui': True", "'search_scope_gui': True", "'open_search_gui': True", "'regex_search_gui': True", "Regex replacement and all-open-document regex search are not supported"):
             self.assertIn(text,source)
         self.assertIn("validate_result(report.get('instance_tabs'), hashes)",Path(product.__file__).read_text())
         self.assertIn("validate_search_scope(report.get('search_scope'), hashes)",Path(product.__file__).read_text())
         self.assertIn("report['search_scope'] = run_search_scope(api, runtime, fixtures, evidence)",Path(product.__file__).read_text())
         self.assertIn("validate_open_search(report.get('open_search'), hashes)",Path(product.__file__).read_text())
         self.assertIn("report['open_search'] = run_open_search(api, runtime, fixtures, evidence)",Path(product.__file__).read_text())
+        self.assertIn("validate_regex_search(report.get('regex_search'), hashes)",Path(product.__file__).read_text())
+        self.assertIn("report['regex_search'] = run_regex_search(api, runtime, fixtures, evidence)",Path(product.__file__).read_text())
 
     def test_package_markdown_scope_binds_current_product_deprecation(self):
         import test_package as fixtures
@@ -455,16 +457,16 @@ class PreviewContracts(unittest.TestCase):
             return build.verify_proof(proof,**kwargs)
         with patch.object(recent_fixtures,'validate_toolchain'),patch.object(recent_fixtures,'verify_proof',side_effect=verify_fields) as verifier:
             recent_fixtures.validate_report(report,app,compiler,dependencies)
-            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16, 'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':709, 'single_instance_native':18, 'single_instance_busy_native':23, 'language_catalog_native':678, 'editor_native':141, 'open_search_native':29})
-            self.assertEqual(verifier.call_count,14)
+            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16, 'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':709, 'single_instance_native':18, 'single_instance_busy_native':23, 'language_catalog_native':678, 'editor_native':141, 'open_search_native':29, 'regex_policy':365, 'regex_native':41})
+            self.assertEqual(verifier.call_count,16)
             bad=copy.deepcopy(report);del bad['results']['single_instance_busy_native']
             with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)
             bad=copy.deepcopy(report);del bad['results']['editor_native']
             with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)
-            for name,old_count in (('single_instance_policy',39),('single_instance_native',15),('app_tabs_native',660),('app_tabs_native',684),('editor_native',102)):
+            for name,old_count in (('single_instance_policy',39),('single_instance_native',15),('app_tabs_native',660),('app_tabs_native',684),('editor_native',102),('regex_policy',364),('regex_native',38)):
                 bad=copy.deepcopy(report);bad['results'][name]['assertions']=old_count
                 with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)
-            for schema in ('ru-notepad-bootstrap-editor-fixtures-v1', 'ru-notepad-bootstrap-editor-fixtures-v2', 'ru-notepad-bootstrap-editor-fixtures-v3'):
+            for schema in ('ru-notepad-bootstrap-editor-fixtures-v1', 'ru-notepad-bootstrap-editor-fixtures-v2', 'ru-notepad-bootstrap-editor-fixtures-v3', 'ru-notepad-bootstrap-editor-fixtures-v4', 'ru-notepad-bootstrap-editor-fixtures-v5', 'ru-notepad-bootstrap-editor-fixtures-v6'):
                 bad=copy.deepcopy(report);bad['schema']=schema
                 with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)
             for mutation in ('missing-runtime', 'missing-dll', 'extra-dll', 'changed-dll', 'rehashed-dll', 'relocated-dll', 'wrong-dependency-source'):
@@ -512,12 +514,14 @@ class PreviewContracts(unittest.TestCase):
                         'python editor/tools/test_gui_instance_tabs.py -v',
                         'python editor/tools/test_i18n.py --catalog-only',
                         'python editor/tools/test_i18n_models.py',
+                        'python editor/tools/test_regex_policy.py --ru-root language --output "$env:PREVIEW_OUTPUT/regex-policy-controls"',
+                        'python editor/tests/test_regex_search_bridge.py --ru-root language',
                         'python editor/tools/test_single_instance_state.py --ru-root language --output "$env:PREVIEW_OUTPUT/instance-state-controls"',
                         'python editor/tools/test_single_instance_admission.py --ru-root language --output "$env:PREVIEW_OUTPUT/instance-admission-controls"',
                         'python -I editor/tools/test_markdown_step_metrics.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-step-controls"',
                         'python -I editor/tools/test_markdown_bulk_guards.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-bulk-guard-controls"'):
             self.assertIn(command+'\n          if ($LASTEXITCODE) { exit $LASTEXITCODE }',body)
-        self.assertEqual(body.count('if ($LASTEXITCODE)'),17)
+        self.assertEqual(body.count('if ($LASTEXITCODE)'),19)
 
     def test_recent_fixtures_require_exact_individual_assertions_and_total(self):
         good=b'PASS: a\nPASS: b\nTOTAL PASS: 2\n'

@@ -1,0 +1,128 @@
+"""Portable positive/negative controls. These are never Windows receipts."""
+import inspect
+import unittest
+import gui_regex_search as gui
+from test_gui_search_scope import layouts as scope_layouts
+from test_gui_open_search import layouts as result_layouts
+
+HASHES={'ru_notepad.exe':'a'*64}
+
+def receipt():
+    return dict(schema='ru-notepad-regex-search-gui-v1',name='main-gui-regex-search',
+                passed=True,executed=True,cleanup_killed=False,main_hwnd_seen=True,
+                close_posted=True,detached_from_console=True,exit_code=0,
+                fixture_binary_sha256=dict(HASHES),fixtures=gui.inventory(),
+                reopen=dict(name='main-gui-regex-reopen',passed=True,executed=True,cleanup_killed=False,main_hwnd_seen=True,close_posted=True,detached_from_console=True,exit_code=0,fixture_binary_sha256=dict(HASHES)),
+                checks=dict.fromkeys(gui.CHECKS,True),cases=gui.expected_cases(),
+                rejected=list(range(len(gui.REJECTED))),engine_gates=list(gui.ENGINE_GATES),
+                disclosures=list(gui.DISCLOSURES),layouts=scope_layouts(),results_layouts=result_layouts(),
+                labels=[dict(language=l,menu_verified=True,scope_verified=True) for l in gui.LANGUAGES],
+                zero_ranges=[[0,0],[4,4],[5,5],[6,6],[0,0]],
+                cancellations=[dict(action=a,running_seen=True,stable=True,seconds=.1) for a in gui.CANCEL_ACTIONS])
+
+
+class Contract(unittest.TestCase):
+    def reject(self,row):
+        with self.assertRaises(ValueError):gui.validate_result(row,HASHES)
+    def test_complete_is_contract_only(self):self.assertTrue(gui.validate_result(receipt(),HASHES))
+    def test_required_fields(self):
+        for key in receipt():
+            row=receipt();del row[key];self.reject(row)
+    def test_lifecycle_types(self):
+        for key in ('passed','executed','main_hwnd_seen','close_posted','detached_from_console'):
+            for value in (False,1,None,'true'):
+                row=receipt();row[key]=value;self.reject(row)
+        for key,value in (('cleanup_killed',True),('cleanup_killed',0),('exit_code',True),('exit_code',1),('error','bad'),('skips',['case']),('schema','old'),('name','main-gui-open-search'),('fixture_binary_sha256',{})):
+            row=receipt();row[key]=value;self.reject(row)
+    def test_reopen_lifecycle(self):
+        for key in receipt()['reopen']:
+            row=receipt();del row['reopen'][key];self.reject(row)
+        for key,value in (('passed',1),('cleanup_killed',0),('exit_code',True),('error','bad'),('skips',['bad'])):
+            row=receipt();row['reopen'][key]=value;self.reject(row)
+    def test_inventory_order_and_identity(self):
+        for field in ('fixtures','cases','rejected','engine_gates','disclosures','labels','cancellations'):
+            row=receipt();row[field].reverse();self.reject(row)
+            row=receipt();row[field].pop();self.reject(row)
+        row=receipt();row['fixtures'][0]['sha256']='b'*64;self.reject(row)
+        row=receipt();row['fixture_binary_sha256']['ru_notepad.exe']='b'*64;self.reject(row)
+    def test_every_check_observed(self):
+        source=inspect.getsource(gui.run)
+        self.assertNotIn('dict.fromkeys(CHECKS,True)',source)
+        for key in gui.CHECKS:
+            self.assertIn("['"+key+"']=True",source)
+            for value in (False,1,None):
+                row=receipt();row['checks'][key]=value;self.reject(row)
+            row=receipt();del row['checks'][key];self.reject(row)
+        row=receipt();row['checks']['extra']=True;self.reject(row)
+    def test_case_range_and_bool_types(self):
+        for index in range(len(gui.cases())):
+            for field,value in (('selection',[-1,-1]),('unchanged',1),('matched',1)):
+                row=receipt();row['cases'][index][field]=value;self.reject(row)
+        row=receipt();row['cases'][0]['selection']=[False,1];self.reject(row)
+    def test_no_truthy_cancellation_or_latency_substitutes(self):
+        for index in range(len(gui.CANCEL_ACTIONS)):
+            for field,value in (('running_seen',False),('running_seen',1),('stable',False),('stable',1),('seconds',True),('seconds',-1),('seconds',2),('seconds',float('nan')),('seconds',float('inf'))):
+                row=receipt();row['cancellations'][index][field]=value;self.reject(row)
+            for field in ('action','running_seen','stable','seconds'):
+                row=receipt();del row['cancellations'][index][field];self.reject(row)
+    def test_zero_scalar_bytes_exact(self):
+        self.assertEqual(gui.fixtures()['zero.txt'],'😀\r\n'.encode())
+        row=receipt();row['zero_ranges'][1]=[1,1];self.reject(row)
+        row=receipt();row['zero_ranges'][0]=[False,False];self.reject(row)
+    def test_no_match_preserves_zero_marker_until_explicit_change(self):
+        source=inspect.getsource(gui.run)
+        self.assertIn('def no_zero_repeats(expected):',source)
+        self.assertIn('for _ in range(3):',source)
+        self.assertIn('no_zero_repeats((0,0))',source)
+        self.assertIn('no_zero_repeats((6,6))',source)
+        self.assertIn("for reset in ('query','caret','scope'):",source)
+        self.assertIn("start(r'\\z')",source)
+    def test_layout_samples_fail_closed(self):
+        self.assertEqual(len(receipt()['layouts']),42)
+        self.assertEqual(len(receipt()['results_layouts']),28)
+        for field in ('layouts','results_layouts'):
+            for index in range(len(receipt()[field])):
+                row=receipt();row[field].pop(index);self.reject(row)
+        for index in range(7):
+            for key in ('menu_verified','scope_verified'):
+                row=receipt();row['labels'][index][key]=1;self.reject(row)
+    def test_fixture_oracles_are_not_python_regex(self):
+        rows={c['id']:c for c in gui.cases()}
+        self.assertEqual(rows['previous-nonoverlap']['expected'],(0,3))
+        self.assertEqual(rows['previous-ceiling']['expected'],None)
+        for name in ('doc-start-not-scope','line-start-not-scope','doc-end-not-scope','line-end-not-scope'):
+            self.assertIsNone(rows[name]['expected'])
+        for c in gui.cases():
+            if c['expected'] is not None:
+                a,b=c['expected'];self.assertTrue(0<=a<=b<=len(c['source']))
+                c['source'][:a].decode();c['source'][:b].decode()
+        self.assertIn('(a?)*',gui.REJECTED);self.assertIn('()+',gui.REJECTED)
+    def test_hidden_bar_uses_real_guarded_shortcuts(self):
+        self.assertIn('hidden_bar_shortcuts',gui.CHECKS)
+        source=inspect.getsource(gui.run)
+        self.assertIn('regex_shortcut(api,process,hwnd,api.editor(hwnd),backwards)',source)
+        self.assertIn("ui_catalog['search.scope_required']['en']",source)
+        self.assertIn('selection()==expected and not running()',source)
+        helper=inspect.getsource(gui.regex_shortcut)
+        for token in ('GetAsyncKeyState','GetGUIThreadInfo','api.verify_owned_handles(', 'SendInput', 'if not focused()', 'finally:', 'reversed(pending)', '(16,0x72) if backwards else (0x72,)'):
+            self.assertIn(token,helper)
+        self.assertEqual(len(gui.cases()),29)
+        self.assertEqual(len(gui.CANCEL_ACTIONS),15)
+        self.assertEqual(gui.RESPONSE_SECONDS,2.0)
+        self.assertIn('finish(timeout=900)',source)
+        self.assertIn('elapsed>=RESPONSE_SECONDS',source)
+    def test_uninjected_allocation_failure_is_not_a_pass_claim(self):
+        self.assertNotIn('allocation_failure_cleanup',gui.ENGINE_GATES)
+        self.assertIn('has not been fault-injected',gui.DISCLOSURES[2])
+        row=receipt();row['engine_gates'].append('allocation_failure_cleanup');self.reject(row)
+    def test_native_owned_lifecycle_and_actual_input(self):
+        source=inspect.getsource(gui.run)
+        for token in ('isolated_settings()', '_copy_runtime(', 'ci.run_gui(', 'api.post_navigation(', 'api.verify_owned_handles(', 'api.command(hwnd,STOP)', 'api.command(hwnd,105)', 'api.drop(hwnd,[paths[\'stress.txt\']])',"status('regex.limit')",'scope_gui.native_layout(', 'open_gui.native_layout('):
+            self.assertIn(token,source)
+        for token in ('WriteProcessMemory','SCI_SETTEXT','SendInput','import re','re.search','re.finditer'):
+            self.assertNotIn(token,source)
+        self.assertEqual(gui.RESPONSE_SECONDS,2)
+        self.assertEqual(gui.STRESS_BYTES,4*1024*1024)
+        self.assertIn('not universal DPI',gui.DISCLOSURES[1])
+
+if __name__=='__main__':unittest.main()

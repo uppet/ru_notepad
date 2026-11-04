@@ -73,6 +73,9 @@ EXPECTED_MENUS = (
         (317, 'search.results_find', 'Find All in Open Documents'),
         (318, 'search.results_stop', 'Stop'),
         (319, 'search.results_hide', 'Close results'),
+        (323, 'regex.mode_literal', 'Literal search'),
+        (324, 'regex.mode_regular', 'Regular expression (case-sensitive)'),
+        (325, 'regex.stop', 'Stop regex search'),
     )),
     ('menu.encoding', 'E&ncoding', (
         (401, 'command.save_utf8', 'Save as &UTF-8'),
@@ -253,7 +256,7 @@ def validate_menu_catalog(catalog):
     for group, title, commands in EXPECTED_MENUS:
         labels[group] = title
         labels.update((key, label) for _, key, label in commands)
-    actual = {key for key in catalog if key.startswith(('menu.', 'command.', 'language.')) or key in ('search.capture_selection', 'search.current_document', 'search.clear_history', 'search.results_find', 'search.results_stop', 'search.results_hide')}
+    actual = {key for key in catalog if key.startswith(('menu.', 'command.', 'language.')) or key in ('search.capture_selection', 'search.current_document', 'search.clear_history', 'search.results_find', 'search.results_stop', 'search.results_hide', 'regex.mode_literal', 'regex.mode_regular', 'regex.stop')}
     if actual != set(labels):
         raise ValueError('Menu catalog key coverage changed')
     for key, english in labels.items():
@@ -331,16 +334,16 @@ class FlatModelTests(unittest.TestCase):
             changed = replace_array(changed, name, value)
         return self.syntax.replace(section, changed, 1)
 
-    def test_exact_nine_groups_and_seventy_two_command_mappings(self):
+    def test_exact_nine_groups_and_seventy_five_command_mappings(self):
         model = validate_menu(self.main)
         self.assertEqual(len(model), 9)
         commands = [command for _, group in model for command in group]
-        self.assertEqual(len(commands), 72)
-        self.assertEqual(len({number for number, _ in commands}), 72)
-        self.assertEqual(len({key for _, key in commands}), 72)
+        self.assertEqual(len(commands), 75)
+        self.assertEqual(len({number for number, _ in commands}), 75)
+        self.assertEqual(len({key for _, key in commands}), 75)
 
     def test_all_original_command_ids_keep_their_group_and_order(self):
-        original = tuple((group, tuple(number for number, _ in commands if number not in (308, 313, 314, 315, 317, 318, 319, 113, 805, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219)))
+        original = tuple((group, tuple(number for number, _ in commands if number not in (308, 313, 314, 315, 317, 318, 319, 323, 324, 325, 113, 805, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219)))
                          for group, commands in validate_menu(self.main)
                          if group != 'menu.ui_language')
         self.assertEqual(original, LEGACY_COMMAND_GROUPS)
@@ -366,19 +369,19 @@ class FlatModelTests(unittest.TestCase):
         validate_menu_catalog(self.catalog)
 
     def test_menu_arrays_are_primitive_with_exact_group_boundaries(self):
-        self.assertEqual(self.menu_arrays['组量们'], [11, 19, 10, 6, 5, 7, 5, 8, 1])
+        self.assertEqual(self.menu_arrays['组量们'], [11, 19, 13, 6, 5, 7, 5, 8, 1])
         for name, kind in MENU_ARRAY_TYPES.items():
             self.assertTrue(all(type(value) is kind for value in self.menu_arrays[name]))
 
     def test_every_changed_command_id_is_rejected(self):
-        for index in range(66):
+        for index in range(75):
             ids = self.menu_arrays['号们'].copy()
             ids[index] += 1000
             with self.subTest(index=index), self.assertRaises(ValueError):
                 validate_menu(self.mutated_menu(号们=ids))
 
     def test_every_command_key_misassignment_is_rejected(self):
-        for index in range(66):
+        for index in range(75):
             keys = self.menu_arrays['键们'].copy()
             following = (index + 1) % len(keys)
             keys[index], keys[following] = keys[following], keys[index]
@@ -386,7 +389,7 @@ class FlatModelTests(unittest.TestCase):
                 validate_menu(self.mutated_menu(键们=keys))
 
     def test_every_removed_command_is_rejected_even_with_consistent_lengths(self):
-        for index in range(66):
+        for index in range(75):
             arrays = deepcopy(self.menu_arrays)
             del arrays['号们'][index]
             del arrays['键们'][index]

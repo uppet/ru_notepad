@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = 'Package only the exact GUI-tested bootstrap preview and verify ZIP bytes'
 UPLOAD = 'Upload labelled preview package (not all-native release acceptance)'
 DIAGNOSTIC = 'Preserve exact tested runtime as NOT ACCEPTED diagnostic evidence'
-GUI = 'Same-binary active GUI budgets, recent files and instance/tab acceptance'
+GUI = 'Same-binary active GUI budgets, recent files, instance/tab and regex FIND acceptance'
 IR = 'Preserve emitted IR for independent source and final-link identity review'
 
 def validate(text):

@@ -91,8 +91,19 @@ The project-owned application code and documentation are licensed under the [MIT
 
 ### Captured selection search and session history
 
-The Search menu can capture a fixed selection for **find only**, or explicitly return to current-document scope. Editing, switching tabs or closing the bar invalidates that capture without falling back to the whole document. Separate 12-entry find/replacement histories stay in memory only and can be cleared with their inputs. Selection replacement and regex are not included. See [literal-search semantics](docs/literal-search.md); only exact-build Windows receipts establish preview acceptance.
+The Search menu can capture a fixed selection for **find only**, or explicitly return to current-document scope. Editing, switching tabs or closing the bar invalidates that capture without falling back to the whole document. Separate 12-entry find/replacement histories stay in memory only and can be cleared with their inputs. Selection replacement is not included. A separate, bounded regex find mode is described below. See [literal-search semantics](docs/literal-search.md); only exact-build Windows receipts establish preview acceptance.
 
 ### Find All in Open Documents
 
 The Search menu can collect literal matches from every live open buffer, including unsaved and unnamed documents, into a separate results panel. Results navigate by document identity and exact UTF-8 range; edits or changes to the open-document set invalidate old results. Work is incremental, cancellable and capped at 2,000 rows. There is no disk search or cross-document replacement. See [all-open-document search](docs/open-document-search.md). Windows acceptance for this candidate is pending exact-build receipts.
+
+### Bounded regular-expression find
+
+The Search menu adds an explicit case-sensitive regex mode for the current live
+document or captured selection. It supports Unicode scalar literals/classes,
+alternation, greedy/lazy `* + ?`, and document-aware multiline anchors, with
+cooperative cancellation and explicit resource limits. Unsupported constructs
+are rejected. Previous enumerates nonoverlapping forward matches; this is not
+Boost/PCRE parity. Regex replacement and all-open-document regex are not included.
+See [the exact dialect, limits and acceptance boundary](docs/regex-search.md).
+Windows validation of this increment remains pending exact-build receipts.

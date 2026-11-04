@@ -2,7 +2,7 @@
 """Layered preview product gate for the actual bootstrap LLVM editor.
 
 B7 remains functional smoke. This runner separately executes the original four
-product GUI gates with unchanged validators/budgets plus the recent-file gate.
+product GUI gates with unchanged validators/budgets plus all added feature gates.
 It is not the original all-console native acceptance and cannot mint its receipt.
 """
 import argparse
@@ -75,6 +75,8 @@ def validate_product(report, ci):
     validate_search_scope(report.get('search_scope'), hashes)
     from gui_open_search import validate_result as validate_open_search
     validate_open_search(report.get('open_search'), hashes)
+    from gui_regex_search import validate_result as validate_regex_search
+    validate_regex_search(report.get('regex_search'), hashes)
 
 
 def collect_product_gui(ci, api, runtime, fixtures, evidence, report, save):
@@ -133,7 +135,7 @@ def verify(config, output):
                   ('app_receipt', 'argv_probe_receipt', 'dll_probe_receipt', 'dependencies_receipt')},
               'smoke_receipt': identity(smoke_path), 'recent_fixtures_receipt': identity(recent_fixture_path), 'gui_results': [],
               'all_native_console_tests_bootstrap_compiled': False, 'full_release_acceptance': False,
-              'coverage': 'Original four GUI product gates, recent-file GUI, single-instance/tab-close GUI, and all 95 language-menu routes, capability-based fold commands/shortcuts, EOL conversion, line operations, line ordering, selection-only literal search/session history, and bounded all-open-document literal results; independent C-native baseline is separate'}
+              'coverage': 'Original four GUI product gates, recent-file GUI, single-instance/tab-close GUI, and all 95 language-menu routes, capability-based fold commands/shortcuts, EOL conversion, line operations, line ordering, selection-only literal search/session history, bounded all-open-document literal results, and bounded current-document/fixed-selection regex FIND; independent C-native baseline is separate'}
     def save():
         (output/'product-preview.json').write_text(json.dumps(report, indent=2, ensure_ascii=True)+'\n', encoding='utf-8')
     save()
@@ -166,6 +168,9 @@ def verify(config, output):
             save()
             from gui_open_search import run as run_open_search
             report['open_search'] = run_open_search(api, runtime, fixtures, evidence)
+            save()
+            from gui_regex_search import run as run_regex_search
+            report['regex_search'] = run_regex_search(api, runtime, fixtures, evidence)
             save()
         smoke.validate_receipts(config)
         validate_receipt(Path(config['dependencies_receipt']))

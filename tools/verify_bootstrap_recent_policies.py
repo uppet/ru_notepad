@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile and execute fourteen reviewed editor fixtures with stage3.
+"""Compile and execute sixteen reviewed editor fixtures with stage3.
 
 These are additional native feature tests, not the historical 39-fixture C
 acceptance. All input, emitted IR, linked binary and executed binary identities
@@ -28,8 +28,8 @@ import verify_bootstrap_editor_windows as smoke
 
 CASES = {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10,
          'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16,
-         'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':709, 'single_instance_native':18, 'single_instance_busy_native':23, 'language_catalog_native':678, 'editor_native':141, 'open_search_native':29}
-SCHEMA = 'ru-notepad-bootstrap-editor-fixtures-v6'
+         'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':709, 'single_instance_native':18, 'single_instance_busy_native':23, 'language_catalog_native':678, 'editor_native':141, 'open_search_native':29, 'regex_policy':365, 'regex_native':41}
+SCHEMA = 'ru-notepad-bootstrap-editor-fixtures-v7'
 
 
 def exact_assertions(stdout, stderr, returncode, count):

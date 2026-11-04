@@ -1,3 +1,11 @@
+## WIP — bounded regular-expression find
+
+- Add an explicit case-sensitive regex mode for current-document/captured-selection find, with restored literal options on exit and no regex replacement.
+- Use a bounded, iterative pure-Ru parser and prioritized VM; reject unsupported constructs and nullable unbounded repetition rather than silently changing semantics.
+- Preserve actual-document anchors, scalar zero-match progress and nonoverlapping Previous behavior; cancel stale jobs before navigation.
+- Require 365 policy and 41 native assertions, actual Windows semantic/cancellation/limit flows and seven-language layouts. Portable checks are not Windows acceptance.
+- Keep compiler c3bb177 and the separate default-C analysis limitation; no compiler source or main-branch changes.
+
 ## WIP — all-open-document literal results
 
 - Search live open buffers incrementally without saving or replacing text; retain at most 2,000 results with explicit completion/cancellation/limit status.

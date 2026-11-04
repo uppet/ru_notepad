@@ -9,8 +9,8 @@
     {
       "scope": "app",
       "path": "src/main.ru",
-      "sha256": "d5b94bfd20d5e9b3a26b14e0d39f3fc0ba9bfc5a588b599419e51db33bc3be93",
-      "git_blob": "62892f3a8c64b96798d8cf14f5bd712f8b5f3fc8"
+      "sha256": "2a4e3bc6c95606668a441340e7e0a9b623ff813fbdb50661d835c895b816ef5e",
+      "git_blob": "137940b2f3324aba8d4063a55b16dd7401f1d395"
     },
     {
       "scope": "compiler",
@@ -27,8 +27,8 @@
     {
       "scope": "app",
       "path": "src/i18n_catalog.ru",
-      "sha256": "84127e50828fff7687f25f32187862313c6259f1aaa831960816e5a94854bded",
-      "git_blob": "7fe1b92a7cbb367dcc146a960ab55338f2981de9"
+      "sha256": "3d35c6d0c668f5b96d5eea2581f4bc898375de204760d7c6b860c60439f2d7b3",
+      "git_blob": "3e58b3241d91aab0aca7c19bfd54902869a121c2"
     },
     {
       "scope": "app",
@@ -131,6 +131,24 @@
       "path": "src/open_search.ru",
       "sha256": "e8d10755c231c4b71760e81fc4563f495ecc872483a36bcf8b70e92980ad96bd",
       "git_blob": "7968fed7e57ac002d01215b4061c59ce262d431d"
+    },
+    {
+      "scope": "app",
+      "path": "src/regex_compile.ru",
+      "sha256": "f0fec9da156ac743fb001eff400bdb338c6de79b6668f24cfc0297797af0439c",
+      "git_blob": "62b00003157956e893e55e8e27daa70f93cff87d"
+    },
+    {
+      "scope": "app",
+      "path": "src/regex_search.ru",
+      "sha256": "68e9bf3daf58cf7ca5b024ce63e865e9b9353004d1980dd91f8650cd8f52fea2",
+      "git_blob": "cbdca66078dffdbe745fd1f862178832b1340f1a"
+    },
+    {
+      "scope": "app",
+      "path": "src/regex_vm.ru",
+      "sha256": "e6df6422da0f5023dcc4342fb85b74a624b7a9e61d3ee056019248be4366258d",
+      "git_blob": "d8b2706c91753b1d96372de622a70254ec2c431f"
     },
     {
       "scope": "app",

@@ -1,0 +1,173 @@
+{
+  "regex.mode_literal": {
+    "en": "Literal search",
+    "zh-CN": "字面量查找",
+    "ja": "文字列検索",
+    "ko": "일반 문자열 검색",
+    "es": "Búsqueda literal",
+    "ru": "Буквальный поиск",
+    "it": "Ricerca letterale"
+  },
+  "regex.mode_regular": {
+    "en": "Regular expression (case-sensitive)",
+    "zh-CN": "正则表达式（区分大小写）",
+    "ja": "正規表現（大文字小文字を区別）",
+    "ko": "정규식 (대소문자 구분)",
+    "es": "Expresión regular (distingue mayúsculas)",
+    "ru": "Регулярное выражение (с учётом регистра)",
+    "it": "Espressione regolare (distingue maiuscole)"
+  },
+  "regex.stop": {
+    "en": "Stop regex search",
+    "zh-CN": "停止正则查找",
+    "ja": "正規表現検索を停止",
+    "ko": "정규식 검색 중지",
+    "es": "Detener búsqueda regex",
+    "ru": "Остановить поиск по регулярному выражению",
+    "it": "Ferma ricerca regex"
+  },
+  "regex.scope_document": {
+    "en": "Regex: document",
+    "zh-CN": "正则：当前文档",
+    "ja": "正規表現: 文書",
+    "ko": "정규식: 문서",
+    "es": "Regex: documento",
+    "ru": "Регекс: документ",
+    "it": "Regex: documento"
+  },
+  "regex.scope_selection": {
+    "en": "Regex: selection",
+    "zh-CN": "正则：固定选区",
+    "ja": "正規表現: 固定範囲",
+    "ko": "정규식: 고정 선택 영역",
+    "es": "Regex: selección fija",
+    "ru": "Регекс: фиксированная область",
+    "it": "Regex: selezione fissa"
+  },
+  "regex.scope_invalid": {
+    "en": "Regex: choose scope",
+    "zh-CN": "正则：请选择范围",
+    "ja": "正規表現: 範囲を選択",
+    "ko": "정규식: 범위 선택",
+    "es": "Regex: elegir ámbito",
+    "ru": "Регекс: выберите область",
+    "it": "Regex: scegli ambito"
+  },
+  "regex.running": {
+    "en": "Regex search running…",
+    "zh-CN": "正在进行正则查找…",
+    "ja": "正規表現を検索中…",
+    "ko": "정규식 검색 중…",
+    "es": "Búsqueda regex en curso…",
+    "ru": "Поиск по регулярному выражению…",
+    "it": "Ricerca regex in corso…"
+  },
+  "regex.cancelled": {
+    "en": "Regex search stopped.",
+    "zh-CN": "正则查找已停止。",
+    "ja": "正規表現検索を停止しました。",
+    "ko": "정규식 검색이 중지되었습니다.",
+    "es": "Búsqueda regex detenida.",
+    "ru": "Поиск по регулярному выражению остановлен.",
+    "it": "Ricerca regex interrotta."
+  },
+  "regex.stale": {
+    "en": "Regex search stopped because the document or selection changed.",
+    "zh-CN": "文档或选区已变化，正则查找已停止。",
+    "ja": "文書または選択範囲が変わったため、正規表現検索を停止しました。",
+    "ko": "문서 또는 선택 영역이 변경되어 정규식 검색이 중지되었습니다.",
+    "es": "Búsqueda regex detenida porque cambió el documento o la selección.",
+    "ru": "Поиск остановлен: документ или выделение изменились.",
+    "it": "Ricerca regex interrotta: il documento o la selezione sono cambiati."
+  },
+  "regex.limit": {
+    "en": "Regex search limit reached. Select a smaller range or simplify the pattern.",
+    "zh-CN": "正则查找达到安全工作上限。请选择更小的范围或简化表达式。",
+    "ja": "正規表現検索の作業上限に達しました。範囲を小さくするか、式を簡単にしてください。",
+    "ko": "정규식 검색 작업 한도에 도달했습니다. 범위를 줄이거나 식을 단순화하세요.",
+    "es": "Se alcanzó el límite de búsqueda regex. Reduzca el ámbito o simplifique la expresión.",
+    "ru": "Достигнут предел работы поиска. Сузьте область или упростите выражение.",
+    "it": "Raggiunto il limite di ricerca regex. Riduci l’ambito o semplifica l’espressione."
+  },
+  "regex.failed": {
+    "en": "Regex search could not finish. No result was selected.",
+    "zh-CN": "正则查找未能完成，未选择任何结果。",
+    "ja": "正規表現検索を完了できませんでした。結果は選択されていません。",
+    "ko": "정규식 검색을 완료하지 못했습니다. 결과가 선택되지 않았습니다.",
+    "es": "No se pudo completar la búsqueda regex. No se seleccionó ningún resultado.",
+    "ru": "Не удалось завершить поиск. Результат не выбран.",
+    "it": "Impossibile completare la ricerca regex. Nessun risultato è stato selezionato."
+  },
+  "regex.unavailable": {
+    "en": "Regex mode supports find in the current document or selection only. Switch to Literal for replace or all open documents.",
+    "zh-CN": "正则模式仅支持当前文档或固定选区中的查找。替换或搜索所有打开文档前，请切换到字面量查找。",
+    "ja": "正規表現モードは現在の文書または固定範囲の検索専用です。置換や全ての開いている文書の検索には文字列検索へ切り替えてください。",
+    "ko": "정규식 모드는 현재 문서 또는 고정 선택 영역의 찾기만 지원합니다. 바꾸기 또는 열린 모든 문서 검색은 일반 문자열 모드로 전환하세요.",
+    "es": "El modo regex solo busca en el documento actual o la selección fija. Cambie a búsqueda literal para reemplazar o buscar en todos los documentos abiertos.",
+    "ru": "Режим регулярных выражений ищет только в текущем документе или фиксированной области. Для замены или поиска во всех открытых документах выберите буквальный поиск.",
+    "it": "La modalità regex cerca solo nel documento corrente o nella selezione fissa. Passa alla ricerca letterale per sostituire o cercare in tutti i documenti aperti."
+  },
+  "regex.pattern_error": {
+    "en": "Regex error at character {0}: {1}",
+    "zh-CN": "正则表达式第 {0} 个字符有误：{1}",
+    "ja": "正規表現の {0} 文字目でエラー: {1}",
+    "ko": "정규식 {0}번째 문자 오류: {1}",
+    "es": "Error regex en el carácter {0}: {1}",
+    "ru": "Ошибка выражения в символе {0}: {1}",
+    "it": "Errore regex al carattere {0}: {1}"
+  },
+  "regex.reason_syntax": {
+    "en": "Invalid expression syntax.",
+    "zh-CN": "表达式语法无效。",
+    "ja": "式の構文が無効です。",
+    "ko": "식의 문법이 올바르지 않습니다.",
+    "es": "Sintaxis de expresión no válida.",
+    "ru": "Недопустимый синтаксис выражения.",
+    "it": "Sintassi dell’espressione non valida."
+  },
+  "regex.reason_unsupported": {
+    "en": "This syntax is not supported in this regex preview.",
+    "zh-CN": "此正则预览版暂不支持该语法。",
+    "ja": "この正規表現プレビューはこの構文に対応していません。",
+    "ko": "이 정규식 미리 보기 버전은 해당 문법을 지원하지 않습니다.",
+    "es": "Esta vista previa de regex no admite esa sintaxis.",
+    "ru": "Этот предварительный режим не поддерживает такой синтаксис.",
+    "it": "Questa anteprima regex non supporta tale sintassi."
+  },
+  "regex.reason_nullable": {
+    "en": "Unbounded repetition of an expression that can match empty text is not supported.",
+    "zh-CN": "不支持对可匹配空文本的表达式进行无限重复。",
+    "ja": "空文字列に一致する式の無制限の繰り返しには対応していません。",
+    "ko": "빈 텍스트와 일치할 수 있는 식의 무제한 반복은 지원하지 않습니다.",
+    "es": "No se admite la repetición ilimitada de una expresión que puede coincidir con texto vacío.",
+    "ru": "Неограниченное повторение выражения, способного совпасть с пустым текстом, не поддерживается.",
+    "it": "La ripetizione illimitata di un’espressione che può corrispondere a testo vuoto non è supportata."
+  },
+  "regex.reason_pattern_limit": {
+    "en": "Use at most 256 Unicode characters.",
+    "zh-CN": "最多允许 256 个 Unicode 字符。",
+    "ja": "Unicode文字数は256文字以内にしてください。",
+    "ko": "Unicode 문자를 256자 이하로 입력하세요.",
+    "es": "Use como máximo 256 caracteres Unicode.",
+    "ru": "Используйте не более 256 символов Unicode.",
+    "it": "Usa al massimo 256 caratteri Unicode."
+  },
+  "regex.reason_complexity": {
+    "en": "The expression exceeds the safe complexity limits.",
+    "zh-CN": "表达式超出安全复杂度上限。",
+    "ja": "式が安全な複雑度の上限を超えています。",
+    "ko": "식이 안전한 복잡도 한도를 초과했습니다.",
+    "es": "La expresión supera los límites seguros de complejidad.",
+    "ru": "Выражение превышает безопасные пределы сложности.",
+    "it": "L’espressione supera i limiti di complessità sicuri."
+  },
+  "regex.reason_internal": {
+    "en": "The expression could not be compiled safely.",
+    "zh-CN": "无法安全编译该表达式。",
+    "ja": "式を安全にコンパイルできませんでした。",
+    "ko": "식을 안전하게 컴파일하지 못했습니다.",
+    "es": "No se pudo compilar la expresión de forma segura.",
+    "ru": "Не удалось безопасно скомпилировать выражение.",
+    "it": "Impossibile compilare l’espressione in modo sicuro."
+  }
+}
