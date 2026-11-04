@@ -1240,7 +1240,7 @@ def wait_gui(api, process, predicate, failure, timeout=30):
         time.sleep(0.01)
 
 
-def verify_gui_documents(api, hwnd, expected):
+def verify_gui_documents(api, hwnd, expected, diagnostics=None):
     # The initial untitled document is retained. Cycle via the real command
     # router, checking every opened file's visible title and every UTF-8 byte.
     count = api.scalar(api.control(hwnd, 10), 0x1304)  # TCM_GETITEMCOUNT
@@ -1252,7 +1252,20 @@ def verify_gui_documents(api, hwnd, expected):
         matches = [name for name in remaining if title == name + ' · ru_notepad']
         if matches:
             name = matches[0]
-            if api.editor_bytes(hwnd) != remaining.pop(name):
+            wanted = remaining.pop(name)
+            actual = api.editor_bytes(hwnd)
+            if actual != wanted:
+                if diagnostics is not None:
+                    # Only bounded synthetic fixture metadata, never arbitrary
+                    # GUI text, paths, document bytes or an extra UI query.
+                    diagnostics['mismatch'] = {
+                        'fixture_index': list(expected).index(name), 'tab_count': count,
+                        'expected_bytes': len(wanted), 'actual_bytes': len(actual),
+                        'expected_sha256': hashlib.sha256(wanted).hexdigest(),
+                        'actual_sha256': hashlib.sha256(actual).hexdigest(),
+                        'first_difference': next((i for i, pair in enumerate(zip(wanted, actual))
+                                                  if pair[0] != pair[1]), min(len(wanted), len(actual))),
+                    }
                 raise RuntimeError('GUI editor content differs from the synthetic Unicode input')
         api.command(hwnd, 112)  # next tab, through production WM_COMMAND
     if remaining:
@@ -1297,23 +1310,30 @@ def run_gui_file_entry(api, binary_dir, fixtures, evidence):
     queued.write_bytes(b'queued synthetic file must remain unopened')
     originals = {path: sha(path) for path in (*cli, *dropped, large, queued)}
 
+    checks = {}
+    diagnostics = {'phase': 'launch'}
+
     def exercise(process, hwnd):
-        checks = {}
+        diagnostics['phase'] = 'cli-open'
         tab_count = lambda: api.scalar(api.control(hwnd, 10), 0x1304)
         status = lambda: api.text(api.control(hwnd, 11))
         busy = lambda: status_startswith(status(), 'status.opening')
         wait_gui(api, process, lambda: tab_count() == 3 and not busy(),
                  'Unicode command-line files did not finish opening')
-        verify_gui_documents(api, hwnd, {path.name: expected[path.name] for path in cli})
+        diagnostics['phase'] = 'cli-verify'
+        verify_gui_documents(api, hwnd, {path.name: expected[path.name] for path in cli}, diagnostics)
         checks.update(cli_unicode_paths=True, cli_exact_text=True)
         # Target the actual visible Scintilla child, where users drop files.
         # This proves native child-message routing; it is not an Explorer mouse
         # gesture or a complete OLE drag-and-drop interaction test.
+        diagnostics['phase'] = 'drop-open'
         api.drop(api.editor(hwnd), dropped)
         wait_gui(api, process, lambda: tab_count() == 5 and not busy(),
                  'Unicode multi-file WM_DROPFILES did not finish opening')
-        verify_gui_documents(api, hwnd, expected)
+        diagnostics['phase'] = 'drop-verify'
+        verify_gui_documents(api, hwnd, expected, diagnostics)
         checks.update(drop_unicode_paths=True, drop_exact_text=True)
+        diagnostics['phase'] = 'cancel-open'
         api.drop(api.editor(hwnd), [large, queued])
         wait_gui(api, process, busy, 'Large GUI open did not expose responsive busy state')
         checks['child_drop_routed'] = True
@@ -1329,11 +1349,13 @@ def run_gui_file_entry(api, binary_dir, fixtures, evidence):
             api.no_dialog(process.pid)
             api.responsive(hwnd)
             time.sleep(0.01)
-        verify_gui_documents(api, hwnd, expected)
+        diagnostics['phase'] = 'cancel-verify'
+        verify_gui_documents(api, hwnd, expected, diagnostics)
         checks.update(cancel_no_partial_tab=True, cancel_queue_cleared=True)
         if any(sha(path) != digest for path, digest in originals.items()):
             raise RuntimeError('GUI open/drop/cancel modified a synthetic source file')
         checks['source_bytes_preserved'] = True
+        diagnostics['phase'] = 'complete'
         return checks
 
     try:
@@ -1341,6 +1363,8 @@ def run_gui_file_entry(api, binary_dir, fixtures, evidence):
                          exercise=exercise, log_prefix='main-file-entry-launcher')
     finally:
         api.release_drops()
+    result.update(checks)
+    result['file_entry_diagnostic'] = diagnostics
     result['fixture_binary_sha256'] = fixture_hashes
     return result
 

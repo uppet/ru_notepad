@@ -348,7 +348,9 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
     得 (本地 其 文本 键)+'    '.
 法
 算 正则状态:
-    若 A 其 查 'ready' 则
+    # File operations own the status while busy. Invalidation during open/tab
+    # registration must not publish the previous document's idle status.
+    若 (A 其 查 'ready') 且 非 (A 其 查 'busy') 则
         窗 其 标题 (A 其 查 'status') ((正则状态文)+(A 其 查 'statusBase')+(A 其 查 'markdownDiagnosticText')).
     然
     得 空.

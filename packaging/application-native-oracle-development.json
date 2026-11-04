@@ -57,26 +57,26 @@
     "compiler_tree": "5dedbf06f9fb6e00fbfe779b33f172aa35b61334",
     "source": "src/main.ru",
     "line": 1731,
-    "column": 11,
-    "message": "原生签名静态分析超过复杂度上限；已分析 200001 步（上限 200000），39 个模块，74 个签名，3763 次函数分析，8782 次摘要命中；此位置仅为停止处，不一定是耗时来源；可用 --native-analysis 查看统计；请简化签名构造和包装函数",
+    "column": 25,
+    "message": "原生签名静态分析超过复杂度上限；已分析 200001 步（上限 200000），39 个模块，74 个签名，3763 次函数分析，8780 次摘要命中；此位置仅为停止处，不一定是耗时来源；可用 --native-analysis 查看统计；请简化签名构造和包装函数",
     "steps": 200001,
     "step_limit": 200000,
     "modules": 39,
     "signatures": 74,
     "function_evaluations": 3763,
-    "summary_hits": 8782
+    "summary_hits": 8780
   },
   "isolated_development_step_limit": 2000000,
   "analysis_step_limit": 2000000,
-  "actual_steps": 318169,
-  "elapsed_seconds": 14.596184,
+  "actual_steps": 318174,
+  "elapsed_seconds": 13.982095,
   "other_analysis_limits": "unchanged",
   "compiler_files_modified": false,
   "modules": 39,
   "shapes": 74,
   "callbacks": 2,
   "module_sha256": {
-    "app:src/main.ru": "2a4e3bc6c95606668a441340e7e0a9b623ff813fbdb50661d835c895b816ef5e",
+    "app:src/main.ru": "a7ef3299a27eac609fe582f7eedc8581dba7e516ecd151a4ff09ca3041364475",
     "compiler:rulang/stdlib/密.ru": "174a64c1c03499469ad825429db98577a314958cfb070d8c87bd03c4ca23700d",
     "app:src/i18n.ru": "e5ed0325977748d3567d60e61f13f17e3db31c8b5afa7c34eec5703d649cbe85",
     "app:src/i18n_catalog.ru": "3d35c6d0c668f5b96d5eea2581f4bc898375de204760d7c6b860c60439f2d7b3",
@@ -116,5 +116,5 @@
     "app:src/associations_policy.ru": "02c96b9d8c38953d460ddac56fab08ac7b59a78bc840668152b3b14ce3a3382f",
     "app:src/file_drop.ru": "c61a8679075a971d5fdc9e0aac01d4adb6f9e143fb5c05abbb381b7124b5c9ec"
   },
-  "oracle_sha256": "ce7b953c0d1259e62a5bb371e6de9a30fc3a3edf9c886c7a1acb72df9732dab1"
+  "oracle_sha256": "2f3dfc53aec0a11921aee7fe1bc23f3cf2817335ea4634411d5b5795e2d5086d"
 }

@@ -127,11 +127,11 @@
     },
     "packaging/application-native-oracle-development.json": {
       "before": null,
-      "after": "a2f5ddea4e18c45d68a0cd69e6407636c64f0e81d522234630bba5b286244922"
+      "after": "b6f186edc1469f348b7cc151ebb1fd578d033dcf4adacd9e3a7a06e7335a7d9d"
     },
     "packaging/application-native-oracle.json": {
       "before": null,
-      "after": "ce7b953c0d1259e62a5bb371e6de9a30fc3a3edf9c886c7a1acb72df9732dab1"
+      "after": "2f3dfc53aec0a11921aee7fe1bc23f3cf2817335ea4634411d5b5795e2d5086d"
     },
     "packaging/licenses/Godot.txt": {
       "before": null,
@@ -175,7 +175,7 @@
     },
     "src/main.ru": {
       "before": "3dcb97ca641f2fb8068785517aedcbbda6d3c65ca179683601f76508d71dd734",
-      "after": "2a4e3bc6c95606668a441340e7e0a9b623ff813fbdb50661d835c895b816ef5e"
+      "after": "a7ef3299a27eac609fe582f7eedc8581dba7e516ecd151a4ff09ca3041364475"
     },
     "src/markdown_policy.ru": {
       "before": "e9658000e1c5fbe5fb49403af2a27eb11a0efb9d4bf5261617b760688ea2d720",
@@ -437,13 +437,17 @@
       "before": null,
       "after": "aeea9cddd680b539fbafb7a2f5c0a124735d942ab384f94ec16a95033452040e"
     },
+    "tests/test_regex_status_ownership.py": {
+      "before": null,
+      "after": "0e42dd1339c2a8489117f91f47a2444808912ec5aed89b0dc2c2316530efb3fa"
+    },
     "tests/test_regex_ui_contract.py": {
       "before": null,
-      "after": "c8cf5297bf04521b5022f54c1d4df9c69a1058e1a48980eb390c304c08876c8b"
+      "after": "9f5fe43f882565829b6f7cd786d110f598ae2608231ef0ebd7d0c0e5c8401fe9"
     },
     "tools/bootstrap_preflight.py": {
       "before": null,
-      "after": "1a43616739dce5cca940c6a013231ba76f6947132680a4eee364376a5da87c2d"
+      "after": "aa1ee13f6b7cee4a102f89094d99ed7647e7726f7199cf812a48cae4de88ef67"
     },
     "tools/build.py": {
       "before": "b22059c62a80a2e8861e0538a69cef2cddf4ea14d894cb9331f1e5c213955dae",
@@ -635,7 +639,7 @@
     },
     "tools/test_windows_ci.py": {
       "before": "b28733251662cd749c961fda95d912a1638794857fbb07015b5fb6363c28ec3b",
-      "after": "6c12e7e4233081847bf312a31c1b2859f5bc86406dd91dccee7821e0f844b0f8"
+      "after": "acc444ddc0f8481d00a6f6927543ce5edff5b440c701231688ad52ddbafe38e3"
     },
     "tools/verify_bootstrap_application_oracle.py": {
       "before": null,
@@ -659,7 +663,7 @@
     },
     "tools/windows_ci.py": {
       "before": "c1a793bf7d96267adc47d70bd459b3c050cb54f67c9768a57041cad5a732142a",
-      "after": "f8171134a287315da57c61ed7c0c0673277f67d985b951082cce6fe884a470b2"
+      "after": "2079dde5b4b35ebc0d71f13d2f142c54e3b84b9f43a127328f1b606fdbb7f71e"
     }
   }
 }

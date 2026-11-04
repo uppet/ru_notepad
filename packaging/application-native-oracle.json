@@ -9,8 +9,8 @@
     {
       "scope": "app",
       "path": "src/main.ru",
-      "sha256": "2a4e3bc6c95606668a441340e7e0a9b623ff813fbdb50661d835c895b816ef5e",
-      "git_blob": "137940b2f3324aba8d4063a55b16dd7401f1d395"
+      "sha256": "a7ef3299a27eac609fe582f7eedc8581dba7e516ecd151a4ff09ca3041364475",
+      "git_blob": "b6c6361725692ce59ef19d2f9983bf040c75aa42"
     },
     {
       "scope": "compiler",

@@ -173,6 +173,19 @@ class RegexUIContract(unittest.TestCase):
         self.assertIn("(A 其 查 'statusBase')", body('正则状态:'))
         self.assertIn('正则状态文', body('刷新:'))
 
+    def test_file_operation_status_owns_busy_interval_during_invalidation(self):
+        status = body('正则状态:')
+        self.assertIn("若 (A 其 查 'ready') 且 非 (A 其 查 'busy') 则", status)
+        self.assertIn('正则状态.', body('停正则 '))
+        self.assertIn("停正则 'regex.stale'", body('结果失效:'))
+        self.assertIn("停正则 'regex.stale'", body('搜索失效:'))
+        register = body('登记页 ')
+        self.assertLess(register.index('结果失效.'), register.index('4926'))
+        switch = body('切页 ')
+        self.assertLess(switch.index('搜索失效.'), switch.index("A 其 增 'active'"))
+        finish = body('结束工作:')
+        self.assertLess(finish.index("A 其 增 'busy' 假"), finish.index('刷新.'))
+
     def test_no_local_status_module_shadowing_or_text_mutation(self):
         regex = SOURCE.split('# Regex jobs own no HWNDs.', 1)[1].split('# Read-only all-open-buffer', 1)[0]
         self.assertNotRegex(regex, r'(?m)^\s*态 取')

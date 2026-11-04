@@ -1795,7 +1795,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                 return self.docs[self.active][0] + ' · ru_notepad'
             def editor_bytes(self, _):
                 data = self.docs[self.active][1]
-                return b'wrong' if mode == 'wrong-text' else data
+                return b'wrong' if mode == 'wrong-text' or (mode == 'wrong-drop-text' and self.drop_count == 1) else data
             def editor(self, _): return 456
             def drop(self, hwnd, paths):
                 self.drop_targets.append(hwnd)
@@ -1849,6 +1849,32 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
 
     def test_gui_file_entry_rejects_wrong_content(self):
         self.assertFalse(self.gui_file_entry('wrong-text')[0]['passed'])
+
+    def test_gui_file_entry_preserves_phase_partial_checks_and_bounded_mismatch(self):
+        result, _ = self.gui_file_entry('wrong-drop-text')
+        self.assertFalse(result['passed'])
+        self.assertTrue(result['cli_unicode_paths'])
+        self.assertTrue(result['cli_exact_text'])
+        self.assertNotIn('drop_exact_text', result)
+        diagnostic = result['file_entry_diagnostic']
+        self.assertEqual(diagnostic['phase'], 'drop-verify')
+        mismatch = diagnostic['mismatch']
+        self.assertEqual(mismatch['fixture_index'], 3)
+        self.assertEqual(mismatch['tab_count'], 5)
+        expected = 'DROP fourth\n最后😀'.encode('utf-8')
+        self.assertEqual(mismatch['expected_bytes'], len(expected))
+        self.assertEqual(mismatch['actual_bytes'], 5)
+        self.assertEqual(mismatch['expected_sha256'], hashlib.sha256(expected).hexdigest())
+        self.assertEqual(mismatch['actual_sha256'], hashlib.sha256(b'wrong').hexdigest())
+        self.assertEqual(mismatch['first_difference'], 0)
+        self.assertEqual(set(mismatch), {'fixture_index', 'tab_count', 'expected_bytes', 'actual_bytes',
+                                         'expected_sha256', 'actual_sha256', 'first_difference'})
+
+    def test_gui_file_entry_diagnostics_do_not_change_success_checks(self):
+        result, _ = self.gui_file_entry()
+        self.assertTrue(result['passed'])
+        self.assertEqual(result['file_entry_diagnostic'], {'phase': 'complete'})
+        self.assertTrue(all(result[key] for key in ci.GUI_FILE_CHECKS))
 
     def test_gui_file_entry_rejects_retained_queue_after_cancel(self):
         self.assertFalse(self.gui_file_entry('queued-after-cancel')[0]['passed'])

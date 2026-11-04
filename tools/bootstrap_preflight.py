@@ -7,7 +7,7 @@ from pathlib import Path
 from bootstrap_provenance import require
 from prepare_bootstrap_preview import git, manifest, ROOT
 
-BLOCK_SHA256 = "3bffe16094d270cc6257666e14938d3c4467fc2eb57e478083b9411edbb0792e"
+BLOCK_SHA256 = "6a8f9ca87aaf4b57195cfcf731cbdcf4ebfc68d582269f80ef609bf180495e8d"
 
 def block_hash():
     text = (ROOT / '.github/workflows/bootstrap-preview.yml').read_text(encoding='utf-8')

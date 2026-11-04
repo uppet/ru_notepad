@@ -107,6 +107,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python editor/tests/test_regex_search_bridge.py --ru-root language
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tests/test_regex_status_ownership.py --ru-root language
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python editor/tools/test_single_instance_state.py --ru-root language --output "$env:PREVIEW_OUTPUT/instance-state-controls"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python editor/tools/test_single_instance_admission.py --ru-root language --output "$env:PREVIEW_OUTPUT/instance-admission-controls"
