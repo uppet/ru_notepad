@@ -115,11 +115,11 @@
     },
     "packaging/application-native-oracle-development.json": {
       "before": null,
-      "after": "85b70a94c2e3da1f1ad7027d71f3f863add166259a145321a82c341971293b79"
+      "after": "1653f429b863b9426e2669ef3a14358529afbec8945706dd6fa06496a805200c"
     },
     "packaging/application-native-oracle.json": {
       "before": null,
-      "after": "a9086e60c81d9091cb73c3984704f6fd9a6670f85380a01a24d8f52a89995da8"
+      "after": "c8e94ba447a2c6f2310e0b09490b89a9521c6f99a036eddd1cbc6bd52d43d867"
     },
     "packaging/licenses/Godot.txt": {
       "before": null,
@@ -175,7 +175,7 @@
     },
     "src/open_search.ru": {
       "before": null,
-      "after": "53d927e68f09fc9ee9a7e86cb444965d39972f3acacda8f8d536efbef7278313"
+      "after": "e8d10755c231c4b71760e81fc4563f495ecc872483a36bcf8b70e92980ad96bd"
     },
     "src/recent_files.ru": {
       "before": null,
@@ -267,7 +267,7 @@
     },
     "tests/open_search_native.ru": {
       "before": null,
-      "after": "7013b83c535e91801153780969b4dc335b4bf4680bf5135d6b6b29594008b724"
+      "after": "063d5930f5c84b8d159f70e3e1e53135ffd062fb7ea273efcb791d4147958547"
     },
     "tests/recent_files_callbacks.ru": {
       "before": null,
@@ -375,7 +375,7 @@
     },
     "tests/test_open_search_contract.py": {
       "before": null,
-      "after": "f630be3a33d719269732c5e5a781850d960f2296457c543e402c9b77380753d5"
+      "after": "37583d0e4d615f92e9c8e3c051d03d48a217b67d88ea882e45dcca5e2a8e8b71"
     },
     "tests/test_preview_language_sample.py": {
       "before": null,

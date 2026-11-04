@@ -40,6 +40,16 @@ class OpenSearchContract(unittest.TestCase):
     def test_failure_does_not_expose_arbitrary_native_error_text(self):
         self.assertNotIn("'error' (原因 为 句)", SOURCE)
         self.assertIn("若 态['status'] == 'stale' 则 得 假", SOURCE)
+        tick = SOURCE.split('算 步进 ', 1)[1].split('\n法', 1)[0]
+        guard = "若 态['documentIndex'] < 0 或 态['documentIndex'] >= (态['documents'] 其 量) 则"
+        self.assertIn(guard, tick)
+        boundary = tick.split(guard, 1)[1].split('\n    然', 1)[0]
+        self.assertIn("态 其 增 'status' 'failed'", boundary)
+        self.assertIn("态 其 增 'error' 'Open-buffer search could not continue.'", boundary)
+        self.assertIn('得 态.', boundary)
+        self.assertNotIn('卒 ', boundary)
+        self.assertLess(tick.index(guard), tick.index('_有效'))
+        self.assertLess(tick.index(guard), tick.index("快照 取 态['documents'][态['documentIndex']]"))
 
     def test_only_fixed_imports_no_disk_or_replace(self):
         imports = re.findall("外言 '([^']+)'", SOURCE)

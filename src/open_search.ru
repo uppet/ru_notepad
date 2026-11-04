@@ -109,6 +109,12 @@ _查型 取 密 其 结构 [['start',窗 其 IP],['end',窗 其 IP],['text',窗 
 算 步进 态 文档们:
     若 态['status'] != 'running' 则 得 态. 然
     态 其 增 'lastCandidateBytes' 0. 态 其 增 'lastResultCount' 0.
+    # Array bounds faults are fatal in the LLVM runtime, not recoverable by 救.
+    # Validate the work cursor before any snapshot indexing or native access.
+    若 态['documentIndex'] < 0 或 态['documentIndex'] >= (态['documents'] 其 量) 则
+        态 其 增 'status' 'failed'. 态 其 增 'error' 'Open-buffer search could not continue.'.
+        得 态.
+    然
     试
         若 非 (_有效 态 文档们) 则 得 态. 然
         快照 取 态['documents'][态['documentIndex']].

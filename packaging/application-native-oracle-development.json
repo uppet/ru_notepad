@@ -56,20 +56,20 @@
     "compiler_commit": "c3bb177c6a15e90821e5495cc74b0fdfc39b893a",
     "compiler_tree": "5dedbf06f9fb6e00fbfe779b33f172aa35b61334",
     "source": "src/main.ru",
-    "line": 242,
-    "column": 18,
-    "message": "原生签名静态分析超过复杂度上限；已分析 200001 步（上限 200000），36 个模块，74 个签名，3681 次函数分析，9574 次摘要命中；此位置仅为停止处，不一定是耗时来源；可用 --native-analysis 查看统计；请简化签名构造和包装函数",
+    "line": 233,
+    "column": 14,
+    "message": "原生签名静态分析超过复杂度上限；已分析 200001 步（上限 200000），36 个模块，74 个签名，3681 次函数分析，9573 次摘要命中；此位置仅为停止处，不一定是耗时来源；可用 --native-analysis 查看统计；请简化签名构造和包装函数",
     "steps": 200001,
     "step_limit": 200000,
     "modules": 36,
     "signatures": 74,
     "function_evaluations": 3681,
-    "summary_hits": 9574
+    "summary_hits": 9573
   },
   "isolated_development_step_limit": 2000000,
   "analysis_step_limit": 2000000,
-  "actual_steps": 295853,
-  "elapsed_seconds": 17.210149,
+  "actual_steps": 295899,
+  "elapsed_seconds": 12.769686,
   "other_analysis_limits": "unchanged",
   "compiler_files_modified": false,
   "modules": 36,
@@ -96,7 +96,7 @@
     "app:src/line_operations.ru": "81df5afbe000e476b92754fcbff58820f90e3707e83476bf312967e2158a8208",
     "app:src/line_ordering.ru": "e6018d0a992646a36bb33cbc828e881bf1a4c5d5ce2adf0f515288c79c9e5061",
     "app:src/search_history.ru": "78a90838988f5738602408f68919cbc3a7165bcb647389b52699992a0aa1e116",
-    "app:src/open_search.ru": "53d927e68f09fc9ee9a7e86cb444965d39972f3acacda8f8d536efbef7278313",
+    "app:src/open_search.ru": "e8d10755c231c4b71760e81fc4563f495ecc872483a36bcf8b70e92980ad96bd",
     "app:src/document.ru": "708f48fe5ee9c86e140e9aff4b5b4dac0cb1b7e2127527a6ea6ec479142dc273",
     "app:src/ui_arguments.ru": "d27989270478cf0772ed8aab567ee45116be30d9800ba58de6bdc1a8062a9307",
     "app:src/status.ru": "73bbfe0910226d6bfb2e9a78ffe1d2ea5f8a2c1605f67b3b1fe9eb26366fe767",
@@ -113,5 +113,5 @@
     "app:src/associations_policy.ru": "02c96b9d8c38953d460ddac56fab08ac7b59a78bc840668152b3b14ce3a3382f",
     "app:src/file_drop.ru": "c61a8679075a971d5fdc9e0aac01d4adb6f9e143fb5c05abbb381b7124b5c9ec"
   },
-  "oracle_sha256": "a9086e60c81d9091cb73c3984704f6fd9a6670f85380a01a24d8f52a89995da8"
+  "oracle_sha256": "c8e94ba447a2c6f2310e0b09490b89a9521c6f99a036eddd1cbc6bd52d43d867"
 }

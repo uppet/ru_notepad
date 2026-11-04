@@ -100,7 +100,7 @@
     确认 ((搜 其 新建 ([]) (重复 '😀' 1024) 真 假)['status'] == 'complete') 'exact scalar cap accepted for empty document set'.
     态 取 搜 其 新建 ([一]) 'a' 真 假. 态 其 增 'documentIndex' 99.
     搜 其 步进 态 ([一]).
-    确认 (态['status'] == 'failed' 且 态['error'] == 'Open-buffer search could not continue.' 且 (搜 其 定位 态 0 ([一])) == -1) 'caught engine failure stops work and rejects navigation'.
+    确认 (态['status'] == 'failed' 且 态['error'] == 'Open-buffer search could not continue.' 且 (搜 其 定位 态 0 ([一])) == -1) 'invalid work cursor fails before indexing and rejects navigation'.
     丙 取 编 其 创建 父 实例 3. 三 取 文档 丙 103 'closed'.
     编 其 设文本 丙 'a'. 态 取 搜 其 新建 ([三]) 'a' 真 假.
     窗 其 结果 ((窗 其 DestroyWindow) 其 调用 [丙]).

@@ -129,8 +129,8 @@
     {
       "scope": "app",
       "path": "src/open_search.ru",
-      "sha256": "53d927e68f09fc9ee9a7e86cb444965d39972f3acacda8f8d536efbef7278313",
-      "git_blob": "a1df7f2446950c4336e8ef9fa554629fc9ccf9c9"
+      "sha256": "e8d10755c231c4b71760e81fc4563f495ecc872483a36bcf8b70e92980ad96bd",
+      "git_blob": "7968fed7e57ac002d01215b4061c59ce262d431d"
     },
     {
       "scope": "app",
