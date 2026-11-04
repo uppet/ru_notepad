@@ -491,7 +491,7 @@
     },
     "tools/gui_regex_search.py": {
       "before": null,
-      "after": "2f385b2385d3e71513ccd64f693af2b2a7d0c1cdc7de5815dfe021bb2379bede"
+      "after": "2cebd8fbd8be054076459ac5e407baca3b5a2095274c4077d81510cf6d69e159"
     },
     "tools/gui_search_scope.py": {
       "before": null,
@@ -559,7 +559,7 @@
     },
     "tools/test_gui_regex_search.py": {
       "before": null,
-      "after": "2b453d0e4be6f53fe703a9721f58e6f16afe96a0489ade124f4795ad2c54018f"
+      "after": "c58e99b269569cb52e30422ea02fde56d9029cdd6143d3439642652c2e16dfaf"
     },
     "tools/test_gui_search_scope.py": {
       "before": null,

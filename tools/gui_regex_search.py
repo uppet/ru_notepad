@@ -179,6 +179,34 @@ def regex_shortcut(api,process,hwnd,editor,backwards):
         if previous and previous!=hwnd:u.SetForegroundWindow(previous)
 
 
+def activate_regex_fixture(api,process,hwnd,name,paths,identities):
+    """Learn an unambiguous clean fixture once, then use its live editor HWND.
+
+    Dirty captions are deliberately not normalized. The caller must forget a
+    closed editor before reopening, even if Windows later recycles its HWND.
+    """
+    if name not in identities:
+        activate_source(api,hwnd,paths[name],len(paths))
+        editor=api.editor(hwnd)
+        api.verify_owned_handles(process.pid,hwnd,editor)
+        identities[name]=editor
+        return editor
+    expected=identities[name]
+    for _ in range(len(paths)+1):
+        if api.editor(hwnd)==expected:
+            api.verify_owned_handles(process.pid,hwnd,expected)
+            return expected
+        api.command(hwnd,112);api.responsive(hwnd)
+    raise RuntimeError('Known regex fixture editor is not reachable: '+name)
+
+
+def write_progress(evidence,progress,phase,case=None):
+    """Diagnostic partial observations, never a substitute acceptance receipt."""
+    progress['phase']=phase;progress['case']=case
+    evidence=Path(evidence);evidence.mkdir(parents=True,exist_ok=True)
+    ci.save_json(evidence/'regex-search-progress.json',progress)
+
+
 def run(api,binary_dir,fixtures_dir,evidence):
     from gui_instance_tabs import _information_dialog, _information_shape, _post_command, _wait
     binary_dir,fixtures_dir,evidence=map(Path,(binary_dir,fixtures_dir,evidence))
@@ -189,16 +217,20 @@ def run(api,binary_dir,fixtures_dir,evidence):
     target=fixtures_dir/'regex-search-runtime';_copy_runtime(binary_dir,target,hashes)
     catalog=json.loads((ROOT/'locales/regex_search.json').read_text(encoding='utf-8'))
     ui_catalog=json.loads((ROOT/'locales/ui.json').read_text(encoding='utf-8'))
+    progress=dict(phase='startup',case=None,checks={},cases=[],rejected=[],cancellations=[])
+    def phase(name,case=None):write_progress(evidence,progress,name,case)
+    phase('startup')
     u=api.user
     u.GetMenu.argtypes=[wintypes.HWND];u.GetMenu.restype=wintypes.HMENU
     u.GetMenuState.argtypes=[wintypes.HMENU,ctypes.c_uint,ctypes.c_uint];u.GetMenuState.restype=ctypes.c_uint
     u.GetMenuStringW.argtypes=[wintypes.HMENU,ctypes.c_uint,wintypes.LPWSTR,ctypes.c_int,ctypes.c_uint];u.GetMenuStringW.restype=ctypes.c_int
     u.IsWindowEnabled.argtypes=[wintypes.HWND];u.IsWindowEnabled.restype=wintypes.BOOL
     def exercise(process,hwnd):
-        checks={};observed=[];rejected=[];cancellations=[];layouts=[];results_layouts=[];labels=[]
+        checks=progress['checks'];observed=progress['cases'];rejected=progress['rejected'];cancellations=progress['cancellations']
+        layouts=[];results_layouts=[];labels=[];identities={}
         ci.wait_gui(api,process,lambda:api.text(hwnd)==paths['stress.txt'].name+' · ru_notepad' and not u.IsWindowVisible(api.control(hwnd,901)),'Regex fixtures did not finish opening')
         api.command(hwnd,851)
-        def activate(name):activate_source(api,hwnd,paths[name],len(paths))
+        def activate(name):return activate_regex_fixture(api,process,hwnd,name,paths,identities)
         def selection():return tuple(api.scalar(api.editor(hwnd),n) for n in (2143,2145))
         def caret(a,b=None):api.scalar(api.editor(hwnd),2160,a,a if b is None else b)
         def menu(command):
@@ -236,6 +268,7 @@ def run(api,binary_dir,fixtures_dir,evidence):
             api.verify_owned_handles(process.pid,hwnd,*found)
             if not u.PostMessageW(found[1],0xF5,0,0):raise ctypes.WinError(ctypes.get_last_error())
             _wait(api,process,lambda:not u.IsWindowVisible(found[0]),'Regex dialog did not dismiss',10,dialogs=True)
+        phase('mode-restore')
         activate('alt-first.txt');api.command(hwnd,301);api.command(hwnd,LITERAL)
         api.scalar(api.control(hwnd,306),241,0);api.scalar(api.control(hwnd,309),241,1)
         api.command(hwnd,REGEX)
@@ -246,6 +279,7 @@ def run(api,binary_dir,fixtures_dir,evidence):
         if not u.GetMenuState(u.GetMenu(hwnd),LITERAL,0)&8 or u.GetMenuState(u.GetMenu(hwnd),REGEX,0)&8:raise RuntimeError('Literal mode menu check differs')
         if api.scalar(api.control(hwnd,306),240)!=0 or api.scalar(api.control(hwnd,309),240)!=1:raise RuntimeError('Literal options were not restored')
         checks['mode_restore']=True
+        phase('hidden-bar-shortcuts')
         activate('fixed.txt');document();query('a');api.scalar(api.control(hwnd,312),241,0)
         for backwards,position,expected in ((False,0,(2,3)),(True,9,(8,9))):
             caret(position);api.command(hwnd,307)
@@ -265,6 +299,7 @@ def run(api,binary_dir,fixtures_dir,evidence):
         if api.text(api.control(hwnd,316))!=catalog['regex.scope_invalid']['en']:raise RuntimeError('Captured scope did not stay invalid')
         checks['hidden_bar_shortcuts']=True
         for c in cases():
+            phase('semantic-case',c['id'])
             activate(c['id']+'.txt');document();api.scalar(api.control(hwnd,312),241,int(c['wrap']))
             if c['scope']:
                 caret(*c['scope']);api.command(hwnd,313)
@@ -280,6 +315,7 @@ def run(api,binary_dir,fixtures_dir,evidence):
         checks['case_matrix']=True
         activate('alt-first.txt');document();api.command(hwnd,315)
         for index,pattern in enumerate(REJECTED):
+            phase('rejected-pattern',str(index))
             query(pattern);before=(persistent_state(),selection());old_history=menu(1700)
             reasons=('regex.reason_nullable',) if index in (7,8) else ('regex.reason_unsupported','regex.reason_syntax')
             bodies={catalog['regex.pattern_error']['en'].replace('{0}',str(n)).replace('{1}',catalog[r]['en']) for r in reasons for n in range(1,len(pattern)+2)}
@@ -287,9 +323,11 @@ def run(api,binary_dir,fixtures_dir,evidence):
             if (persistent_state(),selection())!=before or menu(1700)!=old_history:raise RuntimeError('Rejected regex changed state/history')
             rejected.append(index)
         checks['strict_rejection']=True
+        phase('accepted-history')
         caret(0);start('a');finish();before=(persistent_state(),selection());query('pending-input');api.command(hwnd,1700)
         if api.text(api.control(hwnd,310))!='a' or (persistent_state(),selection())!=before:raise RuntimeError('Accepted history selection executed search')
         checks['accepted_history']=True
+        phase('zero-progress')
         activate('zero.txt');document();caret(0);api.scalar(api.control(hwnd,312),241,1);query('()');zero=[]
         for _ in range(5):api.command(hwnd,303);finish();zero.append(list(selection()))
         if zero!=[[0,0],[4,4],[5,5],[6,6],[0,0]]:raise RuntimeError('Zero regex did not advance/wrap at scalar boundaries')
@@ -316,20 +354,24 @@ def run(api,binary_dir,fixtures_dir,evidence):
             if selection()!=(6,6) or api.text(api.control(hwnd,11)).startswith(ui_catalog['search.no_match']['en']):raise RuntimeError('Explicit query/caret/scope change did not reset zero exclusion')
             no_zero_repeats((6,6))
         checks['zero_progress']=True
+        phase('fixed-selection')
         activate('fixed.txt');document();caret(2,5);api.command(hwnd,313);caret(2);query('a');api.scalar(api.control(hwnd,312),241,1)
         for expected in ((2,3),(4,5),(2,3)):
             api.command(hwnd,303);finish()
             if selection()!=expected:raise RuntimeError('Search highlight replaced fixed scope')
         checks['fixed_selection']=True
+        phase('readonly')
         document();caret(0);api.scalar(api.editor(hwnd),2171,1)
         try:
             before=persistent_state();start('a');finish()
             if selection()!=(2,3) or persistent_state()!=before:raise RuntimeError('Read-only regex failed')
         finally:api.scalar(api.editor(hwnd),2171,0)
         checks['readonly']=True
+        phase('dirty-live')
         caret(0);api.scalar(api.editor(hwnd),0x102,ord('Z'),1);before=persistent_state();start('Z');finish()
         if selection()!=(0,1) or persistent_state()!=before or not api.scalar(api.editor(hwnd),2159):raise RuntimeError('Regex ignored dirty live buffer')
         api.command(hwnd,201);checks['dirty_live']=True
+        phase('blocked-mutation')
         # First establish real literal all-open results, then prove direct guards preserve them.
         api.command(hwnd,LITERAL);api.scalar(api.control(hwnd,306),241,1);api.scalar(api.control(hwnd,309),241,0);query('xy');api.command(hwnd,317)
         ci.wait_gui(api,process,lambda:not u.IsWindowEnabled(api.control(hwnd,318)),'Literal results did not finish',timeout=40)
@@ -340,6 +382,7 @@ def run(api,binary_dir,fixtures_dir,evidence):
         checks['blocked_mutation']=True
         api.command(hwnd,319)
         for action in CANCEL_ACTIONS:
+            phase('cancellation',action)
             activate('stress.txt');document();caret(0);api.scalar(api.control(hwnd,312),241,1)
             if action=='undo':api.scalar(api.editor(hwnd),0x102,ord('a'),1);caret(0)
             start('(a|aa)*b')
@@ -363,6 +406,7 @@ def run(api,binary_dir,fixtures_dir,evidence):
                 api.verify_owned_handles(process.pid,hwnd,api.editor(hwnd));api.post_navigation(api.editor(hwnd),'RIGHT')
                 ci.wait_gui(api,process,lambda:selection()==(1,1),'Real navigation input was not serviced',timeout=RESPONSE_SECONDS)
             elif action=='close_reopen':
+                del identities['stress.txt']
                 api.command(hwnd,105)
             ci.wait_gui(api,process,lambda:not running(),'Regex cancellation did not stop',timeout=RESPONSE_SECONDS)
             elapsed=time.perf_counter()-began
@@ -374,14 +418,17 @@ def run(api,binary_dir,fixtures_dir,evidence):
             after=(persistent_state(),selection());time.sleep(.12);api.responsive(hwnd)
             if (persistent_state(),selection())!=after:raise RuntimeError('Cancelled job applied stale navigation')
             cancellations.append(dict(action=action,running_seen=True,stable=True,seconds=elapsed))
+            phase('cancellation-cleanup',action)
             activate('stress.txt')
             while api.scalar(api.editor(hwnd),2174):api.command(hwnd,201)
         checks['cancel_matrix']=True;checks['input_responsiveness']=True
+        phase('limit-no-navigation')
         activate('stress.txt');document();caret(STRESS_BYTES);before=(persistent_state(),selection());start('a|(a|aa)*b',True);finish(timeout=900)
         if not status('regex.limit') or (persistent_state(),selection())!=before:raise RuntimeError('Work limit selected a provisional result or wrong terminal state')
         checks['limit_no_navigation']=True
         activate('fixed.txt');document()
         for index,language in enumerate(LANGUAGES):
+            phase('layout',language)
             api.command(hwnd,851+index)
             for command,key in ((LITERAL,'regex.mode_literal'),(REGEX,'regex.mode_regular'),(STOP,'regex.stop')):
                 if menu(command)!=catalog[key][language]:raise RuntimeError('Regex menu translation differs')
@@ -401,13 +448,17 @@ def run(api,binary_dir,fixtures_dir,evidence):
                 api.command(hwnd,301);results_layouts.append(open_gui.native_layout(api,hwnd,language,size,True))
             api.command(hwnd,319);labels.append(dict(language=language,menu_verified=True,scope_verified=True))
         scope_gui.validate_layouts(layouts);open_gui.validate_layouts(results_layouts);checks['seven_language_layout']=True
+        phase('disk-unchanged')
         if any(path.read_bytes()!=sources[name] for name,path in paths.items()):raise RuntimeError('Regex wrote synthetic fixture files')
         checks['disk_unchanged']=True
         return dict(checks=checks,cases=observed,rejected=rejected,zero_ranges=zero,cancellations=cancellations,layouts=layouts,results_layouts=results_layouts,labels=labels)
     with isolated_settings():
         result=ci.run_gui(api,target,evidence,name='main-gui-regex-search',arguments=list(paths.values()),exercise=exercise,log_prefix='regex-search')
+        phase('first-process-complete' if result['passed'] else progress['phase'],progress['case'])
+        result['progress']=progress
         result.update(schema='ru-notepad-regex-search-gui-v1',fixture_binary_sha256=hashes,fixtures=inventory(),engine_gates=list(ENGINE_GATES),disclosures=list(DISCLOSURES))
         if result['passed']:
+            phase('history-restart')
             reopen_target=fixtures_dir/'regex-search-reopen-runtime';_copy_runtime(binary_dir,reopen_target,hashes)
             def reopened(process,hwnd):
                 ci.wait_gui(api,process,lambda:api.text(hwnd)==paths['fixed.txt'].name+' · ru_notepad' and not u.IsWindowVisible(api.control(hwnd,901)),'Regex new session did not open')
@@ -420,5 +471,6 @@ def run(api,binary_dir,fixtures_dir,evidence):
                 return {}
             result['reopen']=ci.run_gui(api,reopen_target,evidence,name='main-gui-regex-reopen',arguments=[paths['fixed.txt']],exercise=reopened,log_prefix='regex-search-reopen')
             result['reopen']['fixture_binary_sha256']=hashes
+            phase('complete' if result['reopen']['passed'] else 'history-restart')
             validate_result(result,hashes)
     return result

@@ -1,5 +1,8 @@
 """Portable positive/negative controls. These are never Windows receipts."""
 import inspect
+import json
+import tempfile
+from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 from types import SimpleNamespace
@@ -113,6 +116,60 @@ class Contract(unittest.TestCase):
         self.assertEqual(gui.RESPONSE_SECONDS,2.0)
         self.assertIn('finish(timeout=900)',source)
         self.assertIn('elapsed>=RESPONSE_SECONDS',source)
+    def identity_fixture(self,handles=(200,201),active=0):
+        state={'active':active}
+        def command(hwnd,identifier):
+            self.assertEqual(identifier,112)
+            state['active']=(state['active']+1)%len(handles)
+        api=SimpleNamespace(editor=Mock(side_effect=lambda hwnd:handles[state['active']]),
+                            command=Mock(side_effect=command),responsive=Mock(),
+                            text=Mock(return_value='*stress.txt · ru_notepad'),verify_owned_handles=Mock())
+        return api,state
+    def test_dirty_fixture_is_reactivated_by_verified_live_identity(self):
+        api,state=self.identity_fixture(active=1)
+        paths={'stress.txt':Path('stress.txt'),'other.txt':Path('other.txt')}
+        identities={'stress.txt':200}
+        with patch.object(gui,'activate_source') as clean_lookup:
+            self.assertEqual(gui.activate_regex_fixture(api,SimpleNamespace(pid=77),100,'stress.txt',paths,identities),200)
+        clean_lookup.assert_not_called();api.text.assert_not_called()
+        api.verify_owned_handles.assert_called_with(77,100,200)
+        self.assertEqual(api.command.call_args_list,[unittest.mock.call(100,112)])
+    def test_unknown_fixture_learns_only_after_clean_lookup_and_ownership(self):
+        api,state=self.identity_fixture();paths={'stress.txt':Path('stress.txt')};identities={}
+        with patch.object(gui,'activate_source') as clean_lookup:
+            gui.activate_regex_fixture(api,SimpleNamespace(pid=77),100,'stress.txt',paths,identities)
+        clean_lookup.assert_called_once_with(api,100,paths['stress.txt'],1)
+        self.assertEqual(identities,{'stress.txt':200})
+        api.verify_owned_handles.assert_called_once_with(77,100,200)
+        identities.clear();api.verify_owned_handles.side_effect=RuntimeError('foreign')
+        with patch.object(gui,'activate_source'):
+            with self.assertRaisesRegex(RuntimeError,'foreign'):
+                gui.activate_regex_fixture(api,SimpleNamespace(pid=77),100,'stress.txt',paths,identities)
+        self.assertEqual(identities,{})
+    def test_missing_cached_fixture_does_not_fall_back_to_matching_caption(self):
+        api,state=self.identity_fixture(handles=(201,202));paths={'stress.txt':Path('stress.txt')}
+        with patch.object(gui,'activate_source') as clean_lookup:
+            with self.assertRaisesRegex(RuntimeError,'not reachable'):
+                gui.activate_regex_fixture(api,SimpleNamespace(pid=77),100,'stress.txt',paths,{'stress.txt':200})
+        clean_lookup.assert_not_called();api.text.assert_not_called()
+        self.assertEqual(api.command.call_count,2)
+    def test_closed_fixture_identity_is_discarded_before_reopen(self):
+        source=inspect.getsource(gui.run)
+        before=source.index("del identities['stress.txt']")
+        self.assertLess(before,source.index('api.command(hwnd,105)',before))
+        self.assertLess(before,source.index("api.drop(hwnd,[paths['stress.txt']])",before))
+    def test_partial_progress_persists_only_observed_completions(self):
+        progress=dict(checks={'mode_restore':True},cases=[],rejected=[],cancellations=[])
+        with tempfile.TemporaryDirectory() as directory:
+            gui.write_progress(directory,progress,'cancellation-cleanup','edit')
+            saved=json.loads((Path(directory)/'regex-search-progress.json').read_text())
+        self.assertEqual(saved,dict(progress,phase='cancellation-cleanup',case='edit'))
+        self.assertNotIn('passed',saved)
+        self.assertNotIn('cancel_matrix',saved['checks'])
+        source=inspect.getsource(gui.run)
+        self.assertIn("result['progress']=progress",source)
+        self.assertIn("phase('semantic-case',c['id'])",source)
+        self.assertIn("phase('cancellation-cleanup',action)",source)
     def shortcut_fixture(self,*,allow_foreground=True,allow_focus=True,held=False):
         state={'foreground':900,'focus':0,'events':[]}
         def foreground(hwnd):
