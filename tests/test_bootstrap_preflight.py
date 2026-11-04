@@ -45,8 +45,8 @@ class PreflightContracts(unittest.TestCase):
         text = (preflight.ROOT/'.github/workflows/bootstrap-preview.yml').read_text()
         cheap, main = text.split('  windows-preview:\n')
         self.assertIn('    needs: cheap-preflight\n', main)
-        for job in (cheap, main):
-            self.assertIn('    timeout-minutes: 60\n', job)
+        for job, budget in ((cheap,60), (main,90)):
+            self.assertIn(f'    timeout-minutes: {budget}\n', job)
             self.assertIn('          ref: ${{ github.sha }}\n          path: editor', job)
             self.assertIn('ref: ${{ steps.pins.outputs.compiler_commit }}', job)
             self.assertNotIn('continue-on-error', job)

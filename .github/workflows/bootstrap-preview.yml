@@ -133,7 +133,8 @@ jobs:
     # Independent layered preview. The old complete C-native workflow still runs;
     # its results must be reviewed separately before delivering this ZIP.
     runs-on: windows-latest
-    timeout-minutes: 60
+    # Additional regex gates need total orchestration headroom; individual test budgets stay fixed.
+    timeout-minutes: 90
     env:
       PREFLIGHT_RECEIPT: ${{ needs.cheap-preflight.outputs.receipt }}
       PYTHONUTF8: '1'

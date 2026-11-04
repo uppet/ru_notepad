@@ -124,13 +124,14 @@ class PreviewContracts(unittest.TestCase):
             self.assertEqual(branches,expected)
             self.assertIn('main',branches)
             self.assertIn('  cancel-in-progress: false\n',text)
-            self.assertIn('    timeout-minutes: 60\n',text)
+            self.assertEqual(re.findall(r'^    timeout-minutes: (.+)$',text,re.M), ['60','90'])
         verify(workflow)
         for bad in (workflow.replace(', wip, main,',', main,'),workflow.replace(', main,',','),
                     workflow.replace(', feature/notepad-main-bootstrap-20261029,',','),
                     workflow.replace(', feature/notepad-all-languages-20261029]',']'),
                     workflow.replace('cancel-in-progress: false','cancel-in-progress: true'),
-                    workflow.replace('timeout-minutes: 60','timeout-minutes: 90')):
+                    workflow.replace('timeout-minutes: 60','timeout-minutes: 90'),
+                    workflow.replace('timeout-minutes: 90','timeout-minutes: 120')):
             with self.assertRaises(AssertionError):verify(bad)
 
     def test_workflow_job_env_contexts_and_runtime_output_initialization(self):

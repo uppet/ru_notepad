@@ -1,0 +1,67 @@
+name: NOT ACCEPTED - saved-runtime regex GUI diagnostic
+on:
+  push:
+    branches: [wip]
+    paths:
+      - '.github/workflows/diagnose-regex-gui.yml'
+      - 'tools/run_regex_gui_diagnostic.py'
+      - 'tests/test_bootstrap_regex_gui_diagnostic.py'
+      - 'tools/gui_regex_search.py'
+      - 'tools/test_gui_regex_search.py'
+      - 'tests/test_bootstrap_regex_search.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: regex-gui-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  saved-runtime-regex:
+    if: github.repository == 'uppet/ru_notepad' && github.ref == 'refs/heads/wip'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONOPTIMIZE: '0'
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: core.autocrlf
+      GIT_CONFIG_VALUE_0: 'false'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out exact diagnostic harness source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: editor
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - name: Check diagnostic transport and full regex receipt contracts
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m unittest discover -s editor/tests -p 'test_bootstrap_regex_gui_diagnostic.py' -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_gui_regex_search.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Verify exact saved failed runtime and exercise current regex harness
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -I -B editor/tools/run_regex_gui_diagnostic.py --expected-harness-commit "$env:GITHUB_SHA" --output "$env:RUNNER_TEMP/regex-gui-diagnostic"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Preserve NOT ACCEPTED diagnostic evidence only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: NOT-ACCEPTED-regex-gui-diagnostic-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/regex-gui-diagnostic/NOT_ACCEPTED-regex-gui-diagnostic.json
+            ${{ runner.temp }}/regex-gui-diagnostic/evidence/
+          if-no-files-found: error
+          retention-days: 14

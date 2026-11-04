@@ -29,8 +29,8 @@ def validate(text):
                 '          if-no-files-found: error\n')
     if any(value not in block for value in required) or 'continue-on-error' in block:
         raise ValueError('strict accepted-artifact upload boundary differs')
-    if re.findall(r'^    timeout-minutes: (.+)$',text,re.M) != ['60','60']:
-        raise ValueError('fixed overall budgets changed')
+    if re.findall(r'^    timeout-minutes: (.+)$',text,re.M) != ['60','90']:
+        raise ValueError('reviewed per-job orchestration budgets changed')
     return True
 
 class UploadOrder(unittest.TestCase):
@@ -42,7 +42,7 @@ class UploadOrder(unittest.TestCase):
             with self.subTest(other=other),self.assertRaises(ValueError):validate(bad)
     def test_reject_weakened_upload(self):
         for old,new in (('if: success()','if: always()'),('if-no-files-found: error','if-no-files-found: warn'),
-                        ('dist/*.receipt.json','diagnostic-runtime/*.json'),('timeout-minutes: 60','timeout-minutes: 90')):
+                        ('dist/*.receipt.json','diagnostic-runtime/*.json'),('timeout-minutes: 60','timeout-minutes: 90'),('timeout-minutes: 90','timeout-minutes: 120')):
             with self.subTest(old=old),self.assertRaises(ValueError):validate(self.text.replace(old,new))
     def test_missing_or_duplicate_gate_rejected(self):
         for name in (PACKAGE,UPLOAD,DIAGNOSTIC,GUI,IR):

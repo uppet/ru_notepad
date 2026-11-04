@@ -137,7 +137,15 @@ def regex_shortcut(api,process,hwnd,editor,backwards):
     keys=(16,0x72) if backwards else (0x72,)
     if any(u.GetAsyncKeyState(k)&0x8000 for k in (16,17,18,91,92,0x72)):
         raise RuntimeError('Refusing regex shortcut with pre-existing held key')
-    previous=u.GetForegroundWindow();pending=[]
+    previous=u.GetForegroundWindow();pending=[];stage='foreground';activation=None
+    def focus_state():
+        info=_GUIThreadInfo();info.cbSize=ctypes.sizeof(info)
+        thread=u.GetWindowThreadProcessId(hwnd,None)
+        valid=bool(u.GetGUIThreadInfo(thread,ctypes.byref(info)))
+        return {'stage':stage,'backwards':bool(backwards),'activation_returned':activation,
+                'foreground':int(u.GetForegroundWindow() or 0),'expected_main':int(hwnd),
+                'expected_editor':int(editor),'focus':int(info.hwndFocus or 0),
+                'thread_info_valid':valid}
     def focused():
         info=_GUIThreadInfo();info.cbSize=ctypes.sizeof(info)
         thread=u.GetWindowThreadProcessId(hwnd,None)
@@ -146,14 +154,26 @@ def regex_shortcut(api,process,hwnd,editor,backwards):
         event=_Input();event.type=1;event.value.ki.wVk=key;event.value.ki.dwFlags=2 if release else 0
         if u.SendInput(1,ctypes.byref(event),ctypes.sizeof(event))!=1:raise RuntimeError('Regex shortcut native input failed')
     try:
-        u.SetForegroundWindow(hwnd)
+        api.verify_owned_handles(process.pid,hwnd,editor)
+        activation=bool(u.SetForegroundWindow(hwnd))
+        ci.wait_gui(api,process,lambda:u.GetForegroundWindow()==hwnd,'Owned regex window did not become foreground')
+        # Foreground activation does not guarantee child keyboard focus. Ask
+        # the verified Scintilla itself to acquire focus on its own UI thread;
+        # this scalar command does not alter text, selection, undo, or scope.
+        stage='editor-focus'
+        api.verify_owned_handles(process.pid,hwnd,editor)
+        api.scalar(editor,2400)  # SCI_GRABFOCUS, no pointer or keyboard injection.
         ci.wait_gui(api,process,focused,'Owned regex editor did not acquire keyboard focus')
         api.verify_owned_handles(process.pid,hwnd,editor)
+        stage='keys'
         for key in keys:
             if not focused():raise RuntimeError('Regex fixture lost focus before shortcut')
             send(key);pending.append(key)
         for key in reversed(keys):send(key,True);pending.remove(key)
         api.responsive(hwnd)
+    except Exception as exc:
+        # Bounded HWND/phase facts only, never query or document contents.
+        raise RuntimeError(str(exc)+'; regex_focus='+json.dumps(focus_state(),sort_keys=True)) from exc
     finally:
         for key in reversed(pending):send(key,True)
         if previous and previous!=hwnd:u.SetForegroundWindow(previous)

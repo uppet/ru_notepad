@@ -9,6 +9,10 @@
     "tree": "2522d03114c808480e42911be850b75e0ae14206"
   },
   "reviewed_changes": {
+    ".github/workflows/diagnose-regex-gui.yml": {
+      "before": null,
+      "after": "64313c23ebd720e2e6b768276156e497a86de30697e9d8f5bb2e0f5d7db7e4b3"
+    },
     ".github/workflows/windows.yml": {
       "before": "f82e3e45e0cf4f0522fdd6d2a516e6ec91cc0a000fbff503ca954f0e37dfaf57",
       "after": "cbd906487c63b3952f7218b335db46caf96bd0594df7a2c15fd10918bcc1acbd"
@@ -27,7 +31,7 @@
     },
     "docs/bootstrap-llvm-preview.md": {
       "before": null,
-      "after": "6560e8fec0dd7940c0ca4882af45cdc81ba7c88b7a588524bf809a4d116e3bb6"
+      "after": "3b29d46e503d59ada66b324c48c7f98a6d6748c046c535d00d2fa7c94772a6dd"
     },
     "docs/eol-conversion.md": {
       "before": null,
@@ -383,7 +387,7 @@
     },
     "tests/test_bootstrap_preflight.py": {
       "before": null,
-      "after": "7f49546f70b0c94b34a119089e8fd7e4d755d52c3dab2eca6294eece0b01bbfc"
+      "after": "f68573befc585cca357864b288d6301fd8db6b76c3e4a2454f89e3674928467f"
     },
     "tests/test_bootstrap_receipt_integration.py": {
       "before": null,
@@ -392,6 +396,10 @@
     "tests/test_bootstrap_regex_contracts.py": {
       "before": null,
       "after": "fb3fb618c129bf13a2dc646aebfe3c5ab63ecb95b638eacfaec2d36112955fe1"
+    },
+    "tests/test_bootstrap_regex_gui_diagnostic.py": {
+      "before": null,
+      "after": "4ac555bf7043db8bcbffa29adc053f3ebe43e119d6af5eb6acf8678a64ca34ce"
     },
     "tests/test_bootstrap_regex_search.py": {
       "before": null,
@@ -403,7 +411,7 @@
     },
     "tests/test_bootstrap_upload_order.py": {
       "before": null,
-      "after": "81de1beeb79c10fdb00477ad1b17b556dcc4e2d252f079b225aeae5ff12c11e8"
+      "after": "9047d2deb1a709df38844cc2e5c2adad3d5126beeb887be1617f59de1005523f"
     },
     "tests/test_lexilla_languages.py": {
       "before": null,
@@ -483,7 +491,7 @@
     },
     "tools/gui_regex_search.py": {
       "before": null,
-      "after": "3dc0d942b4b0e16fb64df11481d1b03a04d21dc256424859ee22d653d1676408"
+      "after": "2f385b2385d3e71513ccd64f693af2b2a7d0c1cdc7de5815dfe021bb2379bede"
     },
     "tools/gui_search_scope.py": {
       "before": null,
@@ -512,6 +520,10 @@
     "tools/run_markdown_phase_profile.py": {
       "before": "3502a1924397910fe2a0dac0ffa85b4f911d91d647e1188d9b817b58a445c4d3",
       "after": "083c9ea17d7ae4d07308f96b469774c41ca2443bcd10cfcfc6c0cf93c15d6d95"
+    },
+    "tools/run_regex_gui_diagnostic.py": {
+      "before": null,
+      "after": "4b43d4860b5bdb0ed109b6c155ce7456ae73dc47eae74c81ebfb00baf5d5b7d5"
     },
     "tools/test_cleanup_paths.py": {
       "before": "43ba2326b43981154c61aab60b8458a48847866c6163455daa5d9ce8c16007aa",
@@ -547,7 +559,7 @@
     },
     "tools/test_gui_regex_search.py": {
       "before": null,
-      "after": "b04f3cf947670cf26aef8e87de6ae6ca419bcf1c42fdbd75dcf0e50b3952fa08"
+      "after": "2b453d0e4be6f53fe703a9721f58e6f16afe96a0489ade124f4795ad2c54018f"
     },
     "tools/test_gui_search_scope.py": {
       "before": null,

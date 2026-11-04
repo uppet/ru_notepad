@@ -137,3 +137,18 @@ and `run_gui_markdown_stage` performs the original serial Undo actions and
 for investigation; reproducing them is opt-in, not part of default acceptance.
 The separate old Ru 0.22 C-native lane's signature-analysis complexity failure
 remains a disclosed limitation, not a passed gate or a budget increase.
+
+## Aggregate scheduling after regex gates
+
+The cheap-preflight job retains its 60-minute cap. The Windows preview job has a
+90-minute aggregate orchestration cap to accommodate the additional two native
+regex fixtures and GUI limit scenario. This does not alter any individual
+compilation deadline, fixture deadline, original GUI budget, or the 2-second
+regex input/cancellation bound. Failed or cancelled execution is never accepted.
+
+The first regex run 41832860414 built the application, passed all 2,772 native
+assertions and the earlier product GUI gates, but the new regex GUI driver failed
+its owned-editor keyboard-focus check. The overall job also reached its old
+60-minute limit during evidence finalization. That run is not accepted. A narrow
+exact-runtime diagnostic can investigate the GUI driver; it cannot substitute for
+a fresh complete source-bound preview build and successful packaging.

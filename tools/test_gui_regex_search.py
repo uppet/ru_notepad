@@ -1,6 +1,8 @@
 """Portable positive/negative controls. These are never Windows receipts."""
 import inspect
 import unittest
+from unittest.mock import Mock, patch
+from types import SimpleNamespace
 import gui_regex_search as gui
 from test_gui_search_scope import layouts as scope_layouts
 from test_gui_open_search import layouts as result_layouts
@@ -111,6 +113,58 @@ class Contract(unittest.TestCase):
         self.assertEqual(gui.RESPONSE_SECONDS,2.0)
         self.assertIn('finish(timeout=900)',source)
         self.assertIn('elapsed>=RESPONSE_SECONDS',source)
+    def shortcut_fixture(self,*,allow_foreground=True,allow_focus=True,held=False):
+        state={'foreground':900,'focus':0,'events':[]}
+        def foreground(hwnd):
+            state['events'].append(('foreground',hwnd))
+            if allow_foreground:state['foreground']=hwnd
+            return allow_foreground
+        def thread_info(thread,pointer):
+            pointer._obj.hwndFocus=state['focus'];return True
+        def scalar(hwnd,message):
+            state['events'].append(('scalar',hwnd,message))
+            if allow_focus and message==2400:state['focus']=hwnd
+            return 0
+        def send(count,pointer,size):
+            key=pointer._obj.value.ki
+            state['events'].append(('key',key.wVk,key.dwFlags));return 1
+        user=SimpleNamespace(
+            GetForegroundWindow=Mock(side_effect=lambda:state['foreground']),
+            SetForegroundWindow=Mock(side_effect=foreground),
+            GetAsyncKeyState=Mock(return_value=0x8000 if held else 0),
+            GetGUIThreadInfo=Mock(side_effect=thread_info),
+            GetWindowThreadProcessId=Mock(return_value=7),
+            SendInput=Mock(side_effect=send))
+        api=SimpleNamespace(user=user,scalar=Mock(side_effect=scalar),
+                            verify_owned_handles=Mock(),responsive=Mock())
+        def wait(api,process,predicate,failure,**kwargs):
+            if not predicate():raise RuntimeError(failure)
+        return api,state,wait
+    def test_shortcut_acquires_child_focus_after_foreground(self):
+        for backwards,keys in ((False,[(0x72,0),(0x72,2)]),(True,[(16,0),(0x72,0),(0x72,2),(16,2)])):
+            api,state,wait=self.shortcut_fixture()
+            with patch.object(gui.ci,'wait_gui',side_effect=wait):
+                gui.regex_shortcut(api,SimpleNamespace(pid=77),100,200,backwards)
+            self.assertEqual(state['events'][:2],[('foreground',100),('scalar',200,2400)])
+            self.assertEqual([item[1:] for item in state['events'] if item[0]=='key'],keys)
+            self.assertEqual(state['foreground'],900)
+            api.verify_owned_handles.assert_called_with(77,100,200)
+            self.assertGreaterEqual(api.verify_owned_handles.call_count,3)
+    def test_shortcut_never_injects_without_foreground_and_child_focus(self):
+        for field in ('allow_foreground','allow_focus'):
+            api,state,wait=self.shortcut_fixture(**{field:False})
+            with patch.object(gui.ci,'wait_gui',side_effect=wait):
+                with self.assertRaisesRegex(RuntimeError,'regex_focus='):
+                    gui.regex_shortcut(api,SimpleNamespace(pid=77),100,200,False)
+            api.user.SendInput.assert_not_called()
+            if field=='allow_foreground':api.scalar.assert_not_called()
+    def test_shortcut_rejects_preheld_keys_without_focus_or_input_changes(self):
+        api,state,wait=self.shortcut_fixture(held=True)
+        with patch.object(gui.ci,'wait_gui',side_effect=wait):
+            with self.assertRaisesRegex(RuntimeError,'pre-existing held key'):
+                gui.regex_shortcut(api,SimpleNamespace(pid=77),100,200,True)
+        self.assertEqual(state['events'],[])
+        api.user.SendInput.assert_not_called()
     def test_uninjected_allocation_failure_is_not_a_pass_claim(self):
         self.assertNotIn('allocation_failure_cleanup',gui.ENGINE_GATES)
         self.assertIn('has not been fault-injected',gui.DISCLOSURES[2])
