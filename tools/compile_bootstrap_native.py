@@ -13,8 +13,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from bootstrap_provenance import require, sha, checked
 
-CORE_COMMIT = 'b93b23dd545e5e392544b4c411db30e9c2d7d15a'
-CORE_TREE = 'a15bc85adafdb512af53b4ead8e33be3b48ed70a'
+CORE_COMMIT = 'c3bb177c6a15e90821e5495cc74b0fdfc39b893a'
+CORE_TREE = '5dedbf06f9fb6e00fbfe779b33f172aa35b61334'
 POISON_ENTRIES = ('frontend.parse', 'modules.load_module_graph', 'NativeCPlan.__init__',
                   'NativeCPlan.emit_c', 'Compiler.compile', 'LLVMCompiler.compile', 'cli.build')
 API_PARAMETERS = ('compiler', 'source', 'output', 'toolchain', 'emit_llvm', 'keep_frontend',

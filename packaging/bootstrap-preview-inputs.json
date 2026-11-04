@@ -1,8 +1,8 @@
 {
   "schema": "ru-notepad-reviewed-preview-inputs-v1",
   "compiler": {
-    "commit": "b93b23dd545e5e392544b4c411db30e9c2d7d15a",
-    "tree": "a15bc85adafdb512af53b4ead8e33be3b48ed70a"
+    "commit": "c3bb177c6a15e90821e5495cc74b0fdfc39b893a",
+    "tree": "5dedbf06f9fb6e00fbfe779b33f172aa35b61334"
   },
   "baseline": {
     "commit": "d964ea9f7e27065aa5bbcced8d6c7526a6224dd1",
@@ -15,11 +15,11 @@
     },
     "CHANGELOG.md": {
       "before": "6dba0bf5f16f3d11c94063caabbab4e43d808713f155eaba5b9db9a29fcab1c3",
-      "after": "419e96259a214083549265de5b15bfc5b3f224d0ee1a9da72221eee618dc4f54"
+      "after": "eca0a6c5e3d8764e8337e74a0434de5ccd81b1c02977c5cdab574bdf78d0564f"
     },
     "README.md": {
       "before": "4fec039d9e1f3129d90c9662c2202fca8809d9c1e340dae429130cfe41cf9c7c",
-      "after": "32c2ffb73f43f5863a5f8fa1416bdf5388871ea442d58c03604c2eb4b6fe81eb"
+      "after": "7b41f99701899c80453d511d2d7c1828013d7812672427b380d2937f955271ff"
     },
     "THIRD_PARTY_NOTICES.md": {
       "before": "e7afbfb064500e19f9863579f1185e37b8a9e1002ef2050d0bd201564d015ece",
@@ -27,7 +27,7 @@
     },
     "docs/bootstrap-llvm-preview.md": {
       "before": null,
-      "after": "f517b5cca909dd3c1538b08b7ebf3cc0d98d3988a6129a7fe28107f71e3bd834"
+      "after": "baf1e5e8742c4ad0c99d3458981077aa2c81fdd2d0c14525f0b2984330d91e4f"
     },
     "docs/eol-conversion.md": {
       "before": null,
@@ -47,7 +47,7 @@
     },
     "docs/literal-search.md": {
       "before": "46a3d4595ae446db9dce64d581ba96b8e34f41b3520f053ea3b93f4402596da9",
-      "after": "009d5d3065d09635165e66415d72f56a61fe06fd8c9bb0a49cbbd8dc18fd2ab9"
+      "after": "61cbd43f2de416b4e9759c31e226d740a1508804dc7f8e4097f15f2722c2450f"
     },
     "docs/markdown-direct-folds.md": {
       "before": "b281e6c7fd7fc949db129e8ab5e3998b5b87329d1687b11fa50f17a5d0abcfd5",
@@ -56,6 +56,10 @@
     "docs/markdown-editing.md": {
       "before": "b1185eee1c70ab93956932fe820381c101df94950237acf4f95b9d18a78467bf",
       "after": "6b10b80fb8fd0c088a7f4a897cdfc472b4c7de5f6b55146db31a77a54889f33c"
+    },
+    "docs/open-document-search.md": {
+      "before": null,
+      "after": "506db010c8b58d92cc4935e9346784274e28924f16e4dbb12d6ca16e8d99ae6c"
     },
     "docs/preview-024-candidate.md": {
       "before": null,
@@ -80,6 +84,10 @@
     "locales/instance_tabs.json": {
       "before": null,
       "after": "81131d676884e8d12b4ae920e930f322f71814229d9ec0e5d9ce36d99ed7ee23"
+    },
+    "locales/open_search.json": {
+      "before": null,
+      "after": "76a2e5c72433c8462fe623cdd5efa8ae41a8393c8288ec8ba1dd7c4640d941cf"
     },
     "locales/ui.json": {
       "before": "954dcda145db13b05b3f753c43eba56223f09479cf93955edb5944d571b2fb35",
@@ -107,11 +115,11 @@
     },
     "packaging/application-native-oracle-development.json": {
       "before": null,
-      "after": "4637a75676aab059354864cce9a0babfed9722505e3e0bbb3a224d8315b884d3"
+      "after": "85b70a94c2e3da1f1ad7027d71f3f863add166259a145321a82c341971293b79"
     },
     "packaging/application-native-oracle.json": {
       "before": null,
-      "after": "01a9f764c74639941fd1b089def459068c668b131ab6933c3ead285dbab51bd4"
+      "after": "a9086e60c81d9091cb73c3984704f6fd9a6670f85380a01a24d8f52a89995da8"
     },
     "packaging/licenses/Godot.txt": {
       "before": null,
@@ -143,7 +151,7 @@
     },
     "src/i18n_catalog.ru": {
       "before": "e2b6d48d25529c7d631652980ec45d6a5dc837467e505e58fbe581a352fe84db",
-      "after": "2a2069d12d975ecd198e649ddd64e3156affe8e3ba3914d6f30aa6816afe5027"
+      "after": "84127e50828fff7687f25f32187862313c6259f1aaa831960816e5a94854bded"
     },
     "src/line_operations.ru": {
       "before": null,
@@ -155,7 +163,7 @@
     },
     "src/main.ru": {
       "before": "3dcb97ca641f2fb8068785517aedcbbda6d3c65ca179683601f76508d71dd734",
-      "after": "ece7c152575859bd69d59f85d337fdbfc3cea1c5a67356de4c379c8f37142f64"
+      "after": "d5b94bfd20d5e9b3a26b14e0d39f3fc0ba9bfc5a588b599419e51db33bc3be93"
     },
     "src/markdown_policy.ru": {
       "before": "e9658000e1c5fbe5fb49403af2a27eb11a0efb9d4bf5261617b760688ea2d720",
@@ -164,6 +172,10 @@
     "src/markdown_syntax.ru": {
       "before": "8ae5c6b71f48fd3e374095cbcbb0e1585ba1aea54d2a592d03446d49da760ce3",
       "after": "443d442393f382ae21c2a1b0ed9f5354253adaf14b37ddf3bd4aadde16f57ada"
+    },
+    "src/open_search.ru": {
+      "before": null,
+      "after": "53d927e68f09fc9ee9a7e86cb444965d39972f3acacda8f8d536efbef7278313"
     },
     "src/recent_files.ru": {
       "before": null,
@@ -215,7 +227,7 @@
     },
     "src/win32.ru": {
       "before": "addd9b27f75864b15346664574b07fd536240019a9b3f5a33a02d73ab72a05b2",
-      "after": "04c796b02f4366e5bbce1c3cfa413624ef35b09a0940c78adabcbacc3b9a910c"
+      "after": "80a2bf6ad15a082144389c6f22d72cf335279c6537df167204673cf53dd57edf"
     },
     "syntax/languages.json": {
       "before": null,
@@ -252,6 +264,10 @@
     "tests/language_samples.ru": {
       "before": null,
       "after": "1ce013925463c83feca632cb0fdd03dfcab072b05f313e7b392c05fcdb112dbf"
+    },
+    "tests/open_search_native.ru": {
+      "before": null,
+      "after": "7013b83c535e91801153780969b4dc335b4bf4680bf5135d6b6b29594008b724"
     },
     "tests/recent_files_callbacks.ru": {
       "before": null,
@@ -303,7 +319,7 @@
     },
     "tests/test_bootstrap_fixture_compilation.py": {
       "before": null,
-      "after": "3848aaf5f2ff8b30155e95fac0850d2b592f9bc76deecbc4a916de0af1029324"
+      "after": "4ef91314fcb65aad794391a6b79abf4d4ca47effdd8aee667c5aa57f950c433d"
     },
     "tests/test_bootstrap_fold_baseline.py": {
       "before": null,
@@ -311,7 +327,7 @@
     },
     "tests/test_bootstrap_instance_tabs.py": {
       "before": null,
-      "after": "13d1f280081095becd6fb783bb398a78e13c6ec49af9bb906d1000df2aac8eda"
+      "after": "a32deb45dcc32bda9347c38adf3e67b5805cc95859498aa6ab63dcdb15486014"
     },
     "tests/test_bootstrap_line_operations.py": {
       "before": null,
@@ -323,11 +339,19 @@
     },
     "tests/test_bootstrap_native_wrapper.py": {
       "before": null,
-      "after": "4994893f9f751c0c59b082712db71cd970749f02fa700741e9729a40617d767b"
+      "after": "d2e8231fa314db83ec0a6167afcd13a7db217917ddefc86db3f6f823e4334fa9"
+    },
+    "tests/test_bootstrap_open_search.py": {
+      "before": null,
+      "after": "9af725d9d410c00d1af250c4d8cea43bf8e9fd554e69ee9babad8b958001ad37"
     },
     "tests/test_bootstrap_oracle_privacy.py": {
       "before": null,
-      "after": "0ebaed261b6b6095a783637d535955e4bf2c170bcf71d42bcb5fbc2b1c041c13"
+      "after": "6390abde93a391a6109dd784306ea5efbfb02a87c2fb0a8cd807a88a506cbadd"
+    },
+    "tests/test_bootstrap_oracle_refresh.py": {
+      "before": null,
+      "after": "c2d3b242e11b983285b90080cf406948c0df68b3586918db039061b976a92e14"
     },
     "tests/test_bootstrap_preflight.py": {
       "before": null,
@@ -349,6 +373,10 @@
       "before": null,
       "after": "0cb45fcf3a574fb0d673869d3feda51eefa142d26dccf80af3befb8044266994"
     },
+    "tests/test_open_search_contract.py": {
+      "before": null,
+      "after": "f630be3a33d719269732c5e5a781850d960f2296457c543e402c9b77380753d5"
+    },
     "tests/test_preview_language_sample.py": {
       "before": null,
       "after": "50e5973947ecc15229b9d1cea34a04fe7403e6e738b3eec606e2fdd611783cfa"
@@ -367,7 +395,7 @@
     },
     "tools/compile_bootstrap_native.py": {
       "before": null,
-      "after": "63cd085a95d44c50a1a0285c338005e26f5d3f674155f5eac5758946a415e869"
+      "after": "214d3015bc6d6a7d896c22bcef035a837e45fa64d7c1bcd9b295a5f507fb3d0d"
     },
     "tools/generate_language_samples.py": {
       "before": null,
@@ -401,6 +429,10 @@
       "before": null,
       "after": "6c3898b36304e4e89f220b9fc94b83dd9e34528eb5d72f18e779d0eca5396fd0"
     },
+    "tools/gui_open_search.py": {
+      "before": null,
+      "after": "b5b2d45dd4f1c12230288f35a625a5900cf1a846bddf98ea9de695f384f9969b"
+    },
     "tools/gui_search_scope.py": {
       "before": null,
       "after": "bf810b175b85646c1a0663e7434aab07a67a0bd6b8721c1e569f7f1db7170d67"
@@ -423,7 +455,7 @@
     },
     "tools/refresh_language_native_oracle.py": {
       "before": null,
-      "after": "837cf8ecb54f80ee64679078dcdd6bbab32b0b13bd0e232eacc38a04a1dfd651"
+      "after": "5d97af5f2d91f51b67cfd868c3b8c095d06171307fdcbc493bd56e5e6845c73f"
     },
     "tools/run_markdown_phase_profile.py": {
       "before": "3502a1924397910fe2a0dac0ffa85b4f911d91d647e1188d9b817b58a445c4d3",
@@ -457,6 +489,10 @@
       "before": null,
       "after": "21e28328831668e5a1f6ac5a3a3ff138fe2315f095385190cb8de6efe6064bc9"
     },
+    "tools/test_gui_open_search.py": {
+      "before": null,
+      "after": "77abd4b613e1b9bdc4aa77c12ee214c5ab566084c1ecfdb6bd5344d1ebf4cc55"
+    },
     "tools/test_gui_search_scope.py": {
       "before": null,
       "after": "dac1c86f456da187d75693d0eff5baa187e3a5eced61283a93d36afce0f61d61"
@@ -467,7 +503,7 @@
     },
     "tools/test_i18n_models.py": {
       "before": "507b687a6d1c6e98f9287beb168eb10b2eb7648457ca9e60f1aae51d089531cc",
-      "after": "6bdc064feb76dcd8f23cb73e3ca27d81c1de2ac56876d87b785061dabc9b9104"
+      "after": "ff458b973f4eb0c5b8eea0911c87b1544224074dd478d68e7320a33b6c59d276"
     },
     "tools/test_i18n_runner.py": {
       "before": "594f3e83c1acd5ff78e27c4c3da40ffb322dbc25c220a17adca7a567884f03d3",
@@ -531,7 +567,7 @@
     },
     "tools/verify_bootstrap_application_oracle.py": {
       "before": null,
-      "after": "07cdfe8415eb61329ca851641efed68d6f6b5080cd8abe8cb0e8f8f0be7ea06b"
+      "after": "65b6415610627c4505d09f557c4949fa628e98533d6e648e98467b55537a148a"
     },
     "tools/verify_fold_baseline.py": {
       "before": null,

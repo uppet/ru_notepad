@@ -1,3 +1,10 @@
+## WIP — all-open-document literal results
+
+- Search live open buffers incrementally without saving or replacing text; retain at most 2,000 results with explicit completion/cancellation/limit status.
+- Navigate exact byte matches by stable document identity; edits and document-set changes invalidate old results.
+- Require 29 additional native assertions, actual Windows GUI flows and seven-language layouts alongside existing gates.
+- Pin the approved ru-language wip snapshot c3bb177 for a fresh exact-source build. Source changes and portable checks alone are not Windows acceptance.
+
 ## Unreleased — explicitly scoped line ordering
 
 ## WIP — captured selection search and private session history

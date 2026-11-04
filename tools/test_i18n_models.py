@@ -70,6 +70,9 @@ EXPECTED_MENUS = (
         (313, 'search.capture_selection', 'Find in captured selection (no replace)'),
         (314, 'search.current_document', 'Search current document'),
         (315, 'search.clear_history', 'Clear search history and inputs'),
+        (317, 'search.results_find', 'Find All in Open Documents'),
+        (318, 'search.results_stop', 'Stop'),
+        (319, 'search.results_hide', 'Close results'),
     )),
     ('menu.encoding', 'E&ncoding', (
         (401, 'command.save_utf8', 'Save as &UTF-8'),
@@ -250,7 +253,7 @@ def validate_menu_catalog(catalog):
     for group, title, commands in EXPECTED_MENUS:
         labels[group] = title
         labels.update((key, label) for _, key, label in commands)
-    actual = {key for key in catalog if key.startswith(('menu.', 'command.', 'language.')) or key in ('search.capture_selection', 'search.current_document', 'search.clear_history')}
+    actual = {key for key in catalog if key.startswith(('menu.', 'command.', 'language.')) or key in ('search.capture_selection', 'search.current_document', 'search.clear_history', 'search.results_find', 'search.results_stop', 'search.results_hide')}
     if actual != set(labels):
         raise ValueError('Menu catalog key coverage changed')
     for key, english in labels.items():
@@ -328,16 +331,16 @@ class FlatModelTests(unittest.TestCase):
             changed = replace_array(changed, name, value)
         return self.syntax.replace(section, changed, 1)
 
-    def test_exact_nine_groups_and_fifty_six_command_mappings(self):
+    def test_exact_nine_groups_and_seventy_two_command_mappings(self):
         model = validate_menu(self.main)
         self.assertEqual(len(model), 9)
         commands = [command for _, group in model for command in group]
-        self.assertEqual(len(commands), 69)
-        self.assertEqual(len({number for number, _ in commands}), 69)
-        self.assertEqual(len({key for _, key in commands}), 69)
+        self.assertEqual(len(commands), 72)
+        self.assertEqual(len({number for number, _ in commands}), 72)
+        self.assertEqual(len({key for _, key in commands}), 72)
 
     def test_all_original_command_ids_keep_their_group_and_order(self):
-        original = tuple((group, tuple(number for number, _ in commands if number not in (308, 313, 314, 315, 113, 805, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219)))
+        original = tuple((group, tuple(number for number, _ in commands if number not in (308, 313, 314, 315, 317, 318, 319, 113, 805, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219)))
                          for group, commands in validate_menu(self.main)
                          if group != 'menu.ui_language')
         self.assertEqual(original, LEGACY_COMMAND_GROUPS)
@@ -363,7 +366,7 @@ class FlatModelTests(unittest.TestCase):
         validate_menu_catalog(self.catalog)
 
     def test_menu_arrays_are_primitive_with_exact_group_boundaries(self):
-        self.assertEqual(self.menu_arrays['组量们'], [11, 19, 7, 6, 5, 7, 5, 8, 1])
+        self.assertEqual(self.menu_arrays['组量们'], [11, 19, 10, 6, 5, 7, 5, 8, 1])
         for name, kind in MENU_ARRAY_TYPES.items():
             self.assertTrue(all(type(value) is kind for value in self.menu_arrays[name]))
 

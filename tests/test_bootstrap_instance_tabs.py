@@ -15,6 +15,7 @@ import test_gui_eol_conversion as eols
 import test_gui_line_operations as lines
 import test_gui_line_ordering as ordering
 import test_gui_search_scope as search_scope
+import test_gui_open_search as open_search
 from bootstrap_provenance import InvalidProvenance
 
 class InstanceProductContract(unittest.TestCase):
@@ -22,7 +23,7 @@ class InstanceProductContract(unittest.TestCase):
         return dict(schema=product.SCHEMA,status='passed',
             all_native_console_tests_bootstrap_compiled=False,full_release_acceptance=False,
             runtime_sha256=dict(samples.HASHES),gui_results=[],scanner_preflight={},
-            recent_files={},instance_tabs=samples.receipt(),language_catalog=languages.receipt(samples.HASHES),fold_commands=folds.receipt(samples.HASHES),eol_conversion=eols.receipt(samples.HASHES),line_operations=lines.receipt(samples.HASHES),line_ordering=ordering.receipt(samples.HASHES),search_scope=search_scope.receipt(samples.HASHES))
+            recent_files={},instance_tabs=samples.receipt(),language_catalog=languages.receipt(samples.HASHES),fold_commands=folds.receipt(samples.HASHES),eol_conversion=eols.receipt(samples.HASHES),line_operations=lines.receipt(samples.HASHES),line_ordering=ordering.receipt(samples.HASHES),search_scope=search_scope.receipt(samples.HASHES),open_search=open_search.receipt(samples.HASHES))
 
     def validate(self,record):
         ci=SimpleNamespace(portable=SimpleNamespace(RUNTIME_NAMES=tuple(samples.HASHES)),
@@ -76,6 +77,14 @@ class InstanceProductContract(unittest.TestCase):
         with self.assertRaises(ValueError):self.validate(r)
         r=self.record();r['search_scope']['fixture_binary_sha256']={}
         with self.assertRaises(ValueError):self.validate(r)
+
+    def test_open_search_gate_is_mandatory(self):
+        r=self.record();del r['open_search']
+        with self.assertRaises(ValueError):self.validate(r)
+        for mutate in (lambda x:x.update(passed=False), lambda x:x['cases'].pop(),
+                       lambda x:x['layouts'].pop(), lambda x:x.update(fixture_binary_sha256={})):
+            r=self.record();mutate(r['open_search'])
+            with self.assertRaises(ValueError):self.validate(r)
 
     def test_fold_command_gate_is_mandatory(self):
         r=self.record();del r['fold_commands']

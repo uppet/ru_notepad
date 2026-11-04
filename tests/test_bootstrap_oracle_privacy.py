@@ -22,5 +22,12 @@ class OraclePrivacyTests(unittest.TestCase):
         self.assertEqual(public_failure(data),data)
         self.assertEqual(hashlib.sha256(data).hexdigest(),proof['default_limit_failure']['sha256'])
         self.assertIn('prefix removed',proof['default_limit_failure']['path_redaction'])
+        self.assertIs(proof['default_limit_failure']['historical'],True)
+        self.assertNotEqual(proof['default_limit_failure']['compiler_commit'],proof['compiler_commit'])
+        current=proof['current_default_limit_failure']
+        self.assertEqual(current['compiler_commit'],proof['compiler_commit'])
+        self.assertEqual(current['steps'],current['step_limit']+1)
+        self.assertTrue(current['source'].startswith('src/'))
+        self.assertNotIn('/workspace/',json.dumps(proof))
         self.assertIn('原生签名静态分析超过复杂度上限',data.decode())
 if __name__=='__main__':unittest.main()

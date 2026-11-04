@@ -29,22 +29,24 @@ class PreviewContracts(unittest.TestCase):
 
     def test_descriptive_unicode_zip_checksum(self):
         with tempfile.TemporaryDirectory() as directory:
-            output=Path(directory)/'ru_notepad-常用行操作预览版-Windows-x64.zip'
+            output=Path(directory)/'ru_notepad-打开文档查找预览版-Windows-x64.zip'
             output.write_bytes(b'synthetic checksum fixture, not a package')
             package.write_checksum(output)
             self.assertEqual(output.with_suffix('.zip.sha256').read_text(encoding='utf-8'),
                              build.sha(output)+'  '+output.name+'\n')
 
     def test_preview_package_documents_instance_tabs_acceptance(self):
-        self.assertEqual(package.PREVIEW_DOCS,('bootstrap-llvm-preview.md','recent-files.md','single-instance-and-tabs.md','language-highlighting.md','eol-conversion.md','line-operations.md','line-ordering.md','literal-search.md'))
+        self.assertEqual(package.PREVIEW_DOCS,('bootstrap-llvm-preview.md','recent-files.md','single-instance-and-tabs.md','language-highlighting.md','eol-conversion.md','line-operations.md','line-ordering.md','literal-search.md','open-document-search.md'))
         for name in package.PREVIEW_DOCS:
             self.assertTrue((package.ROOT/'docs'/name).is_file())
         source=Path(package.__file__).read_text()
-        for text in ('instance_tabs GUI gate','--multi-instance','pending shell files',"'instance_tabs_gui': True", "'search_scope_gui': True"):
+        for text in ('instance_tabs GUI gate','--multi-instance','pending shell files',"'instance_tabs_gui': True", "'search_scope_gui': True", "'open_search_gui': True"):
             self.assertIn(text,source)
         self.assertIn("validate_result(report.get('instance_tabs'), hashes)",Path(product.__file__).read_text())
         self.assertIn("validate_search_scope(report.get('search_scope'), hashes)",Path(product.__file__).read_text())
         self.assertIn("report['search_scope'] = run_search_scope(api, runtime, fixtures, evidence)",Path(product.__file__).read_text())
+        self.assertIn("validate_open_search(report.get('open_search'), hashes)",Path(product.__file__).read_text())
+        self.assertIn("report['open_search'] = run_open_search(api, runtime, fixtures, evidence)",Path(product.__file__).read_text())
 
     def test_package_markdown_scope_binds_current_product_deprecation(self):
         import test_package as fixtures
@@ -273,7 +275,10 @@ class PreviewContracts(unittest.TestCase):
         # Negative controls use this same checkout's real baseline and inventory,
         # not a synthetic repository whose valid manifest could hide stale inputs.
         for name in ('src/main.ru', 'src/editor.ru', 'src/search_history.ru',
-                     'tools/gui_search_scope.py', 'tests/test_bootstrap_search_scope.py'):
+                     'tools/gui_search_scope.py', 'tests/test_bootstrap_search_scope.py',
+                     'src/open_search.ru', 'tests/open_search_native.ru', 'tests/test_open_search_contract.py',
+                     'tools/gui_open_search.py', 'tools/test_gui_open_search.py', 'tests/test_bootstrap_open_search.py',
+                     'locales/open_search.json', 'docs/open-document-search.md'):
             changed = dict(current); changed[name] = '0' * 64
             with self.subTest(path=name), self.assertRaises(InvalidProvenance):
                 build.verify_app_baseline(root, {**frozen['baseline'],
@@ -450,8 +455,8 @@ class PreviewContracts(unittest.TestCase):
             return build.verify_proof(proof,**kwargs)
         with patch.object(recent_fixtures,'validate_toolchain'),patch.object(recent_fixtures,'verify_proof',side_effect=verify_fields) as verifier:
             recent_fixtures.validate_report(report,app,compiler,dependencies)
-            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16, 'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':709, 'single_instance_native':18, 'single_instance_busy_native':23, 'language_catalog_native':678, 'editor_native':141})
-            self.assertEqual(verifier.call_count,13)
+            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16, 'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':709, 'single_instance_native':18, 'single_instance_busy_native':23, 'language_catalog_native':678, 'editor_native':141, 'open_search_native':29})
+            self.assertEqual(verifier.call_count,14)
             bad=copy.deepcopy(report);del bad['results']['single_instance_busy_native']
             with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)
             bad=copy.deepcopy(report);del bad['results']['editor_native']

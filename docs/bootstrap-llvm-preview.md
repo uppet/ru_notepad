@@ -74,9 +74,9 @@ reported as a successful complete release suite.
 
 ## Native application graph evidence
 
-The editor-owned `compile_bootstrap_native.py` calls the exact reviewed b93b23dd
+The editor-owned `compile_bootstrap_native.py` calls the exact reviewed c3bb177c
 `compile_native` API with native support and retained frontend evidence. During
-main, probe and all ten fixture compilations it poisons seven Python application
+main, probe and all fourteen fixture compilations it poisons seven Python application
 frontend entry points (including the native emitter's source alias). Attempts,
 even caught ones, fail the build. This does not replace stage3, the six frozen
 LLVM executable identities, linker/source checks, native fixtures or GUI gates.

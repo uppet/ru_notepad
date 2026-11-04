@@ -14,6 +14,7 @@
 行作 取 外言 'line_operations.ru'.
 行序 取 外言 'line_ordering.ru'.
 寻史 取 外言 'search_history.ru'.
+开寻 取 外言 'open_search.ru'.
 件编 取 外言 'file_codec.ru'.
 模 取 外言 'document.ru'.
 参 取 外言 'ui_arguments.ru'.
@@ -24,7 +25,7 @@
 关联 取 外言 'associations.ru'.
 拖放 取 外言 'file_drop.ru'.
 修改头 取 密 其 结构 [['header',窗 其 NMHDR],['position',窗 其 IP],['ch',窗 其 I],['modifiers',窗 其 I],['modificationType',窗 其 I],['text',窗 其 PTR],['length',窗 其 IP],['linesAdded',窗 其 IP],['message',窗 其 I],['wParam',窗 其 UP],['lParam',窗 其 IP],['line',窗 其 IP],['foldLevelNow',窗 其 I],['foldLevelPrev',窗 其 I],['margin',窗 其 I]].
-A 取 {'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':0,'scopeEnd':0,'scopeLabel':'','scope':空,'findHistory':[],'replaceHistory':[],'orderNotice':假,'lineNotice':假,'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':假,'cleanupRetrying':假,'cleanupPending':假,'singlePreference':真,'singleState':空,'singleDeferredShow':假,'handoffPending':[],'closeRun':空,'tabMenuOpen':假,'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'system','docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'previous':空,'whole':空,'searchWrap':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxEntryYields':0,'syntaxPostYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
+A 取 {'openSearch':空,'openSearchVisible':假,'openSearchRows':0,'openSearchTick':假,'resultList':空,'resultSummary':空,'resultOpen':空,'resultStop':空,'resultHide':空,'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':0,'scopeEnd':0,'scopeLabel':'','scope':空,'findHistory':[],'replaceHistory':[],'orderNotice':假,'lineNotice':假,'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':假,'cleanupRetrying':假,'cleanupPending':假,'singlePreference':真,'singleState':空,'singleDeferredShow':假,'handoffPending':[],'closeRun':空,'tabMenuOpen':假,'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'system','docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'previous':空,'whole':空,'searchWrap':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxEntryYields':0,'syntaxPostYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
 
 # Admission barrier across native modal loops. No unacknowledged raw pointers retained.
 算 界面弹窗 主窗, 文 为 句, 标题 为 句, 类型 为 数:
@@ -333,6 +334,117 @@ A 取 {'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':
     A 其 增 'shutdownBlocked' 假.
     得 1.
 法
+# Read-only all-open-buffer search owns a timer and a separate result panel.
+# Only identities/revisions are retained; every tick validates the live set.
+算 结果状态:
+    查找态 取 A 其 查 'openSearch'.
+    若 查找态 == 空 则 得 空. 然
+    键 取 'search.results_'+查找态['status'].
+    窗 其 标题 (A 其 查 'resultSummary') (本地 其 格式 键 ([(查找态['results'] 其 量),查找态['documentCount']])).
+    活 取 0. 若 查找态['status'] == 'running' 则 活 取 1. 然
+    窗 其 结果 ((窗 其 EnableWindow) 其 调用 [(A 其 查 'resultStop'),活]).
+    可去 取 0.
+    若 (查找态['results'] 其 量) > 0 且 查找态['status'] != 'stale' 且 查找态['status'] != 'failed' 则 可去 取 1. 然
+    窗 其 结果 ((窗 其 EnableWindow) 其 调用 [(A 其 查 'resultOpen'),可去]).
+    得 空.
+法
+算 停结果:
+    窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),903]).
+    查找态 取 A 其 查 'openSearch'.
+    若 查找态 != 空 则 开寻 其 取消 查找态. 结果状态. 然
+    得 空.
+法
+算 结果失效:
+    查找态 取 A 其 查 'openSearch'.
+    若 查找态 != 空 则
+        窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),903]).
+        查找态 其 增 'status' 'stale'.
+        若 A 其 查 'ready' 则 结果状态. 然
+    然
+    得 空.
+法
+算 结果显示 显示 为 事实:
+    若 非 显示 则
+        停结果.
+        当前焦 取 (((窗 其 GetFocus) 其 调用 []) 其 值) 其 句.
+        若 当前焦 == ((A 其 查 'resultList') 其 句) 或 当前焦 == ((A 其 查 'resultOpen') 其 句) 或 当前焦 == ((A 其 查 'resultStop') 其 句) 或 当前焦 == ((A 其 查 'resultHide') 其 句) 则
+            窗 其 结果 ((窗 其 SetFocus) 其 调用 [(编辑柄)]).
+        然
+    然
+    A 其 增 'openSearchVisible' 显示.
+    模式 取 0. 若 显示 则 模式 取 5. 然
+    控们 取 ['resultList','resultSummary','resultOpen','resultStop','resultHide']. 位 取 0.
+    循 控们 其 量 次
+        窗 其 结果 ((窗 其 ShowWindow) 其 调用 (参 其 控件二参 A 控们[位] 模式)).
+        位 取 位+1.
+    环
+    布局.
+    得 空.
+法
+算 启动全文档搜索:
+    词 取 窗 其 取文 (A 其 查 'find').
+    若 词 == '' 则 寻栏 真. 得 空. 然
+    若 (词 其 量) > 1024 则 提示 (本地 其 文本 'search.results_query_limit'). 得 空. 然
+    停结果.
+    区分 取 非 ((窗 其 发送 (A 其 查 'case') 240 0 0) 其 为空).
+    整词 取 非 ((窗 其 发送 (A 其 查 'whole') 240 0 0) 其 为空).
+    查找态 取 开寻 其 新建 (A 其 查 'docs') 词 区分 整词.
+    A 其 增 'openSearch' 查找态.
+    A 其 增 'openSearchRows' 0.
+    窗 其 发送 (A 其 查 'resultList') 388 0 0. # LB_RESETCONTENT
+    A 其 增 'findHistory' (寻史 其 记录 (A 其 查 'findHistory') 词).
+    菜单.
+    结果显示 真.
+    若 查找态['status'] == 'running' 则
+        若 ((窗 其 SetTimer) 其 调用 [(A 其 查 'window'),903,20,空]) 其 值 其 为空 则
+            查找态 其 增 'status' 'failed'.
+            查找态 其 增 'error' 'Search timer could not start.'.
+        然
+    然
+    结果状态.
+    得 空.
+法
+算 搜索结果时钟:
+    若 (A 其 查 'openSearchTick') 或 (A 其 查 'busy') 或 (A 其 查 'modalDepth') != 0 或 (A 其 查 'closeRun') != 空 或 (A 其 查 'tabMenuOpen') 或 (A 其 查 'closeIndex') >= 0 则 得 空. 然
+    查找态 取 A 其 查 'openSearch'.
+    若 查找态 == 空 或 查找态['status'] != 'running' 或 非 (A 其 查 'openSearchVisible') 则 得 空. 然
+    A 其 增 'openSearchTick' 真.
+    试
+        开寻 其 步进 查找态 (A 其 查 'docs').
+        位 取 A 其 查 'openSearchRows'.
+        循
+            若 位 >= (查找态['results'] 其 量) 则 破. 然
+            文 取 开寻 其 行标签 查找态['results'][位].
+            存 取 密 其 UTF16 文. 加果 取 0.
+            试
+                加果 取 (窗 其 发指 (A 其 查 'resultList') 384 0 存) 其 数. # LB_ADDSTRINGW
+            救 原因
+                存 其 关闭. 卒 'Search result display failed.'.
+            终
+            存 其 关闭.
+            若 加果 < 0 则 卒 'Search result display failed.'. 然
+            位 取 位+1. A 其 增 'openSearchRows' 位.
+        环
+    救 原因
+        查找态 其 增 'status' 'failed'. 查找态 其 增 'error' 'Open-buffer search could not continue.'.
+    终
+    A 其 增 'openSearchTick' 假.
+    若 查找态['status'] != 'running' 则 窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),903]). 然
+    结果状态.
+    得 空.
+法
+算 转到搜索结果:
+    查找态 取 A 其 查 'openSearch'.
+    若 查找态 == 空 或 非 (A 其 查 'openSearchVisible') 则 得 空. 然
+    项 取 (窗 其 发送 (A 其 查 'resultList') 392 0 0) 其 数. # LB_GETCURSEL
+    若 项 < 0 则 得 空. 然
+    位 取 开寻 其 定位 查找态 项 (A 其 查 'docs').
+    若 位 >= 0 则 切页 位. 然
+    若 查找态['status'] != 'running' 则 窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),903]). 然
+    结果状态.
+    得 空.
+法
+
 # Search scope is an explicit capture, never the transient selected match.
 # Invalid is sticky: only the two user scope commands can leave it.
 算 搜索失效:
@@ -482,7 +594,23 @@ A 取 {'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':
     若 A 其 查 'busy' 则 状态宽 取 宽-取消宽-4. 然
     移控 (A 其 查 'status') 0 (高-25) 状态宽 25.
     移控 (A 其 查 'cancel') (宽-取消宽-2) (高-25) 取消宽 25.
-    若 (A 其 查 'active') >= 0 则 移控 编辑柄 0 32 宽 (高-57-寻高). 然
+    结果高 取 0.
+    若 A 其 查 'openSearchVisible' 则
+        结果高 取 180.
+        可用 取 高-57-寻高.
+        若 结果高 > 可用-48 则 结果高 取 可用-48. 然
+        若 结果高 < 64 则 结果高 取 64. 然
+        结果纵 取 高-25-寻高-结果高.
+        移控 (A 其 查 'resultSummary') 8 结果纵 (宽-16) 24.
+        移控 (A 其 查 'resultList') 8 (结果纵+24) (宽-16) (结果高-58).
+        横 取 8. 控们果 取 ['resultOpen','resultStop','resultHide']. 果位 取 0.
+        循 控们果 其 量 次
+            按宽 取 按钮宽 控们果[果位].
+            移控 (A 其 查 控们果[果位]) 横 (结果纵+结果高-29) 按宽 26.
+            横 取 横+按宽+6. 果位 取 果位+1.
+        环
+    然
+    若 (A 其 查 'active') >= 0 则 移控 编辑柄 0 32 宽 (高-57-寻高-结果高). 然
     若 位置 == 空 则 得 空. 然
     栏纵 取 高-25-寻高.
     输入宽 取 位置['inputWidth'].
@@ -498,14 +626,14 @@ A 取 {'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':
     得 空.
 法
 算 界面文字:
-    标控们 取 ['cancel','case','whole','searchWrap','previous','next','one','all','hide'].
-    标键们 取 ['search.cancel','search.case','search.whole','search.wrap','search.previous','search.next','search.replace','search.all','search.close'].
+    标控们 取 ['resultOpen','resultStop','resultHide','cancel','case','whole','searchWrap','previous','next','one','all','hide'].
+    标键们 取 ['search.results_open','search.results_stop','search.results_hide','search.cancel','search.case','search.whole','search.wrap','search.previous','search.next','search.replace','search.all','search.close'].
     位 取 0.
     循 标控们 其 量 次
         窗 其 标题 (A 其 查 标控们[位]) (本地 其 文本 标键们[位]).
         位 取 位+1.
     环
-    控们 取 ['tabs','status','cancel','find','replace','scope','case','whole','searchWrap','previous','next','one','all','hide'].
+    控们 取 ['resultList','resultSummary','resultOpen','resultStop','resultHide','tabs','status','cancel','find','replace','scope','case','whole','searchWrap','previous','next','one','all','hide'].
     位 取 0.
     循 控们 其 量 次
         窗 其 界面字体 (A 其 查 控们[位]).
@@ -513,6 +641,7 @@ A 取 {'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':
     环
     窗 其 输入提示 (A 其 查 'find') (本地 其 文本 'search.find').
     窗 其 输入提示 (A 其 查 'replace') (本地 其 文本 'search.replace_with').
+    结果状态.
     得 空.
 法
 算 切界面 代码 为 句, 持久 为 事实:
@@ -605,6 +734,7 @@ A 取 {'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':
     若 路 == '' 则 名 取 本地 其 格式 'document.untitled' ([序]). 然
     语言 取 'plain'.
     若 非 大型 则 语言 取 选择语法 柄 (语 其 识别 路). 然
+    结果失效.
     文档 取 {'editor':柄,'path':路,'untitledNumber':序,'name':名,'encoding':编码,'bom':BOM,'stamp':戳,'fileIdentity':身份,'encodingDirty':假,'label':'','wrap':假,'language':语言,'markdownFolds':真,'large':大型,'revision':0}.
     项 取 (窗 其 TCITEM) 其 新建.
     存 取 空.
@@ -1079,6 +1209,7 @@ A 取 {'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':
     得 界面弹窗 (A 其 查 'window') (本地 其 格式 'dialog.unsaved' ([(文档 其 查 'name')])) (本地 其 文本 'dialog.unsaved.title') 35.
 法
 算 删除当前页:
+    结果失效.
     # Invalidate before forgetting or destroying a document with queued work.
     停止语法.
     文们 取 A 其 查 'docs'.
@@ -1354,9 +1485,13 @@ A 取 {'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':
         A 其 增 'orderNotice' (行果 == -2).
         A 其 增 'lineNotice' (行果 == -1).
     然
-    若 (号 >= 301 且 号 <= 316) 或 (号 >= 1700 且 号 <= 1731) 则
+    若 (号 >= 301 且 号 <= 322) 或 (号 >= 1700 且 号 <= 1731) 则
         若 (A 其 查 'modalDepth') != 0 则 得 空. 然
     然
+    若 号 == 317 则 启动全文档搜索. 得 空. 然
+    若 号 == 318 则 停结果. 得 空. 然
+    若 号 == 319 则 结果显示 假. 得 空. 然
+    若 号 == 322 则 转到搜索结果. 得 空. 然
     若 号 == 313 则 捕获搜索选区. 得 空. 然
     若 号 == 314 则 A 其 增 'searchScope' 'document'. 搜索状态. 寻栏 真. 得 空. 然
     若 号 == 315 则
@@ -1520,9 +1655,9 @@ A 取 {'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':
 算 菜单:
     # Parallel primitive arrays keep the pinned compiler's ABI analysis bounded.
     组键们 取 ['menu.file', 'menu.edit', 'menu.search', 'menu.encoding', 'menu.language', 'menu.view', 'menu.settings', 'menu.ui_language', 'menu.help'].
-    组量们 取 [11, 19, 7, 6, 5, 7, 5, 8, 1].
-    号们 取 [101, 102, 108, 109, 103, 104, 105, 111, 112, 113, 106, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 301, 302, 303, 308, 313, 314, 315, 401, 402, 403, 404, 405, 406, 701, 702, 703, 704, 705, 501, 502, 503, 504, 505, 506, 507, 801, 802, 803, 804, 805, 850, 851, 852, 853, 854, 855, 856, 857, 601].
-    键们 取 ['command.new', 'command.open', 'command.open_windows1252', 'command.open_gbk', 'command.save', 'command.save_as', 'command.close_tab', 'command.previous_tab', 'command.next_tab', 'command.open_pending_shell', 'command.exit', 'command.undo', 'command.redo', 'command.cut', 'command.copy', 'command.paste', 'command.select_all', 'command.eol_crlf', 'command.eol_lf', 'command.eol_cr', 'command.duplicate_lines', 'command.move_lines_up', 'command.move_lines_down', 'command.trim_line_ends', 'command.sort_selected_ascending', 'command.sort_selected_descending', 'command.deduplicate_selected_lines', 'command.sort_all_ascending', 'command.sort_all_descending', 'command.deduplicate_all_lines', 'command.find', 'command.replace', 'command.find_next', 'command.find_previous', 'search.capture_selection', 'search.current_document', 'search.clear_history', 'command.save_utf8', 'command.save_utf8_bom', 'command.save_utf16le', 'command.save_utf16be', 'command.save_windows1252', 'command.save_gbk', 'command.language_plain', 'command.language_cpp', 'command.language_json', 'command.language_ru', 'command.language_markdown', 'command.toggle_wrap', 'command.zoom_in', 'command.zoom_out', 'command.zoom_reset', 'command.fold_all', 'command.unfold_all', 'command.toggle_markdown_folds', 'command.register_association', 'command.default_apps', 'command.unregister_association', 'command.registration_status', 'command.single_instance', 'language.system', 'language.en', 'language.zh_cn', 'language.ja', 'language.ko', 'language.es', 'language.ru', 'language.it', 'command.about'].
+    组量们 取 [11, 19, 10, 6, 5, 7, 5, 8, 1].
+    号们 取 [101, 102, 108, 109, 103, 104, 105, 111, 112, 113, 106, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 301, 302, 303, 308, 313, 314, 315, 317, 318, 319, 401, 402, 403, 404, 405, 406, 701, 702, 703, 704, 705, 501, 502, 503, 504, 505, 506, 507, 801, 802, 803, 804, 805, 850, 851, 852, 853, 854, 855, 856, 857, 601].
+    键们 取 ['command.new', 'command.open', 'command.open_windows1252', 'command.open_gbk', 'command.save', 'command.save_as', 'command.close_tab', 'command.previous_tab', 'command.next_tab', 'command.open_pending_shell', 'command.exit', 'command.undo', 'command.redo', 'command.cut', 'command.copy', 'command.paste', 'command.select_all', 'command.eol_crlf', 'command.eol_lf', 'command.eol_cr', 'command.duplicate_lines', 'command.move_lines_up', 'command.move_lines_down', 'command.trim_line_ends', 'command.sort_selected_ascending', 'command.sort_selected_descending', 'command.deduplicate_selected_lines', 'command.sort_all_ascending', 'command.sort_all_descending', 'command.deduplicate_all_lines', 'command.find', 'command.replace', 'command.find_next', 'command.find_previous', 'search.capture_selection', 'search.current_document', 'search.clear_history', 'search.results_find', 'search.results_stop', 'search.results_hide', 'command.save_utf8', 'command.save_utf8_bom', 'command.save_utf16le', 'command.save_utf16be', 'command.save_windows1252', 'command.save_gbk', 'command.language_plain', 'command.language_cpp', 'command.language_json', 'command.language_ru', 'command.language_markdown', 'command.toggle_wrap', 'command.zoom_in', 'command.zoom_out', 'command.zoom_reset', 'command.fold_all', 'command.unfold_all', 'command.toggle_markdown_folds', 'command.register_association', 'command.default_apps', 'command.unregister_association', 'command.registration_status', 'command.single_instance', 'language.system', 'language.en', 'language.zh_cn', 'language.ja', 'language.ko', 'language.es', 'language.ru', 'language.it', 'command.about'].
     主 取 窗 其 成功 ((窗 其 CreateMenu) 其 调用 []) 'CreateMenu'.
     子 取 空.
     试
@@ -1588,6 +1723,8 @@ A 取 {'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':
         得 0.
     然
     若 号 == 2 则
+        窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),903]).
+        A 其 增 'openSearch' 空.
         A 其 增 'ready' 假.
         停止语法.
         # This single main window is being destroyed; no queued slot may carry
@@ -1615,6 +1752,7 @@ A 取 {'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':
             若 号 == 17 则 得 关机会话. 然
             若 号 == 275 且 (宽参 其 数) == 901 则 工作时钟. 得 0. 然
             若 号 == 275 且 (宽参 其 数) == 902 则 语法时钟. 得 0. 然
+            若 号 == 275 且 (宽参 其 数) == 903 则 搜索结果时钟. 得 0. 然
             若 号 == 33671 则
                 若 (柄 其 句) == ((A 其 查 'window') 其 句) 且 (宽参 其 位段 0 32) == 0 且 (宽参 其 位段 32 32) == 0 且 (长参 其 位段 0 32) == 0 且 (长参 其 位段 32 32) == 0 则 诊断语法. 然
                 得 0.
@@ -1634,6 +1772,10 @@ A 取 {'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':
             若 号 == 279 则 行序菜单状态. 得 0. 然
             若 号 == 5 则 布局. 得 0. 然
             若 号 == 16 则 关程序. 得 0. 然
+            若 号 == 273 且 (宽参 其 位段 0 16) == 320 且 (宽参 其 位段 16 16) == 2 则
+                若 ((窗 其 PTR) 其 重释 长参) 其 句 == ((A 其 查 'resultList') 其 句) 则 命令 322. 然
+                得 0.
+            然
             若 号 == 273 且 (宽参 其 位段 16 16) == 0 则
                 命令 (宽参 其 位段 0 16).
                 得 0.
@@ -1662,6 +1804,7 @@ A 取 {'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':
                     若 码 == 2008 且 (类型 其 位段 0 2) != 0 则
                         若 (A 其 查 'scopeEditor') == (来源 其 句) 则 搜索失效. 然
                         文档 其 增 'revision' ((文档 其 查 'revision')+1).
+                        结果失效.
                         语 其 变化 来源 位置 长度 行变 (类型 其 数).
                         安排语法.
                     然
@@ -1696,6 +1839,10 @@ A 取 {'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':
     Ctrl 取 ((窗 其 结果 ((窗 其 GetKeyState) 其 调用 [17])) 其 位段 15 1) == 1.
     Shift 取 ((窗 其 结果 ((窗 其 GetKeyState) 其 调用 [16])) 其 位段 15 1) == 1.
     Alt 取 ((窗 其 结果 ((窗 其 GetKeyState) 其 调用 [18])) 其 位段 15 1) == 1.
+    若 非 Ctrl 且 非 Shift 且 非 Alt 且 (A 其 查 'openSearchVisible') 且 (消息 其 读 'hwnd') 其 句 == ((A 其 查 'resultList') 其 句) 则
+        若 键 == 13 则 命令 322. 得 真. 然
+        若 键 == 27 则 命令 319. 得 真. 然
+    然
     号令 取 键规 其 命令号 键 Ctrl Shift Alt (A 其 查 'search').
     若 号令 == 0 则 得 假. 然
     试
@@ -1791,6 +1938,11 @@ A 取 {'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':
     A 其 增 'all' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 305).
     A 其 增 'scope' (窗 其 控制 主窗 实例 'BUTTON' '' 1208025088 316).
     A 其 增 'hide' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 307).
+    A 其 增 'resultList' (窗 其 控制 主窗 实例 'LISTBOX' '' 1084293377 320).
+    A 其 增 'resultSummary' (窗 其 控制 主窗 实例 'STATIC' '' 1073741824 321).
+    A 其 增 'resultOpen' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 322).
+    A 其 增 'resultStop' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 318).
+    A 其 增 'resultHide' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 319).
     显 '[startup] controls created'.
     界面文字.
     菜单.

@@ -2,15 +2,15 @@
   "schema": "ru-notepad-application-native-oracle-v1",
   "scope": "independent Python development oracle with isolated 2000000-step analysis budget, not default-limit C/stage3/LLVM/Windows evidence",
   "application_base_commit": "b79baa824b0a48f564ad95447e4ce64cc5b5911b",
-  "compiler_commit": "b93b23dd545e5e392544b4c411db30e9c2d7d15a",
-  "compiler_tree": "a15bc85adafdb512af53b4ead8e33be3b48ed70a",
+  "compiler_commit": "c3bb177c6a15e90821e5495cc74b0fdfc39b893a",
+  "compiler_tree": "5dedbf06f9fb6e00fbfe779b33f172aa35b61334",
   "entry": "src/main.ru",
   "modules": [
     {
       "scope": "app",
       "path": "src/main.ru",
-      "sha256": "ece7c152575859bd69d59f85d337fdbfc3cea1c5a67356de4c379c8f37142f64",
-      "git_blob": "a9b1ecc096282e3f71837479c68a039d9cb4ef9c"
+      "sha256": "d5b94bfd20d5e9b3a26b14e0d39f3fc0ba9bfc5a588b599419e51db33bc3be93",
+      "git_blob": "62892f3a8c64b96798d8cf14f5bd712f8b5f3fc8"
     },
     {
       "scope": "compiler",
@@ -27,8 +27,8 @@
     {
       "scope": "app",
       "path": "src/i18n_catalog.ru",
-      "sha256": "2a2069d12d975ecd198e649ddd64e3156affe8e3ba3914d6f30aa6816afe5027",
-      "git_blob": "492042a4d0da7b6a4714fbd5b35242e6a657acdb"
+      "sha256": "84127e50828fff7687f25f32187862313c6259f1aaa831960816e5a94854bded",
+      "git_blob": "7fe1b92a7cbb367dcc146a960ab55338f2981de9"
     },
     {
       "scope": "app",
@@ -75,8 +75,8 @@
     {
       "scope": "app",
       "path": "src/win32.ru",
-      "sha256": "04c796b02f4366e5bbce1c3cfa413624ef35b09a0940c78adabcbacc3b9a910c",
-      "git_blob": "7c360796d28e59c0791acfea6ce81e7bfe412de3"
+      "sha256": "80a2bf6ad15a082144389c6f22d72cf335279c6537df167204673cf53dd57edf",
+      "git_blob": "9bee30e35c337e548647502639157d56fde1f04a"
     },
     {
       "scope": "app",
@@ -125,6 +125,12 @@
       "path": "src/search_history.ru",
       "sha256": "78a90838988f5738602408f68919cbc3a7165bcb647389b52699992a0aa1e116",
       "git_blob": "bc1ee13512fc9f67c0c6a6be35ded2d965693e0e"
+    },
+    {
+      "scope": "app",
+      "path": "src/open_search.ru",
+      "sha256": "53d927e68f09fc9ee9a7e86cb444965d39972f3acacda8f8d536efbef7278313",
+      "git_blob": "a1df7f2446950c4336e8ef9fa554629fc9ccf9c9"
     },
     {
       "scope": "app",

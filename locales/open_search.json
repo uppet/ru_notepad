@@ -1,0 +1,101 @@
+{
+  "search.results_find": {
+    "en": "Find All in Open Documents",
+    "zh-CN": "在所有打开文档中查找",
+    "ja": "開いているすべての文書を検索",
+    "ko": "열린 모든 문서에서 찾기",
+    "es": "Buscar en documentos abiertos",
+    "ru": "Найти во всех открытых документах",
+    "it": "Trova nei documenti aperti"
+  },
+  "search.results_open": {
+    "en": "Go to result",
+    "zh-CN": "转到结果",
+    "ja": "結果に移動",
+    "ko": "결과로 이동",
+    "es": "Ir al resultado",
+    "ru": "Перейти к результату",
+    "it": "Vai al risultato"
+  },
+  "search.results_stop": {
+    "en": "Stop",
+    "zh-CN": "停止",
+    "ja": "停止",
+    "ko": "중지",
+    "es": "Detener",
+    "ru": "Остановить",
+    "it": "Interrompi"
+  },
+  "search.results_hide": {
+    "en": "Close results",
+    "zh-CN": "关闭结果",
+    "ja": "結果を閉じる",
+    "ko": "결과 닫기",
+    "es": "Cerrar resultados",
+    "ru": "Закрыть результаты",
+    "it": "Chiudi risultati"
+  },
+  "search.results_running": {
+    "en": "{0} matches · searching {1} open documents…",
+    "zh-CN": "{0} 处匹配 · 正在搜索 {1} 个打开文档…",
+    "ja": "{0} 件一致 · 開いている {1} 文書を検索中…",
+    "ko": "일치 {0}개 · 열린 문서 {1}개 검색 중…",
+    "es": "{0} coincidencias · buscando en {1} documentos…",
+    "ru": "Совпадений: {0} · поиск в {1} документах…",
+    "it": "{0} corrispondenze · ricerca in {1} documenti…"
+  },
+  "search.results_complete": {
+    "en": "{0} matches in {1} open documents",
+    "zh-CN": "{1} 个打开文档中有 {0} 处匹配",
+    "ja": "開いている {1} 文書に {0} 件一致",
+    "ko": "열린 문서 {1}개에서 {0}개 일치",
+    "es": "{0} coincidencias en {1} documentos abiertos",
+    "ru": "Совпадений: {0}, открытых документов: {1}",
+    "it": "{0} corrispondenze in {1} documenti aperti"
+  },
+  "search.results_cancelled": {
+    "en": "{0} matches · stopped (incomplete; {1} documents)",
+    "zh-CN": "{0} 处匹配 · 已停止（不完整；{1} 个文档）",
+    "ja": "{0} 件一致 · 停止（未完了、{1} 文書）",
+    "ko": "일치 {0}개 · 중지됨(미완료, 문서 {1}개)",
+    "es": "{0} coincidencias · detenido (incompleto; {1} documentos)",
+    "ru": "Совпадений: {0} · остановлено (неполно; документов: {1})",
+    "it": "{0} corrispondenze · interrotto (incompleto; {1} documenti)"
+  },
+  "search.results_stale": {
+    "en": "{0} matches · documents changed; run again ({1} documents)",
+    "zh-CN": "{0} 处匹配 · 文档已更改，请重新搜索（{1} 个文档）",
+    "ja": "{0} 件一致 · 文書が変更されました。再検索してください（{1} 文書）",
+    "ko": "일치 {0}개 · 문서가 변경됨, 다시 검색하세요(문서 {1}개)",
+    "es": "{0} coincidencias · documentos modificados; vuelva a buscar ({1} documentos)",
+    "ru": "Совпадений: {0} · документы изменились; повторите поиск ({1})",
+    "it": "{0} corrispondenze · documenti modificati; ripeti la ricerca ({1} documenti)"
+  },
+  "search.results_limited": {
+    "en": "{0} matches · result limit reached (incomplete; {1} documents)",
+    "zh-CN": "{0} 处匹配 · 已达结果上限（不完整；{1} 个文档）",
+    "ja": "{0} 件一致 · 結果上限に到達（未完了、{1} 文書）",
+    "ko": "일치 {0}개 · 결과 한도 도달(미완료, 문서 {1}개)",
+    "es": "{0} coincidencias · límite alcanzado (incompleto; {1} documentos)",
+    "ru": "Совпадений: {0} · достигнут предел (неполно; документов: {1})",
+    "it": "{0} corrispondenze · limite raggiunto (incompleto; {1} documenti)"
+  },
+  "search.results_failed": {
+    "en": "{0} matches · search failed (incomplete; {1} documents)",
+    "zh-CN": "{0} 处匹配 · 搜索失败（不完整；{1} 个文档）",
+    "ja": "{0} 件一致 · 検索失敗（未完了、{1} 文書）",
+    "ko": "일치 {0}개 · 검색 실패(미완료, 문서 {1}개)",
+    "es": "{0} coincidencias · búsqueda fallida (incompleto; {1} documentos)",
+    "ru": "Совпадений: {0} · ошибка поиска (неполно; документов: {1})",
+    "it": "{0} corrispondenze · ricerca fallita (incompleto; {1} documenti)"
+  },
+  "search.results_query_limit": {
+    "en": "Find All in Open Documents accepts up to 1,024 characters. Existing results are unchanged.",
+    "zh-CN": "所有打开文档查找最多接受 1,024 个字符。已有结果保持不变。",
+    "ja": "全文書検索は 1,024 文字までです。既存の結果は変更されません。",
+    "ko": "열린 모든 문서 찾기는 최대 1,024자까지 지원합니다. 기존 결과는 유지됩니다.",
+    "es": "La búsqueda en documentos abiertos admite hasta 1.024 caracteres. Los resultados existentes no cambian.",
+    "ru": "Поиск во всех документах допускает до 1024 символов. Прежние результаты сохранены.",
+    "it": "La ricerca nei documenti aperti accetta fino a 1.024 caratteri. I risultati esistenti restano invariati."
+  }
+}

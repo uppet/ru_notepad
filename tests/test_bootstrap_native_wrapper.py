@@ -158,9 +158,11 @@ class NativeWrapperTests(unittest.TestCase):
             original=source.read_bytes();source.write_bytes(original+b'changed')
             with self.assertRaises(InvalidProvenance):oracle.verify_application_oracle(proof,app,core,frozen,binary)
             source.write_bytes(original)
-            wrong_anchor=copy.deepcopy(expected);wrong_anchor['application_base_commit']='b'*40
-            oracle_path.write_text(json.dumps(wrong_anchor));frozen['app_source'][oracle.ORACLE_PATH]=native.sha(oracle_path)
-            with self.assertRaises(InvalidProvenance):oracle.verify_application_oracle(proof,app,core,frozen,binary)
+            for key in ('application_base_commit','compiler_commit','compiler_tree','entry','scope'):
+                wrong_anchor=copy.deepcopy(expected);wrong_anchor[key]='b'*40
+                oracle_path.write_text(json.dumps(wrong_anchor));frozen['app_source'][oracle.ORACLE_PATH]=native.sha(oracle_path)
+                with self.subTest(key=key),self.assertRaises(InvalidProvenance):
+                    oracle.verify_application_oracle(proof,app,core,frozen,binary)
             altered=copy.deepcopy(expected);altered['shapes'][0]['result']='u32';oracle_path.write_text(json.dumps(altered))
             with self.assertRaises(InvalidProvenance):oracle.verify_application_oracle(proof,app,core,frozen,binary)
             frozen['app_source'][oracle.ORACLE_PATH]=native.sha(oracle_path)

@@ -270,8 +270,8 @@ class FixtureCompilation(unittest.TestCase):
             def native(command,**kwargs):
                 name=Path(command[0]).stem
                 self.assertEqual(kwargs['timeout'],60)
-                self.assertEqual(len([e for e in events if e[0]=='compiled']),13)
-                self.assertEqual(len([e for e in events if e[0]=='proof']),13)
+                self.assertEqual(len([e for e in events if e[0]=='compiled']),14)
+                self.assertEqual(len([e for e in events if e[0]=='proof']),14)
                 events.append(('execute',name))
                 count=fixtures.CASES[name]
                 return subprocess.CompletedProcess(command,0,('PASS: synthetic\n'*count+'TOTAL PASS: '+str(count)+'\n').encode(),b'')
@@ -286,8 +286,8 @@ class FixtureCompilation(unittest.TestCase):
         source=inspect.getsource(fixtures.verify)
         self.assertIn('timeout=EXECUTE_TIMEOUT',source)
         self.assertEqual((fixtures.COMPILE_WORKERS,fixtures.COMPILE_TIMEOUT,fixtures.EXECUTE_TIMEOUT),(2,600,60))
-        self.assertEqual(len(fixtures.CASES),13)
-        self.assertEqual(sum(fixtures.CASES.values()),2337)
+        self.assertEqual(len(fixtures.CASES),14)
+        self.assertEqual(sum(fixtures.CASES.values()),2366)
         outputs=[]
         for name in fixtures.CASES:
             outputs.extend(name+suffix for suffix in ('.exe','.ll','.proof.json','.exe.metadata.c','.exe.frontend.ll','.exe.native-wrapper.json'))

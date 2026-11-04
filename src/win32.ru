@@ -47,6 +47,7 @@ PostMessageW 取 用户 其 绑定 'PostMessageW' (密 其 签名 I ([PTR,U,UP,I
 MoveWindow 取 用户 其 绑定 'MoveWindow' (密 其 签名 I ([PTR,I,I,I,I,I]) 'win64').
 GetClientRect 取 用户 其 绑定 'GetClientRect' (密 其 签名 I ([PTR,PTR]) 'win64').
 SetFocus 取 用户 其 绑定 'SetFocus' (密 其 签名 PTR ([PTR]) 'win64').
+GetFocus 取 用户 其 绑定 'GetFocus' (密 其 签名 PTR ([]) 'win64').
 MessageBoxW 取 用户 其 绑定 'MessageBoxW' (密 其 签名 I ([PTR,PTR,PTR,U]) 'win64').
 CreateMenu 取 用户 其 绑定 'CreateMenu' (密 其 签名 PTR ([]) 'win64').
 CreatePopupMenu 取 用户 其 绑定 'CreatePopupMenu' (密 其 签名 PTR ([]) 'win64').

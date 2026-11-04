@@ -27,3 +27,7 @@ Choosing a history item only fills its corresponding input. It does not execute 
 The bootstrap preview requires all previous native/GUI gates plus native bounded-search/MRU/lifecycle assertions and a real-menu Windows search-scope gate: exact Unicode selections and saved bytes, fresh-process reopen, scope invalidation, replacement isolation, history limits/privacy and seven-language labels. Portable checks are contracts, not Windows execution. The editor-native fixture is now included in bootstrap execution, rather than relying on the separately blocked default-C application route. Source-bound receipts establish actual results and counts.
 
 Regex, extended escapes, cross-file search, selection replacement, disk batch replacement and durable history remain out of scope.
+
+## All-open-document results
+
+A separate Find All in Open Documents command collects literal results from live buffers. It does not change the selected-scope replacement policy described above. See [the all-open-document contract](open-document-search.md); directory search, regex and cross-document replacement remain outside the increment.

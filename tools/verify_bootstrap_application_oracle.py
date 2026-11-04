@@ -13,6 +13,7 @@ from bootstrap_provenance import checked, require, sha
 from compile_bootstrap_native import CORE_COMMIT, CORE_TREE, validate_retained
 
 SCHEMA='ru-notepad-application-native-oracle-v1'
+DEFAULT_SCOPE='independent Python development oracle with unmodified 200000-step default analysis budget, not C/stage3/LLVM/Windows evidence'
 SCOPE='independent Python development oracle with isolated 2000000-step analysis budget, not default-limit C/stage3/LLVM/Windows evidence'
 ORACLE_PATH='packaging/application-native-oracle.json'
 C_TYPES={'无值':'void','i8':'int8_t','u8':'uint8_t','i16':'int16_t','u16':'uint16_t',
@@ -90,7 +91,7 @@ def verify_application_oracle(proof, app_root, ru_root, source_hashes, binary):
     path=checked(app_root,ORACLE_PATH)
     require(source_hashes['app_source'].get(ORACLE_PATH)==sha(path),'oracle not frozen in application snapshot')
     oracle=unique_json(path.read_text(encoding='utf-8'))
-    require(isinstance(oracle,dict) and set(oracle)==TOP_KEYS and oracle['schema']==SCHEMA and oracle['scope']==SCOPE,
+    require(isinstance(oracle,dict) and set(oracle)==TOP_KEYS and oracle['schema']==SCHEMA and oracle['scope'] in (SCOPE,DEFAULT_SCOPE),
             'unknown application oracle contract')
     require(oracle['application_base_commit']==APPLICATION_BASE_COMMIT
             and oracle['compiler_commit']==CORE_COMMIT and oracle['compiler_tree']==CORE_TREE
