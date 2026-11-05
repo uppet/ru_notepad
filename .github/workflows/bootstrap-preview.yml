@@ -103,6 +103,17 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python editor/tools/test_i18n_models.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $env:RU_ROOT = (Resolve-Path language).Path
+          python -m unittest discover -s editor/tests -p 'test_directory*.py' -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tests/test_directory_search_ui.py --ru-root language
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_directory_text_policy.py --ru-root language --output "$env:PREVIEW_OUTPUT/directory-text-controls"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_directory_io.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python editor/tools/test_gui_directory_search.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python editor/tools/test_regex_policy.py --ru-root language --output "$env:PREVIEW_OUTPUT/regex-policy-controls"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python editor/tests/test_regex_search_bridge.py --ru-root language

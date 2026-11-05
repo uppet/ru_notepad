@@ -21,7 +21,7 @@ import verify_bootstrap_editor_windows as smoke
 from prepare_bootstrap_dependencies import validate_receipt
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA = 'ru-notepad-bootstrap-product-preview-v2'
+SCHEMA = 'ru-notepad-bootstrap-product-preview-v3'
 GUI_NAMES = {'main-gui-smoke', 'main-gui-file-entry', 'main-gui-ru-syntax', 'main-gui-markdown'}
 
 
@@ -77,6 +77,10 @@ def validate_product(report, ci):
     validate_open_search(report.get('open_search'), hashes)
     from gui_regex_search import validate_result as validate_regex_search
     validate_regex_search(report.get('regex_search'), hashes)
+    from verify_directory_io_windows import validate_result as validate_directory_io
+    validate_directory_io(report.get('directory_io'), hashes)
+    from gui_directory_search import validate_result as validate_directory_search
+    validate_directory_search(report.get('directory_search'), hashes)
 
 
 def collect_product_gui(ci, api, runtime, fixtures, evidence, report, save):
@@ -135,7 +139,7 @@ def verify(config, output):
                   ('app_receipt', 'argv_probe_receipt', 'dll_probe_receipt', 'dependencies_receipt')},
               'smoke_receipt': identity(smoke_path), 'recent_fixtures_receipt': identity(recent_fixture_path), 'gui_results': [],
               'all_native_console_tests_bootstrap_compiled': False, 'full_release_acceptance': False,
-              'coverage': 'Original four GUI product gates, recent-file GUI, single-instance/tab-close GUI, and all 95 language-menu routes, capability-based fold commands/shortcuts, EOL conversion, line operations, line ordering, selection-only literal search/session history, bounded all-open-document literal results, and bounded current-document/fixed-selection regex FIND; independent C-native baseline is separate'}
+              'coverage': 'Original four GUI product gates, recent-file GUI, single-instance/tab-close GUI, and all 95 language-menu routes, capability-based fold commands/shortcuts, EOL conversion, line operations, line ordering, selection-only literal search/session history, bounded all-open-document literal results, and bounded current-document/fixed-selection regex FIND, and list-only bounded local-directory literal search with native traversal/lifetime checks; independent C-native baseline is separate'}
     def save():
         (output/'product-preview.json').write_text(json.dumps(report, indent=2, ensure_ascii=True)+'\n', encoding='utf-8')
     save()
@@ -143,7 +147,17 @@ def verify(config, output):
         report['scanner_preflight'] = ci.run_scanner_preflight(api, runtime, evidence)
         ci.validate_scanner_preflight(report['scanner_preflight'], hashes, ROOT)
         save()
+        from verify_directory_io_windows import run as run_directory_io
+        report['directory_io'] = run_directory_io(runtime, evidence, dependencies)
+        save()
+        from verify_directory_io_windows import validate_result as validate_directory_io
+        validate_directory_io(report['directory_io'], hashes)
         with tempfile.TemporaryDirectory(prefix='ru-bootstrap-product-') as fixtures:
+            from gui_directory_search import run as run_directory_search
+            report['directory_search'] = run_directory_search(api, runtime, fixtures, evidence)
+            save()
+            from gui_directory_search import validate_result as validate_directory_search
+            validate_directory_search(report['directory_search'], hashes)
             collect_product_gui(ci, api, runtime, fixtures, evidence, report, save)
             from gui_instance_tabs import run as run_instance_tabs
             report['instance_tabs'] = run_instance_tabs(api, runtime, fixtures, evidence)
@@ -172,6 +186,7 @@ def verify(config, output):
             from gui_regex_search import run as run_regex_search
             report['regex_search'] = run_regex_search(api, runtime, fixtures, evidence)
             save()
+
         smoke.validate_receipts(config)
         validate_receipt(Path(config['dependencies_receipt']))
         require(identity(smoke_path) == report['smoke_receipt'], 'smoke receipt changed')

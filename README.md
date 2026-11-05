@@ -95,7 +95,7 @@ The Search menu can capture a fixed selection for **find only**, or explicitly r
 
 ### Find All in Open Documents
 
-The Search menu can collect literal matches from every live open buffer, including unsaved and unnamed documents, into a separate results panel. Results navigate by document identity and exact UTF-8 range; edits or changes to the open-document set invalidate old results. Work is incremental, cancellable and capped at 2,000 rows. There is no disk search or cross-document replacement. See [all-open-document search](docs/open-document-search.md). Windows acceptance for this candidate is pending exact-build receipts.
+The Search menu can collect literal matches from every live open buffer, including unsaved and unnamed documents, into a separate results panel. Results navigate by document identity and exact UTF-8 range; edits or changes to the open-document set invalidate old results. Work is incremental, cancellable and capped at 2,000 rows. This mode does not read disk files or replace across documents. See [all-open-document search](docs/open-document-search.md). Windows acceptance for this candidate is pending exact-build receipts.
 
 ### Bounded regular-expression find
 
@@ -107,3 +107,7 @@ are rejected. Previous enumerates nonoverlapping forward matches; this is not
 Boost/PCRE parity. Regex replacement and all-open-document regex are not included.
 See [the exact dialect, limits and acceptance boundary](docs/regex-search.md).
 Windows validation of this increment remains pending exact-build receipts.
+
+## Directory literal search preview
+
+A separate Find in Folder command searches disk text under an explicitly selected local fixed-drive root. It is recursive and exact-case literal, independent of the current-buffer regex/case/whole-word options. Strict UTF-8 and BOM UTF-16 decoding, bounded traversal/reads/results, visible exclusions and asynchronous cancellation protect the UI and selected scope. Results are a list only in this increment; activation and cross-file replacement are disabled. See [directory-search limits and consistency](docs/directory-search.md). Exact-build Windows acceptance remains required.

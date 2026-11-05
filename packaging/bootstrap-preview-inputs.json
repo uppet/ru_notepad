@@ -19,11 +19,11 @@
     },
     "CHANGELOG.md": {
       "before": "6dba0bf5f16f3d11c94063caabbab4e43d808713f155eaba5b9db9a29fcab1c3",
-      "after": "78eaae9d2a74221d7b8dd1ee2b985c84891b90cc130f3f143b9d5119fbbcffb7"
+      "after": "2eaab1e829106631c50a96a4a29c90dc8b8d77895f5e18c3757b5ee3491e3247"
     },
     "README.md": {
       "before": "4fec039d9e1f3129d90c9662c2202fca8809d9c1e340dae429130cfe41cf9c7c",
-      "after": "0c87fae778fb6ad790500b4107b69f2e4af2cbac494f752f83576670b7e41528"
+      "after": "8c7e54427fd1995c4a7277c60f57532a9bd3937aa001b9ce5d33955d7d9148e6"
     },
     "THIRD_PARTY_NOTICES.md": {
       "before": "e7afbfb064500e19f9863579f1185e37b8a9e1002ef2050d0bd201564d015ece",
@@ -32,6 +32,14 @@
     "docs/bootstrap-llvm-preview.md": {
       "before": null,
       "after": "3b29d46e503d59ada66b324c48c7f98a6d6748c046c535d00d2fa7c94772a6dd"
+    },
+    "docs/compiler-feedback-directory-search.md": {
+      "before": null,
+      "after": "16e75183d25d634285bdef51324eeac0df330307fa5a36f8ae1efac4ad93c653"
+    },
+    "docs/directory-search.md": {
+      "before": null,
+      "after": "e1eb804eea21a6284baca2eb84c9d862f6b0c8321261d6723bd71607068aefb0"
     },
     "docs/eol-conversion.md": {
       "before": null,
@@ -89,6 +97,10 @@
       "before": "2fdf6db6fbbc5fd4d3064412d85cd82301a67d55c7d06290f30ac0c3e77ea97d",
       "after": "50ccbdbc35ba35e35658f80687eecd639cb487c2f0fe6e3cd37491209976a974"
     },
+    "locales/directory_search.json": {
+      "before": null,
+      "after": "ef78acee1c2ecf6759bad6ae4e0589f7039cc33d96d43fe633ff7ebb6608d02c"
+    },
     "locales/instance_tabs.json": {
       "before": null,
       "after": "81131d676884e8d12b4ae920e930f322f71814229d9ec0e5d9ce36d99ed7ee23"
@@ -117,6 +129,14 @@
       "before": null,
       "after": "4a2982fccc583a6a7399d0aeb78f819cf6b1c9be2c01b2252c3291413e567e22"
     },
+    "native/ru_directory_io.c": {
+      "before": null,
+      "after": "04d887d7112532dfe175e328612789e96479c1e5efaac94bf3c466fe7519aa3a"
+    },
+    "native/ru_directory_io.h": {
+      "before": null,
+      "after": "d1b825798a13485bbfea21d5255e5bdc07107c93b9c939b67b2839a562aa9637"
+    },
     "packaging/README-preview.txt": {
       "before": "93d5b4910da6bf07b652aafb4b8955ad9d58c23aa6f4218dcade5a152eb84047",
       "after": "a9aa8f9141a4fcf480d188418c120ae481e7ad990090ee525ea9c23b03c0be30"
@@ -127,11 +147,11 @@
     },
     "packaging/application-native-oracle-development.json": {
       "before": null,
-      "after": "b6f186edc1469f348b7cc151ebb1fd578d033dcf4adacd9e3a7a06e7335a7d9d"
+      "after": "40e381fe3bd1962380fa05d6e2dc35b4e7c28028c231ed15042c4cc79efda8dc"
     },
     "packaging/application-native-oracle.json": {
       "before": null,
-      "after": "2f3dfc53aec0a11921aee7fe1bc23f3cf2817335ea4634411d5b5795e2d5086d"
+      "after": "900d694ce849cd170a1a279c13afcb5160681081e6366510fcad801e49c57ea9"
     },
     "packaging/licenses/Godot.txt": {
       "before": null,
@@ -157,13 +177,25 @@
       "before": "d38fd7262018170b7fb931bde35e11205d437dbad6c161491233858bc3ae379e",
       "after": "38f6b6227141c0df9891da7b25b07e6d0af22f60bbebfc0dbb60a078b8eaa5e0"
     },
+    "src/directory_io.ru": {
+      "before": null,
+      "after": "cd370bcf7317e6d4bb25237e38dddd1329e6258beca4e5b0c098c8a6c9d6638b"
+    },
+    "src/directory_search.ru": {
+      "before": null,
+      "after": "eaef56e6b73b4d17e0f637ac8a30a98be83964bd4f11d6ba1e228f712d6ab423"
+    },
+    "src/directory_text.ru": {
+      "before": null,
+      "after": "542175a32c1be2857cab0784993198ca328d2082f0e87343a9ae8d0947c04ceb"
+    },
     "src/editor.ru": {
       "before": "8970ba9ed54095cb2df707e606f15140d76c639b705cbee5949c23e36e752c3e",
       "after": "79a82083cd21012e92ae7aa0e33f77d13a0ab4698e6f67f3c5a2d83e1b7dc889"
     },
     "src/i18n_catalog.ru": {
       "before": "e2b6d48d25529c7d631652980ec45d6a5dc837467e505e58fbe581a352fe84db",
-      "after": "3d35c6d0c668f5b96d5eea2581f4bc898375de204760d7c6b860c60439f2d7b3"
+      "after": "6e1ce35b4a546aa23a68ccd8bfb0142b091136159f7831287708fa18daae0d87"
     },
     "src/line_operations.ru": {
       "before": null,
@@ -175,7 +207,7 @@
     },
     "src/main.ru": {
       "before": "3dcb97ca641f2fb8068785517aedcbbda6d3c65ca179683601f76508d71dd734",
-      "after": "a7ef3299a27eac609fe582f7eedc8581dba7e516ecd151a4ff09ca3041364475"
+      "after": "e4a9abbfa4461e5dfb68798dc910bc6ab565a0f46d2e923349288c95c7ce3c95"
     },
     "src/markdown_policy.ru": {
       "before": "e9658000e1c5fbe5fb49403af2a27eb11a0efb9d4bf5261617b760688ea2d720",
@@ -273,6 +305,30 @@
       "before": null,
       "after": "710e28c7ea84b392fb0798c350b53b6c11816182ff72422c3423859dde30165d"
     },
+    "tests/directory_io_faults.h": {
+      "before": null,
+      "after": "1b1680d7dc5eaea0fd3f64362481c8773c638732db833b66bce6c315872c1ce7"
+    },
+    "tests/directory_io_host.c": {
+      "before": null,
+      "after": "6c4f47dedc6589a2b2b26f552da3784739b8ef6acc29c67a3acce6ecaa576729"
+    },
+    "tests/directory_search_mock.ru": {
+      "before": null,
+      "after": "7d353d5c843411033dca596968b3f486fad465aa28b926dce31029dc015e8f72"
+    },
+    "tests/directory_search_native.ru": {
+      "before": null,
+      "after": "cfc868c2fa0b385db73c1a55a680e7fe056e296a05659d030532022c5122230e"
+    },
+    "tests/directory_text_native.ru": {
+      "before": null,
+      "after": "5a61eb16f159551fdbfb969b3da81af503168ff7d4b3f3f8b93917dc2eae69ba"
+    },
+    "tests/directory_text_policy.ru": {
+      "before": null,
+      "after": "b0fc7be7bc770fdcd07d4435607ff937f13ee04cc0806ca61f4e67d4ab5cba81"
+    },
     "tests/editor_native.ru": {
       "before": "9b00df895196e081ead36041e4d336d17f8ee3a60c1422ea1cdfe0a8d9f138f2",
       "after": "3617702b24ddfb6e97bd9cc89f8375bc190372342773e359830db8fc6774c177"
@@ -349,9 +405,13 @@
       "before": null,
       "after": "62c8d213f897403f5a7f7e8b44844ea60040e5149d8612b48e12059009b4a49e"
     },
+    "tests/test_bootstrap_directory_io.py": {
+      "before": null,
+      "after": "af4514f63323b9a4048199a009e3748c35e9e50380caab1b2cbfd5216d49c2e4"
+    },
     "tests/test_bootstrap_fixture_compilation.py": {
       "before": null,
-      "after": "3b65c781ef631f59f7d1fcf1fc0bb4e7bf364bee39f5ef7c9bbfeab42c2dd01d"
+      "after": "5b43e26dd5f18bd2ee0a7adcec31240bc5c7a1cea49feeda6c424d3d390c6e39"
     },
     "tests/test_bootstrap_fold_baseline.py": {
       "before": null,
@@ -359,7 +419,7 @@
     },
     "tests/test_bootstrap_instance_tabs.py": {
       "before": null,
-      "after": "f80bdfb7bf714f9403353f7d3ea2ad8c079b3fe16fbd24ff9803f7cb0ac46b04"
+      "after": "9e370a191631c47e4f82a6ac779cf9b5b21d81f1d61a50ba7bd7b40180e122a2"
     },
     "tests/test_bootstrap_line_operations.py": {
       "before": null,
@@ -391,7 +451,7 @@
     },
     "tests/test_bootstrap_receipt_integration.py": {
       "before": null,
-      "after": "b395913e5455fbcb447e17c7dbe42424c353033c1d4b89ae835669aaa2a1eacd"
+      "after": "66d23a3154514d9105e1a58151cebf78ebe4be6fd1c083e64a47f5da3855830b"
     },
     "tests/test_bootstrap_regex_contracts.py": {
       "before": null,
@@ -412,6 +472,18 @@
     "tests/test_bootstrap_upload_order.py": {
       "before": null,
       "after": "9047d2deb1a709df38844cc2e5c2adad3d5126beeb887be1617f59de1005523f"
+    },
+    "tests/test_directory_search_jobs.py": {
+      "before": null,
+      "after": "30bf3b096cca99f090902b4f077d23204172656a04d8add4788a7d0eeb1360f5"
+    },
+    "tests/test_directory_search_ui.py": {
+      "before": null,
+      "after": "88720afebf082620697abba63fa85fd63c465ed5cf38d1ceb82b27726b753f27"
+    },
+    "tests/test_directory_text_policy_runner.py": {
+      "before": null,
+      "after": "436043d503b0a9cb506e56018ee3dae4b22af4e9d14240c20e1fe9bc296cca8c"
     },
     "tests/test_lexilla_languages.py": {
       "before": null,
@@ -443,11 +515,11 @@
     },
     "tests/test_regex_ui_contract.py": {
       "before": null,
-      "after": "9f5fe43f882565829b6f7cd786d110f598ae2608231ef0ebd7d0c0e5c8401fe9"
+      "after": "3d1cf80aaac4a0db2066d04365d845462824b155f0b5a5e455556a89889ed811"
     },
     "tools/bootstrap_preflight.py": {
       "before": null,
-      "after": "aa1ee13f6b7cee4a102f89094d99ed7647e7726f7199cf812a48cae4de88ef67"
+      "after": "83bc9839aa3955d4138248ca230f8d0d1bf1c6298f71f842351c5c646e9078e0"
     },
     "tools/build.py": {
       "before": "b22059c62a80a2e8861e0538a69cef2cddf4ea14d894cb9331f1e5c213955dae",
@@ -464,6 +536,10 @@
     "tools/generate_syntax_catalog.py": {
       "before": null,
       "after": "e438628e8fbf5a87d51f3afec3fa93c9e1461f15435e96aee4c3afa08bb109fe"
+    },
+    "tools/gui_directory_search.py": {
+      "before": null,
+      "after": "f3dce37bcfd35fb512585a8669c4c5fadd0435011dafa9a9e75d005153766a79"
     },
     "tools/gui_eol_conversion.py": {
       "before": null,
@@ -503,7 +579,7 @@
     },
     "tools/package.py": {
       "before": "bbf2819d10a67fa888905c25687c8ca7b773ed1db32be4b311c587513aa6251d",
-      "after": "464c5e6b71e939a207e72156dd833d4e01f19c68aecb96ee781532bbe35ae1a7"
+      "after": "5097774e5f7869711863f5a67220ca05d2232cb10a23f74de5e436106f04a74a"
     },
     "tools/package_manual_preview.py": {
       "before": "ca2dc35586d1642debf6a5111fa282d881bad43cee4d55138427ad90d954939e",
@@ -532,6 +608,18 @@
     "tools/test_cleanup_paths.py": {
       "before": "43ba2326b43981154c61aab60b8458a48847866c6163455daa5d9ce8c16007aa",
       "after": "505f4c0faad97fb29e96d8d5169874e61c4581bcb1c9c88d8b2d0d4312376397"
+    },
+    "tools/test_directory_io.py": {
+      "before": null,
+      "after": "95642fc1901701604a25f4b4cb071742aa3cdd6a9b21dbb20a801b3253ff2e80"
+    },
+    "tools/test_directory_text_policy.py": {
+      "before": null,
+      "after": "3f840ed862752ef213c4898653d3666804cd2fe08878fca19458019f97da6ce4"
+    },
+    "tools/test_gui_directory_search.py": {
+      "before": null,
+      "after": "3a61c1ae0dc0b0f1a6e4bb6aa255eb6066659b5d305890c125d29dd2b3384ae4"
     },
     "tools/test_gui_eol_conversion.py": {
       "before": null,
@@ -639,11 +727,15 @@
     },
     "tools/test_windows_ci.py": {
       "before": "b28733251662cd749c961fda95d912a1638794857fbb07015b5fb6363c28ec3b",
-      "after": "acc444ddc0f8481d00a6f6927543ce5edff5b440c701231688ad52ddbafe38e3"
+      "after": "90731b69630d6dca79ab37dd6162e76c63138b936684b32e891f9280e45d1923"
     },
     "tools/verify_bootstrap_application_oracle.py": {
       "before": null,
       "after": "65b6415610627c4505d09f557c4949fa628e98533d6e648e98467b55537a148a"
+    },
+    "tools/verify_directory_io_windows.py": {
+      "before": null,
+      "after": "f72116d64b39897860e2645e7fe88e6a3742bf348bd9ba6f3b697282cface4e6"
     },
     "tools/verify_fold_baseline.py": {
       "before": null,

@@ -17,6 +17,9 @@ import test_gui_line_ordering as ordering
 import test_gui_search_scope as search_scope
 import test_gui_open_search as open_search
 import test_gui_regex_search as regex_search
+import test_gui_directory_search as directory_search
+import verify_directory_io_windows as directory_io
+from bootstrap_provenance import require
 from bootstrap_provenance import InvalidProvenance
 
 class InstanceProductContract(unittest.TestCase):
@@ -24,19 +27,33 @@ class InstanceProductContract(unittest.TestCase):
         regex = regex_search.receipt()
         regex['fixture_binary_sha256'] = dict(samples.HASHES)
         regex['reopen']['fixture_binary_sha256'] = dict(samples.HASHES)
+        directory = directory_search.receipt()
+        directory['fixture_binary_sha256'] = dict(samples.HASHES)
+        directory['close_running']['fixture_binary_sha256'] = dict(samples.HASHES)
         return dict(schema=product.SCHEMA,status='passed',
             all_native_console_tests_bootstrap_compiled=False,full_release_acceptance=False,
             runtime_sha256=dict(samples.HASHES),gui_results=[],scanner_preflight={},
-            recent_files={},instance_tabs=samples.receipt(),language_catalog=languages.receipt(samples.HASHES),fold_commands=folds.receipt(samples.HASHES),eol_conversion=eols.receipt(samples.HASHES),line_operations=lines.receipt(samples.HASHES),line_ordering=ordering.receipt(samples.HASHES),search_scope=search_scope.receipt(samples.HASHES),open_search=open_search.receipt(samples.HASHES),regex_search=regex)
+            recent_files={},instance_tabs=samples.receipt(),language_catalog=languages.receipt(samples.HASHES),fold_commands=folds.receipt(samples.HASHES),eol_conversion=eols.receipt(samples.HASHES),line_operations=lines.receipt(samples.HASHES),line_ordering=ordering.receipt(samples.HASHES),search_scope=search_scope.receipt(samples.HASHES),open_search=open_search.receipt(samples.HASHES),regex_search=regex,directory_search=directory,directory_io={'synthetic_transport': True})
 
     def validate(self,record):
         ci=SimpleNamespace(portable=SimpleNamespace(RUNTIME_NAMES=tuple(samples.HASHES)),
             validate_scanner_preflight=lambda *a:None)
-        with patch.object(product,'validate_gui_results'),patch.object(recent,'validate_recent_files_result'):
+        # Transport file identities are independently tested in test_bootstrap_directory_io.
+        def transport(row, hashes):
+            require(row == {'synthetic_transport': True}, 'directory transport gate missing')
+        with patch.object(product,'validate_gui_results'),patch.object(recent,'validate_recent_files_result'),patch.object(directory_io,'validate_result',side_effect=transport):
             product.validate_product(record,ci)
 
     def test_valid_complete_new_contract(self):
         self.validate(self.record())
+
+    def test_directory_gates_are_mandatory(self):
+        r=self.record();del r['directory_io']
+        with self.assertRaises(InvalidProvenance):self.validate(r)
+        r=self.record();del r['directory_search']
+        with self.assertRaises(ValueError):self.validate(r)
+        r=self.record();r['schema']='ru-notepad-bootstrap-product-preview-v2'
+        with self.assertRaises(InvalidProvenance):self.validate(r)
 
     def test_old_or_missing_new_feature_receipt_cannot_pass(self):
         r=self.record();r['schema']='ru-notepad-bootstrap-product-preview-v1'

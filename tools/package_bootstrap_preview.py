@@ -27,7 +27,7 @@ import package as legacy_package
 import preview_language_sample as language_sample
 
 ROOT = Path(__file__).resolve().parents[1]
-PREVIEW_DOCS = ('bootstrap-llvm-preview.md', 'recent-files.md', 'single-instance-and-tabs.md', 'language-highlighting.md', 'eol-conversion.md', 'line-operations.md', 'line-ordering.md', 'literal-search.md', 'open-document-search.md', 'regex-search.md')
+PREVIEW_DOCS = ('bootstrap-llvm-preview.md', 'recent-files.md', 'single-instance-and-tabs.md', 'language-highlighting.md', 'eol-conversion.md', 'line-operations.md', 'line-ordering.md', 'literal-search.md', 'open-document-search.md', 'regex-search.md', 'directory-search.md', 'compiler-feedback-directory-search.md')
 
 
 def verify_zip(path, files):
@@ -175,7 +175,10 @@ def package(config, product_receipt, output, mingw_root):
             'Regex FIND supports a bounded, case-sensitive subset in the current document or fixed selection.\n'
             'Regex replacement and all-open-document regex search are not supported.\n'
             'See docs/regex-search.md for syntax, limits, cancellation and exact acceptance scope.\n'
-            'The real Windows regex FIND, language menu and lexical coverage gates are mandatory.\n'
+            'Find in Folder searches disk text recursively with exact-case literal matching.\n'
+            'Directory results are list-only: no activation, snapshot tabs or cross-file replacement.\n'
+            'See docs/directory-search.md for supported encodings, exclusions and resource limits.\n'
+            'The real Windows directory, regex FIND, language menu and lexical gates are mandatory.\n'
             'The same EXE and DLL bytes passed B7 functional smoke, the four existing product GUI\n'
             'gates (active-stage budgets unchanged), recent-file checks, and the instance_tabs GUI gate.\n'
             'Markdown checks cover 11 active stages. The 1 MB unclosed-fence serial double-Undo\n'
@@ -210,7 +213,7 @@ def package(config, product_receipt, output, mingw_root):
             'product_receipt_sha256': inputs['product_receipt']['sha256'],
             'smoke_receipt_sha256': inputs['smoke_receipt']['sha256'],
             'markdown_acceptance': markdown_scope,
-            'gui_gates': sorted(product.GUI_NAMES), 'recent_files_gui': True, 'instance_tabs_gui': True, 'eol_conversion_gui': True, 'line_operations_gui': True, 'line_ordering_gui': True, 'search_scope_gui': True, 'open_search_gui': True, 'regex_search_gui': True,
+            'gui_gates': sorted(product.GUI_NAMES), 'recent_files_gui': True, 'instance_tabs_gui': True, 'eol_conversion_gui': True, 'line_operations_gui': True, 'line_ordering_gui': True, 'search_scope_gui': True, 'open_search_gui': True, 'regex_search_gui': True, 'directory_search_gui': True, 'directory_io_windows': True,
             'stage3_recent_fixtures': dict(CASES),
             'recent_fixtures_receipt_sha256': inputs['recent_fixtures_receipt']['sha256'],
             'experimental_wij_enabled': False,

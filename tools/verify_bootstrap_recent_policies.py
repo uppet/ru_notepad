@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile and execute sixteen reviewed editor fixtures with stage3.
+"""Compile and execute eighteen reviewed editor fixtures with stage3.
 
 These are additional native feature tests, not the historical 39-fixture C
 acceptance. All input, emitted IR, linked binary and executed binary identities
@@ -28,8 +28,8 @@ import verify_bootstrap_editor_windows as smoke
 
 CASES = {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10,
          'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16,
-         'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':709, 'single_instance_native':18, 'single_instance_busy_native':23, 'language_catalog_native':678, 'editor_native':141, 'open_search_native':29, 'regex_policy':365, 'regex_native':41}
-SCHEMA = 'ru-notepad-bootstrap-editor-fixtures-v7'
+         'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':709, 'single_instance_native':18, 'single_instance_busy_native':23, 'language_catalog_native':678, 'editor_native':141, 'open_search_native':29, 'regex_policy':365, 'regex_native':41, 'directory_text_native':91, 'directory_search_native':6}
+SCHEMA = 'ru-notepad-bootstrap-editor-fixtures-v8'
 
 
 def exact_assertions(stdout, stderr, returncode, count):
@@ -87,6 +87,20 @@ def install_runtime_dependencies(output, app, dependencies):
     return records
 
 
+DIRECTORY_FIXTURE_BYTES = 'a😀a'.encode('utf-8')
+
+def validate_directory_fixture(report, output=None):
+    record = report.get('directory_fixture')
+    require(isinstance(record, dict), 'directory native fixture missing')
+    path = smoke.verify_identity(record)
+    require(path.name == 'utf8.txt' and path.parent.name == 'directory-fixture'
+            and path.read_bytes() == DIRECTORY_FIXTURE_BYTES, 'directory native fixture bytes differ')
+    if output is not None:
+        require(path.resolve() == (Path(output)/'directory-fixture/utf8.txt').resolve(),
+                'directory native fixture is not beside executed binary')
+    return record
+
+
 def validate_report(report, app, compiler, dependencies):
     require(report.get('schema') == SCHEMA and report.get('status') == 'passed'
             and report.get('source_pins') == app['source_pins'], 'recent fixture report mismatch')
@@ -94,6 +108,7 @@ def validate_report(report, app, compiler, dependencies):
             and sha(compiler) == app['bootstrap']['stage3_sha256'], 'recent fixture used another stage3')
     require(set(report.get('results',{})) == set(CASES), 'recent native fixture missing')
     validate_compile_policy(report.get('compile_policy'))
+    validate_directory_fixture(report, Path(report['results']['directory_search_native']['binary']['path']).parent)
     validate_runtime_dependencies(report, app, dependencies)
     frozen = {str((Path(pin['path'])/name).resolve()):digest for key,pin in app['source_pins'].items()
               for name,digest in app['source_sha256'][key].items()}
@@ -298,10 +313,16 @@ def verify(config, output):
             verify_proof(proof_data,source=source,compiler=compiler,ir=ir,binary=binary,
                          triple=app['target_triple'],layout=app['data_layout'],frozen=frozen,tools=tools,proof_path=proof_path)
             row.update(binary=identity(binary),ir=identity(ir),proof=identity(proof_path));save()
+        directory_fixture = output/'directory-fixture'
+        directory_fixture.mkdir()
+        (directory_fixture/'utf8.txt').write_bytes(DIRECTORY_FIXTURE_BYTES)
+        report['directory_fixture'] = identity(directory_fixture/'utf8.txt')
+        save()
         for job in jobs:
             name=job['name'];count=job['count'];binary=job['binary'];row=report['results'][name]
             validate_runtime_dependencies(report, app, dependencies, output)
             for key in ('binary','ir','proof'):smoke.verify_identity(row[key])
+            validate_directory_fixture(report, output)
             ran=subprocess.run([str(binary)],cwd=output,env=env,capture_output=True,timeout=EXECUTE_TIMEOUT)
             out=output/(name+'.stdout.log');err=output/(name+'.stderr.log')
             out.write_bytes(ran.stdout);err.write_bytes(ran.stderr)
@@ -309,6 +330,7 @@ def verify(config, output):
             exact_assertions(ran.stdout,ran.stderr,ran.returncode,count)
             for key in ('binary','ir','proof'):smoke.verify_identity(row[key])
             validate_runtime_dependencies(report, app, dependencies, output)
+            validate_directory_fixture(report, output)
             row['assertions']=count;save()
         smoke.validate_receipts(config)
         validate_toolchain(tools,app['tool_sha256'])

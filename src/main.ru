@@ -15,6 +15,7 @@
 行序 取 外言 'line_ordering.ru'.
 寻史 取 外言 'search_history.ru'.
 开寻 取 外言 'open_search.ru'.
+目寻 取 外言 'directory_search.ru'.
 正编 取 外言 'regex_compile.ru'.
 正寻 取 外言 'regex_search.ru'.
 件编 取 外言 'file_codec.ru'.
@@ -27,7 +28,7 @@
 关联 取 外言 'associations.ru'.
 拖放 取 外言 'file_drop.ru'.
 修改头 取 密 其 结构 [['header',窗 其 NMHDR],['position',窗 其 IP],['ch',窗 其 I],['modifiers',窗 其 I],['modificationType',窗 其 I],['text',窗 其 PTR],['length',窗 其 IP],['linesAdded',窗 其 IP],['message',窗 其 I],['wParam',窗 其 UP],['lParam',窗 其 IP],['line',窗 其 IP],['foldLevelNow',窗 其 I],['foldLevelPrev',窗 其 I],['margin',窗 其 I]].
-A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regexZero':空,'regexAnchor':-1,'regexCaret':-1,'regexEditor':'','regexIdentity':-1,'regexCase':1,'regexWhole':0,'regexNotice':'','openSearch':空,'openSearchVisible':假,'openSearchRows':0,'openSearchTick':假,'resultList':空,'resultSummary':空,'resultOpen':空,'resultStop':空,'resultHide':空,'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':0,'scopeEnd':0,'scopeLabel':'','scope':空,'findHistory':[],'replaceHistory':[],'orderNotice':假,'lineNotice':假,'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':假,'cleanupRetrying':假,'cleanupPending':假,'singlePreference':真,'singleState':空,'singleDeferredShow':假,'handoffPending':[],'closeRun':空,'tabMenuOpen':假,'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'system','docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'previous':空,'whole':空,'searchWrap':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxEntryYields':0,'syntaxPostYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
+A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regexZero':空,'regexAnchor':-1,'regexCaret':-1,'regexEditor':'','regexIdentity':-1,'regexCase':1,'regexWhole':0,'regexNotice':'','resultMode':'open','directorySearch':空,'directoryDetail':'','directoryHeader':'','directorySignature':'','directoryLanguage':'','resultDetails':空,'openSearch':空,'openSearchVisible':假,'openSearchRows':0,'openSearchTick':假,'resultList':空,'resultSummary':空,'resultOpen':空,'resultStop':空,'resultHide':空,'searchScope':'document','scopeEditor':'','scopeRevision':0,'scopeStart':0,'scopeEnd':0,'scopeLabel':'','scope':空,'findHistory':[],'replaceHistory':[],'orderNotice':假,'lineNotice':假,'modalDepth':0,'openFinalizing':假,'handoffReject':假,'cleanupActive':假,'cleanupRetrying':假,'cleanupPending':假,'singlePreference':真,'singleState':空,'singleDeferredShow':假,'handoffPending':[],'closeRun':空,'tabMenuOpen':假,'recentItems':[],'recentError':0,'recentReader':空,'recentWriter':空,'window':空,'instance':空,'tabs':空,'status':空,'uiPreference':'system','docs':[],'active':-1,'ready':假,'search':假,'find':空,'replace':空,'previous':空,'whole':空,'searchWrap':空,'next':空,'one':空,'all':空,'case':空,'hide':空,'counter':0,'wrap':假,'busy':假,'shutdownBlocked':假,'visible':假,'syntaxWarning':'','cancel':空,'operation':空,'queue':[],'locks':[],'cancelRequested':假,'inTick':假,'closeIndex':-1,'errors':[],'lastOutcome':'','lastReader':空,'lastWriter':空,'ticks':0,'syntaxTimer':假,'syntaxGeneration':0,'syntaxQueued':0,'syntaxPosts':0,'syntaxContinuations':0,'syntaxYields':0,'syntaxEntryYields':0,'syntaxPostYields':0,'syntaxStale':0,'syntaxTick':假,'syntaxNext':0,'syntaxTicks':0,'syntaxWorkMs':0,'syntaxMaxTickMs':0,'syntaxGapMs':0,'syntaxMaxGapMs':0,'syntaxLastEndMs':0,'syntaxTextNotifications':0,'syntaxStyleNotifications':0,'syntaxFoldNotifications':0,'syntaxSnapshots':0,'markdownDiagnosticEnabled':假,'markdownDiagnosticFailed':假,'markdownDiagnosticNext':0,'markdownDiagnosticSeq':0,'markdownDiagnosticIdentity':0,'markdownDiagnosticPending':真,'markdownDiagnosticText':'','statusBase':'','statusOwner':''}.
 
 # Admission barrier across native modal loops. No unacknowledged raw pointers retained.
 算 界面弹窗 主窗, 文 为 句, 标题 为 句, 类型 为 数:
@@ -509,9 +510,74 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
     得 空.
 法
 
-# Read-only all-open-buffer search owns a timer and a separate result panel.
-# Only identities/revisions are retained; every tick validates the live set.
+# Read-only all-open-buffer search shares only the panel with list-only disk search.
+# The snapshots and cancellation remain independent; timer 903 also owns retirement.
+算 目录显示文本 文 为 句:
+    果 取 ''. 位 取 0.
+    循 1024 次
+        若 位 >= (文 其 量) 则 破. 然
+        字 取 文[位].
+        若 字 == '\t' 则 果 取 果+'␉'.
+        另 若 字 == '\r' 则 果 取 果+'␍'.
+        另 若 字 == '\n' 则 果 取 果+'␊'.
+        另 若 字 < ' ' 或 (字 >= '' 且 字 < ' ') 或 (字 >= ' ' 且 字 <= '‮') 或 (字 >= '⁦' 且 字 <= '⁩') 或 字 == '؜' 或 字 == '‎' 或 字 == '‏' 则 果 取 果+'�'.
+        另 果 取 果+字. 然 然 然 然
+        位 取 位+1.
+    环
+    若 位 < (文 其 量) 则 果 取 果+'…'. 然
+    得 果.
+法
+算 目录详情 查找态:
+    语言 取 本地 其 当前语言.
+    若 语言 != (A 其 查 'directoryLanguage') 则
+        A 其 增 'directoryLanguage' 语言. A 其 增 'directoryHeader' ''. A 其 增 'directorySignature' ''.
+    然
+    文 取 A 其 查 'directoryHeader'.
+    若 文 == '' 则
+        文 取 (本地 其 格式 'directory.root' ([(目录显示文本 查找态['root'])]))+'\r\n'+(本地 其 格式 'directory.query' ([(目录显示文本 查找态['query'])])).
+        文 取 文+'\r\n'+(本地 其 文本 'directory.policy')+'\r\n'+(本地 其 文本 'directory.exclusions')+'\r\n'+(本地 其 文本 'directory.limits').
+        A 其 增 'directoryHeader' 文.
+    然
+    因们 取 ['native-1','native-2','native-3','native-4','native-5','native-6','native-7','native-8','native-9','native-10','native-11','native-12','invalid-utf8','invalid-utf16','unsupported-bom','binary-nul','incomplete-file','changed-snapshot','invalid-argument','invalid-sequence','rows'].
+    键们 取 ['path','unsafe','io','changed','size','files','directories','depth','reads','cancelled','enumeration','platform','utf8','utf16','bom','nul','incomplete','changed','decoded','decoded','rows'].
+    签 取 查找态['status']+':'+(查找态['filesSkipped'] 为 句)+':'+(查找态['dirsSkipped'] 为 句)+':'+(查找态['rawBytes'] 为 句)+':'+(查找态['workerPending'] 为 句).
+    位 取 0.
+    循 因们 其 量 次
+        签 取 签+':'+((查找态['reasonCounts'] 其 查 因们[位]) 为 句). 位 取 位+1.
+    环
+    若 签 == (A 其 查 'directorySignature') 则 得 A 其 查 'directoryDetail'. 然
+    文 取 文+'\r\n'+(本地 其 格式 'directory.counts' ([查找态['filesSkipped'],查找态['dirsSkipped'],查找态['rawBytes']])).
+    位 取 0.
+    循 因们 其 量 次
+        数量 取 查找态['reasonCounts'] 其 查 因们[位].
+        若 数量 != 空 则
+            文 取 文+'\r\n'+(本地 其 文本 ('directory.reason_'+键们[位]))+': '+(数量 为 句).
+        然
+        位 取 位+1.
+    环
+    若 查找态['status'] == 'failed' 则 文 取 文+'\r\n'+(本地 其 文本 'directory.failed_detail'). 然
+    若 查找态['status'] == 'cancelled' 则 文 取 文+'\r\n'+(本地 其 文本 'directory.cancelled_detail'). 然
+    若 查找态['workerPending'] 且 查找态['status'] != 'running' 则 文 取 文+'\r\n'+(本地 其 文本 'directory.draining'). 然
+    A 其 增 'directorySignature' 签.
+    得 文.
+法
 算 结果状态:
+    若 (A 其 查 'resultMode') == 'directory' 则
+        查找态 取 A 其 查 'directorySearch'.
+        若 查找态 == 空 则 得 空. 然
+        文 取 本地 其 格式 'directory.summary' ([(本地 其 文本 ('directory.status_'+查找态['status'])),(查找态['results'] 其 量),查找态['filesSearched']]).
+        若 查找态['workerPending'] 且 查找态['status'] != 'running' 则 文 取 文+' · '+(本地 其 文本 'directory.retiring'). 然
+        窗 其 标题 (A 其 查 'resultSummary') 文.
+        详情 取 目录详情 查找态.
+        若 详情 != (A 其 查 'directoryDetail') 则
+            A 其 增 'directoryDetail' 详情.
+            窗 其 标题 (A 其 查 'resultDetails') 详情.
+        然
+        活 取 0. 若 查找态['status'] == 'running' 则 活 取 1. 然
+        窗 其 结果 ((窗 其 EnableWindow) 其 调用 [(A 其 查 'resultStop'),活]).
+        窗 其 结果 ((窗 其 EnableWindow) 其 调用 [(A 其 查 'resultOpen'),0]).
+        得 空.
+    然
     查找态 取 A 其 查 'openSearch'.
     若 查找态 == 空 则 得 空. 然
     键 取 'search.results_'+查找态['status'].
@@ -523,27 +589,55 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
     窗 其 结果 ((窗 其 EnableWindow) 其 调用 [(A 其 查 'resultOpen'),可去]).
     得 空.
 法
-算 停结果:
-    窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),903]).
+算 结果菜单状态:
+    若 非 (A 其 查 'ready') 则 得 空. 然
+    主 取 窗 其 结果 ((窗 其 GetMenu) 其 调用 [(A 其 查 'window')]).
     查找态 取 A 其 查 'openSearch'.
-    若 查找态 != 空 则 开寻 其 取消 查找态. 结果状态. 然
+    若 (A 其 查 'resultMode') == 'directory' 则 查找态 取 A 其 查 'directorySearch'. 然
+    停旗 取 3. 关旗 取 3.
+    若 查找态 != 空 且 查找态['status'] == 'running' 则 停旗 取 0. 然
+    若 A 其 查 'openSearchVisible' 则 关旗 取 0. 然
+    窗 其 结果 ((窗 其 EnableMenuItem) 其 调用 [主,318,停旗]).
+    窗 其 结果 ((窗 其 EnableMenuItem) 其 调用 [主,319,关旗]).
+    得 空.
+法
+算 结果仍需时钟:
+    查找态 取 A 其 查 'openSearch'.
+    若 查找态 != 空 且 查找态['status'] == 'running' 则 得 真. 然
+    查找态 取 A 其 查 'directorySearch'.
+    若 查找态 != 空 且 查找态['status'] == 'running' 则 得 真. 然
+    得 目寻 其 忙.
+法
+算 结果时钟状态:
+    若 非 (结果仍需时钟) 则 窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),903]). 然
+    得 空.
+法
+算 停结果:
+    若 (A 其 查 'resultMode') == 'directory' 则
+        查找态 取 A 其 查 'directorySearch'.
+        若 查找态 != 空 则 目寻 其 取消 查找态. 然
+    另
+        查找态 取 A 其 查 'openSearch'.
+        若 查找态 != 空 则 开寻 其 取消 查找态. 然
+    然
+    结果时钟状态. 结果状态.
     得 空.
 法
 算 结果失效:
     停正则 'regex.stale'.
     查找态 取 A 其 查 'openSearch'.
     若 查找态 != 空 则
-        窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),903]).
         查找态 其 增 'status' 'stale'.
-        若 A 其 查 'ready' 则 结果状态. 然
+        若 (A 其 查 'ready') 且 (A 其 查 'resultMode') == 'open' 则 结果状态. 然
     然
+    结果时钟状态.
     得 空.
 法
 算 结果显示 显示 为 事实:
     若 非 显示 则
         停结果.
         当前焦 取 (((窗 其 GetFocus) 其 调用 []) 其 值) 其 句.
-        若 当前焦 == ((A 其 查 'resultList') 其 句) 或 当前焦 == ((A 其 查 'resultOpen') 其 句) 或 当前焦 == ((A 其 查 'resultStop') 其 句) 或 当前焦 == ((A 其 查 'resultHide') 其 句) 则
+        若 当前焦 == ((A 其 查 'resultList') 其 句) 或 当前焦 == ((A 其 查 'resultDetails') 其 句) 或 当前焦 == ((A 其 查 'resultOpen') 其 句) 或 当前焦 == ((A 其 查 'resultStop') 其 句) 或 当前焦 == ((A 其 查 'resultHide') 其 句) 则
             窗 其 结果 ((窗 其 SetFocus) 其 调用 [(编辑柄)]).
         然
     然
@@ -554,6 +648,8 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
         窗 其 结果 ((窗 其 ShowWindow) 其 调用 (参 其 控件二参 A 控们[位] 模式)).
         位 取 位+1.
     环
+    若 (A 其 查 'resultMode') != 'directory' 则 模式 取 0. 然
+    窗 其 结果 ((窗 其 ShowWindow) 其 调用 [(A 其 查 'resultDetails'),模式]).
     布局.
     得 空.
 法
@@ -563,6 +659,7 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
     若 词 == '' 则 寻栏 真. 得 空. 然
     若 (词 其 量) > 1024 则 提示 (本地 其 文本 'search.results_query_limit'). 得 空. 然
     停结果.
+    A 其 增 'resultMode' 'open'.
     区分 取 非 ((窗 其 发送 (A 其 查 'case') 240 0 0) 其 为空).
     整词 取 非 ((窗 其 发送 (A 其 查 'whole') 240 0 0) 其 为空).
     查找态 取 开寻 其 新建 (A 其 查 'docs') 词 区分 整词.
@@ -581,17 +678,75 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
     结果状态.
     得 空.
 法
+算 界面目录对话:
+    A 其 增 'modalDepth' ((A 其 查 'modalDepth')+1).
+    结果盒 取 [空].
+    试
+        结果盒[0] 取 目寻 其 选目录 (A 其 查 'window') (本地 其 文本 'directory.find').
+    救 原因
+        A 其 增 'modalDepth' ((A 其 查 'modalDepth')-1).
+        卒 原因.
+    终
+    A 其 增 'modalDepth' ((A 其 查 'modalDepth')-1).
+    得 结果盒[0].
+法
+算 启动目录搜索:
+    # Validate the captured literal before opening a picker or replacing results.
+    长 取 (窗 其 结果 ((窗 其 GetWindowTextLengthW) 其 调用 [(A 其 查 'find')])) 其 数.
+    若 长 < 1 或 长 > 512 则 提示 (本地 其 文本 'directory.query_invalid'). 得 空. 然
+    词 取 窗 其 取文 (A 其 查 'find').
+    检查 取 目寻 其 检查查询 词.
+    若 检查['status'] != 'ok' 则 提示 (本地 其 文本 'directory.query_invalid'). 得 空. 然
+    若 目寻 其 忙 则 提示 (本地 其 文本 'directory.busy'). 得 空. 然
+    若 (目寻 其 初始化) != '' 则 提示 (本地 其 文本 'directory.unavailable'). 得 空. 然
+    选 取 空.
+    试 选 取 界面目录对话.
+    救 原因 提示 (本地 其 文本 'directory.picker_failed'). 得 空. 终
+    若 选['status'] == 'cancelled' 则 得 空. 然
+    若 选['status'] != 'chosen' 则 提示 (本地 其 文本 'directory.picker_failed'). 得 空. 然
+    若 目寻 其 忙 则 提示 (本地 其 文本 'directory.busy'). 得 空. 然
+    停结果.
+    查找态 取 目寻 其 新建 选['path'] 词.
+    A 其 增 'directorySearch' 查找态. A 其 增 'resultMode' 'directory'.
+    A 其 增 'directoryDetail' ''. A 其 增 'directoryHeader' ''. A 其 增 'directorySignature' ''. A 其 增 'openSearchRows' 0.
+    窗 其 发送 (A 其 查 'resultList') 388 0 0.
+    A 其 增 'findHistory' (寻史 其 记录 (A 其 查 'findHistory') 词).
+    菜单. 结果显示 真.
+    若 结果仍需时钟 则
+        若 ((窗 其 SetTimer) 其 调用 [(A 其 查 'window'),903,20,空]) 其 值 其 为空 则
+            目寻 其 取消 查找态.
+            查找态 其 增 'status' 'failed'. 查找态 其 增 'error' 'directory-timer'.
+            # No timer can retire this worker. Abandon it without joining.
+            目寻 其 关停.
+        然
+    然
+    结果状态.
+    得 空.
+法
 算 搜索结果时钟:
-    若 (A 其 查 'openSearchTick') 或 (A 其 查 'busy') 或 (A 其 查 'modalDepth') != 0 或 (A 其 查 'closeRun') != 空 或 (A 其 查 'tabMenuOpen') 或 (A 其 查 'closeIndex') >= 0 则 得 空. 然
-    查找态 取 A 其 查 'openSearch'.
-    若 查找态 == 空 或 查找态['status'] != 'running' 或 非 (A 其 查 'openSearchVisible') 则 得 空. 然
+    若 A 其 查 'openSearchTick' 则 得 空. 然
+    # Retirement is independent of panel visibility, mode and owned modal loops.
+    目寻 其 维护.
+    结果时钟状态.
+    若 (A 其 查 'resultMode') == 'directory' 则
+        结束态 取 A 其 查 'directorySearch'.
+        若 结束态 != 空 且 结束态['status'] != 'running' 则 结果状态. 得 空. 然
+    然
+    若 (A 其 查 'busy') 或 (A 其 查 'modalDepth') != 0 或 (A 其 查 'closeRun') != 空 或 (A 其 查 'tabMenuOpen') 或 (A 其 查 'closeIndex') >= 0 则 得 空. 然
+    查找态 取 A 其 查 'openSearch'. 目录模式 取 (A 其 查 'resultMode') == 'directory'.
+    若 目录模式 则 查找态 取 A 其 查 'directorySearch'. 然
+    若 查找态 == 空 或 非 (A 其 查 'openSearchVisible') 则 得 空. 然
+    若 查找态['status'] != 'running' 则 结果状态. 得 空. 然
     A 其 增 'openSearchTick' 真.
     试
-        开寻 其 步进 查找态 (A 其 查 'docs').
+        若 目录模式 则 目寻 其 步进 查找态.
+        另 开寻 其 步进 查找态 (A 其 查 'docs'). 然
         位 取 A 其 查 'openSearchRows'.
-        循
+        循 16 次
             若 位 >= (查找态['results'] 其 量) 则 破. 然
-            文 取 开寻 其 行标签 查找态['results'][位].
+            文 取 ''.
+            若 目录模式 则 文 取 目寻 其 行标签 查找态['results'][位].
+            另 文 取 开寻 其 行标签 查找态['results'][位]. 然
             存 取 密 其 UTF16 文. 加果 取 0.
             试
                 加果 取 (窗 其 发指 (A 其 查 'resultList') 384 0 存) 其 数. # LB_ADDSTRINGW
@@ -603,22 +758,23 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
             位 取 位+1. A 其 增 'openSearchRows' 位.
         环
     救 原因
-        查找态 其 增 'status' 'failed'. 查找态 其 增 'error' 'Open-buffer search could not continue.'.
+        若 目录模式 则 目寻 其 取消 查找态. 然
+        查找态 其 增 'status' 'failed'. 查找态 其 增 'error' 'Search result display failed.'.
     终
     A 其 增 'openSearchTick' 假.
-    若 查找态['status'] != 'running' 则 窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),903]). 然
-    结果状态.
+    结果时钟状态. 结果状态.
     得 空.
 法
 算 转到搜索结果:
+    # First increment is list-only. Also guards direct command, Enter and double-click.
+    若 (A 其 查 'resultMode') == 'directory' 则 得 空. 然
     查找态 取 A 其 查 'openSearch'.
     若 查找态 == 空 或 非 (A 其 查 'openSearchVisible') 则 得 空. 然
     项 取 (窗 其 发送 (A 其 查 'resultList') 392 0 0) 其 数. # LB_GETCURSEL
     若 项 < 0 则 得 空. 然
     位 取 开寻 其 定位 查找态 项 (A 其 查 'docs').
     若 位 >= 0 则 切页 位. 然
-    若 查找态['status'] != 'running' 则 窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),903]). 然
-    结果状态.
+    结果时钟状态. 结果状态.
     得 空.
 法
 
@@ -781,13 +937,19 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
     移控 (A 其 查 'cancel') (宽-取消宽-2) (高-25) 取消宽 25.
     结果高 取 0.
     若 A 其 查 'openSearchVisible' 则
-        结果高 取 180.
+        结果高 取 180. 详情高 取 0.
+        若 (A 其 查 'resultMode') == 'directory' 则 结果高 取 260. 然
         可用 取 高-57-寻高.
         若 结果高 > 可用-48 则 结果高 取 可用-48. 然
         若 结果高 < 64 则 结果高 取 64. 然
+        若 (A 其 查 'resultMode') == 'directory' 则
+            详情高 取 (结果高-58)/2. 详情高 取 详情高-详情高%1.
+            若 详情高 > 96 则 详情高 取 96. 然
+        然
         结果纵 取 高-25-寻高-结果高.
         移控 (A 其 查 'resultSummary') 8 结果纵 (宽-16) 24.
-        移控 (A 其 查 'resultList') 8 (结果纵+24) (宽-16) (结果高-58).
+        移控 (A 其 查 'resultDetails') 8 (结果纵+24) (宽-16) 详情高.
+        移控 (A 其 查 'resultList') 8 (结果纵+24+详情高) (宽-16) (结果高-58-详情高).
         横 取 8. 控们果 取 ['resultOpen','resultStop','resultHide']. 果位 取 0.
         循 控们果 其 量 次
             按宽 取 按钮宽 控们果[果位].
@@ -818,7 +980,7 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
         窗 其 标题 (A 其 查 标控们[位]) (本地 其 文本 标键们[位]).
         位 取 位+1.
     环
-    控们 取 ['resultList','resultSummary','resultOpen','resultStop','resultHide','tabs','status','cancel','find','replace','scope','case','whole','searchWrap','previous','next','one','all','hide'].
+    控们 取 ['resultList','resultSummary','resultDetails','resultOpen','resultStop','resultHide','tabs','status','cancel','find','replace','scope','case','whole','searchWrap','previous','next','one','all','hide'].
     位 取 0.
     循 控们 其 量 次
         窗 其 界面字体 (A 其 查 控们[位]).
@@ -1670,7 +1832,7 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
         A 其 增 'orderNotice' (行果 == -2).
         A 其 增 'lineNotice' (行果 == -1).
     然
-    若 (号 >= 301 且 号 <= 325) 或 (号 >= 1700 且 号 <= 1731) 则
+    若 (号 >= 301 且 号 <= 326) 或 (号 >= 1700 且 号 <= 1731) 则
         若 (A 其 查 'modalDepth') != 0 则 得 空. 然
     然
     若 (A 其 查 'regexMode') 且 (号 == 302 或 号 == 304 或 号 == 305 或 号 == 317 或 (号 >= 1720 且 号 <= 1731)) 则 提示 (本地 其 文本 'regex.unavailable'). 得 空. 然
@@ -1680,6 +1842,7 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
     若 号 == 312 则 停正则 'regex.cancelled'. 得 空. 然
     若 (A 其 查 'regexMode') 且 (号 == 303 或 号 == 308) 则 启动正则搜索 号. 得 空. 然
     若 号 == 317 则 启动全文档搜索. 得 空. 然
+    若 号 == 326 则 启动目录搜索. 得 空. 然
     若 号 == 318 则 停结果. 得 空. 然
     若 号 == 319 则 结果显示 假. 得 空. 然
     若 号 == 322 则 转到搜索结果. 得 空. 然
@@ -1848,9 +2011,9 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
 算 菜单:
     # Parallel primitive arrays keep the pinned compiler's ABI analysis bounded.
     组键们 取 ['menu.file', 'menu.edit', 'menu.search', 'menu.encoding', 'menu.language', 'menu.view', 'menu.settings', 'menu.ui_language', 'menu.help'].
-    组量们 取 [11, 19, 13, 6, 5, 7, 5, 8, 1].
-    号们 取 [101, 102, 108, 109, 103, 104, 105, 111, 112, 113, 106, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 301, 302, 303, 308, 313, 314, 315, 317, 318, 319, 323, 324, 325, 401, 402, 403, 404, 405, 406, 701, 702, 703, 704, 705, 501, 502, 503, 504, 505, 506, 507, 801, 802, 803, 804, 805, 850, 851, 852, 853, 854, 855, 856, 857, 601].
-    键们 取 ['command.new', 'command.open', 'command.open_windows1252', 'command.open_gbk', 'command.save', 'command.save_as', 'command.close_tab', 'command.previous_tab', 'command.next_tab', 'command.open_pending_shell', 'command.exit', 'command.undo', 'command.redo', 'command.cut', 'command.copy', 'command.paste', 'command.select_all', 'command.eol_crlf', 'command.eol_lf', 'command.eol_cr', 'command.duplicate_lines', 'command.move_lines_up', 'command.move_lines_down', 'command.trim_line_ends', 'command.sort_selected_ascending', 'command.sort_selected_descending', 'command.deduplicate_selected_lines', 'command.sort_all_ascending', 'command.sort_all_descending', 'command.deduplicate_all_lines', 'command.find', 'command.replace', 'command.find_next', 'command.find_previous', 'search.capture_selection', 'search.current_document', 'search.clear_history', 'search.results_find', 'search.results_stop', 'search.results_hide', 'regex.mode_literal', 'regex.mode_regular', 'regex.stop', 'command.save_utf8', 'command.save_utf8_bom', 'command.save_utf16le', 'command.save_utf16be', 'command.save_windows1252', 'command.save_gbk', 'command.language_plain', 'command.language_cpp', 'command.language_json', 'command.language_ru', 'command.language_markdown', 'command.toggle_wrap', 'command.zoom_in', 'command.zoom_out', 'command.zoom_reset', 'command.fold_all', 'command.unfold_all', 'command.toggle_markdown_folds', 'command.register_association', 'command.default_apps', 'command.unregister_association', 'command.registration_status', 'command.single_instance', 'language.system', 'language.en', 'language.zh_cn', 'language.ja', 'language.ko', 'language.es', 'language.ru', 'language.it', 'command.about'].
+    组量们 取 [11, 19, 14, 6, 5, 7, 5, 8, 1].
+    号们 取 [101, 102, 108, 109, 103, 104, 105, 111, 112, 113, 106, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 301, 302, 303, 308, 313, 314, 315, 317, 318, 319, 323, 324, 325, 326, 401, 402, 403, 404, 405, 406, 701, 702, 703, 704, 705, 501, 502, 503, 504, 505, 506, 507, 801, 802, 803, 804, 805, 850, 851, 852, 853, 854, 855, 856, 857, 601].
+    键们 取 ['command.new', 'command.open', 'command.open_windows1252', 'command.open_gbk', 'command.save', 'command.save_as', 'command.close_tab', 'command.previous_tab', 'command.next_tab', 'command.open_pending_shell', 'command.exit', 'command.undo', 'command.redo', 'command.cut', 'command.copy', 'command.paste', 'command.select_all', 'command.eol_crlf', 'command.eol_lf', 'command.eol_cr', 'command.duplicate_lines', 'command.move_lines_up', 'command.move_lines_down', 'command.trim_line_ends', 'command.sort_selected_ascending', 'command.sort_selected_descending', 'command.deduplicate_selected_lines', 'command.sort_all_ascending', 'command.sort_all_descending', 'command.deduplicate_all_lines', 'command.find', 'command.replace', 'command.find_next', 'command.find_previous', 'search.capture_selection', 'search.current_document', 'search.clear_history', 'search.results_find', 'search.results_stop', 'search.results_hide', 'regex.mode_literal', 'regex.mode_regular', 'regex.stop', 'directory.find', 'command.save_utf8', 'command.save_utf8_bom', 'command.save_utf16le', 'command.save_utf16be', 'command.save_windows1252', 'command.save_gbk', 'command.language_plain', 'command.language_cpp', 'command.language_json', 'command.language_ru', 'command.language_markdown', 'command.toggle_wrap', 'command.zoom_in', 'command.zoom_out', 'command.zoom_reset', 'command.fold_all', 'command.unfold_all', 'command.toggle_markdown_folds', 'command.register_association', 'command.default_apps', 'command.unregister_association', 'command.registration_status', 'command.single_instance', 'language.system', 'language.en', 'language.zh_cn', 'language.ja', 'language.ko', 'language.es', 'language.ru', 'language.it', 'command.about'].
     主 取 窗 其 成功 ((窗 其 CreateMenu) 其 调用 []) 'CreateMenu'.
     子 取 空.
     试
@@ -1869,6 +2032,13 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
                     若 工作 == 空 则 标记 取 3.
                     另 若 工作['status'] != 'running' 则 标记 取 3. 然 然
                 然
+                若 号 == 318 则
+                    结果作 取 A 其 查 'openSearch'.
+                    若 (A 其 查 'resultMode') == 'directory' 则 结果作 取 A 其 查 'directorySearch'. 然
+                    若 结果作 == 空 则 标记 取 3.
+                    另 若 结果作['status'] != 'running' 则 标记 取 3. 然 然
+                然
+                若 号 == 319 且 非 (A 其 查 'openSearchVisible') 则 标记 取 3. 然
                 若 号 == 805 且 (A 其 查 'singlePreference') 则 标记 取 8. 然
                 若 号 == 113 且 ((A 其 查 'handoffPending') 其 量) == 0 则 标记 取 3. 然
                 若 号 >= 850 且 号 <= 857 则
@@ -1926,8 +2096,10 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
     若 号 == 2 则
         A 其 增 'ready' 假.
         停正则 'regex.cancelled'.
+        目寻 其 关停.
         窗 其 结果 ((窗 其 KillTimer) 其 调用 [(A 其 查 'window'),903]).
         A 其 增 'openSearch' 空.
+        A 其 增 'directorySearch' 空.
         A 其 增 'ready' 假.
         停止语法.
         # This single main window is being destroyed; no queued slot may carry
@@ -1973,7 +2145,7 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
                 入队 路们 0.
                 得 0.
             然
-            若 号 == 279 则 正则菜单状态. 行序菜单状态. 得 0. 然
+            若 号 == 279 则 正则菜单状态. 行序菜单状态. 结果菜单状态. 得 0. 然
             若 号 == 5 则 布局. 得 0. 然
             若 号 == 16 则 关程序. 得 0. 然
             若 号 == 273 且 (宽参 其 位段 0 16) == 310 且 (宽参 其 位段 16 16) == 768 则
@@ -2149,6 +2321,8 @@ A 取 {'regexMode':假,'regexJob':空,'regexTick':假,'regexApplying':假,'regex
     A 其 增 'hide' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 307).
     A 其 增 'resultList' (窗 其 控制 主窗 实例 'LISTBOX' '' 1084293377 320).
     A 其 增 'resultSummary' (窗 其 控制 主窗 实例 'STATIC' '' 1073741824 321).
+    # Read-only wrapping text with a vertical scrollbar keeps all seven locales accessible.
+    A 其 增 'resultDetails' (窗 其 控制 主窗 实例 'EDIT' '' 1084295236 327).
     A 其 增 'resultOpen' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 322).
     A 其 增 'resultStop' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 318).
     A 其 增 'resultHide' (窗 其 控制 主窗 实例 'BUTTON' '' 1073807360 319).

@@ -1,3 +1,11 @@
+## WIP — bounded directory literal search
+
+- Search an explicitly selected local folder recursively, with strict Unicode decoding, bounded resources and visible exclusions. Current-buffer search preferences remain unchanged.
+- Keep filesystem work in one cancellable native worker and decode/match/commit in bounded Ru steps. Follow no reparse, junction, cloud-recall or network traversal fallback.
+- Deliver results as a list only. Activation and cross-file replacement remain unavailable until ordinary-editor navigation can verify file identity/content without overwriting dirty tabs.
+- Require independent actual-core interpreter/C checks, native Windows traversal/lifetime tests and actual-executable GUI checks. Windows acceptance is pending exact-build receipts, not implied by this source entry.
+- Preserve compiler c3bb177 and editor main.
+
 ## WIP — bounded regular-expression find
 
 - Add an explicit case-sensitive regex mode for current-document/captured-selection find, with restored literal options on exit and no regex replacement.

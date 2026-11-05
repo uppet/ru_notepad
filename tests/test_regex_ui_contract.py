@@ -24,7 +24,7 @@ class RegexUIContract(unittest.TestCase):
     def test_menu_shape_and_stop_state(self):
         menu = body('菜单:')
         counts = re.search(r'组量们 取 \[([^]]+)\]', menu).group(1)
-        self.assertEqual([int(v) for v in counts.split(',')], [11, 19, 13, 6, 5, 7, 5, 8, 1])
+        self.assertEqual([int(v) for v in counts.split(',')], [11, 19, 14, 6, 5, 7, 5, 8, 1])
         self.assertIn('323, 324, 325', menu)
         self.assertIn("工作['status'] != 'running' 则 标记 取 3", menu)
         self.assertIn("工作['status'] == 'running' 则 旗 取 0", body('正则菜单状态:'))

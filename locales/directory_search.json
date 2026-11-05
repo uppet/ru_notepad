@@ -1,0 +1,362 @@
+{
+  "directory.find": {
+    "en": "Find in Folder…",
+    "zh-CN": "在文件夹中查找…",
+    "ja": "フォルダー内を検索…",
+    "ko": "폴더에서 찾기…",
+    "es": "Buscar en carpeta…",
+    "ru": "Найти в папке…",
+    "it": "Trova nella cartella…"
+  },
+  "directory.summary": {
+    "en": "Folder: {0} · {1} matches / {2} files",
+    "zh-CN": "目录：{0} · {1} 处 / {2} 文件",
+    "ja": "フォルダー：{0} · {1} 件 / {2} ファイル",
+    "ko": "폴더: {0} · {1}개 일치 / {2}개 파일",
+    "es": "Carpeta: {0} · {1} coincidencias / {2} archivos",
+    "ru": "Папка: {0} · {1} совпадений / {2} файлов",
+    "it": "Cartella: {0} · {1} risultati / {2} file"
+  },
+  "directory.status_running": {
+    "en": "Searching",
+    "zh-CN": "搜索中",
+    "ja": "検索中",
+    "ko": "검색 중",
+    "es": "Buscando",
+    "ru": "Поиск",
+    "it": "Ricerca"
+  },
+  "directory.status_complete": {
+    "en": "Complete",
+    "zh-CN": "已完成",
+    "ja": "完了",
+    "ko": "완료",
+    "es": "Completado",
+    "ru": "Готово",
+    "it": "Completata"
+  },
+  "directory.status_cancelled": {
+    "en": "Cancelled",
+    "zh-CN": "已取消",
+    "ja": "キャンセル済み",
+    "ko": "취소됨",
+    "es": "Cancelado",
+    "ru": "Отменено",
+    "it": "Annullata"
+  },
+  "directory.status_limited": {
+    "en": "Partial",
+    "zh-CN": "不完整",
+    "ja": "一部のみ",
+    "ko": "일부만 검색됨",
+    "es": "Parcial",
+    "ru": "Неполные",
+    "it": "Parziale"
+  },
+  "directory.status_failed": {
+    "en": "Failed",
+    "zh-CN": "失败",
+    "ja": "失敗",
+    "ko": "실패",
+    "es": "Error",
+    "ru": "Ошибка",
+    "it": "Errore"
+  },
+  "directory.retiring": {
+    "en": "Stopping…",
+    "zh-CN": "清理中…",
+    "ja": "終了処理中…",
+    "ko": "종료 중…",
+    "es": "Deteniendo…",
+    "ru": "Остановка…",
+    "it": "Arresto…"
+  },
+  "directory.root": {
+    "en": "Captured folder: {0}",
+    "zh-CN": "已选文件夹：{0}",
+    "ja": "選択したフォルダー：{0}",
+    "ko": "선택한 폴더: {0}",
+    "es": "Carpeta elegida: {0}",
+    "ru": "Выбранная папка: {0}",
+    "it": "Cartella scelta: {0}"
+  },
+  "directory.query": {
+    "en": "Captured literal (controls shown as symbols): {0}",
+    "zh-CN": "固定字面查询（控制字符显示为符号）：{0}",
+    "ja": "検索文字列（制御文字は記号表示）：{0}",
+    "ko": "고정 검색어(제어 문자는 기호로 표시): {0}",
+    "es": "Texto literal fijado (controles como símbolos): {0}",
+    "ru": "Искомый текст (управляющие знаки показаны символами): {0}",
+    "it": "Testo fissato (controlli mostrati come simboli): {0}"
+  },
+  "directory.policy": {
+    "en": "Recursive, exact-case literal search on disk. Search options and unsaved edits are ignored. Results are a list only; opening them is disabled.",
+    "zh-CN": "递归搜索磁盘，按字面精确区分大小写。不使用搜索选项或未保存编辑。仅列出结果，暂不能打开。",
+    "ja": "ディスク上を再帰検索。大文字と小文字を区別する文字列検索です。検索オプションと未保存の編集は対象外。結果は一覧のみで、開けません。",
+    "ko": "디스크의 하위 폴더까지 대소문자를 구분하여 문자 그대로 검색합니다. 검색 옵션과 저장하지 않은 편집은 적용되지 않습니다. 결과는 목록만 제공하며 열 수 없습니다.",
+    "es": "Búsqueda literal recursiva en disco, con distinción de mayúsculas. No usa las opciones de búsqueda ni cambios sin guardar. Solo lista resultados; no se pueden abrir.",
+    "ru": "Рекурсивный поиск точного текста на диске с учётом регистра. Параметры поиска и несохранённые правки не учитываются. Результаты только списком, открыть их нельзя.",
+    "it": "Ricerca letterale ricorsiva su disco, sensibile alle maiuscole. Ignora le opzioni di ricerca e le modifiche non salvate. Solo elenco dei risultati; apertura disabilitata."
+  },
+  "directory.exclusions": {
+    "en": "Local fixed drives only. UTF-8 or UTF-16 with BOM; no legacy decoding. Skips links, reparse/cloud/offline paths, network or substituted drives, unreadable, changed, oversized, NUL or malformed text. Skipped folders leave their contents unsearched.",
+    "zh-CN": "仅本地固定磁盘。支持 UTF-8 及带 BOM 的 UTF-16，不回退旧编码。跳过链接、重解析/云端/离线路径、网络或映射驱动器、不可读、变化、过大、含 NUL 或编码无效的文本。跳过文件夹时不搜索其内容。",
+    "ja": "ローカル固定ドライブのみ。UTF-8 または BOM 付き UTF-16 に対応。リンク、再解析点、クラウド、オフライン、ネットワーク、代替ドライブ、読取不可、変更済み、巨大、NUL 含有、不正なテキストは除外。除外フォルダーの内容も検索しません。",
+    "ko": "로컬 고정 드라이브만 지원합니다. UTF-8 또는 BOM이 있는 UTF-16만 읽습니다. 링크, 재분석·클라우드·오프라인 경로, 네트워크·대체 드라이브, 읽기 불가·변경·크기 초과·NUL 포함·잘못된 텍스트는 건너뜁니다. 제외된 폴더의 내용도 검색하지 않습니다.",
+    "es": "Solo unidades locales fijas. UTF-8 o UTF-16 con BOM, sin otras codificaciones. Omite enlaces, rutas de reanálisis, nube o sin conexión, unidades de red o sustituidas y textos ilegibles, cambiados, grandes, con NUL o inválidos. No busca dentro de carpetas omitidas.",
+    "ru": "Только локальные несъёмные диски. UTF-8 или UTF-16 с BOM, без старых кодировок. Пропускаются ссылки, точки повторного анализа, облачные и автономные пути, сетевые и подставленные диски, недоступный, изменённый, слишком большой или некорректный текст и NUL. Содержимое пропущенных папок не проверяется.",
+    "it": "Solo unità locali fisse. UTF-8 o UTF-16 con BOM, senza codifiche obsolete. Esclude link, punti di analisi, cloud, percorsi offline, unità di rete o sostituite e testi illeggibili, modificati, grandi, con NUL o non validi. Non cerca nelle cartelle escluse."
+  },
+  "directory.limits": {
+    "en": "Limits: 8 MiB/file, 16 MiB decoded, 256 MiB read; 10,000 file entries, 2,000 folders, depth 32, 2,000 rows, paths 1,023 UTF-16 units. Skipped entries count toward limits. Enumeration order is not sorted.",
+    "zh-CN": "上限：每文件 8 MiB、解码后 16 MiB、读取总量 256 MiB；10,000 文件项、2,000 文件夹、32 层、2,000 行结果、路径 1,023 个 UTF-16 单元。跳过项也计入限额。结果按枚举顺序，不排序。",
+    "ja": "上限：1 ファイル 8 MiB、復号後 16 MiB、総読取 256 MiB。ファイル項目 10,000、フォルダー 2,000、深さ 32、結果 2,000 行、パス 1,023 UTF-16 単位。除外項目も上限に含みます。列挙順で、並べ替えません。",
+    "ko": "한도: 파일당 8 MiB, 디코딩 16 MiB, 총 읽기 256 MiB; 파일 항목 10,000개, 폴더 2,000개, 깊이 32, 결과 2,000행, 경로 1,023 UTF-16 단위. 제외 항목도 한도에 포함됩니다. 나열 순서는 정렬되지 않습니다.",
+    "es": "Límites: 8 MiB/archivo, 16 MiB decodificados, 256 MiB leídos; 10.000 entradas de archivo, 2.000 carpetas, profundidad 32, 2.000 filas, rutas de 1.023 unidades UTF-16. Las omisiones cuentan para los límites. Sin ordenar.",
+    "ru": "Пределы: 8 МиБ/файл, 16 МиБ после декодирования, 256 МиБ чтения; 10 000 записей файлов, 2 000 папок, глубина 32, 2 000 строк, путь 1 023 единицы UTF-16. Пропущенные записи тоже учитываются. Порядок без сортировки.",
+    "it": "Limiti: 8 MiB/file, 16 MiB decodificati, 256 MiB letti; 10.000 voci file, 2.000 cartelle, profondità 32, 2.000 righe, percorsi di 1.023 unità UTF-16. Anche le esclusioni contano nei limiti. Ordine non ordinato."
+  },
+  "directory.counts": {
+    "en": "Skipped: {0} files, {1} folders · last observed read: {2} bytes (may be incomplete)",
+    "zh-CN": "已跳过：{0} 文件、{1} 文件夹 · 最后观测读取量：{2} 字节（可能不完整）",
+    "ja": "除外：{0} ファイル、{1} フォルダー · 最後に確認した読取量：{2} バイト（途中値の場合あり）",
+    "ko": "건너뜀: 파일 {0}개, 폴더 {1}개 · 마지막 확인 읽기: {2}바이트(최종값이 아닐 수 있음)",
+    "es": "Omitidos: {0} archivos, {1} carpetas · última lectura observada: {2} bytes (puede ser parcial)",
+    "ru": "Пропущено: {0} файлов, {1} папок · последнее наблюдение чтения: {2} байт (может быть неполным)",
+    "it": "Esclusi: {0} file, {1} cartelle · ultima lettura osservata: {2} byte (può essere parziale)"
+  },
+  "directory.query_invalid": {
+    "en": "Enter a literal of 1–256 Unicode characters (up to 1,024 UTF-8 bytes), without NUL. Previous results are unchanged.",
+    "zh-CN": "请输入 1–256 个 Unicode 字符（最多 1,024 个 UTF-8 字节），不能含 NUL。保留原有结果。",
+    "ja": "NUL を含まない 1～256 文字（UTF-8 で最大 1,024 バイト）を入力してください。前の結果は保持されます。",
+    "ko": "NUL이 없는 유니코드 1~256자(UTF-8 최대 1,024바이트)를 입력하세요. 이전 결과는 유지됩니다.",
+    "es": "Escribe entre 1 y 256 caracteres Unicode (máximo 1.024 bytes UTF-8), sin NUL. Se conservan los resultados anteriores.",
+    "ru": "Введите от 1 до 256 символов Unicode (до 1 024 байт UTF-8), без NUL. Предыдущие результаты сохранены.",
+    "it": "Inserisci da 1 a 256 caratteri Unicode (fino a 1.024 byte UTF-8), senza NUL. I risultati precedenti restano invariati."
+  },
+  "directory.busy": {
+    "en": "A folder search is still running or stopping. Stop it and wait for cleanup before starting another.",
+    "zh-CN": "目录搜索仍在运行或清理中。请先停止并等待清理完成，再开始新搜索。",
+    "ja": "フォルダー検索の実行中または終了処理中です。停止して終了処理が完了してから再実行してください。",
+    "ko": "폴더 검색이 실행 또는 종료 중입니다. 중지한 뒤 정리가 끝날 때까지 기다려 주세요.",
+    "es": "Hay una búsqueda en ejecución o deteniéndose. Detenla y espera a que termine la limpieza antes de iniciar otra.",
+    "ru": "Поиск в папке ещё выполняется или останавливается. Остановите его и дождитесь завершения очистки.",
+    "it": "Una ricerca è ancora in corso o in arresto. Fermala e attendi la pulizia prima di avviarne un’altra."
+  },
+  "directory.unavailable": {
+    "en": "Folder search is unavailable because its disk-search helper could not be loaded or verified.",
+    "zh-CN": "无法加载或验证磁盘搜索组件，目录搜索不可用。",
+    "ja": "ディスク検索部品を読み込み・検証できないため、フォルダー検索は利用できません。",
+    "ko": "디스크 검색 구성 요소를 불러오거나 확인할 수 없어 폴더 검색을 사용할 수 없습니다.",
+    "es": "La búsqueda en carpetas no está disponible: no se pudo cargar o verificar su componente.",
+    "ru": "Поиск в папке недоступен: не удалось загрузить или проверить компонент поиска на диске.",
+    "it": "Ricerca nelle cartelle non disponibile: impossibile caricare o verificare il componente di ricerca."
+  },
+  "directory.picker_failed": {
+    "en": "The folder could not be selected. Previous results are unchanged.",
+    "zh-CN": "无法选择文件夹，保留原有结果。",
+    "ja": "フォルダーを選択できませんでした。前の結果は保持されます。",
+    "ko": "폴더를 선택하지 못했습니다. 이전 결과는 유지됩니다.",
+    "es": "No se pudo seleccionar la carpeta. Se conservan los resultados anteriores.",
+    "ru": "Не удалось выбрать папку. Предыдущие результаты сохранены.",
+    "it": "Impossibile selezionare la cartella. I risultati precedenti restano invariati."
+  },
+  "directory.failed_detail": {
+    "en": "Search failed. Only already validated results are retained; the folder was not fully searched.",
+    "zh-CN": "搜索失败。仅保留已验证结果，未搜索完整目录。",
+    "ja": "検索に失敗しました。検証済みの結果のみ保持され、フォルダー全体は検索されていません。",
+    "ko": "검색에 실패했습니다. 검증된 결과만 유지되며 폴더 전체를 검색하지 못했습니다.",
+    "es": "La búsqueda falló. Solo se conservan resultados ya validados; no se examinó toda la carpeta.",
+    "ru": "Поиск завершился ошибкой. Сохранены только проверенные результаты; папка просмотрена не полностью.",
+    "it": "Ricerca non riuscita. Restano solo i risultati già verificati; la cartella non è stata cercata interamente."
+  },
+  "directory.cancelled_detail": {
+    "en": "Cancelled. Already validated results remain; the scan is incomplete.",
+    "zh-CN": "已取消。保留已验证结果，扫描未完成。",
+    "ja": "キャンセルしました。検証済みの結果は保持されますが、検索は未完了です。",
+    "ko": "취소되었습니다. 검증된 결과는 유지되지만 검색은 완료되지 않았습니다.",
+    "es": "Cancelado. Se conservan los resultados validados; la búsqueda está incompleta.",
+    "ru": "Отменено. Проверенные результаты сохранены; поиск не завершён.",
+    "it": "Annullata. I risultati verificati restano; la ricerca è incompleta."
+  },
+  "directory.draining": {
+    "en": "Disk worker is stopping. Cleanup is asynchronous; another folder search must wait.",
+    "zh-CN": "磁盘任务正在停止，清理在后台继续；完成前不能开始新目录搜索。",
+    "ja": "ディスク処理を終了中です。後処理は非同期で続き、次の検索は完了まで待機します。",
+    "ko": "디스크 작업을 종료하고 있습니다. 정리는 비동기로 진행되며 완료 전에는 새 폴더 검색을 시작할 수 없습니다.",
+    "es": "Se está deteniendo el proceso de disco. La limpieza es asíncrona; espera antes de otra búsqueda.",
+    "ru": "Останавливается работа с диском. Очистка идёт асинхронно; новый поиск должен подождать.",
+    "it": "Arresto del processo su disco. La pulizia è asincrona; attendi prima di un’altra ricerca."
+  },
+  "directory.reason_path": {
+    "en": "Unsupported or long path",
+    "zh-CN": "不支持或过长路径",
+    "ja": "未対応・長すぎるパス",
+    "ko": "미지원·길이 초과 경로",
+    "es": "Ruta no admitida o larga",
+    "ru": "Неподдерживаемый или длинный путь",
+    "it": "Percorso non supportato o lungo"
+  },
+  "directory.reason_unsafe": {
+    "en": "Unsafe or excluded location",
+    "zh-CN": "不安全或排除位置",
+    "ja": "安全性未確認・対象外の場所",
+    "ko": "안전하지 않거나 제외된 위치",
+    "es": "Ubicación insegura o excluida",
+    "ru": "Небезопасное или исключённое место",
+    "it": "Posizione non sicura o esclusa"
+  },
+  "directory.reason_io": {
+    "en": "Access or read error",
+    "zh-CN": "访问或读取错误",
+    "ja": "アクセス・読取エラー",
+    "ko": "접근·읽기 오류",
+    "es": "Error de acceso o lectura",
+    "ru": "Ошибка доступа или чтения",
+    "it": "Errore di accesso o lettura"
+  },
+  "directory.reason_changed": {
+    "en": "File changed during search",
+    "zh-CN": "搜索期间文件变化",
+    "ja": "検索中に変更されたファイル",
+    "ko": "검색 중 변경된 파일",
+    "es": "Archivo cambiado durante la búsqueda",
+    "ru": "Файл изменился при поиске",
+    "it": "File modificato durante la ricerca"
+  },
+  "directory.reason_size": {
+    "en": "File size limit",
+    "zh-CN": "文件大小上限",
+    "ja": "ファイルサイズ上限",
+    "ko": "파일 크기 한도",
+    "es": "Límite de tamaño de archivo",
+    "ru": "Предел размера файла",
+    "it": "Limite dimensione file"
+  },
+  "directory.reason_files": {
+    "en": "File entry limit",
+    "zh-CN": "文件项数上限",
+    "ja": "ファイル項目数上限",
+    "ko": "파일 항목 수 한도",
+    "es": "Límite de entradas de archivo",
+    "ru": "Предел записей файлов",
+    "it": "Limite voci file"
+  },
+  "directory.reason_directories": {
+    "en": "Folder entry limit",
+    "zh-CN": "文件夹数上限",
+    "ja": "フォルダー数上限",
+    "ko": "폴더 수 한도",
+    "es": "Límite de carpetas",
+    "ru": "Предел числа папок",
+    "it": "Limite cartelle"
+  },
+  "directory.reason_depth": {
+    "en": "Depth limit",
+    "zh-CN": "目录深度上限",
+    "ja": "階層の深さ上限",
+    "ko": "폴더 깊이 한도",
+    "es": "Límite de profundidad",
+    "ru": "Предел глубины",
+    "it": "Limite profondità"
+  },
+  "directory.reason_reads": {
+    "en": "Total read limit",
+    "zh-CN": "总读取量上限",
+    "ja": "総読取量上限",
+    "ko": "총 읽기 한도",
+    "es": "Límite total de lectura",
+    "ru": "Предел общего чтения",
+    "it": "Limite totale lettura"
+  },
+  "directory.reason_cancelled": {
+    "en": "Disk scan cancelled",
+    "zh-CN": "磁盘扫描取消",
+    "ja": "ディスク検索の中止",
+    "ko": "디스크 검색 취소",
+    "es": "Lectura de disco cancelada",
+    "ru": "Чтение диска отменено",
+    "it": "Scansione disco annullata"
+  },
+  "directory.reason_enumeration": {
+    "en": "Folder enumeration error",
+    "zh-CN": "文件夹枚举错误",
+    "ja": "フォルダー列挙エラー",
+    "ko": "폴더 나열 오류",
+    "es": "Error al enumerar carpetas",
+    "ru": "Ошибка перечисления папок",
+    "it": "Errore di enumerazione cartelle"
+  },
+  "directory.reason_platform": {
+    "en": "Unsupported disk-search platform",
+    "zh-CN": "磁盘搜索平台不支持",
+    "ja": "ディスク検索に未対応の環境",
+    "ko": "디스크 검색 미지원 환경",
+    "es": "Plataforma de búsqueda no admitida",
+    "ru": "Платформа поиска не поддерживается",
+    "it": "Piattaforma di ricerca non supportata"
+  },
+  "directory.reason_utf8": {
+    "en": "Invalid UTF-8",
+    "zh-CN": "无效 UTF-8",
+    "ja": "不正な UTF-8",
+    "ko": "잘못된 UTF-8",
+    "es": "UTF-8 inválido",
+    "ru": "Некорректный UTF-8",
+    "it": "UTF-8 non valido"
+  },
+  "directory.reason_utf16": {
+    "en": "Invalid UTF-16",
+    "zh-CN": "无效 UTF-16",
+    "ja": "不正な UTF-16",
+    "ko": "잘못된 UTF-16",
+    "es": "UTF-16 inválido",
+    "ru": "Некорректный UTF-16",
+    "it": "UTF-16 non valido"
+  },
+  "directory.reason_bom": {
+    "en": "Unsupported byte-order mark",
+    "zh-CN": "不支持的字节序标记",
+    "ja": "未対応のバイト順マーク",
+    "ko": "지원하지 않는 바이트 순서 표시",
+    "es": "Marca de orden de bytes no admitida",
+    "ru": "Неподдерживаемая метка порядка байтов",
+    "it": "Indicatore ordine byte non supportato"
+  },
+  "directory.reason_nul": {
+    "en": "NUL-containing text",
+    "zh-CN": "文本含 NUL",
+    "ja": "NUL を含むテキスト",
+    "ko": "NUL 포함 텍스트",
+    "es": "Texto con NUL",
+    "ru": "Текст с NUL",
+    "it": "Testo contenente NUL"
+  },
+  "directory.reason_incomplete": {
+    "en": "Incomplete file read",
+    "zh-CN": "文件读取不完整",
+    "ja": "不完全なファイル読取",
+    "ko": "불완전한 파일 읽기",
+    "es": "Lectura incompleta",
+    "ru": "Файл прочитан не полностью",
+    "it": "Lettura file incompleta"
+  },
+  "directory.reason_decoded": {
+    "en": "Text validation failed or limit reached",
+    "zh-CN": "文本验证失败或达到上限",
+    "ja": "テキスト検証失敗・上限到達",
+    "ko": "텍스트 검증 실패·한도 도달",
+    "es": "Validación fallida o límite de texto",
+    "ru": "Ошибка проверки или предел текста",
+    "it": "Verifica testo fallita o limite raggiunto"
+  },
+  "directory.reason_rows": {
+    "en": "Result row limit",
+    "zh-CN": "结果行数上限",
+    "ja": "結果行数上限",
+    "ko": "결과 행 수 한도",
+    "es": "Límite de resultados",
+    "ru": "Предел числа результатов",
+    "it": "Limite righe risultati"
+  }
+}

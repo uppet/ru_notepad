@@ -36,7 +36,7 @@ class PreviewContracts(unittest.TestCase):
                              build.sha(output)+'  '+output.name+'\n')
 
     def test_preview_package_documents_instance_tabs_acceptance(self):
-        self.assertEqual(package.PREVIEW_DOCS,('bootstrap-llvm-preview.md','recent-files.md','single-instance-and-tabs.md','language-highlighting.md','eol-conversion.md','line-operations.md','line-ordering.md','literal-search.md','open-document-search.md','regex-search.md'))
+        self.assertEqual(package.PREVIEW_DOCS,('bootstrap-llvm-preview.md','recent-files.md','single-instance-and-tabs.md','language-highlighting.md','eol-conversion.md','line-operations.md','line-ordering.md','literal-search.md','open-document-search.md','regex-search.md','directory-search.md','compiler-feedback-directory-search.md'))
         for name in package.PREVIEW_DOCS:
             self.assertTrue((package.ROOT/'docs'/name).is_file())
         source=Path(package.__file__).read_text()
@@ -453,13 +453,16 @@ class PreviewContracts(unittest.TestCase):
         dependencies={'app_source':app['source_pins']['app_source'],
                       'source_sha256':app['source_sha256']['app_source'],'binaries':binaries}
         report['runtime_dependencies']=recent_fixtures.install_runtime_dependencies(root,app,dependencies)
+        directory_fixture=root/'directory-fixture';directory_fixture.mkdir()
+        (directory_fixture/'utf8.txt').write_bytes(recent_fixtures.DIRECTORY_FIXTURE_BYTES)
+        report['directory_fixture']=build.identity(directory_fixture/'utf8.txt')
         def verify_fields(proof,**kwargs):
             self.assertEqual(kwargs.pop('tools'),app['tool_paths'])
             return build.verify_proof(proof,**kwargs)
         with patch.object(recent_fixtures,'validate_toolchain'),patch.object(recent_fixtures,'verify_proof',side_effect=verify_fields) as verifier:
             recent_fixtures.validate_report(report,app,compiler,dependencies)
-            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16, 'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':709, 'single_instance_native':18, 'single_instance_busy_native':23, 'language_catalog_native':678, 'editor_native':141, 'open_search_native':29, 'regex_policy':365, 'regex_native':41})
-            self.assertEqual(verifier.call_count,16)
+            self.assertEqual(recent_fixtures.CASES, {'recent_files_policy':25, 'recent_files_native':22, 'recent_files_callbacks':10, 'ru_lexical_policy':422, 'markdown_policy':221, 'tab_close_policy':16, 'single_instance_policy':41, 'single_instance_settings_native':11, 'app_tabs_native':709, 'single_instance_native':18, 'single_instance_busy_native':23, 'language_catalog_native':678, 'editor_native':141, 'open_search_native':29, 'regex_policy':365, 'regex_native':41, 'directory_text_native':91, 'directory_search_native':6})
+            self.assertEqual(verifier.call_count,18)
             bad=copy.deepcopy(report);del bad['results']['single_instance_busy_native']
             with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)
             bad=copy.deepcopy(report);del bad['results']['editor_native']
@@ -467,7 +470,7 @@ class PreviewContracts(unittest.TestCase):
             for name,old_count in (('single_instance_policy',39),('single_instance_native',15),('app_tabs_native',660),('app_tabs_native',684),('editor_native',102),('regex_policy',364),('regex_native',38)):
                 bad=copy.deepcopy(report);bad['results'][name]['assertions']=old_count
                 with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)
-            for schema in ('ru-notepad-bootstrap-editor-fixtures-v1', 'ru-notepad-bootstrap-editor-fixtures-v2', 'ru-notepad-bootstrap-editor-fixtures-v3', 'ru-notepad-bootstrap-editor-fixtures-v4', 'ru-notepad-bootstrap-editor-fixtures-v5', 'ru-notepad-bootstrap-editor-fixtures-v6'):
+            for schema in ('ru-notepad-bootstrap-editor-fixtures-v1', 'ru-notepad-bootstrap-editor-fixtures-v2', 'ru-notepad-bootstrap-editor-fixtures-v3', 'ru-notepad-bootstrap-editor-fixtures-v4', 'ru-notepad-bootstrap-editor-fixtures-v5', 'ru-notepad-bootstrap-editor-fixtures-v6', 'ru-notepad-bootstrap-editor-fixtures-v7'):
                 bad=copy.deepcopy(report);bad['schema']=schema
                 with self.assertRaises(InvalidProvenance):recent_fixtures.validate_report(bad,app,compiler,dependencies)
             for mutation in ('missing-runtime', 'missing-dll', 'extra-dll', 'changed-dll', 'rehashed-dll', 'relocated-dll', 'wrong-dependency-source'):
@@ -515,6 +518,11 @@ class PreviewContracts(unittest.TestCase):
                         'python editor/tools/test_gui_instance_tabs.py -v',
                         'python editor/tools/test_i18n.py --catalog-only',
                         'python editor/tools/test_i18n_models.py',
+                        "python -m unittest discover -s editor/tests -p 'test_directory*.py' -v",
+                        'python editor/tools/test_directory_text_policy.py --ru-root language --output "$env:PREVIEW_OUTPUT/directory-text-controls"',
+                        'python editor/tools/test_directory_io.py',
+                        'python editor/tests/test_directory_search_ui.py --ru-root language',
+                        'python editor/tools/test_gui_directory_search.py -v',
                         'python editor/tools/test_regex_policy.py --ru-root language --output "$env:PREVIEW_OUTPUT/regex-policy-controls"',
                         'python editor/tests/test_regex_search_bridge.py --ru-root language',
                         'python editor/tests/test_regex_status_ownership.py --ru-root language',
@@ -523,7 +531,7 @@ class PreviewContracts(unittest.TestCase):
                         'python -I editor/tools/test_markdown_step_metrics.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-step-controls"',
                         'python -I editor/tools/test_markdown_bulk_guards.py --ru-root language --output "$env:PREVIEW_OUTPUT/markdown-bulk-guard-controls"'):
             self.assertIn(command+'\n          if ($LASTEXITCODE) { exit $LASTEXITCODE }',body)
-        self.assertEqual(body.count('if ($LASTEXITCODE)'),20)
+        self.assertEqual(body.count('if ($LASTEXITCODE)'),25)
 
     def test_recent_fixtures_require_exact_individual_assertions_and_total(self):
         good=b'PASS: a\nPASS: b\nTOTAL PASS: 2\n'

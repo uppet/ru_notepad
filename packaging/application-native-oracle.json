@@ -9,8 +9,8 @@
     {
       "scope": "app",
       "path": "src/main.ru",
-      "sha256": "a7ef3299a27eac609fe582f7eedc8581dba7e516ecd151a4ff09ca3041364475",
-      "git_blob": "b6c6361725692ce59ef19d2f9983bf040c75aa42"
+      "sha256": "e4a9abbfa4461e5dfb68798dc910bc6ab565a0f46d2e923349288c95c7ce3c95",
+      "git_blob": "af6eec6b8d4b40052da2ac43757866e794897302"
     },
     {
       "scope": "compiler",
@@ -27,8 +27,8 @@
     {
       "scope": "app",
       "path": "src/i18n_catalog.ru",
-      "sha256": "3d35c6d0c668f5b96d5eea2581f4bc898375de204760d7c6b860c60439f2d7b3",
-      "git_blob": "3e58b3241d91aab0aca7c19bfd54902869a121c2"
+      "sha256": "6e1ce35b4a546aa23a68ccd8bfb0142b091136159f7831287708fa18daae0d87",
+      "git_blob": "49b563f3c2598bbf2bf157a26726d35d320c3524"
     },
     {
       "scope": "app",
@@ -131,6 +131,24 @@
       "path": "src/open_search.ru",
       "sha256": "e8d10755c231c4b71760e81fc4563f495ecc872483a36bcf8b70e92980ad96bd",
       "git_blob": "7968fed7e57ac002d01215b4061c59ce262d431d"
+    },
+    {
+      "scope": "app",
+      "path": "src/directory_search.ru",
+      "sha256": "eaef56e6b73b4d17e0f637ac8a30a98be83964bd4f11d6ba1e228f712d6ab423",
+      "git_blob": "44cbd11b7eb216bdf5032ae9dfd5fcbf8741b7bd"
+    },
+    {
+      "scope": "app",
+      "path": "src/directory_io.ru",
+      "sha256": "cd370bcf7317e6d4bb25237e38dddd1329e6258beca4e5b0c098c8a6c9d6638b",
+      "git_blob": "11678d93f69e97ad16c5ab7192f6435a9ec17e13"
+    },
+    {
+      "scope": "app",
+      "path": "src/directory_text.ru",
+      "sha256": "542175a32c1be2857cab0784993198ca328d2082f0e87343a9ae8d0947c04ceb",
+      "git_blob": "4fa626b4b8802be44f93d121c5f7188ca73f28a8"
     },
     {
       "scope": "app",
@@ -647,6 +665,30 @@
     {
       "result": "u32",
       "parameters": [
+        "u32"
+      ]
+    },
+    {
+      "result": "u32",
+      "parameters": [
+        "u32",
+        "u32"
+      ]
+    },
+    {
+      "result": "u32",
+      "parameters": [
+        "u32",
+        "u32",
+        "指针",
+        "u32"
+      ]
+    },
+    {
+      "result": "u32",
+      "parameters": [
+        "u64",
+        "指针",
         "u32"
       ]
     },

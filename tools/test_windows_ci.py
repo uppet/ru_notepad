@@ -1083,7 +1083,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
     def scanner_preflight(self, mode='normal'):
         for relative in (*ci.SCANNER_PREFLIGHT_SOURCES, 'native/ru_scan.c',
                          'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h',
-                         'native/ru_markdown_fold.c', 'native/ru_markdown_fold.h'):
+                         'native/ru_markdown_fold.c', 'native/ru_markdown_fold.h',
+                'native/ru_directory_io.c', 'native/ru_directory_io.h',
+                         'native/ru_directory_io.c', 'native/ru_directory_io.h'):
             path = self.root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('synthetic fixture\n')
@@ -3035,7 +3037,9 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         generator = self.root / 'tools/generate_i18n.py'
         generator.write_text('generator source')
         for relative in ('native/ru_scan.c', 'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h',
-                         'native/ru_markdown_fold.c', 'native/ru_markdown_fold.h'):
+                         'native/ru_markdown_fold.c', 'native/ru_markdown_fold.h',
+                'native/ru_directory_io.c', 'native/ru_directory_io.h',
+                         'native/ru_directory_io.c', 'native/ru_directory_io.h'):
             target = self.root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text('native input')
@@ -3048,6 +3052,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
             self.assertEqual(set(before), {'src/main.ru', 'tests/entry.ru', 'tests/imported_helper.ru',
                 'native/ru_scan.c', 'native/ru_wrong_abi.c', 'native/ru_scan.h', 'native/ru_unicode_data.h',
                 'native/ru_markdown_fold.c', 'native/ru_markdown_fold.h',
+                'native/ru_directory_io.c', 'native/ru_directory_io.h',
                 'locales/ui.json', 'tools/generate_i18n.py', 'tools/generate_syntax_catalog.py',
                 *builder.lexilla_languages.INPUTS})
             helper.write_text('changed helper source')
@@ -3309,7 +3314,7 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
         self.assertIn('mkdir -p build/markdown-fold-helper-evidence', workflow)
         self.assertIn('build/markdown-fold-helper-evidence/markdown-bulk-helper-controls.json', workflow)
         self.assertEqual(ci.portable.NATIVE_COMPILE_SOURCES['RuSyntax.dll'],
-                         ('native/ru_scan.c', 'native/ru_markdown_fold.c'))
+                         ('native/ru_scan.c', 'native/ru_markdown_fold.c', 'native/ru_directory_io.c'))
         self.assertIn('user32', ci.portable.NATIVE_LINK_LIBRARIES)
         for name in ('markdown_fold_windows.exe', 'markdown_fold_host.exe'):
             self.assertNotIn(name, ci.BINARY_NAMES)

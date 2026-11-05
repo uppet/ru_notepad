@@ -140,6 +140,9 @@ class ReceiptIntegration(unittest.TestCase):
                 'compile_policy':dict(recent.COMPILE_POLICY),
                 'stage3_sha256':app['bootstrap']['stage3_sha256'],'results':{},
                 'runtime_dependencies':recent.install_runtime_dependencies(output,app,deps)}
+        directory_fixture=output/'directory-fixture';directory_fixture.mkdir()
+        (directory_fixture/'utf8.txt').write_bytes(recent.DIRECTORY_FIXTURE_BYTES)
+        report['directory_fixture']=build.identity(directory_fixture/'utf8.txt')
         wrappers={}
         for name,count in recent.CASES.items():
             binary=output/(name+'.exe');ir=output/(name+'.ll');proof_path=output/(name+'.json')
