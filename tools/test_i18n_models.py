@@ -6,9 +6,10 @@ Run: python tools/test_i18n_models.py
 The old menu IDs/order and every old Lexilla style/colour pair were reviewed
 against src/main.ru and src/syntax.ru at 5a619410ea93ec0b8fb5197a4780b615a308e4f9.
 The constants below deliberately do not read git, import the catalog generator,
-or derive expected values from the production arrays. The eight UI-language
-commands, Find Previous, Open Pending Shell Files, Single Instance and three EOL
-conversion actions are the explicit additions to the original 42 commands (60 total). English labels anchor the catalog keys' meanings as well as their ID/group associations.
+or derive expected values from the production arrays. EXPECTED_MENUS explicitly
+records every reviewed addition to the original 42 commands (76 total), including
+Find in Folder (326). English labels anchor the catalog keys' meanings as well as
+their ID/group associations.
 
 This is source-model and consumer-wiring verification, not a Ru interpreter,
 compiler-budget check, native Windows execution, or GUI acceptance test.
@@ -76,6 +77,7 @@ EXPECTED_MENUS = (
         (323, 'regex.mode_literal', 'Literal search'),
         (324, 'regex.mode_regular', 'Regular expression (case-sensitive)'),
         (325, 'regex.stop', 'Stop regex search'),
+        (326, 'directory.find', 'Find in Folder…'),
     )),
     ('menu.encoding', 'E&ncoding', (
         (401, 'command.save_utf8', 'Save as &UTF-8'),
@@ -256,7 +258,7 @@ def validate_menu_catalog(catalog):
     for group, title, commands in EXPECTED_MENUS:
         labels[group] = title
         labels.update((key, label) for _, key, label in commands)
-    actual = {key for key in catalog if key.startswith(('menu.', 'command.', 'language.')) or key in ('search.capture_selection', 'search.current_document', 'search.clear_history', 'search.results_find', 'search.results_stop', 'search.results_hide', 'regex.mode_literal', 'regex.mode_regular', 'regex.stop')}
+    actual = {key for key in catalog if key.startswith(('menu.', 'command.', 'language.')) or key in ('search.capture_selection', 'search.current_document', 'search.clear_history', 'search.results_find', 'search.results_stop', 'search.results_hide', 'regex.mode_literal', 'regex.mode_regular', 'regex.stop', 'directory.find')}
     if actual != set(labels):
         raise ValueError('Menu catalog key coverage changed')
     for key, english in labels.items():
@@ -334,23 +336,23 @@ class FlatModelTests(unittest.TestCase):
             changed = replace_array(changed, name, value)
         return self.syntax.replace(section, changed, 1)
 
-    def test_exact_nine_groups_and_seventy_five_command_mappings(self):
+    def test_exact_nine_groups_and_seventy_six_command_mappings(self):
         model = validate_menu(self.main)
         self.assertEqual(len(model), 9)
         commands = [command for _, group in model for command in group]
-        self.assertEqual(len(commands), 75)
-        self.assertEqual(len({number for number, _ in commands}), 75)
-        self.assertEqual(len({key for _, key in commands}), 75)
+        self.assertEqual(len(commands), 76)
+        self.assertEqual(len({number for number, _ in commands}), 76)
+        self.assertEqual(len({key for _, key in commands}), 76)
 
     def test_all_original_command_ids_keep_their_group_and_order(self):
-        original = tuple((group, tuple(number for number, _ in commands if number not in (308, 313, 314, 315, 317, 318, 319, 323, 324, 325, 113, 805, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219)))
+        original = tuple((group, tuple(number for number, _ in commands if number not in (308, 313, 314, 315, 317, 318, 319, 323, 324, 325, 326, 113, 805, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219)))
                          for group, commands in validate_menu(self.main)
                          if group != 'menu.ui_language')
         self.assertEqual(original, LEGACY_COMMAND_GROUPS)
         self.assertEqual(sum(len(ids) for _, ids in original), 42)
 
-    def test_new_instance_commands_missing_wrong_group_or_duplicate_rejected(self):
-        for number, source_group, wrong_group in ((113, 0, 6), (805, 6, 0)):
+    def test_instance_and_directory_commands_missing_wrong_group_or_duplicate_rejected(self):
+        for number, source_group, wrong_group in ((113, 0, 6), (805, 6, 0), (326, 2, 0)):
             for mutation in ('missing', 'wrong-group', 'duplicate'):
                 model = [(group, list(commands)) for group, commands in decode_menu(self.menu_arrays)]
                 command = next(row for row in model[source_group][1] if row[0] == number)
@@ -369,19 +371,19 @@ class FlatModelTests(unittest.TestCase):
         validate_menu_catalog(self.catalog)
 
     def test_menu_arrays_are_primitive_with_exact_group_boundaries(self):
-        self.assertEqual(self.menu_arrays['组量们'], [11, 19, 13, 6, 5, 7, 5, 8, 1])
+        self.assertEqual(self.menu_arrays['组量们'], [11, 19, 14, 6, 5, 7, 5, 8, 1])
         for name, kind in MENU_ARRAY_TYPES.items():
             self.assertTrue(all(type(value) is kind for value in self.menu_arrays[name]))
 
     def test_every_changed_command_id_is_rejected(self):
-        for index in range(75):
+        for index in range(len(self.menu_arrays['号们'])):
             ids = self.menu_arrays['号们'].copy()
             ids[index] += 1000
             with self.subTest(index=index), self.assertRaises(ValueError):
                 validate_menu(self.mutated_menu(号们=ids))
 
     def test_every_command_key_misassignment_is_rejected(self):
-        for index in range(75):
+        for index in range(len(self.menu_arrays['键们'])):
             keys = self.menu_arrays['键们'].copy()
             following = (index + 1) % len(keys)
             keys[index], keys[following] = keys[following], keys[index]
@@ -389,7 +391,7 @@ class FlatModelTests(unittest.TestCase):
                 validate_menu(self.mutated_menu(键们=keys))
 
     def test_every_removed_command_is_rejected_even_with_consistent_lengths(self):
-        for index in range(75):
+        for index in range(len(self.menu_arrays['号们'])):
             arrays = deepcopy(self.menu_arrays)
             del arrays['号们'][index]
             del arrays['键们'][index]
@@ -403,7 +405,7 @@ class FlatModelTests(unittest.TestCase):
                 validate_menu(self.mutated_menu(**arrays))
 
     def test_every_adjacent_command_reordering_is_rejected(self):
-        for index in range(52):
+        for index in range(len(self.menu_arrays['号们']) - 1):
             arrays = deepcopy(self.menu_arrays)
             for name in ('号们', '键们'):
                 array = arrays[name]
@@ -482,10 +484,13 @@ class FlatModelTests(unittest.TestCase):
                 validate_menu_catalog(data)
 
     def test_missing_or_unreviewed_menu_catalog_keys_are_rejected(self):
-        data = deepcopy(self.catalog)
-        del data['command.about']
-        with self.assertRaises(ValueError):
-            validate_menu_catalog(data)
+        keys = [group for group, _, _ in EXPECTED_MENUS]
+        keys.extend(key for _, _, commands in EXPECTED_MENUS for _, key, _ in commands)
+        for key in keys:
+            data = deepcopy(self.catalog)
+            del data[key]
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                validate_menu_catalog(data)
         data = deepcopy(self.catalog)
         data['command.unreviewed'] = {'en': '&Extra'}
         with self.assertRaises(ValueError):
