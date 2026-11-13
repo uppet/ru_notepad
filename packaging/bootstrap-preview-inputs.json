@@ -319,7 +319,7 @@
     },
     "tests/directory_search_native.ru": {
       "before": null,
-      "after": "cfc868c2fa0b385db73c1a55a680e7fe056e296a05659d030532022c5122230e"
+      "after": "e609058599edf709e0694e7f43e606598f7846edae532aafd98d707e3186613f"
     },
     "tests/directory_text_native.ru": {
       "before": null,

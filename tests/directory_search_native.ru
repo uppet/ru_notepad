@@ -45,6 +45,13 @@ _睡 取 (窗 其 内核) 其 绑定 'Sleep' (密 其 签名 (窗 其 V) ([(窗 
 显 'PASS: directory query bounds'.
 根 取 (窗 其 目录)+'directory-fixture'.
 态 取 搜 其 新建 根 'a'. 泵 态.
+# Failure-only diagnostics for the controlled fixture: no paths or file contents.
+若 态['status'] != 'complete' 则
+    显 'DIAGNOSTIC directory: status='+态['status']+' partial='+(态['partial'] 为 句)+' error='+态['error']+' limit='+态['limitReason'].
+    显 'DIAGNOSTIC directory: generation='+(态['generation'] 为 句)+' sequence='+(态['sequence'] 为 句)+' fileSequence='+(态['fileSequence'] 为 句).
+    显 'DIAGNOSTIC directory: observedFiles='+(态['observedFiles'] 为 句)+' observedDirs='+(态['observedDirs'] 为 句)+' observedSkipped='+(态['observedSkipped'] 为 句)+' observedErrors='+(态['observedErrors'] 为 句).
+    显 'DIAGNOSTIC directory: rawBytes='+(态['rawBytes'] 为 句)+' filesSearched='+(态['filesSearched'] 为 句)+' reasons='+(态['reasonCounts'] 为 句).
+然.
 确认 (态['status'] == 'complete') 'fixture complete'.
 确认 ((态['results'] 其 量) == 2 且 态['filesSearched'] == 1) 'fixture results'.
 确认 (态['results'][0]['startUtf8'] == 0 且 态['results'][1]['startUtf8'] == 5) 'UTF8 numeric offsets'.
