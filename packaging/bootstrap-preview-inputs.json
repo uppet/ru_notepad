@@ -9,6 +9,10 @@
     "tree": "2522d03114c808480e42911be850b75e0ae14206"
   },
   "reviewed_changes": {
+    ".github/workflows/diagnose-directory-root.yml": {
+      "before": null,
+      "after": "66bb9cf8f42b44a91e95afde52d4ceb8477c2af70aae0881ab693dd96097d1fa"
+    },
     ".github/workflows/diagnose-regex-gui.yml": {
       "before": null,
       "after": "64313c23ebd720e2e6b768276156e497a86de30697e9d8f5bb2e0f5d7db7e4b3"
@@ -313,6 +317,10 @@
       "before": null,
       "after": "6c4f47dedc6589a2b2b26f552da3784739b8ef6acc29c67a3acce6ecaa576729"
     },
+    "tests/directory_root_diagnostic.c": {
+      "before": null,
+      "after": "0c796b23fbfdd78dbb29dd00a7e764b165b6ee9a23bf5495e81c3e3587e97a74"
+    },
     "tests/directory_search_mock.ru": {
       "before": null,
       "after": "7d353d5c843411033dca596968b3f486fad465aa28b926dce31029dc015e8f72"
@@ -596,6 +604,10 @@
     "tools/refresh_language_native_oracle.py": {
       "before": null,
       "after": "5d97af5f2d91f51b67cfd868c3b8c095d06171307fdcbc493bd56e5e6845c73f"
+    },
+    "tools/run_directory_root_diagnostic.py": {
+      "before": null,
+      "after": "b551e924a1c08037971c94827cc7ac32e73ab9d44d2e56a22a043fa3f2279ef3"
     },
     "tools/run_markdown_phase_profile.py": {
       "before": "3502a1924397910fe2a0dac0ffa85b4f911d91d647e1188d9b817b58a445c4d3",
