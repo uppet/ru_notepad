@@ -19,7 +19,7 @@
     },
     ".github/workflows/windows.yml": {
       "before": "f82e3e45e0cf4f0522fdd6d2a516e6ec91cc0a000fbff503ca954f0e37dfaf57",
-      "after": "cbd906487c63b3952f7218b335db46caf96bd0594df7a2c15fd10918bcc1acbd"
+      "after": "aa6deaf398f84285495476ece9017e45d11675ea3e656d8a57c86b7f4a53ce7b"
     },
     "CHANGELOG.md": {
       "before": "6dba0bf5f16f3d11c94063caabbab4e43d808713f155eaba5b9db9a29fcab1c3",
@@ -671,7 +671,7 @@
     },
     "tools/test_i18n.py": {
       "before": "efe744d29412beab1f4d44b8e116267706bca32d0d435f95bb07512a28705d5f",
-      "after": "8437da91ce4ae8636884f3c5e5a9f895b8250b30908516fdf9de9e3e9aeaab6a"
+      "after": "9dcf97819e83bb398c3ad060ea260aa6647f0ec75c4cdc50ce7a358eb36da3dd"
     },
     "tools/test_i18n_models.py": {
       "before": "507b687a6d1c6e98f9287beb168eb10b2eb7648457ca9e60f1aae51d089531cc",
@@ -715,7 +715,7 @@
     },
     "tools/test_ru_policy_fast.py": {
       "before": "e770b7b9fe54c971ec4f6aac3d2498aef6a7593ac35390d370a021f4d0bba000",
-      "after": "89bc90fbb939ca03aca3aa275e947eb657d90b3db881eb96d2ad4f9b798646db"
+      "after": "2506dcf3e17ee899af4087cde9c7411c66e5fc268c3b5582558e8b102d924635"
     },
     "tools/test_ru_scan.py": {
       "before": "55abbfc25ead3509020e9d46d325ab402657fc34a4b503f4c5626aaf28fb2b11",
@@ -739,7 +739,7 @@
     },
     "tools/test_windows_ci.py": {
       "before": "b28733251662cd749c961fda95d912a1638794857fbb07015b5fb6363c28ec3b",
-      "after": "90731b69630d6dca79ab37dd6162e76c63138b936684b32e891f9280e45d1923"
+      "after": "10d13a51414cd373f10aa82178b940e8ce75f3335d36c47738f7a1ef22d214ca"
     },
     "tools/verify_bootstrap_application_oracle.py": {
       "before": null,
@@ -759,15 +759,15 @@
     },
     "tools/verify_ru_policy_fast_outputs.py": {
       "before": "32b4fdcec098114f9a211456058ebc46ba78e7138cdbf556b346570167c7903b",
-      "after": "7841c0727006fe53a110bbe53e490e01858dde9474beba58e7ab49a23284f38f"
+      "after": "33b80652bed1dd74b8e4dff6f1e99e5c427984ee1e3d30606462d5a7f270bb8b"
     },
     "tools/windows_ci.ps1": {
       "before": "a6df98bd9521264d53f39e800e639d3e7a04b83c6165e4f61f5c13a105235bac",
-      "after": "88140439e0d7c4adea6da58040fae89686020de835f0e8986530d9d94fab7961"
+      "after": "b2040d332b3135705c6919f9290f065e9b5e41ae8a0d88d87590bc4cb9ac32e7"
     },
     "tools/windows_ci.py": {
       "before": "c1a793bf7d96267adc47d70bd459b3c050cb54f67c9768a57041cad5a732142a",
-      "after": "2079dde5b4b35ebc0d71f13d2f142c54e3b84b9f43a127328f1b606fdbb7f71e"
+      "after": "364a333934f9c738ae4ddf4406a7b0b5faffe5d2e892f2603c607a68e292eb50"
     }
   }
 }

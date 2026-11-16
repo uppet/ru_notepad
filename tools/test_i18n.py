@@ -30,8 +30,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 from ru_cli_diagnostics import prepare_compile_diagnostics, validate_stderr
 ASSERTIONS = 289
-RU_COMMIT = '85c7821fda35aa79deeaf67b4d430f24ddd7f07f'
-RU_TREE = 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba'
+RU_COMMIT = 'c62a03624f024ba0050a8f3e4fcc091c70f3ca55'
+RU_TREE = '57c3cd9d6c2322bc3fa2b4c6215f36fd8cecaf2b'
 LIMIT = 1024 * 1024
 LANGUAGES = ('en', 'zh-CN', 'ja', 'ko', 'es', 'ru', 'it')
 MENU_GROUPS = {

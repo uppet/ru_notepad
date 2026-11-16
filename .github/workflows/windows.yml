@@ -61,7 +61,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: uppet/ru-language
-          ref: 85c7821fda35aa79deeaf67b4d430f24ddd7f07f
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.historical_callback && '85c7821fda35aa79deeaf67b4d430f24ddd7f07f' || 'c62a03624f024ba0050a8f3e4fcc091c70f3ca55' }}
           path: .ci/ru-language
           persist-credentials: false
       - name: Check out the exact accepted public policy baseline
@@ -228,7 +228,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: uppet/ru-language
-          ref: 85c7821fda35aa79deeaf67b4d430f24ddd7f07f
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.historical_callback && '85c7821fda35aa79deeaf67b4d430f24ddd7f07f' || 'c62a03624f024ba0050a8f3e4fcc091c70f3ca55' }}
           path: .ci/ru-language
           persist-credentials: false
       # Research baseline is separate from the accepted product/candidate

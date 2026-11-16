@@ -184,8 +184,8 @@ HELPER_POLICY_EVIDENCE_FILES = ('helper-policy.stdout.log', 'helper-policy.stder
     'policy-prefix-order.stdout.log', 'policy-prefix-order.stderr.log',
     'scanner-build.log', 'differential-python.log', 'differential-build.log',
     'differential-c.log', 'sanitize-build.log', 'sanitize.log', 'report.json')
-HELPER_POLICY_COMMIT = '85c7821fda35aa79deeaf67b4d430f24ddd7f07f'
-HELPER_POLICY_TREE = 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba'
+HELPER_POLICY_COMMIT = 'c62a03624f024ba0050a8f3e4fcc091c70f3ca55'
+HELPER_POLICY_TREE = '57c3cd9d6c2322bc3fa2b4c6215f36fd8cecaf2b'
 POLICY_PREFIX_BASELINE_COMMIT = 'a5f5fd825767cd5af662cba792f5ce352991c21e'
 POLICY_PREFIX_BASELINE_TREE = 'e8a402fb3eb551bfe416b8aee0aaaf942d2d4f4a'
 POLICY_PREFIX_BASELINE_SHA256 = 'f78589e247186890855526f7bb3624d34e4004bb8fbc69587c96d38c826a602c'

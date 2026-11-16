@@ -663,16 +663,42 @@ Write-Output 'DUPLICATE_PATH_RESOLUTION_PASS'
                     self.assertIn(resolved.relative_to(ci.ROOT).as_posix(), snapshot)
 
     def test_reviewed_compiler_pin_is_consistent_across_all_build_entrypoints(self):
-        commit = '85c7821fda35aa79deeaf67b4d430f24ddd7f07f'
-        tree = 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba'
-        self.assertEqual(builder.BASELINE_TREE, tree)
+        replay_commit = '85c7821fda35aa79deeaf67b4d430f24ddd7f07f'
+        replay_tree = 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba'
+        commit = 'c62a03624f024ba0050a8f3e4fcc091c70f3ca55'
+        tree = '57c3cd9d6c2322bc3fa2b4c6215f36fd8cecaf2b'
+        # The low-level builder defaults to the original diagnostic tree;
+        # normal Windows acceptance passes its own exact, guarded tree.
+        self.assertEqual(builder.BASELINE_TREE, replay_tree)
         self.assertEqual(ci.HELPER_POLICY_COMMIT, commit)
         self.assertEqual(ci.HELPER_POLICY_TREE, tree)
         script = (ci.ROOT / 'tools/windows_ci.ps1').read_text(encoding='utf-8')
         workflow = (ci.ROOT / '.github/workflows/windows.yml').read_text(encoding='utf-8')
-        self.assertIn(f"-ne '{commit}'", script)
-        self.assertIn(f"-ne '{tree}'", script)
-        self.assertEqual(workflow.count(f'ref: {commit}'), 5)  # two acceptance jobs plus growth, focused and Markdown diagnostics
+        expected_pins = (
+            "if ($RunMarkdownOwnedProfile -or $RunCallbackResearch) {\n"
+            f"        $ExpectedRuCommit = '{replay_commit}'\n"
+            f"        $ExpectedRuTree = '{replay_tree}'\n"
+            "    } else {\n"
+            f"        $ExpectedRuCommit = '{commit}'\n"
+            f"        $ExpectedRuTree = '{tree}'\n"
+            "    }"
+        )
+        self.assertIn(expected_pins, script)
+        self.assertIn("Git-Value @('rev-parse','HEAD')) -ne $ExpectedRuCommit", script)
+        self.assertIn("Git-Value @('rev-parse','HEAD^{tree}')) -ne $ExpectedRuTree", script)
+        self.assertIn("if (Git-Value @('status','--porcelain'))", script)
+        self.assertIn(
+            "if (-not ($RunMarkdownOwnedProfile -or $RunCallbackResearch)) {\n"
+            "        $BuildArgs += @('--allow-toolchain-tree',$ExpectedRuTree)\n"
+            "    }",
+            script,
+        )
+        compiler_ref = (
+            "ref: ${{ github.event_name == 'workflow_dispatch' && inputs.historical_callback"
+            f" && '{replay_commit}' || '{commit}' " "}}"
+        )
+        self.assertEqual(workflow.count(compiler_ref), 2)
+        self.assertEqual(workflow.count(f'ref: {replay_commit}'), 3)
 
     def test_historical_replays_retain_their_exact_compiler_pin(self):
         historical = 'a2f6faa0f914781dea74cb6f0a7574f1dd6808ce'

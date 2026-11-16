@@ -171,10 +171,17 @@ try {
         Set-Alias -Name Invoke-Checked -Value Invoke-OwnedDiagnosticCommand -Scope Local
 
     }
-    if ((Git-Value @('rev-parse','HEAD')) -ne '85c7821fda35aa79deeaf67b4d430f24ddd7f07f') {
+    if ($RunMarkdownOwnedProfile -or $RunCallbackResearch) {
+        $ExpectedRuCommit = '85c7821fda35aa79deeaf67b4d430f24ddd7f07f'
+        $ExpectedRuTree = 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba'
+    } else {
+        $ExpectedRuCommit = 'c62a03624f024ba0050a8f3e4fcc091c70f3ca55'
+        $ExpectedRuTree = '57c3cd9d6c2322bc3fa2b4c6215f36fd8cecaf2b'
+    }
+    if ((Git-Value @('rev-parse','HEAD')) -ne $ExpectedRuCommit) {
         throw 'Ru public commit does not match the reviewed pin.'
     }
-    if ((Git-Value @('rev-parse','HEAD^{tree}')) -ne 'a770e367e84d87a0d2fcb6d49ea6f06da2dbe4ba') {
+    if ((Git-Value @('rev-parse','HEAD^{tree}')) -ne $ExpectedRuTree) {
         throw 'Ru compiler tree does not match the reviewed pin.'
     }
     if (Git-Value @('status','--porcelain')) { throw 'Ru checkout must be unmodified.' }
@@ -264,6 +271,10 @@ try {
         '--cc',(Join-Path $Bin 'gcc.exe'),'--cxx',(Join-Path $Bin 'g++.exe'),
         '--windres',(Join-Path $Bin 'windres.exe'),'--ar',(Join-Path $Bin 'ar.exe'),
         '--ranlib',(Join-Path $Bin 'ranlib.exe'),'--skip-scintilla','--skip-lexilla')
+    # Diagnostics keep the historical default and original build arguments.
+    if (-not ($RunMarkdownOwnedProfile -or $RunCallbackResearch)) {
+        $BuildArgs += @('--allow-toolchain-tree',$ExpectedRuTree)
+    }
     Invoke-Checked $Python ($BuildArgs + @('--source','src/main.ru','--output',(Join-Path $Output 'ru_notepad.exe')))
     # This independent diagnostic stops before native acceptance and packaging.
     # Only the sanitizer's single fixed-schema JSON is eligible for publication.
