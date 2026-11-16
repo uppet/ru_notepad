@@ -112,11 +112,12 @@ static HANDLE open_nt(HANDLE parent,const uint16_t *name,uint32_t units,int dire
     memset(&o,0,sizeof(o));memset(&ios,0,sizeof(ios));u.Length=(USHORT)(units*2);u.MaximumLength=u.Length;u.Buffer=(PWSTR)name;
     o.Length=sizeof(o);o.RootDirectory=parent;o.ObjectName=&u;
     o.Attributes=0x40u|0x1000u; /* OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE */
+    /* Keep FILE_OPEN_REPARSE_POINT and FILE_OPEN_NO_RECALL. Windows can
+     * reject FILE_DIRECTORY_FILE combined with NO_RECALL; every directory
+     * caller checks the type and safety attributes on this same handle in
+     * info() before using it. File opens still require FILE_NON_DIRECTORY_FILE. */
     st=DIR_NT_CALL(&h,(directory?FILE_LIST_DIRECTORY:FILE_READ_DATA)|FILE_READ_ATTRIBUTES|SYNCHRONIZE,
-        &o,&ios,NULL,0,FILE_SHARE_READ,1,0x00200000u|0x00400000u|0x20u|(directory?1u:0x40u),NULL,0);
-    /* FILE_OPEN_REPARSE_POINT | FILE_OPEN_NO_RECALL | synchronous | type.
-     * NO_RECALL prevents a raced cloud-placeholder attribute change from
-     * silently triggering recall before post-open attribute validation. */
+        &o,&ios,NULL,0,FILE_SHARE_READ,1,0x00200000u|0x00400000u|0x20u|(directory?0u:0x40u),NULL,0);
     if(st<0)return INVALID_HANDLE_VALUE;
     if(!h)return INVALID_HANDLE_VALUE;
     return h;
