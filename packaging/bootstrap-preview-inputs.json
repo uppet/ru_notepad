@@ -319,7 +319,7 @@
     },
     "tests/directory_root_diagnostic.c": {
       "before": null,
-      "after": "0c796b23fbfdd78dbb29dd00a7e764b165b6ee9a23bf5495e81c3e3587e97a74"
+      "after": "ab0636a755b9df6af657f995936959f1b1573c328502d0d1714d57df274ee9f9"
     },
     "tests/directory_search_mock.ru": {
       "before": null,
@@ -607,7 +607,7 @@
     },
     "tools/run_directory_root_diagnostic.py": {
       "before": null,
-      "after": "b551e924a1c08037971c94827cc7ac32e73ab9d44d2e56a22a043fa3f2279ef3"
+      "after": "d89b258e6a11d4b33f19a7ece09a2c8e931d5bad0868c60ca2575bfa9063228d"
     },
     "tools/run_markdown_phase_profile.py": {
       "before": "3502a1924397910fe2a0dac0ffa85b4f911d91d647e1188d9b817b58a445c4d3",

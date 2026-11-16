@@ -19,7 +19,8 @@ PRODUCTION = {
     'native/ru_directory_io.h': 'd1b825798a13485bbfea21d5255e5bdc07107c93b9c939b67b2839a562aa9637',
 }
 FIELDS = {'api', 'component', 'result', 'win32_valid', 'win32_code', 'nt_valid',
-          'nt_code', 'mapping', 'attributes', 'same_volume', 'handle_present'}
+          'nt_code', 'mapping', 'attributes', 'same_volume', 'handle_present',
+          'requested_options', 'effective_options', 'object_flags', 'share_access', 'disposition', 'desired_access'}
 
 
 def require(condition, label):
@@ -31,7 +32,8 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def validate(value, instrumented):
+def validate(value, instrumented, policy='baseline'):
+    require(policy in ('baseline', 'postcheck'), 'known policy')
     require(type(value) is dict and set(value) == {'schema', 'root_established',
             'trace_overflow', 'instrumented', 'trace'}, 'observation fields')
     require(value['schema'] == 'ru-directory-root-observation-v1', 'schema')
@@ -48,6 +50,11 @@ def validate(value, instrumented):
         require(all(row[k] in (0, 1) for k in ('win32_valid', 'nt_valid', 'same_volume', 'handle_present')), 'flag bounds')
         require(not row['nt_valid'] or row['api'] == 3, 'NT source')
         require(not row['win32_valid'] or row['api'] in (2, 4, 5), 'Win32 source')
+        if row['api'] == 3:
+            require(row['requested_options'] == 0x00600021 and
+                    row['effective_options'] == (0x00600021 if policy == 'baseline' else 0x00600020), 'one type bit only')
+            require(row['object_flags'] == 0x1040 and row['share_access'] == 1 and
+                    row['disposition'] == 1 and row['desired_access'] == 0x00100081, 'native protections retained')
     return value
 
 
@@ -86,7 +93,7 @@ def execute(args):
     report = {'schema':'ru-directory-root-diagnostic-v1', 'acceptance': False,
               'status':'NOT_ACCEPTED-running', 'source_commit': args.expected_source_commit,
               'source_sha256':sources, 'cases': [], 'builds': [], 'probe_processes': [],
-              'scope':'Recreated controlled paths on this runner; unchanged source, not original DLL/worker or product acceptance'}
+              'scope':'Test-only exact type-bit comparison with retained no-follow/no-recall and postchecks; recreated paths, not original DLL/worker or product acceptance'}
     destination = output/'NOT_ACCEPTED-directory-root.json'
     def save():
         destination.write_text(json.dumps(report, indent=2)+'\n', encoding='utf-8')
@@ -95,19 +102,21 @@ def execute(args):
         cc = Path(args.cc).resolve(strict=True)
         report['compiler_sha256'] = sha(cc)
         binaries = {}
-        for label, flags in (('control',['-DRU_DIR_ROOT_CONTROL']), ('instrumented', [])):
-            binary = output/(label+'.exe')
-            command = [str(cc), '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', '-municode',
-                       *flags, str(ROOT/'tests/directory_root_diagnostic.c'), '-lshell32', '-lole32', '-o', str(binary)]
-            report['phase'] = 'build-'+label;save()
-            build = subprocess.run(command, capture_output=True, timeout=120)
-            report['builds'].append({'variant':label, 'returncode':build.returncode,
-                'stdout_sha256':hashlib.sha256(build.stdout).hexdigest(),
-                'stderr_sha256':hashlib.sha256(build.stderr).hexdigest()})
-            save()
-            require(build.returncode == 0, 'probe build failed')
-            binaries[label] = binary
-            report['builds'][-1]['binary_sha256'] = sha(binary)
+        for policy, policy_flags in (('baseline', []), ('postcheck', ['-DRU_DIR_ROOT_POSTCHECK'])):
+            for label, flags in (('control',['-DRU_DIR_ROOT_CONTROL']), ('instrumented', [])):
+                variant = policy+'-'+label
+                binary = output/(variant+'.exe')
+                command = [str(cc), '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', '-municode',
+                           *policy_flags, *flags, str(ROOT/'tests/directory_root_diagnostic.c'), '-lshell32', '-lole32', '-o', str(binary)]
+                report['phase'] = 'build-'+variant;save()
+                build = subprocess.run(command, capture_output=True, timeout=120)
+                report['builds'].append({'variant':variant, 'returncode':build.returncode,
+                    'stdout_sha256':hashlib.sha256(build.stdout).hexdigest(),
+                    'stderr_sha256':hashlib.sha256(build.stderr).hexdigest()})
+                save()
+                require(build.returncode == 0, 'probe build failed')
+                binaries[variant] = binary
+                report['builds'][-1]['binary_sha256'] = sha(binary)
         # Recreate the failing fixture's relative layout, only under this job's
         # fresh private runner temp. Never inspect arbitrary user directories.
         temp = Path(os.environ['RUNNER_TEMP']).absolute()
@@ -124,30 +133,32 @@ def execute(args):
         for fixture_label, fixture_path in (('preview-layout', fixture), ('ordinary-temp', ordinary)):
             payload = fixture_path/'utf8.txt';payload.write_bytes('a😀a'.encode())
             require(sha(payload) == fixture_hash, 'fixture creation')
-            previous = None
-            for repetition in range(2):
-                pair = {}
-                for label in ('control', 'instrumented'):
-                    binary = binaries[label];before = sha(binary)
-                    report['phase'] = 'probe-'+fixture_label+'-'+label;save()
-                    result = subprocess.run([str(binary), str(fixture_path)], capture_output=True, timeout=15)
-                    report['probe_processes'].append({'fixture':fixture_label, 'variant':label,
-                        'repetition':repetition, 'returncode':result.returncode,
-                        'stdout_bytes':len(result.stdout), 'stderr_bytes':len(result.stderr)})
+            for policy in ('baseline', 'postcheck'):
+                previous = None
+                for repetition in range(2):
+                    pair = {}
+                    for label in ('control', 'instrumented'):
+                        variant = policy+'-'+label
+                        binary = binaries[variant];before = sha(binary)
+                        report['phase'] = 'probe-'+fixture_label+'-'+variant;save()
+                        result = subprocess.run([str(binary), str(fixture_path)], capture_output=True, timeout=15)
+                        report['probe_processes'].append({'fixture':fixture_label, 'variant':variant,
+                            'repetition':repetition, 'returncode':result.returncode,
+                            'stdout_bytes':len(result.stdout), 'stderr_bytes':len(result.stderr)})
+                        save()
+                        require(result.returncode == 0 and result.stderr == b'', 'probe process failed')
+                        require(len(result.stdout) <= 65536, 'probe output bound')
+                        observation = validate(json.loads(result.stdout), label == 'instrumented', policy)
+                        require(sha(binary) == before, 'probe binary changed')
+                        pair[label] = observation
+                    require(pair['control']['root_established'] == pair['instrumented']['root_established'],
+                            'control and instrumented outcomes differ')
+                    diagnosis = classify(pair['instrumented'])
+                    report['cases'].append({'fixture':fixture_label, 'policy':policy, 'repetition':repetition,
+                                            **pair, 'diagnosis':diagnosis})
                     save()
-                    require(result.returncode == 0 and result.stderr == b'', 'probe process failed')
-                    require(len(result.stdout) <= 65536, 'probe output bound')
-                    observation = validate(json.loads(result.stdout), label == 'instrumented')
-                    require(sha(binary) == before, 'probe binary changed')
-                    pair[label] = observation
-                require(pair['control']['root_established'] == pair['instrumented']['root_established'],
-                        'control and instrumented outcomes differ')
-                diagnosis = classify(pair['instrumented'])
-                report['cases'].append({'fixture':fixture_label, 'repetition':repetition,
-                                        **pair, 'diagnosis':diagnosis})
-                save()
-                require(previous is None or previous == diagnosis, 'unstable observation')
-                previous = diagnosis
+                    require(previous is None or previous == diagnosis, 'unstable observation')
+                    previous = diagnosis
             require(sha(payload) == fixture_hash, 'fixture changed')
         report['fixture_sha256'] = fixture_hash
         require(sources == {name:sha(ROOT/name) for name in INPUTS} and sha(cc) == report['compiler_sha256'],
@@ -162,13 +173,13 @@ def execute(args):
         raise SystemExit('Root diagnostic failed; numeric evidence is NOT ACCEPTED') from None
     save()
     print(json.dumps({'status': report['status'], 'acceptance':False,
-                      'diagnoses': [{'fixture':c['fixture'], 'diagnosis':c['diagnosis']}
+                      'diagnoses': [{'fixture':c['fixture'], 'policy':c['policy'], 'diagnosis':c['diagnosis']}
                                     for c in report['cases'] if c['repetition'] == 1]}))
 
 
 class Controls(unittest.TestCase):
     def sample(self):
-        row = dict.fromkeys(FIELDS, 0);row.update(api=3, nt_valid=1, nt_code=0xc0000022, result=0xc0000022)
+        row = dict.fromkeys(FIELDS, 0);row.update(api=3, nt_valid=1, nt_code=0xc0000022, result=0xc0000022, requested_options=0x00600021, effective_options=0x00600021, object_flags=0x1040, share_access=1, disposition=1, desired_access=0x00100081)
         return {'schema':'ru-directory-root-observation-v1', 'root_established':False,
                 'trace_overflow':False, 'instrumented':True, 'trace':[row]}
     def test_nt_code(self):
@@ -204,6 +215,14 @@ class Controls(unittest.TestCase):
         for attrs,same,expected in ((0x410,1,'forbidden-directory-attributes'),(0,1,'not-directory'),(0x10,0,'volume-mismatch')):
             value=self.sample();value['trace'][0].update(api=5,nt_valid=0,nt_code=0,result=1,attributes=attrs,same_volume=same)
             self.assertEqual(classify(validate(value,True))['stage'],expected)
+    def test_postcheck_single_bit(self):
+        value=self.sample();value['trace'][0]['effective_options']=0x00600020
+        validate(value,True,'postcheck')
+        with self.assertRaises(ValueError):validate(value,True,'baseline')
+    def test_no_security_bit_removal(self):
+        for field,value in (('effective_options',0x00400020),('effective_options',0x00200020),('object_flags',0x40),('share_access',3),('disposition',2),('desired_access',0x00100080)):
+            sample=self.sample();sample['trace'][0][field]=value
+            with self.subTest(field=field,value=value),self.assertRaises(ValueError):validate(sample,True,'postcheck')
     def test_win32_stage(self):
         value=self.sample();value['trace'][0].update(api=2, nt_valid=0, nt_code=0, win32_valid=1, win32_code=5, result=0)
         self.assertEqual(classify(validate(value,True))['stage'], 'device-mapping')
